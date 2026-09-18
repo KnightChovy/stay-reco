@@ -20,7 +20,7 @@ export default function RoomDetailPage() {
       <Header />
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-grow w-full">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 grow w-full">
         {/* Breadcrumb & Back button */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between text-xs sm:text-sm text-slate-500 gap-2 mb-4">
           <AppBreadcrumb
@@ -86,7 +86,7 @@ export default function RoomDetailPage() {
 
         {/* Photo Gallery */}
         <section className="mb-10">
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-3 h-auto md:h-[440px] rounded-2xl overflow-hidden">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-3 h-auto md:h-110 rounded-2xl overflow-hidden">
             {/* Main Bedroom Photo */}
             <div className="md:col-span-6 relative h-64 md:h-full group overflow-hidden bg-slate-100">
               <img
@@ -494,7 +494,7 @@ export default function RoomDetailPage() {
             </Card>
 
             {/* AI ASSISTANT WIDGET */}
-            <section className="bg-gradient-to-br from-[#f0f6fa] to-[#e1ecf4] rounded-2xl p-6 border border-[#e1ecf4]">
+            <section className="bg-linear-to-br from-[#f0f6fa] to-[#e1ecf4] rounded-2xl p-6 border border-[#e1ecf4]">
               <div className="flex items-center space-x-3 mb-2">
                 <div className="w-8 h-8 rounded-lg bg-[#1b3c57] flex items-center justify-center text-white text-sm shadow-xs">
                   🤖
