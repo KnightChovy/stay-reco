@@ -42,6 +42,7 @@ export type SidebarProps = {
   items?: SidebarItem[];
   roleLabel?: string;
   contextName?: string;
+  footerContent?: React.ReactNode;
   onLogout?: () => void;
   logoutLabel?: string;
   className?: string;
@@ -63,6 +64,7 @@ export default function Sidebar({
   items = defaultSidebarItems,
   roleLabel = 'Không gian làm việc',
   contextName,
+  footerContent,
   onLogout,
   logoutLabel = 'Đăng xuất',
   className,
@@ -163,6 +165,7 @@ export default function Sidebar({
       </SidebarContent>
 
       <SidebarFooter className="border-t border-sidebar-border p-3">
+        {footerContent}
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton

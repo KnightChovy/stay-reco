@@ -3,10 +3,10 @@
 import Link from 'next/link';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
-import HeroSearch from '@/common/search/HeroSearch';
-import HotelCard from '@/common/card/HotelCard';
-import DestinationCard from '@/common/card/DestinationCard';
-import ArticleCard from '@/common/card/ArticleCard';
+import HeroSearch from '@/components/common/search/HeroSearch';
+import HotelCard from '@/components/common/card/HotelCard';
+import DestinationCard from '@/components/common/card/DestinationCard';
+import ArticleCard from '@/components/common/card/ArticleCard';
 
 export default function HomePage() {
   const curatedStays = [

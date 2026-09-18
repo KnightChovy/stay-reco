@@ -21,8 +21,8 @@
     "paths": {
       "@/*": ["./src/*"],
       "@/components/*": ["./src/components/*"],
-      "@/common/*": ["./src/common/*"],
-      "@/ui/*": ["./ui/*", "./src/components/ui/*"],
+      "@/common/*": ["./src/components/common/*"],
+      "@/ui/*": ["./src/components/ui/*"],
       "@/lib/*": ["./src/lib/*"],
       "@/hooks/*": ["./src/hooks/*"],
       "@/utils": ["./src/lib/utils"]

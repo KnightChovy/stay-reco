@@ -17,7 +17,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { cn } from '@/lib/utils';
-import {Avatar, AvatarFallback, AvatarImage } from '@/ui/avatar';
+import {Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 type NavbarUser = {
   name: string;

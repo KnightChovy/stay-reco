@@ -5,7 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
-import AppBreadcrumb from '@/common/breadcrumb/AppBreadcrumb';
+import AppBreadcrumb from '@/components/common/breadcrumb/AppBreadcrumb';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';

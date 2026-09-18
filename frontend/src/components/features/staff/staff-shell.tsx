@@ -3,8 +3,8 @@
 import type { ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 import { AlertTriangle, BadgePercent, CalendarDays, Inbox, KeyRound, LayoutDashboard, LineChart, LogOut, ReceiptText, Sparkles } from 'lucide-react';
-import Navbar from '@/common/navbar/Navbar';
-import Sidebar, { SidebarProvider, type SidebarItem } from '@/common/sidebar/Sidebar';
+import Navbar from '@/components/common/navbar/Navbar';
+import Sidebar, { SidebarProvider, type SidebarItem } from '@/components/common/sidebar/Sidebar';
 import { SidebarInset } from '@/components/ui/sidebar';
 
 const navigation: Omit<SidebarItem, 'isActive'>[] = [
