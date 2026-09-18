@@ -99,7 +99,7 @@ export default function BlogPage() {
       <Header />
 
       {/* Main Content */}
-      <main className="flex-grow w-full max-w-[1240px] mx-auto px-4 sm:px-6 py-6 sm:py-8">
+      <main className="grow w-full max-w-310 mx-auto px-4 sm:px-6 py-6 sm:py-8">
         {/* Breadcrumb */}
         <AppBreadcrumb
           items={[

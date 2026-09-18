@@ -51,7 +51,7 @@ export default function BlogDetailPage() {
       <Header />
 
       {/* Main Content */}
-      <main className="flex-grow w-full max-w-[960px] mx-auto px-4 sm:px-6 py-6 sm:py-10">
+      <main className="grow w-full max-w-240 mx-auto px-4 sm:px-6 py-6 sm:py-10">
         {/* Breadcrumb */}
         <AppBreadcrumb
           items={[
@@ -110,7 +110,7 @@ export default function BlogDetailPage() {
           <img
             src="https://lh3.googleusercontent.com/aida-public/AB6AXuBTMVfrBuTkxrOD13FSMCqwwPOmdnG1cgncEhi-mqqtEaWHgBbPsrN3dI4K_Gtdd2BPvvo1V42mcyHEM6UwrEIm8QeJ1FPqJ4NwQtdvVs4F3KAtKF5q1lK9oJd1qo7jwZgZHwU5SkdVCrW0Okn2oFGjD1qsjeif9kGgZCuQ1tIMTwMBe0Gpr9nkkyelThoMLVgFG9DYs-5976DqWE2y6UbvxaKpbRpY1Z4kD5FxA1tatVfyOVvJrvHB"
             alt="Hoàng hôn bên sông Hoài Hội An"
-            className="w-full h-[400px] sm:h-[480px] object-cover"
+            className="w-full h-100 sm:h-120 object-cover"
           />
           <p className="text-xs text-stone-500 text-center italic py-2 bg-stone-100">
             Nét dịu dàng buổi hoàng hôn bên dòng sông Hoài – Hội An, Quảng Nam.

@@ -107,7 +107,7 @@ export default function AssistantPage() {
           />
 
           <div className="flex items-center gap-4 bg-white p-4 sm:p-5 rounded-2xl border border-border shadow-2xs">
-            <div className="relative size-14 rounded-full bg-gradient-to-r from-primary via-[#193b56] to-[#ae583c] text-white flex items-center justify-center shrink-0 shadow-md ring-4 ring-primary/10">
+            <div className="relative size-14 rounded-full bg-linear-to-r from-primary via-[#193b56] to-[#ae583c] text-white flex items-center justify-center shrink-0 shadow-md ring-4 ring-primary/10">
               <Bot className="size-8 animate-pulse" />
               <span className="absolute -bottom-0.5 -right-0.5 size-4 rounded-full bg-emerald-500 border-2 border-white" />
             </div>
@@ -144,7 +144,7 @@ export default function AssistantPage() {
           </div>
 
           {/* Chat Interface Container */}
-          <Card className="p-4 sm:p-6 bg-white border border-border shadow-xs rounded-2xl flex flex-col h-[550px] justify-between">
+          <Card className="p-4 sm:p-6 bg-white border border-border shadow-xs rounded-2xl flex flex-col h-137.5 justify-between">
             {/* Messages Scroll Area */}
             <div className="flex-1 overflow-y-auto space-y-4 pr-2">
               {messages.map((msg) => (
