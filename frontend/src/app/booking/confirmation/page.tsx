@@ -3,13 +3,10 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import Header from '@/components/layout/Header';
-import Footer from '@/components/layout/Footer';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
-  Check,
   CheckCircle2,
   Printer,
   Mail,
@@ -50,55 +47,7 @@ export default function BookingConfirmationPage() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#f7f9ff] font-sans antialiased text-[#202B36]">
-      <Header />
-
-      <main className="flex-1 w-full bg-[#f7f9ff]">
-        
-        {/* STEPPER TRACKER BAR */}
-        <div className="w-full bg-[#f1f3f9] py-3 border-b border-slate-200/60 shadow-xs">
-          <div className="max-w-[1200px] mx-auto px-4 sm:px-6">
-            <div className="flex items-center justify-between text-xs sm:text-sm">
-              
-              <div className="flex items-center gap-2">
-                <div className="size-7 rounded-full bg-[#EDF4EE] text-[#35624A] flex items-center justify-center font-bold">
-                  <Check className="size-4" />
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Bước 1</span>
-                  <span className="font-medium text-[#202B36]">Thông tin đặt phòng</span>
-                </div>
-              </div>
-
-              <div className="h-[2px] flex-1 mx-3 sm:mx-6 bg-[#35624A]/30" />
-
-              <div className="flex items-center gap-2">
-                <div className="size-7 rounded-full bg-[#EDF4EE] text-[#35624A] flex items-center justify-center font-bold">
-                  <Check className="size-4" />
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Bước 2</span>
-                  <span className="font-medium text-[#202B36]">Thanh toán an toàn</span>
-                </div>
-              </div>
-
-              <div className="h-[2px] flex-1 mx-3 sm:mx-6 bg-[#013758]" />
-
-              <div className="flex items-center gap-2">
-                <div className="size-7 rounded-full bg-[#234e70] text-white flex items-center justify-center font-bold shadow-xs">
-                  <CheckCircle2 className="size-4" />
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-[10px] text-[#013758] font-bold uppercase tracking-wider">Bước 3</span>
-                  <span className="font-bold text-[#013758]">Xác nhận & Voucher</span>
-                </div>
-              </div>
-
-            </div>
-          </div>
-        </div>
-
-        <div className="max-w-[1200px] mx-auto px-4 sm:px-6 pt-6 sm:pt-8 pb-12 w-full">
+    <div className="max-w-marketplace mx-auto px-4 sm:px-6 pt-6 sm:pt-8 pb-12 w-full">
           
           {/* HERO SUCCESS CARD */}
           <Card className="bg-white rounded-xl p-6 sm:p-8 shadow-xs mb-8 relative overflow-hidden border border-slate-200/80">
@@ -154,7 +103,7 @@ export default function BookingConfirmationPage() {
               
               {/* E-VOUCHER TICKET CARD */}
               <Card className="bg-white rounded-2xl shadow-md overflow-hidden border border-slate-200/80">
-                <div className="h-2 w-full bg-gradient-to-r from-[#013758] via-[#234e70] to-[#934a33]" />
+                <div className="h-2 w-full bg-linear-to-r from-[#013758] via-[#234e70] to-[#934a33]" />
 
                 <div className="p-6 sm:p-8 space-y-6">
                   
@@ -168,7 +117,7 @@ export default function BookingConfirmationPage() {
                         height={36}
                         className="h-9 w-auto object-contain"
                       />
-                      <div className="h-6 w-[1px] bg-slate-300 hidden sm:block" />
+                      <div className="h-6 w-px bg-slate-300 hidden sm:block" />
                       <div>
                         <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wide block">Giấy chứng nhận lưu trú điện tử</span>
                         <span className="text-xs font-bold text-[#013758]">Official E-Voucher Pass</span>
@@ -428,11 +377,6 @@ export default function BookingConfirmationPage() {
             </div>
 
           </div>
-        </div>
-
-      </main>
-
-      <Footer />
     </div>
   );
 }

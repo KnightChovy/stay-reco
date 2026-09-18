@@ -3,13 +3,10 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import Header from '@/components/layout/Header';
-import Footer from '@/components/layout/Footer';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
-  Check,
   CheckCircle2,
   Copy,
   Clock,
@@ -58,58 +55,10 @@ export default function PaymentPage() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#f7f9ff] font-sans antialiased text-[#202B36]">
-      <Header />
-
-      <main className="flex-1 w-full bg-[#f7f9ff]">
-        
-        {/* STEPPER TRACKER BAR */}
-        <section className="w-full bg-white py-3 shadow-xs border-b border-slate-200/60">
-          <div className="max-w-[1200px] mx-auto px-4 sm:px-6">
-            <div className="flex flex-col md:flex-row items-center justify-between gap-3">
-              <div className="flex items-center gap-2 text-xs text-slate-500">
-                <span className="uppercase tracking-wider">Tiến trình thanh toán</span>
-                <span>•</span>
-                <span className="font-bold text-[#234e70]">Đơn hàng #SR-261020-0842</span>
-              </div>
-
-              {/* 3 Steps Bar */}
-              <div className="flex items-center gap-3 sm:gap-4 text-xs">
-                {/* Step 1: Completed */}
-                <div className="flex items-center gap-1.5 text-[#35624A]">
-                  <div className="size-6 rounded-full bg-[#EDF4EE] flex items-center justify-center font-bold text-[#35624A]">
-                    <Check className="size-3.5" />
-                  </div>
-                  <span className="font-medium text-[#202B36]">1. Thông tin đặt phòng</span>
-                </div>
-
-                <div className="w-6 sm:w-8 h-[2px] bg-[#234e70]" />
-
-                {/* Step 2: Active */}
-                <div className="flex items-center gap-1.5 text-[#234e70]">
-                  <div className="size-6 rounded-full bg-[#234e70] text-white flex items-center justify-center font-bold">
-                    2
-                  </div>
-                  <span className="font-bold text-[#234e70]">2. Thanh toán an toàn</span>
-                </div>
-
-                <div className="w-6 sm:w-8 h-[2px] bg-slate-300" />
-
-                {/* Step 3: Pending */}
-                <div className="flex items-center gap-1.5 text-slate-400">
-                  <div className="size-6 rounded-full bg-slate-200 text-slate-500 flex items-center justify-center font-medium">
-                    3
-                  </div>
-                  <span className="font-normal text-slate-500">3. Xác nhận & Voucher</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
+    <>
         {/* Countdown Hold Banner */}
         <section className="w-full bg-[#FBF2E3] px-4 sm:px-6 py-2.5 shadow-xs border-b border-[#f3e3c8]">
-          <div className="max-w-[1200px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 text-[#865D23] text-xs sm:text-sm">
+          <div className="max-w-marketplace mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 text-[#865D23] text-xs sm:text-sm">
             <div className="flex items-center gap-2">
               <Timer className="size-4 text-[#865D23] animate-pulse shrink-0" />
               <p>
@@ -124,7 +73,7 @@ export default function PaymentPage() {
         </section>
 
         {/* MAIN CANVAS */}
-        <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-6 sm:py-8 w-full">
+        <div className="max-w-marketplace mx-auto px-4 sm:px-6 py-6 sm:py-8 w-full">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
             
             {/* LEFT COLUMN: Payment Selection & QR (7 cols) */}
@@ -292,7 +241,7 @@ export default function PaymentPage() {
 
                 {/* Checkout Actions */}
                 <div className="space-y-3 pt-2">
-                  <Link href="/booking-confirmation" className="block">
+                  <Link href="/booking/confirmation" className="block">
                     <Button className="w-full h-12 bg-[#234e70] hover:bg-[#193B56] text-white font-bold text-sm rounded-lg shadow-md gap-2">
                       <RefreshCw className="size-4" />
                       <span>Xác nhận đã chuyển khoản / Kiểm tra trạng thái thanh toán</span>
@@ -305,7 +254,7 @@ export default function PaymentPage() {
                   </Button>
 
                   <div className="text-center pt-2">
-                    <Link href="/checkout" className="text-xs text-slate-500 hover:text-[#013758] inline-flex items-center gap-1">
+                    <Link href="/booking" className="text-xs text-slate-500 hover:text-[#013758] inline-flex items-center gap-1">
                       <ArrowLeft className="size-3.5" /> Quay lại chỉnh sửa thông tin đặt phòng
                     </Link>
                   </div>
@@ -441,9 +390,6 @@ export default function PaymentPage() {
           </div>
         </div>
 
-      </main>
-
-      <Footer />
-    </div>
+    </>
   );
 }
