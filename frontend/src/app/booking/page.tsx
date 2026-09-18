@@ -3,8 +3,6 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import Header from '@/components/layout/Header';
-import Footer from '@/components/layout/Footer';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,7 +10,6 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import {
-  Edit3,
   User,
   Mail,
   Phone,
@@ -23,7 +20,6 @@ import {
   Info,
   Clock,
   ShieldCheck,
-  Check,
   ArrowRight,
   Ticket,
   Award,
@@ -56,59 +52,7 @@ export default function CheckoutPage() {
   const total = subtotal - discount; // 2.250.000
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#f7f9ff] font-sans antialiased text-[#202B36]">
-      <Header />
-
-      <main className="flex-1 w-full bg-[#f7f9ff]">
-        
-        {/* STEPPER TRACKER BAR */}
-        <div className="w-full bg-white shadow-xs border-b border-slate-200/60">
-          <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-4">
-            <div className="flex items-center justify-between gap-2 sm:gap-4 max-w-2xl mx-auto">
-              
-              {/* Step 1: Active */}
-              <div className="flex items-center gap-2.5">
-                <div className="size-8 rounded-full bg-[#234e70] text-white flex items-center justify-center text-xs font-bold shadow-xs">
-                  <Edit3 className="size-4" />
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-[10px] text-[#013758] font-bold uppercase tracking-wider">Bước 1</span>
-                  <span className="text-xs sm:text-sm text-[#202B36] font-bold">Thông tin đặt phòng</span>
-                </div>
-              </div>
-
-              <div className="flex-1 h-[2px] bg-slate-200 mx-2 rounded-full" />
-
-              {/* Step 2: Next */}
-              <div className="flex items-center gap-2.5 opacity-60">
-                <div className="size-8 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center text-xs font-bold">
-                  2
-                </div>
-                <div className="hidden sm:flex flex-col">
-                  <span className="text-[10px] text-slate-500 font-medium">Bước 2</span>
-                  <span className="text-xs sm:text-sm text-slate-600 font-medium">Thanh toán</span>
-                </div>
-              </div>
-
-              <div className="flex-1 h-[2px] bg-slate-200 mx-2 rounded-full" />
-
-              {/* Step 3: Pending */}
-              <div className="flex items-center gap-2.5 opacity-60">
-                <div className="size-8 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center text-xs font-bold">
-                  3
-                </div>
-                <div className="hidden sm:flex flex-col">
-                  <span className="text-[10px] text-slate-500 font-medium">Bước 3</span>
-                  <span className="text-xs sm:text-sm text-slate-600 font-medium">Xác nhận đặt phòng</span>
-                </div>
-              </div>
-
-            </div>
-          </div>
-        </div>
-
-        {/* MAIN CONTAINER */}
-        <div className="max-w-[1200px] w-full mx-auto px-4 sm:px-6 py-6 sm:py-8">
+    <div className="max-w-marketplace w-full mx-auto px-4 sm:px-6 py-6 sm:py-8">
           
           {/* Notice Bar / Trust Cue */}
           <div className="mb-6 bg-[#F5EBE5] rounded-xl p-4 flex items-center justify-between flex-wrap gap-3 border border-[#ebd8cc]">
@@ -490,7 +434,7 @@ export default function CheckoutPage() {
                       <span className="text-[#35624A] font-semibold">Đã bao gồm</span>
                     </div>
 
-                    <div className="w-full h-[1px] bg-slate-200 my-2" />
+                    <div className="w-full h-px bg-slate-200 my-2" />
 
                     <div className="flex items-baseline justify-between pt-1">
                       <div>
@@ -502,7 +446,7 @@ export default function CheckoutPage() {
                   </div>
 
                   {/* CTA Button */}
-                  <Link href="/payment" className="block pt-2">
+                  <Link href="/booking/payment" className="block pt-2">
                     <Button
                       disabled={!agreedTerms}
                       className="w-full h-12 bg-[#234e70] hover:bg-[#193B56] text-white font-bold text-sm rounded-lg shadow-md gap-2 transition-all active:scale-[0.99]"
@@ -562,10 +506,6 @@ export default function CheckoutPage() {
 
           </div>
 
-        </div>
-      </main>
-
-      <Footer />
     </div>
   );
 }

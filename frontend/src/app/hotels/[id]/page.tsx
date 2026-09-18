@@ -15,7 +15,7 @@ export default function HotelDetailPage() {
       <Header />
 
       {/* MAIN CONTENT */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 flex-grow w-full">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 grow w-full">
         {/* BREADCRUMB AND ACTIONS */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-500 mb-4">
           <AppBreadcrumb
@@ -75,7 +75,7 @@ export default function HotelDetailPage() {
         </div>
 
         {/* PHOTO GALLERY GRID */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-2 rounded-2xl overflow-hidden mb-6 h-[380px] md:h-[420px]">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-2 rounded-2xl overflow-hidden mb-6 h-95 md:h-105">
           {/* Big featured photo */}
           <div className="relative md:col-span-2 h-full group cursor-pointer overflow-hidden">
             <img
