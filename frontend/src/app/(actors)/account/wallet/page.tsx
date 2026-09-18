@@ -5,7 +5,7 @@ import Link from 'next/link';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import AppBreadcrumb from '@/common/breadcrumb/AppBreadcrumb';
-import AccountSubNav from '@/components/account/AccountSubNav';
+import AccountSubNav from '@/components/features/account/AccountSubNav';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -76,7 +76,7 @@ export default function WalletPage() {
           />
 
           {/* Wallet Balance Card */}
-          <div className="w-full rounded-2xl bg-gradient-to-r from-[#124b6d] via-[#193b56] to-[#ae583c] p-6 sm:p-8 text-white flex flex-col md:flex-row items-start md:items-center justify-between gap-6 shadow-md">
+          <div className="w-full rounded-2xl bg-linear-to-r from-[#124b6d] via-[#193b56] to-[#ae583c] p-6 sm:p-8 text-white flex flex-col md:flex-row items-start md:items-center justify-between gap-6 shadow-md">
             <div className="space-y-2">
               <span className="inline-flex items-center gap-1 bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-xs font-semibold">
                 <Wallet className="size-3.5" /> Ví điện tử StayReco Wallet

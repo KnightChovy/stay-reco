@@ -63,7 +63,7 @@ export default function BookingDetailPage() {
         
         {/* TOP CONTEXT BAR */}
         <section className="w-full bg-[#f1f3f9] py-3 border-b border-slate-200/60">
-          <div className="max-w-[1200px] mx-auto px-4 sm:px-6 flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div className="max-w-marketplace mx-auto px-4 sm:px-6 flex flex-wrap items-center justify-between gap-3 text-xs">
             <AppBreadcrumb
               items={[
                 { label: 'Tài khoản', href: '/profile' },
@@ -83,7 +83,7 @@ export default function BookingDetailPage() {
 
         {/* TITLE & QUICK CONTROLS HEADER */}
         <section className="w-full bg-white py-6 shadow-xs border-b border-slate-200/60">
-          <div className="max-w-[1200px] mx-auto px-4 sm:px-6 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="max-w-marketplace mx-auto px-4 sm:px-6 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-2xl sm:text-3xl font-bold text-[#013758] tracking-tight">
@@ -103,7 +103,7 @@ export default function BookingDetailPage() {
 
             {/* Quick Action Buttons */}
             <div className="flex flex-wrap items-center gap-2 shrink-0">
-              <Link href="/booking-confirmation">
+              <Link href="/booking/confirmation">
                 <Button className="h-10 px-4 bg-[#013758] hover:bg-[#193B56] text-white text-xs font-bold gap-1.5 shadow-xs">
                   <QrCode className="size-4" />
                   <span>Xem QR Voucher</span>
@@ -122,7 +122,7 @@ export default function BookingDetailPage() {
         </section>
 
         {/* MAIN SPLIT LAYOUT */}
-        <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-6 sm:py-8 w-full">
+        <div className="max-w-marketplace mx-auto px-4 sm:px-6 py-6 sm:py-8 w-full">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
             
             {/* LEFT COLUMN (8 cols) */}
@@ -130,7 +130,7 @@ export default function BookingDetailPage() {
               
               {/* CARD 1: Hotel Overview */}
               <Card className="bg-white rounded-xl p-5 sm:p-6 shadow-xs border border-slate-200/80 flex flex-col md:flex-row gap-6">
-                <div className="w-full md:w-5/12 relative aspect-[4/3] rounded-lg overflow-hidden shrink-0 bg-slate-100">
+                <div className="w-full md:w-5/12 relative aspect-4/3 rounded-lg overflow-hidden shrink-0 bg-slate-100">
                   <Image
                     src={bookingData.hotelImage}
                     alt={bookingData.hotelName}

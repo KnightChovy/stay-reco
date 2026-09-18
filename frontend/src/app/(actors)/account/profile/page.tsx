@@ -6,7 +6,7 @@ import Image from 'next/image';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import AppBreadcrumb from '@/common/breadcrumb/AppBreadcrumb';
-import AccountSubNav from '@/components/account/AccountSubNav';
+import AccountSubNav from '@/components/features/account/AccountSubNav';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -87,7 +87,7 @@ export default function ProfilePage() {
           </div>
 
           {/* Membership Banner */}
-          <div className="w-full rounded-2xl bg-gradient-to-r from-[#124b6d] via-[#193b56] to-[#ae583c] p-6 text-white flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-md relative overflow-hidden">
+          <div className="w-full rounded-2xl bg-linear-to-r from-[#124b6d] via-[#193b56] to-[#ae583c] p-6 text-white flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-md relative overflow-hidden">
             <div className="flex items-center gap-4 z-10">
               <div className="size-12 rounded-xl bg-white/15 backdrop-blur-md flex items-center justify-center text-amber-300">
                 <Sparkles className="size-6" />

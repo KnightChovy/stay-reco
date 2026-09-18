@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import AppBreadcrumb from '@/common/breadcrumb/AppBreadcrumb';
-import AccountSubNav from '@/components/account/AccountSubNav';
+import AccountSubNav from '@/components/features/account/AccountSubNav';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';

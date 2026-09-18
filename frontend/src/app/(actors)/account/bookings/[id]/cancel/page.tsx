@@ -323,7 +323,7 @@ export default function CancelBookingPage() {
             <div className="lg:col-span-4 space-y-6 lg:sticky lg:top-24">
               
               {/* Reschedule Option */}
-              <Card className="p-5 bg-gradient-to-br from-primary to-[#122e44] text-white rounded-xl shadow-md space-y-4">
+              <Card className="p-5 bg-linear-to-br from-primary to-[#122e44] text-white rounded-xl shadow-md space-y-4">
                 <div className="size-10 rounded-lg bg-white/10 flex items-center justify-center">
                   <Calendar className="size-5 text-amber-400" />
                 </div>
@@ -350,7 +350,7 @@ export default function CancelBookingPage() {
                     fill
                     className="object-cover"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+                  <div className="absolute inset-0 bg-linear-to-t from-black/70 via-transparent to-transparent" />
                   <div className="absolute bottom-3 left-3 right-3 text-white">
                     <span className="text-[10px] font-medium text-emerald-300"> tiêu chuẩn StayReco</span>
                     <h4 className="font-bold text-xs sm:text-sm truncate">An Nhiên Riverside Hotel</h4>

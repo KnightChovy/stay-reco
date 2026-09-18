@@ -5,7 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
-import AccountSubNav from '@/components/account/AccountSubNav';
+import AccountSubNav from '@/components/features/account/AccountSubNav';
 import AppBreadcrumb from '@/common/breadcrumb/AppBreadcrumb';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -112,7 +112,7 @@ export default function MyBookingsPage() {
       <main className="flex-1 w-full bg-[#f7f9ff]">
         <AccountSubNav activeTab="bookings" />
 
-        <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-6 sm:py-8 w-full">
+        <div className="max-w-marketplace mx-auto px-4 sm:px-6 py-6 sm:py-8 w-full">
           
           <AppBreadcrumb
             items={[
@@ -278,7 +278,7 @@ export default function MyBookingsPage() {
                           <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap">
                             {item.status === 'upcoming' && (
                               <>
-                                <Link href="/booking-confirmation">
+                                <Link href="/booking/confirmation">
                                   <Button className="h-9 px-4 bg-[#013758] hover:bg-[#193B56] text-white text-xs font-bold gap-1.5 shadow-xs">
                                     <QrCode className="size-4" />
                                     <span>Xem voucher & Check-in</span>
@@ -293,7 +293,7 @@ export default function MyBookingsPage() {
                             )}
 
                             {item.status === 'pending' && (
-                              <Link href="/payment">
+                              <Link href="/booking/payment">
                                 <Button className="h-9 px-4 bg-[#013758] hover:bg-[#193B56] text-white text-xs font-bold gap-1.5 shadow-xs">
                                   <span>Thanh toán ngay</span>
                                 </Button>
@@ -306,7 +306,7 @@ export default function MyBookingsPage() {
                                   <Star className="size-3.5 fill-[#934a33]" />
                                   <span>Viết đánh giá (+50 điểm)</span>
                                 </Button>
-                                <Link href="/checkout">
+                                <Link href="/booking">
                                   <Button variant="ghost" className="h-9 px-3 text-xs font-semibold text-slate-600 hover:text-[#013758] gap-1">
                                     <RefreshCcw className="size-3.5" />
                                     <span>Đặt lại</span>
