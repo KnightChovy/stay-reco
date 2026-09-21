@@ -18,7 +18,7 @@ This document applies to the entire `frontend` directory and is intended for dev
 - The primary UI language is Vietnamese (`lang="vi"`), using Be Vietnam Pro via `next/font/google`.
 - Most screens currently use sample data and local state. A button, success message, payment page, or AI page existing in the UI does not imply a backend integration.
 - Authentication is currently mocked with Zustand and localStorage. An API client and React Query provider exist, but there are no business API calls in `src` yet.
-- Roles are `customer`, `partner`, `staff`, `manager`, and `admin`. Actor route trees currently exist only for `account`, `staff`, and `admin`. `/partner/dashboard` and `/manager/dashboard` are in the auth path mapping but do not have corresponding pages.
+- Roles are `customer`, `partner`, `staff`, `manager`, and `admin`. Actor route trees now exist for all five roles. The `partner` and `manager` portals are UI prototypes under active migration, with their routes wired to `src/features/partner` and `src/features/manager` respectively.
 
 ## 2. Stack and development commands
 
@@ -42,44 +42,58 @@ npm run start             # Run after a successful build
 
 ## 3. Source map
 
-| Location | Responsibility and current state |
-| --- | --- |
-| `src/app` | App Router routes, layouts, metadata, and global CSS |
-| `src/components/ui` | Shared UI primitives, mostly built on Base UI |
-| `src/components/features/{auth,account,booking,admin,staff}` | Domain-specific UI and logic |
-| `src/components/layout` | Header and Footer for customer-facing views |
-| `src/components/common` | Shared cards, search, breadcrumb, modal, sidebar/navbar, filter, table, and pagination |
-| `src/hooks` | Shared hooks: `use-mobile`, `use-debounce` |
-| `src/lib/auth-store.ts` | Mock auth used by current screens |
-| `src/lib/admin-data.ts` | Admin types and sample data |
-| `src/lib/utils.ts` | Re-exports `cn` from the `cn` package |
-| `src/services/ApiService.ts` | Axios instance `apiService` |
-| `src/provider/query-provider.tsx` | `Providers` wrapping `QueryClientProvider` |
-| `public` | Static assets, referenced by paths beginning with `/` |
+| Location                                                     | Responsibility and current state                                                       |
+| ------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
+| `src/app`                                                    | App Router routes, layouts, metadata, and global CSS                                   |
+| `src/components/ui`                                          | Shared UI primitives, mostly built on Base UI                                          |
+| `src/components/features/{auth,account,booking,admin,staff}` | Domain-specific UI and logic                                                           |
+| `src/features/{partner,manager}`                             | Work-in-progress partner and manager portal screens, shells, and local UI logic        |
+| `src/components/layout`                                      | Header and Footer for customer-facing views                                            |
+| `src/components/common`                                      | Shared cards, search, breadcrumb, modal, sidebar/navbar, filter, table, and pagination |
+| `src/hooks`                                                  | Shared hooks: `use-mobile`, `use-debounce`                                             |
+| `src/lib/auth-store.ts`                                      | Mock auth used by current screens                                                      |
+| `src/lib/admin-data.ts`                                      | Admin types and sample data                                                            |
+| `src/lib/manager-data.ts`                                    | Manager portal types and centralized mock datasets                                     |
+| `src/lib/partner-data.ts`                                    | Partner portal types and centralized mock datasets                                     |
+| `src/lib/utils.ts`                                           | Re-exports `cn` from the `cn` package                                                  |
+| `src/services/ApiService.ts`                                 | Axios instance `apiService`                                                            |
+| `src/provider/query-provider.tsx`                            | `Providers` wrapping `QueryClientProvider`                                             |
+| `public`                                                     | Static assets, referenced by paths beginning with `/`                                  |
 
 `src/stores/auth.store.ts`, `src/types/request.type.ts`, `src/constants/env.ts`, and `src/config/index.tsx` are currently empty. Do not import them as implemented modules or create a second auth store merely because the `stores` directory exists.
 
 ### Routes and layouts
 
-| Group | URLs and notes |
-| --- | --- |
-| Public pages | `/`, `/search`, `/hotels/[id]`, `/hotels/[id]/rooms/[roomId]` |
-| `(landing-page)` | `/recommendations`, `/assistant`, `/blog`, `/blog/[slug]` |
-| `(auth)` | `/login`, `/register`, `/forgot-password` |
-| Booking | `/booking` → `/booking/payment` → `/booking/confirmation`; shared layout includes Header, Footer, and BookingProgress |
-| `(actors)/account` | Profile, bookings and detail actions, preferences, notifications, security, rewards, wallet |
-| `(actors)/staff` | Dashboard, bookings, check-in/out, refunds, inbox, alerts, marketing; uses `StaffShell` |
-| `(actors)/admin` | Dashboard, users, transactions, logs, payment-settings, ai-settings; uses `AdminShell` |
-| Errors | `/403`, `src/app/not-found.tsx` |
+| Group              | URLs and notes                                                                                                        |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| Public pages       | `/`, `/search`, `/hotels/[id]`, `/hotels/[id]/rooms/[roomId]`                                                         |
+| `(landing-page)`   | `/recommendations`, `/assistant`, `/blog`, `/blog/[slug]`                                                             |
+| `(auth)`           | `/login`, `/register`, `/forgot-password`                                                                             |
+| Booking            | `/booking` → `/booking/payment` → `/booking/confirmation`; shared layout includes Header, Footer, and BookingProgress |
+| `(actors)/account` | Profile, bookings and detail actions, preferences, notifications, security, rewards, wallet                           |
+| `(actors)/staff`   | Dashboard, bookings, check-in/out, refunds, inbox, alerts, marketing; uses `StaffShell`                               |
+| `(actors)/partner` | `/partner` redirects to dashboard; bookings, revenue, hotel, rooms, availability, pricing, promotions, loyalty, AI brand, staff, verification |
+| `(actors)/manager` | `/manager` redirects to dashboard; partners, verifications, compliance, revenue, cashflow, transactions              |
+| `(actors)/admin`   | Dashboard, users, transactions, logs, payment-settings, ai-settings; uses `AdminShell`                                |
+| Errors             | `/403`, `src/app/not-found.tsx`                                                                                       |
 
 - Parenthesized route groups do not appear in URLs.
 - The root layout wraps `Providers` → `AuthRouteGuard`; it does not add Header/Footer to every page. Check the nearest layout before adding a shell to avoid duplicate rendering.
 - Admin uses thin pages → `AdminScreen` selected by `mode` → components in `features/admin/screens`.
 - `next.config.ts` permanently redirects `/payment` to `/booking/payment` and `/booking-confirmation` to `/booking/confirmation`. New links should use the destination URLs.
 
+### Partner and manager portals (work in progress)
+
+- Both route groups use thin pages intended to select a screen by `mode`. Their layouts wrap the portal in `.partner-role` or `.manager-role`, then a role shell with the common sidebar/navbar and an inner `.sr-dense-ui` workspace.
+- The active prototype implementations are under `src/features/partner` and `src/features/manager`. They are mock UI built from hard-coded/sample data and local React state; no partner or manager business API is connected.
+- Manager pages/layout import `ManagerScreen` and `ManagerShell` from `@/features/manager`. Its dashboard/workspace mock datasets and related types are centralized in `@/lib/manager-data`; keep new manager sample records there instead of embedding arrays in components.
+- Partner pages import `PartnerScreen` from `@/features/partner`; it selects specialized bookings, revenue, and verification screens or a typed workspace for the remaining modes, and owns their shared operation dialog/notice. Active partner mock datasets and related types are centralized in `@/lib/partner-data`; keep new partner sample records there instead of embedding arrays in components.
+- Several large partner components are legacy standalone mockups marked with `@ts-nocheck`. They contain their own sidebar/header markup and DOM-driven interactions and are no longer selected by `PartnerScreen`. Treat them as migration sources, not examples for new React code; progressively move any reused data into `partner-data.ts` and interactions into typed components rather than copying the pattern.
+- Only the routes listed in the table above currently have page files. Shell links such as `/partner/profile` and `/manager/profile`, and nested links found inside standalone mockups, are not proof that matching routes exist.
+
 ## 4. Code organization and imports
 
-- Keep pages and layouts focused on routing and composition. Put interaction-heavy screens in `src/components/features/<domain>` instead of copying large page files for new features.
+- Keep pages and layouts focused on routing and composition. Existing stable domains use `src/components/features/<domain>`; the in-progress partner and manager implementations currently use `src/features/<domain>`. Extend the established location for the domain being changed and do not duplicate it in the other tree.
 - Keep feature-specific logic with its feature. Move a hook to `src/hooks` only when it is genuinely shared. Put business API calls in `src/services`; types shared across modules may live in `src/types`.
 - Use PascalCase for components and types, `use` prefixes for hooks, and camelCase for variables and functions. Follow neighboring file/export names; do not rename unrelated code for cosmetic consistency.
 - Keep TypeScript strict. Define props, inputs, outputs, and state unions clearly. Avoid `any`, casts that hide errors, or disabling ESLint instead of fixing the cause.
@@ -89,7 +103,7 @@ npm run start             # Run after a successful build
 ### Working with shared components
 
 - Shared UI lives in `src/components/common`. Before changing a component, find its imports with `rg` and confirm its actual file.
-- AdminShell and StaffShell use the common sidebar/navbar; public pages use common cards, search, breadcrumb, and pagination.
+- AdminShell, StaffShell, ManagerShell, and PartnerShell use the common sidebar/navbar. Public pages use common cards, search, breadcrumb, and pagination.
 - `TableCommon` in `src/components/common/table` accepts `columns`, `data`, `getRowId`, `isLoading`, and `emptyMessage`. It is a custom table wrapper, not a TanStack Table adapter.
 
 ## 5. Next.js and React rules
@@ -125,6 +139,7 @@ Apply these conventions:
 
 - The active source is `useAuthStore`, `AuthUser`, `UserRole`, `roleDashboardPaths`, and `getSafeNextPath` from `@/lib/auth-store`.
 - The store persists user and mock-account records under `stayreco-mock-auth`. Demo passwords are stored in plain text for the prototype; do not reuse this mechanism for real authentication.
+- Demo access for these portals is generated by role: `partner@gmail.com` / `partner123` and `manager@gmail.com` / `manager123`. Successful login falls back to `/partner/dashboard` or `/manager/dashboard` through `roleDashboardPaths` unless a safe `next` path is supplied.
 - `AuthRouteGuard` waits for `hasHydrated`, sends unauthenticated users to `/login?next=...`, and sends users with the wrong role to `/403`. Each prefix requires its exact role; admin does not automatically gain access to `/account`.
 - Preserve hydration handling to avoid flashing authenticated UI or redirecting too early. When handling `next`, use the existing helper and ensure the destination stays within the app.
 - The client guard only controls UI. When connecting a backend, the API/server must authenticate and authorize requests; do not trust role or user ID from localStorage.
@@ -135,7 +150,7 @@ Apply these conventions:
 - Reuse primitives in `src/components/ui` and read their implementation props before use. They are based on Base UI; do not assume Radix APIs such as `asChild`. Many components use a `render` prop.
 - Color, typography, radius, and shadow tokens are in `src/app/globals.css` using Tailwind 4 (`@theme inline`). Prefer `bg-background`, `bg-card`, `text-foreground`, `text-muted-foreground`, `border-border`, `text-primary`, and semantic status colors.
 - Use existing classes such as `sr-marketplace-container`, `sr-workspace-content`, `sr-page-title`, and `sr-section-title` where appropriate. Do not add a separate palette or font for each page.
-- CSS includes `.partner-role`, `.manager-role`, and `.sr-dense-ui`; their presence does not mean the corresponding portals have routes. Do not apply dense styles to the entire customer-facing area.
+- Partner and manager layouts scope their portal tokens with `.partner-role` and `.manager-role`; both shells apply `.sr-dense-ui` only to the inner workspace. Keep those classes scoped to the actor portals and do not apply dense styles to the customer-facing area.
 - Design responsively from small screens. Wide tables should scroll appropriately without overflowing the whole page.
 - Icon-only buttons need accessible names; inputs need labels; dialogs need titles. Keep focus visible and controls keyboard accessible. Do not rely on color alone to communicate status.
 - New forms need validation, field-level errors, a submit state, and clear outcomes. React Hook Form and Zod are available dependencies, but there is no established project form wrapper yet.
