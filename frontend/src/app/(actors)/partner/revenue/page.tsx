@@ -1,5 +1,5 @@
-import { PartnerScreen } from '@/features/partner/partner-screen';
+import PartnerRevenue from "@/features/partner/revenue/PartnerRevenue";
 
 export default function Page() {
-  return <PartnerScreen mode="revenue" />;
+  return <PartnerRevenue />;
 }

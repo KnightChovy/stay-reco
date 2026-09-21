@@ -1,2 +1,5 @@
-import { ManagerScreen } from '@/features/manager/manager-screen';
-export default function Page() { return <ManagerScreen mode="partners" />; }
+import ManagerPartners from "@/features/manager/partners/ManagerPartners";
+
+export default function Page() {
+  return <ManagerPartners />;
+}

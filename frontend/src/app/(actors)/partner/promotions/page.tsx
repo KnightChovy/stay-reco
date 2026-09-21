@@ -1,2 +1,5 @@
-import { PartnerScreen } from '@/features/partner/partner-screen';
-export default function Page() { return <PartnerScreen mode="promotions" />; }
+import PartnerPromotions from "@/features/partner/promotions/PartnerPromotions";
+
+export default function Page() {
+  return <PartnerPromotions />;
+}

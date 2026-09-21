@@ -1,2 +1,5 @@
-import { PartnerScreen } from '@/features/partner/partner-screen';
-export default function Page() { return <PartnerScreen mode="hotel" />; }
+import PartnerHotel from "@/features/partner/hotel/PartnerHotel";
+
+export default function Page() {
+  return <PartnerHotel />;
+}

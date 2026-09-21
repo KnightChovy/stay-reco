@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Download, ReceiptText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { PartnerPanel, PartnerTitle } from '@/features/partner/partner-primitives';
+import { PartnerPanel, PartnerTitle, usePartnerActions } from '@/features/partner/components';
 import AppFilter, { type FilterDefinition, type FilterValues } from '@/components/common/filter/AppFilter';
 import { TablePagination } from '@/components/common/table/TablePagination';
 import {
@@ -16,11 +16,10 @@ import {
   partnerSettlementStatuses,
 } from '@/lib/partner-data';
 
-type Notify = (message: string) => void;
-
 const settlementFilters: FilterDefinition[] = [{ key: 'status', label: 'trạng thái', type: 'select', allLabel: 'Tất cả trạng thái', options: partnerSettlementStatuses.map((status) => ({ label: status, value: status })) }];
 
-export function PartnerRevenueScreen({ notify }: { notify: Notify }) {
+export default function PartnerRevenue() {
+  const { notify } = usePartnerActions();
   const [page, setPage] = useState(1);
   const [filterValues, setFilterValues] = useState<FilterValues>({});
   const pageSize = 4;

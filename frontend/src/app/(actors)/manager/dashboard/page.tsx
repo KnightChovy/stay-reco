@@ -1,2 +1,5 @@
-import { ManagerScreen } from '@/features/manager/manager-screen';
-export default function Page() { return <ManagerScreen mode="dashboard" />; }
+import ManagerDashboard from "@/features/manager/dashboard/ManagerDashboard";
+
+export default function Page() {
+  return <ManagerDashboard />;
+}

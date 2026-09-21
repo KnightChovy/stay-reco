@@ -1,2 +1,5 @@
-import { ManagerScreen } from '@/features/manager/manager-screen';
-export default function Page() { return <ManagerScreen mode="verifications" />; }
+import ManagerVerifications from "@/features/manager/verifications/ManagerVerifications";
+
+export default function Page() {
+  return <ManagerVerifications />;
+}

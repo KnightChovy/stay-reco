@@ -1,5 +1,5 @@
-import { PartnerScreen } from '@/features/partner/partner-screen';
+import PartnerBookings from "@/features/partner/bookings/PartnerBookings";
 
 export default function Page() {
-  return <PartnerScreen mode="bookings" />;
+  return <PartnerBookings />;
 }

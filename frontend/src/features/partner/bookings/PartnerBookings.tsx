@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { CalendarDays, Plus, UserRoundCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { PartnerPanel, PartnerTitle } from '@/features/partner/partner-primitives';
+import { PartnerPanel, PartnerTitle, usePartnerActions } from '@/features/partner/components';
 import AppFilter, { type FilterDefinition, type FilterValues } from '@/components/common/filter/AppFilter';
 import { TablePagination } from '@/components/common/table/TablePagination';
 import {
@@ -14,8 +14,6 @@ import {
   partnerBookingStatuses,
   partnerOperationShifts,
 } from '@/lib/partner-data';
-
-type Notify = (message: string) => void;
 
 const bookingFilters: FilterDefinition[] = [
   {
@@ -27,7 +25,8 @@ const bookingFilters: FilterDefinition[] = [
   },
 ];
 
-export function PartnerBookingsScreen({ notify }: { notify: Notify }) {
+export default function PartnerBookings() {
+  const { notify } = usePartnerActions();
   const [page, setPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterValues, setFilterValues] = useState<FilterValues>({});

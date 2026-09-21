@@ -42,40 +42,39 @@ npm run start             # Run after a successful build
 
 ## 3. Source map
 
-| Location                                                     | Responsibility and current state                                                       |
-| ------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
-| `src/app`                                                    | App Router routes, layouts, metadata, and global CSS                                   |
-| `src/components/ui`                                          | Shared UI primitives, mostly built on Base UI                                          |
-| `src/components/features/{auth,account,booking,admin,staff}` | Domain-specific UI and logic                                                           |
-| `src/features/{partner,manager}`                             | Work-in-progress partner and manager portal screens, shells, and local UI logic        |
-| `src/components/layout`                                      | Header and Footer for customer-facing views                                            |
-| `src/components/common`                                      | Shared cards, search, breadcrumb, modal, sidebar/navbar, filter, table, and pagination |
-| `src/hooks`                                                  | Shared hooks: `use-mobile`, `use-debounce`                                             |
-| `src/lib/auth-store.ts`                                      | Mock auth used by current screens                                                      |
-| `src/lib/admin-data.ts`                                      | Admin types and sample data                                                            |
-| `src/lib/manager-data.ts`                                    | Manager portal types and centralized mock datasets                                     |
-| `src/lib/partner-data.ts`                                    | Partner portal types and centralized mock datasets                                     |
-| `src/lib/utils.ts`                                           | Re-exports `cn` from the `cn` package                                                  |
-| `src/services/ApiService.ts`                                 | Axios instance `apiService`                                                            |
-| `src/provider/query-provider.tsx`                            | `Providers` wrapping `QueryClientProvider`                                             |
-| `public`                                                     | Static assets, referenced by paths beginning with `/`                                  |
+| Location                          | Responsibility and current state                                                       |
+| --------------------------------- | -------------------------------------------------------------------------------------- | --- |
+| `src/app`                         | App Router routes, layouts, metadata, and global CSS                                   |
+| `src/components/ui`               | Shared UI primitives, mostly built on Base UI                                          |     |
+| `src/features/{partner,manager}`  | Work-in-progress partner and manager portal screens, shells, and local UI logic        |
+| `src/components/layout`           | Header and Footer for customer-facing views                                            |
+| `src/components/common`           | Shared cards, search, breadcrumb, modal, sidebar/navbar, filter, table, and pagination |
+| `src/hooks`                       | Shared hooks: `use-mobile`, `use-debounce`                                             |
+| `src/lib/auth-store.ts`           | Mock auth used by current screens                                                      |
+| `src/lib/admin-data.ts`           | Admin types and sample data                                                            |
+| `src/lib/manager-data.ts`         | Manager portal types and centralized mock datasets                                     |
+| `src/lib/partner-data.ts`         | Partner portal types and centralized mock datasets                                     |
+| `src/lib/utils.ts`                | Re-exports `cn` from the `cn` package                                                  |
+| `src/services/ApiService.ts`      | Axios instance `apiService`                                                            |
+| `src/provider/query-provider.tsx` | `Providers` wrapping `QueryClientProvider`                                             |
+| `public`                          | Static assets, referenced by paths beginning with `/`                                  |
 
 `src/stores/auth.store.ts`, `src/types/request.type.ts`, `src/constants/env.ts`, and `src/config/index.tsx` are currently empty. Do not import them as implemented modules or create a second auth store merely because the `stores` directory exists.
 
 ### Routes and layouts
 
-| Group              | URLs and notes                                                                                                        |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------- |
-| Public pages       | `/`, `/search`, `/hotels/[id]`, `/hotels/[id]/rooms/[roomId]`                                                         |
-| `(landing-page)`   | `/recommendations`, `/assistant`, `/blog`, `/blog/[slug]`                                                             |
-| `(auth)`           | `/login`, `/register`, `/forgot-password`                                                                             |
-| Booking            | `/booking` → `/booking/payment` → `/booking/confirmation`; shared layout includes Header, Footer, and BookingProgress |
-| `(actors)/account` | Profile, bookings and detail actions, preferences, notifications, security, rewards, wallet                           |
-| `(actors)/staff`   | Dashboard, bookings, check-in/out, refunds, inbox, alerts, marketing; uses `StaffShell`                               |
+| Group              | URLs and notes                                                                                                                                |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Public pages       | `/`, `/search`, `/hotels/[id]`, `/hotels/[id]/rooms/[roomId]`                                                                                 |
+| `(landing-page)`   | `/recommendations`, `/assistant`, `/blog`, `/blog/[slug]`                                                                                     |
+| `(auth)`           | `/login`, `/register`, `/forgot-password`                                                                                                     |
+| Booking            | `/booking` → `/booking/payment` → `/booking/confirmation`; shared layout includes Header, Footer, and BookingProgress                         |
+| `(actors)/account` | Profile, bookings and detail actions, preferences, notifications, security, rewards, wallet                                                   |
+| `(actors)/staff`   | Dashboard, bookings, check-in/out, refunds, inbox, alerts, marketing; uses `StaffShell`                                                       |
 | `(actors)/partner` | `/partner` redirects to dashboard; bookings, revenue, hotel, rooms, availability, pricing, promotions, loyalty, AI brand, staff, verification |
-| `(actors)/manager` | `/manager` redirects to dashboard; partners, verifications, compliance, revenue, cashflow, transactions              |
-| `(actors)/admin`   | Dashboard, users, transactions, logs, payment-settings, ai-settings; uses `AdminShell`                                |
-| Errors             | `/403`, `src/app/not-found.tsx`                                                                                       |
+| `(actors)/manager` | `/manager` redirects to dashboard; partners, verifications, compliance, revenue, cashflow, transactions                                       |
+| `(actors)/admin`   | Dashboard, users, transactions, logs, payment-settings, ai-settings; uses `AdminShell`                                                        |
+| Errors             | `/403`, `src/app/not-found.tsx`                                                                                                               |
 
 - Parenthesized route groups do not appear in URLs.
 - The root layout wraps `Providers` → `AuthRouteGuard`; it does not add Header/Footer to every page. Check the nearest layout before adding a shell to avoid duplicate rendering.
@@ -86,9 +85,9 @@ npm run start             # Run after a successful build
 
 - Both route groups use thin pages intended to select a screen by `mode`. Their layouts wrap the portal in `.partner-role` or `.manager-role`, then a role shell with the common sidebar/navbar and an inner `.sr-dense-ui` workspace.
 - The active prototype implementations are under `src/features/partner` and `src/features/manager`. They are mock UI built from hard-coded/sample data and local React state; no partner or manager business API is connected.
-- Manager pages/layout import `ManagerScreen` and `ManagerShell` from `@/features/manager`. Its dashboard/workspace mock datasets and related types are centralized in `@/lib/manager-data`; keep new manager sample records there instead of embedding arrays in components.
-- Partner pages import `PartnerScreen` from `@/features/partner`; it selects specialized bookings, revenue, and verification screens or a typed workspace for the remaining modes, and owns their shared operation dialog/notice. Active partner mock datasets and related types are centralized in `@/lib/partner-data`; keep new partner sample records there instead of embedding arrays in components.
-- Several large partner components are legacy standalone mockups marked with `@ts-nocheck`. They contain their own sidebar/header markup and DOM-driven interactions and are no longer selected by `PartnerScreen`. Treat them as migration sources, not examples for new React code; progressively move any reused data into `partner-data.ts` and interactions into typed components rather than copying the pattern.
+- Manager pages import their route-specific screens directly from `@/features/manager/<feature>`. Shared manager-only components and action state live under `@/features/manager/components`; the layout wraps the portal with `ManagerActionProvider` and `ManagerShell`. Dashboard/workspace mock datasets and related types are centralized in `@/lib/manager-data`; keep new manager sample records there instead of embedding arrays in components.
+- Partner pages import their route-specific screens directly from `@/features/partner/<feature>`. Shared partner-only components and action state live under `@/features/partner/components`; the layout wraps the portal with `PartnerActionProvider` and `PartnerShell`. Specialized bookings, revenue, and verification screens own their interactions, while the remaining prototype routes compose the typed `PartnerWorkspace`. Active partner mock datasets and related types are centralized in `@/lib/partner-data`; keep new partner sample records there instead of embedding arrays in components.
+- The unused standalone manager and partner mockups with duplicated shell markup and DOM-driven interactions have been removed after their active data and interactions were migrated. New actor screens should extend the typed route-specific feature structure rather than reintroducing full-page standalone prototypes.
 - Only the routes listed in the table above currently have page files. Shell links such as `/partner/profile` and `/manager/profile`, and nested links found inside standalone mockups, are not proof that matching routes exist.
 
 ## 4. Code organization and imports

@@ -1,2 +1,5 @@
-import { PartnerScreen } from '@/features/partner/partner-screen';
-export default function Page() { return <PartnerScreen mode="verification" />; }
+import PartnerVerification from "@/features/partner/verification/PartnerVerification";
+
+export default function Page() {
+  return <PartnerVerification />;
+}

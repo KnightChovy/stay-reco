@@ -1,2 +1,5 @@
-import { PartnerScreen } from '@/features/partner/partner-screen';
-export default function Page() { return <PartnerScreen mode="availability" />; }
+import PartnerAvailability from "@/features/partner/availability/PartnerAvailability";
+
+export default function Page() {
+  return <PartnerAvailability />;
+}

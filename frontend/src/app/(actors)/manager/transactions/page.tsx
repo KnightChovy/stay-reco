@@ -1,2 +1,5 @@
-import { ManagerScreen } from '@/features/manager/manager-screen';
-export default function Page() { return <ManagerScreen mode="transactions" />; }
+import ManagerTransactions from "@/features/manager/transactions/ManagerTransactions";
+
+export default function Page() {
+  return <ManagerTransactions />;
+}

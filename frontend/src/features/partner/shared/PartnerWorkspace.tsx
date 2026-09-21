@@ -1,74 +1,15 @@
 "use client";
 
-import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { OperationDialog } from "@/components/common/modal/OperationDialog";
-import { PartnerBookingsScreen } from "@/features/partner/bookings/partner-bookings-screen";
-import {
-  PartnerNotice,
-  PartnerPanel,
-  PartnerTitle,
-} from "@/features/partner/partner-primitives";
-import { PartnerRevenueScreen } from "@/features/partner/revenue/partner-revenue-screen";
-import { PartnerVerificationFlowScreen } from "@/features/partner/verification/partner-verification-flow-screen";
+import { PartnerPanel, PartnerTitle, usePartnerActions } from "../components";
 import {
   partnerWorkspaces,
-  type PartnerMode,
-  type PartnerWorkspace,
+  type PartnerWorkspaceMode,
 } from "@/lib/partner-data";
 
-type Notify = (message: string) => void;
-
-export function PartnerScreen({ mode }: { mode: PartnerMode }) {
-  const [action, setAction] = useState("");
-  const [notice, setNotice] = useState("");
-  const notify: Notify = (message) => setAction(message);
-
-  return (
-    <>
-      <PartnerScreenContent mode={mode} notify={notify} />
-      <OperationDialog
-        action={action}
-        onClose={() => setAction("")}
-        onComplete={() => {
-          setNotice(`${action} đã được ghi nhận.`);
-          setAction("");
-        }}
-      />
-      {notice && (
-        <PartnerNotice message={notice} onClose={() => setNotice("")} />
-      )}
-    </>
-  );
-}
-
-function PartnerScreenContent({
-  mode,
-  notify,
-}: {
-  mode: PartnerMode;
-  notify: Notify;
-}) {
-  if (mode === "bookings") {
-    return <PartnerBookingsScreen notify={notify} />;
-  }
-  if (mode === "revenue") {
-    return <PartnerRevenueScreen notify={notify} />;
-  }
-  if (mode === "verification") {
-    return <PartnerVerificationFlowScreen notify={notify} />;
-  }
-
-  return <PartnerWorkspaceScreen data={partnerWorkspaces[mode]} notify={notify} />;
-}
-
-function PartnerWorkspaceScreen({
-  data,
-  notify,
-}: {
-  data: PartnerWorkspace;
-  notify: Notify;
-}) {
+export function PartnerWorkspace({ mode }: { mode: PartnerWorkspaceMode }) {
+  const { notify } = usePartnerActions();
+  const data = partnerWorkspaces[mode];
   const Icon = data.icon;
 
   return (
@@ -89,7 +30,7 @@ function PartnerWorkspaceScreen({
             <Icon size={21} />
           </span>
           <p className="mt-5 text-xs font-semibold text-muted-foreground">
-            TỔNG QUAN
+            Tổng quan
           </p>
           <strong className="mt-2 block text-2xl text-primary">
             {data.summary}

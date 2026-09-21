@@ -1,2 +1,5 @@
-import { ManagerScreen } from '@/features/manager/manager-screen';
-export default function Page() { return <ManagerScreen mode="cashflow" />; }
+import ManagerCashflow from "@/features/manager/cashflow/ManagerCashflow";
+
+export default function Page() {
+  return <ManagerCashflow />;
+}

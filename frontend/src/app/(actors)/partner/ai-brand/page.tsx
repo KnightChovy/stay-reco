@@ -1,2 +1,5 @@
-import { PartnerScreen } from '@/features/partner/partner-screen';
-export default function Page() { return <PartnerScreen mode="ai-brand" />; }
+import PartnerAiBrand from "@/features/partner/ai-brand/PartnerAiBrand";
+
+export default function Page() {
+  return <PartnerAiBrand />;
+}

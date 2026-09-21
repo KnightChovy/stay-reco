@@ -1,9 +1,12 @@
 import type { ReactNode } from "react";
-import { ManagerShell } from "@/features/manager/manager-shell";
+import { ManagerActionProvider } from "@/features/manager/components";
+import { ManagerShell } from "@/features/manager/shell/ManagerShell";
 export default function ManagerLayout({ children }: { children: ReactNode }) {
   return (
     <div className="manager-role">
-      <ManagerShell>{children}</ManagerShell>
+      <ManagerActionProvider>
+        <ManagerShell>{children}</ManagerShell>
+      </ManagerActionProvider>
     </div>
   );
 }

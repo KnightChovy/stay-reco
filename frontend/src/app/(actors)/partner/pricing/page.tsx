@@ -1,2 +1,5 @@
-import { PartnerScreen } from '@/features/partner/partner-screen';
-export default function Page() { return <PartnerScreen mode="pricing" />; }
+import PartnerPricing from "@/features/partner/pricing/PartnerPricing";
+
+export default function Page() {
+  return <PartnerPricing />;
+}

@@ -1,19 +1,5 @@
-"use client";
-
 import type { ReactNode } from "react";
-import { Check, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 
-export function PartnerPanel({
-  children,
-  className = "",
-}: {
-  children: ReactNode;
-  className?: string;
-}) {
-  return <Card className={`bg-card shadow-card ${className}`}>{children}</Card>;
-}
 export function PartnerTitle({
   title,
   description,
@@ -40,27 +26,5 @@ export function PartnerTitle({
       </div>
       {action && <div className="flex shrink-0 flex-wrap gap-2">{action}</div>}
     </section>
-  );
-}
-export function PartnerNotice({
-  message,
-  onClose,
-}: {
-  message: string;
-  onClose: () => void;
-}) {
-  return (
-    <output className="fixed bottom-5 right-5 z-50 flex max-w-sm items-center gap-3 rounded-xl border border-success/20 bg-card p-4 text-sm shadow-dialog">
-      <Check size={18} className="text-success" />
-      <span className="flex-1">{message}</span>
-      <Button
-        variant="ghost"
-        size="icon-xs"
-        onClick={onClose}
-        aria-label="Đóng thông báo"
-      >
-        <X size={15} />
-      </Button>
-    </output>
   );
 }
