@@ -1,4 +1,4 @@
-import { AdminScreen } from '@/components/features/admin/admin-screen';
+import { AdminScreen } from '@/features/admin/admin-screen';
 export default async function TransactionDetailPage({
   params,
 }: PageProps<'/admin/transactions/[id]'>) {
