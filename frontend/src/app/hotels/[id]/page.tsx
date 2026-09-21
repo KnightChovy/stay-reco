@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
-import AppBreadcrumb from '@/common/breadcrumb/AppBreadcrumb';
+import AppBreadcrumb from '@/components/common/breadcrumb/AppBreadcrumb';
 
 export default function HotelDetailPage() {
   const [selectedRoom, setSelectedRoom] = useState<string | null>(null);

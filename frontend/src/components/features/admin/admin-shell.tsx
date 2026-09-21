@@ -3,8 +3,8 @@
 import type { ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 import { Activity, CreditCard, LayoutDashboard, ReceiptText, ShieldCheck, Sparkles, UsersRound } from 'lucide-react';
-import Sidebar, { SidebarProvider, type SidebarItem } from '@/common/sidebar/Sidebar';
-import Navbar from '@/common/navbar/Navbar';
+import Sidebar, { SidebarProvider, type SidebarItem } from '@/components/common/sidebar/Sidebar';
+import Navbar from '@/components/common/navbar/Navbar';
 import { SidebarInset } from '@/components/ui/sidebar';
 
 const navigation: Omit<SidebarItem, 'isActive'>[] = [
