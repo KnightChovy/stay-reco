@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { Bell, ChevronDown, House, Search, UserRound } from 'lucide-react';
+import { Bell, ChevronDown, House, LogOut, Search, UserRound } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -16,8 +17,9 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { SidebarTrigger } from '@/components/ui/sidebar';
+import { useAuthStore } from '@/lib/auth-store';
 import { cn } from '@/lib/utils';
-import {Avatar, AvatarFallback, AvatarImage } from '@/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 type NavbarUser = {
   name: string;
@@ -60,6 +62,8 @@ export default function Navbar({
   className,
   context,
 }: NavbarProps) {
+  const router = useRouter();
+  const logout = useAuthStore((state) => state.logout);
   const [query, setQuery] = useState('');
   const visibleNotificationCount =
     notificationCount > 9 ? '9+' : notificationCount;
@@ -67,6 +71,11 @@ export default function Navbar({
   const handleSearch = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     onSearch?.(query.trim());
+  };
+
+  const handleLogout = () => {
+    logout();
+    router.replace('/');
   };
 
   return (
@@ -182,6 +191,14 @@ export default function Navbar({
             >
               <House className="size-4" aria-hidden="true" />
               Trang chủ
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={handleLogout}
+              className="min-h-10 px-3 text-sm text-destructive focus:text-destructive"
+            >
+              <LogOut className="size-4" aria-hidden="true" />
+              Đăng xuất
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

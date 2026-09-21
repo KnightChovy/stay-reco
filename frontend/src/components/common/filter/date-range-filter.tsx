@@ -7,7 +7,7 @@ import type { DateRange } from 'react-day-picker';
 
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
-import { Popover, PopoverContent, PopoverTrigger } from '@/ui/popover';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 type DateRangeFilterProps = {
   label: string;

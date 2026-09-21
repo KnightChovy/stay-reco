@@ -2,15 +2,15 @@
 
 import { ChevronDown } from 'lucide-react';
 
-import { Badge } from '@/ui/badge';
-import { Checkbox } from '@/ui/checkbox';
+import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Popover,
   PopoverContent,
   PopoverHeader,
   PopoverTitle,
   PopoverTrigger,
-} from '@/ui/popover';
+} from '@/components/ui/popover';
 
 import type { FilterOption } from './filter-types';
 

@@ -4,9 +4,9 @@ import { useState } from 'react';
 import Link from 'next/link';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
-import AppBreadcrumb from '@/common/breadcrumb/AppBreadcrumb';
-import HotelCard, { type HotelCardProps } from '@/common/card/HotelCard';
-import Pagination from '@/common/pagination/Pagination';
+import AppBreadcrumb from '@/components/common/breadcrumb/AppBreadcrumb';
+import HotelCard, { type HotelCardProps } from '@/components/common/card/HotelCard';
+import Pagination from '@/components/common/pagination/Pagination';
 
 export default function SearchPage() {
   const [currentPage, setCurrentPage] = useState(1);

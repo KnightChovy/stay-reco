@@ -5,7 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
-import AppBreadcrumb from '@/common/breadcrumb/AppBreadcrumb';
+import AppBreadcrumb from '@/components/common/breadcrumb/AppBreadcrumb';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -13,7 +13,6 @@ import { Badge } from '@/components/ui/badge';
 import {
   Sparkles,
   Send,
-  Bot,
   User,
   Building2,
   MapPin,
@@ -107,8 +106,14 @@ export default function AssistantPage() {
           />
 
           <div className="flex items-center gap-4 bg-white p-4 sm:p-5 rounded-2xl border border-border shadow-2xs">
-            <div className="relative size-14 rounded-full bg-linear-to-r from-primary via-[#193b56] to-[#ae583c] text-white flex items-center justify-center shrink-0 shadow-md ring-4 ring-primary/10">
-              <Bot className="size-8 animate-pulse" />
+            <div className="relative flex size-14 shrink-0 items-center justify-center rounded-full bg-white shadow-md ring-4 ring-primary/10">
+              <Image
+                src="/images/logo_chatbot.png"
+                alt="Logo Trợ lý AI StayReco"
+                width={56}
+                height={56}
+                className="size-11 object-contain"
+              />
               <span className="absolute -bottom-0.5 -right-0.5 size-4 rounded-full bg-emerald-500 border-2 border-white" />
             </div>
             <div className="space-y-1">
@@ -158,10 +163,20 @@ export default function AssistantPage() {
                     className={`size-8 sm:size-9 rounded-full flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs ${
                       msg.sender === 'user'
                         ? 'bg-[#934a33] text-white'
-                        : 'bg-primary text-white'
+                        : 'bg-white ring-1 ring-primary/15'
                     }`}
                   >
-                    {msg.sender === 'user' ? <User className="size-4" /> : <Bot className="size-4" />}
+                    {msg.sender === 'user' ? (
+                      <User className="size-4" />
+                    ) : (
+                      <Image
+                        src="/images/logo_chatbot.png"
+                        alt=""
+                        width={36}
+                        height={36}
+                        className="size-7 object-contain"
+                      />
+                    )}
                   </div>
 
                   <div className={`space-y-3 max-w-lg ${msg.sender === 'user' ? 'text-right' : ''}`}>
@@ -169,7 +184,7 @@ export default function AssistantPage() {
                       className={`p-3.5 rounded-2xl text-xs sm:text-sm leading-relaxed shadow-2xs inline-block text-left ${
                         msg.sender === 'user'
                           ? 'bg-[#934a33] text-white rounded-tr-none font-medium'
-                          : 'bg-slate-100 text-foreground rounded-tl-none border border-slate-200/60 font-medium'
+                          : 'bg-primary/5 text-foreground rounded-tl-none border border-primary/15 font-medium'
                       }`}
                     >
                       {msg.text}

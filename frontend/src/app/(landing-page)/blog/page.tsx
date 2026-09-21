@@ -3,9 +3,9 @@
 import { useState } from 'react';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
-import AppBreadcrumb from '@/common/breadcrumb/AppBreadcrumb';
-import ArticleCard, { type ArticleCardProps } from '@/common/card/ArticleCard';
-import Pagination from '@/common/pagination/Pagination';
+import AppBreadcrumb from '@/components/common/breadcrumb/AppBreadcrumb';
+import ArticleCard, { type ArticleCardProps } from '@/components/common/card/ArticleCard';
+import Pagination from '@/components/common/pagination/Pagination';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';

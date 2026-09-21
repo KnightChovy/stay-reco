@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { SlidersHorizontal, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/ui/badge';
+import { Badge } from '@/components/ui/badge';
 import { useDebounce } from '@/hooks/use-debounce';
 import { cn } from '@/lib/utils';
 

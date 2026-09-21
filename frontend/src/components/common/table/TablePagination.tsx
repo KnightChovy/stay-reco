@@ -1,4 +1,4 @@
-import Pagination from "../pagination/Pagination";
+import Pagination from '@/components/common/pagination/Pagination';
 
 
 type TablePaginationProps = {

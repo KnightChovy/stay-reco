@@ -2,6 +2,8 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import type { ReactNode } from 'react';
 import {
   Building2,
   CalendarDays,
@@ -12,6 +14,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuthStore } from '@/lib/auth-store';
 import {
   Sidebar as ShadcnSidebar,
   SidebarContent,
@@ -44,6 +47,7 @@ export type SidebarProps = {
   contextName?: string;
   onLogout?: () => void;
   logoutLabel?: string;
+  footerContent?: ReactNode;
   className?: string;
 };
 
@@ -65,8 +69,11 @@ export default function Sidebar({
   contextName,
   onLogout,
   logoutLabel = 'Đăng xuất',
+  footerContent,
   className,
 }: SidebarProps) {
+  const router = useRouter();
+  const logout = useAuthStore((state) => state.logout);
   const groupedItems = items.reduce<Array<{ label: string; items: SidebarItem[] }>>(
     (groups, item) => {
       const label = item.section ?? 'Điều hướng';
@@ -77,6 +84,16 @@ export default function Sidebar({
     },
     [],
   );
+
+  const handleLogout = () => {
+    if (onLogout) {
+      onLogout();
+      return;
+    }
+
+    logout();
+    router.replace('/');
+  };
 
   return (
     <ShadcnSidebar
@@ -163,11 +180,12 @@ export default function Sidebar({
       </SidebarContent>
 
       <SidebarFooter className="border-t border-sidebar-border p-3">
+        {footerContent}
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton
               size="lg"
-              onClick={() => onLogout?.()}
+              onClick={handleLogout}
               tooltip={logoutLabel}
               className="rounded-lg px-3 text-muted-foreground hover:bg-danger-soft hover:text-danger"
             >
