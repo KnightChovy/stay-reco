@@ -46,7 +46,7 @@ npm run start             # Run after a successful build
 | --------------------------------- | -------------------------------------------------------------------------------------- | --- |
 | `src/app`                         | App Router routes, layouts, metadata, and global CSS                                   |
 | `src/components/ui`               | Shared UI primitives, mostly built on Base UI                                          |     |
-| `src/features/{partner,manager}`  | Work-in-progress partner and manager portal screens, shells, and local UI logic        |
+| `src/features`                    | Domain screens, shells, feature-local UI, and client interactions                        |
 | `src/components/layout`           | Header and Footer for customer-facing views                                            |
 | `src/components/common`           | Shared cards, search, breadcrumb, modal, sidebar/navbar, filter, table, and pagination |
 | `src/hooks`                       | Shared hooks: `use-mobile`, `use-debounce`                                             |
@@ -92,7 +92,7 @@ npm run start             # Run after a successful build
 
 ## 4. Code organization and imports
 
-- Keep pages and layouts focused on routing and composition. Existing stable domains use `src/components/features/<domain>`; the in-progress partner and manager implementations currently use `src/features/<domain>`. Extend the established location for the domain being changed and do not duplicate it in the other tree.
+- Keep pages and layouts focused on routing and composition. Domain implementations live in `src/features/<domain>`; extend the established domain location and do not duplicate it under `src/components`.
 - Keep feature-specific logic with its feature. Move a hook to `src/hooks` only when it is genuinely shared. Put business API calls in `src/services`; types shared across modules may live in `src/types`.
 - Use PascalCase for components and types, `use` prefixes for hooks, and camelCase for variables and functions. Follow neighboring file/export names; do not rename unrelated code for cosmetic consistency.
 - Keep TypeScript strict. Define props, inputs, outputs, and state unions clearly. Avoid `any`, casts that hide errors, or disabling ESLint instead of fixing the cause.

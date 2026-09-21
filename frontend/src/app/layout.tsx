@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { Be_Vietnam_Pro } from 'next/font/google';
-import AuthRouteGuard from '@/components/features/auth/AuthRouteGuard';
+import AuthRouteGuard from '@/features/auth/AuthRouteGuard';
 import { Providers } from '../provider/query-provider';
 import './globals.css';
 

@@ -1,15 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import { Notice } from '@/components/features/admin/admin-primitives';
-import { Dashboard } from '@/components/features/admin/screens/dashboard-screen';
-import { UsersPage } from '@/components/features/admin/screens/users-screen';
-import { UserDetail } from '@/components/features/admin/screens/user-detail-screen';
-import { PaymentSettings } from '@/components/features/admin/screens/payment-settings-screen';
-import { TransactionsPage } from '@/components/features/admin/screens/transactions-screen';
-import { TransactionDetail } from '@/components/features/admin/screens/transaction-detail-screen';
-import { LogsPage } from '@/components/features/admin/screens/logs-screen';
-import { AiSettings } from '@/components/features/admin/screens/ai-settings-screen';
+import { Notice } from '@/features/admin/admin-primitives';
+import { Dashboard } from '@/features/admin/screens/dashboard-screen';
+import { UsersPage } from '@/features/admin/screens/users-screen';
+import { UserDetail } from '@/features/admin/screens/user-detail-screen';
+import { PaymentSettings } from '@/features/admin/screens/payment-settings-screen';
+import { TransactionsPage } from '@/features/admin/screens/transactions-screen';
+import { TransactionDetail } from '@/features/admin/screens/transaction-detail-screen';
+import { LogsPage } from '@/features/admin/screens/logs-screen';
+import { AiSettings } from '@/features/admin/screens/ai-settings-screen';
 
 type Mode =
   | 'dashboard'

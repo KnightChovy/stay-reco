@@ -19,7 +19,7 @@ import {
   TrendingUp,
   Users,
 } from 'lucide-react';
-import { Badge } from '@/components/features/admin/admin-primitives';
+import { Badge } from '@/features/admin/admin-primitives';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 

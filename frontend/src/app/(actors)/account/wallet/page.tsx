@@ -5,7 +5,7 @@ import Link from 'next/link';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import AppBreadcrumb from '@/components/common/breadcrumb/AppBreadcrumb';
-import AccountSubNav from '@/components/features/account/AccountSubNav';
+import AccountSubNav from '@/features/account/AccountSubNav';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
