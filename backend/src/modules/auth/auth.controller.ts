@@ -23,6 +23,7 @@ import {
   CurrentUser,
 } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
+import { ErrorCode } from '../../common/errors/error-code';
 import {
   ReqMeta,
   type RequestMeta,
@@ -113,7 +114,12 @@ export class AuthController {
     const token =
       dto.refreshToken ??
       (req.cookies as Record<string, string | undefined>)[REFRESH_COOKIE];
-    if (!token) throw new UnauthorizedException('Missing refresh token');
+    if (!token) {
+      throw new UnauthorizedException({
+        code: ErrorCode.AUTH_REFRESH_TOKEN_INVALID,
+        message: 'Missing refresh token',
+      });
+    }
 
     try {
       const tokens = await this.auth.refresh(token, meta);

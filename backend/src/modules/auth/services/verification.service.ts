@@ -1,7 +1,14 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { VerificationTokenType } from '@prisma/client';
+import { ErrorCode } from '../../../common/errors/error-code';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { generateToken, hashToken } from '../crypto.util';
+
+const invalidToken = () =>
+  new BadRequestException({
+    code: ErrorCode.AUTH_TOKEN_INVALID,
+    message: 'Invalid or expired token',
+  });
 
 const TTL_MS: Record<VerificationTokenType, number> = {
   EMAIL_VERIFY: 24 * 60 * 60 * 1000,
@@ -39,14 +46,14 @@ export class VerificationService {
       where: { tokenHash: hashToken(token) },
     });
     if (!record || record.type !== type || record.expiresAt <= new Date()) {
-      throw new BadRequestException('Invalid or expired token');
+      throw invalidToken();
     }
 
     const { count } = await this.prisma.verificationToken.updateMany({
       where: { id: record.id, usedAt: null },
       data: { usedAt: new Date() },
     });
-    if (count === 0) throw new BadRequestException('Invalid or expired token');
+    if (count === 0) throw invalidToken();
 
     return record.accountId;
   }
