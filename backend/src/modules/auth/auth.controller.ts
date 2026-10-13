@@ -13,6 +13,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { Role } from '@prisma/client';
 import type { Request, Response } from 'express';
@@ -51,6 +52,7 @@ const COOKIE_PATH = `/${API_PREFIX}/auth`;
 const LOGIN_LIMIT = { default: { limit: 5, ttl: 60_000 } };
 const EMAIL_LIMIT = { default: { limit: 3, ttl: 15 * 60_000 } };
 
+@ApiTags('auth')
 @Controller('auth')
 export class AuthController {
   constructor(
