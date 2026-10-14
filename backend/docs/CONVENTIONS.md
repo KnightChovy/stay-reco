@@ -1,7 +1,7 @@
 # Quy ước Backend StayReco
 
 > **Bản nháp.** Các mục có `TODO(họp)` sẽ được chốt trong buổi họp team. Sau khi chốt, cả team cùng tuân theo tài liệu này.
-> Áp dụng cho `backend/` (NestJS 11 + Prisma + PostgreSQL). Hướng dẫn dùng API cho FE/mobile nằm ở [API_GUIDE.md](./API_GUIDE.md).
+> Áp dụng cho `backend/` (NestJS 11 + Prisma + PostgreSQL). Hướng dẫn dùng API cho FE/mobile nằm ở [api-guide.md](../../packages/docs/api-guide.md). Phase và contract: [packages/docs](../../packages/docs/README.md).
 
 ## 1. Đặt tên URL API
 
@@ -82,22 +82,23 @@ Nhóm `/auth/...` là một feature riêng nên vẫn đúng cách A. `TODO(họ
 src/
   common/           decorators, guards, filters, interceptors, pipes, errors (ErrorCode), http (kiểu response) dùng chung
   config/           kiểm tra biến môi trường (zod)
+  (packages/shared) zod schema, ErrorCode, enum, kiểu response dùng chung với FE/mobile
   prisma/           PrismaService
   modules/<feature>/
     <feature>.module.ts
     <feature>.controller.ts        chỉ nhận request, validate DTO, gọi service
     services/<feature>.service.ts  logic nghiệp vụ, gọi Prisma
-    dto/<feature>.dto.ts           class-validator DTO cho input
+    dto/<feature>.dto.ts           DTO bọc zod schema từ @stayreco/shared: `class XDto extends zodDto(xSchema) {}`
 ```
 
 - Tên thư mục và tên file dùng kebab-case. Tên class dùng PascalCase kèm hậu tố (`BookingService`, `CreateBookingDto`).
 - Controller không gọi Prisma trực tiếp và không chứa logic nghiệp vụ.
-- Mọi input phải đi qua DTO. ValidationPipe đang bật `whitelist` và `forbidNonWhitelisted`, nên field lạ sẽ bị trả **400**.
+- Mọi input phải đi qua DTO. Schema viết trong `packages/shared/src/schemas/<feature>.ts` (dùng `z.strictObject` để field lạ bị trả **400**), rồi bọc bằng `zodDto` (`common/pipes/validation.ts`). `ZodValidationPipe` toàn cục sẽ validate và chuẩn hóa (trim, lowercase...) trước khi vào controller. Không viết luật validate riêng ở backend: FE và mobile dùng chung schema đó.
 - Response chỉ trả field cần thiết, chọn bằng `select` hoặc hàm map rõ ràng (xem `toAccountResponse`). Không trả nguyên object Prisma, vì có thể lộ `passwordHash` hoặc cột nội bộ.
 - Mọi endpoint mặc định cần đăng nhập. Endpoint công khai phải gắn `@Public()`. Giới hạn role bằng `@Roles(...)`.
 - **Response**: controller trả **dữ liệu trần**. `ResponseInterceptor` sẽ tự bọc thành `{ success, message, data }`, đừng tự bọc trong controller. Danh sách có phân trang thì trả `Paginated.of(items, { page, pageSize, total })` (`common/http/api-response.ts`). Endpoint không trả gì thì dùng `@HttpCode(204)`.
-- **Lỗi**: ném exception có sẵn của NestJS kèm mã cố định, ví dụ `throw new ConflictException({ code: ErrorCode.AUTH_EMAIL_TAKEN, message: 'Email is already registered' })`. Mã mới phải thêm vào `common/errors/error-code.ts` **và** bảng 4.3 trong [API_GUIDE.md](./API_GUIDE.md). Đặt tên `<FEATURE>_<MÔ_TẢ>`, không đổi tên mã đã công bố. `HttpExceptionFilter` lo phần định dạng, lỗi không lường trước sẽ thành 500 `INTERNAL_ERROR` và được ghi log.
-- **Swagger**: CLI plugin (`nest-cli.json`) tự sinh tài liệu từ kiểu TypeScript, decorator `class-validator` và comment `/** */` trong DTO, nên **không** viết `@ApiProperty` cho từng field. Mỗi controller gắn `@ApiTags('<feature>')`. Chỉ viết `@ApiProperty` khi plugin không tự hiểu được, ví dụ decorator tự gộp như `IsStrongPassword`.
+- **Lỗi**: ném exception có sẵn của NestJS kèm mã cố định, ví dụ `throw new ConflictException({ code: ErrorCode.AUTH_EMAIL_TAKEN, message: 'Email is already registered' })`. Mã mới phải thêm vào `packages/shared/src/errors.ts` **và** bảng 4.3 trong [api-guide.md](../../packages/docs/api-guide.md). Đặt tên `<FEATURE>_<MÔ_TẢ>`, không đổi tên mã đã công bố. `HttpExceptionFilter` lo phần định dạng, lỗi không lường trước sẽ thành 500 `INTERNAL_ERROR` và được ghi log.
+- **Swagger**: body schema sinh tự động từ zod schema qua `zodDto` (dùng `z.toJSONSchema`), nên **không** viết `@ApiProperty`. Mô tả field thì thêm `.meta({ description })` trong schema. Mỗi controller gắn `@ApiTags('<feature>')`.
 - Thao tác quan trọng (tạo, sửa, phê duyệt, tiền, bảo mật) phải ghi `AuditService.log(...)`. Khi thêm hành động mới thì bổ sung vào enum `AuditAction`.
 
 ## 3. Cơ sở dữ liệu và migration
@@ -137,4 +138,4 @@ src/
 - [ ] `npm run test:e2e` pass, đã thêm test cho endpoint mới
 - [ ] Nếu có đổi schema thì đã kèm migration, và seed vẫn chạy được
 - [ ] Endpoint mới đúng quy ước URL ở mục 1, đã có `@Roles` hoặc `@Public`, đã kiểm tra tenant nếu cần
-- [ ] Đã cập nhật [API_GUIDE.md](./API_GUIDE.md) hoặc Swagger nếu đổi hợp đồng API
+- [ ] Đã cập nhật contract của phase trong `packages/docs/contracts/` (và [api-guide.md](../../packages/docs/api-guide.md) nếu đổi quy tắc chung) khi đổi hợp đồng API
