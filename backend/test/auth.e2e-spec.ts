@@ -31,7 +31,7 @@ describe('Auth (e2e)', () => {
       .post('/api/v1/auth/register/customer')
       .send({ email, password: PASSWORD, fullName: 'Alice' })
       .expect(201);
-    return res.body as {
+    return res.body.data as {
       account: { id: string; emailVerified: boolean };
       accessToken: string;
       refreshToken: string;
@@ -43,7 +43,7 @@ describe('Auth (e2e)', () => {
       .post('/api/v1/auth/login')
       .send({ email, password })
       .expect(200);
-    return res.body as { accessToken: string; refreshToken: string };
+    return res.body.data as { accessToken: string; refreshToken: string };
   };
 
   beforeAll(async () => {
@@ -74,6 +74,52 @@ describe('Auth (e2e)', () => {
     await app.close();
   });
 
+  describe('response contract', () => {
+    it('wraps success as { success, message, data }', async () => {
+      const res = await api().get('/api/v1/health').expect(200);
+      expect(res.body).toEqual({
+        success: true,
+        message: 'OK',
+        data: { status: 'ok' },
+      });
+    });
+
+    it('sends no body for 204', async () => {
+      const res = await api()
+        .post('/api/v1/auth/forgot-password')
+        .send({ email: 'nobody@example.com' })
+        .expect(204);
+      expect(res.text).toBe('');
+    });
+
+    it('formats validation errors with field details', async () => {
+      const res = await api()
+        .post('/api/v1/auth/register/customer')
+        .send({ email: 'not-an-email', password: 'short', fullName: 'B' })
+        .expect(400);
+      expect(res.body).toMatchObject({
+        success: false,
+        code: 'VALIDATION_ERROR',
+        message: 'Validation failed',
+      });
+      const fields = (res.body.details as { field: string }[]).map(
+        (d) => d.field,
+      );
+      expect(fields).toEqual(expect.arrayContaining(['email', 'password']));
+    });
+
+    it('gives errors without a specific code one derived from the status', async () => {
+      const res = await api().get('/api/v1/auth/me').expect(401);
+      expect(res.body).toEqual({
+        success: false,
+        message: 'Unauthorized',
+        code: 'UNAUTHENTICATED',
+      });
+      const missing = await api().get('/api/v1/does-not-exist').expect(404);
+      expect(missing.body).toMatchObject({ success: false, code: 'NOT_FOUND' });
+    });
+  });
+
   describe('register', () => {
     it('creates a customer, returns tokens and sends a verification email', async () => {
       const body = await registerCustomer();
@@ -92,7 +138,7 @@ describe('Auth (e2e)', () => {
 
     it('normalizes email and rejects duplicates', async () => {
       await registerCustomer();
-      await api()
+      const dup = await api()
         .post('/api/v1/auth/register/partner')
         .send({
           email: '  ALICE@example.com ',
@@ -100,6 +146,7 @@ describe('Auth (e2e)', () => {
           fullName: 'A',
         })
         .expect(409);
+      expect(dup.body.code).toBe('AUTH_EMAIL_TAKEN');
     });
 
     it('rejects weak passwords and unknown fields', async () => {
@@ -131,6 +178,8 @@ describe('Auth (e2e)', () => {
         .send({ email: 'nobody@example.com', password: PASSWORD })
         .expect(401);
       expect(wrongPw.body.message).toBe(unknown.body.message);
+      expect(wrongPw.body.code).toBe('AUTH_INVALID_CREDENTIALS');
+      expect(unknown.body.code).toBe('AUTH_INVALID_CREDENTIALS');
     });
 
     it('logs in and reads /me', async () => {
@@ -141,7 +190,7 @@ describe('Auth (e2e)', () => {
         .get('/api/v1/auth/me')
         .set('Authorization', `Bearer ${accessToken}`)
         .expect(200);
-      expect(me.body).toMatchObject({ email: 'alice@example.com' });
+      expect(me.body.data).toMatchObject({ email: 'alice@example.com' });
 
       await api().get('/api/v1/auth/me').expect(401);
       await api()
@@ -158,10 +207,11 @@ describe('Auth (e2e)', () => {
           .send({ email: 'alice@example.com', password: 'Wrong12345' })
           .expect(401);
       }
-      await api()
+      const locked = await api()
         .post('/api/v1/auth/login')
         .send({ email: 'alice@example.com', password: PASSWORD })
         .expect(403);
+      expect(locked.body.code).toBe('AUTH_ACCOUNT_LOCKED');
     });
   });
 
@@ -177,7 +227,7 @@ describe('Auth (e2e)', () => {
         .get('/api/v1/auth/me')
         .set('Authorization', `Bearer ${accessToken}`)
         .expect(200);
-      expect(me.body.emailVerified).toBe(true);
+      expect(me.body.data.emailVerified).toBe(true);
     });
 
     it('resend invalidates the previous token', async () => {
@@ -207,22 +257,24 @@ describe('Auth (e2e)', () => {
         .post('/api/v1/auth/refresh')
         .send({ refreshToken: first })
         .expect(200);
-      const second = rotated.body.refreshToken as string;
+      const second = rotated.body.data.refreshToken as string;
       expect(second).not.toBe(first);
 
       // Replaying the used token = theft → whole session revoked.
-      await api()
+      const replay = await api()
         .post('/api/v1/auth/refresh')
         .send({ refreshToken: first })
         .expect(401);
+      expect(replay.body.code).toBe('AUTH_REFRESH_TOKEN_INVALID');
       await api()
         .post('/api/v1/auth/refresh')
         .send({ refreshToken: second })
         .expect(401);
-      await api()
+      const me = await api()
         .get('/api/v1/auth/me')
-        .set('Authorization', `Bearer ${rotated.body.accessToken}`)
+        .set('Authorization', `Bearer ${rotated.body.data.accessToken}`)
         .expect(401);
+      expect(me.body.code).toBe('UNAUTHENTICATED');
     });
 
     it('logout revokes the access token immediately', async () => {
@@ -250,8 +302,8 @@ describe('Auth (e2e)', () => {
         .get('/api/v1/auth/sessions')
         .set('Authorization', `Bearer ${a}`)
         .expect(200);
-      expect(list.body).toHaveLength(2);
-      const other = (list.body as { id: string; current: boolean }[]).find(
+      expect(list.body.data).toHaveLength(2);
+      const other = (list.body.data as { id: string; current: boolean }[]).find(
         (s) => !s.current,
       )!;
 
@@ -277,7 +329,7 @@ describe('Auth (e2e)', () => {
         .send({ email: 'alice@example.com', password: PASSWORD })
         .expect(200);
 
-      expect(res.body.refreshToken).toBeUndefined();
+      expect(res.body.data.refreshToken).toBeUndefined();
       const cookies = res.get('Set-Cookie') ?? [];
       const cookie = cookies.find((c) => c.startsWith('refresh_token='));
       expect(cookie).toContain('HttpOnly');
@@ -288,7 +340,7 @@ describe('Auth (e2e)', () => {
         .set('X-Client-Type', 'web')
         .set('Cookie', cookie!.split(';')[0])
         .expect(200);
-      expect(refreshed.body.accessToken).toEqual(expect.any(String));
+      expect(refreshed.body.data.accessToken).toEqual(expect.any(String));
     });
   });
 
@@ -331,11 +383,12 @@ describe('Auth (e2e)', () => {
       const { accessToken: current } = await registerCustomer();
       const { accessToken: other } = await login('alice@example.com');
 
-      await api()
+      const wrong = await api()
         .post('/api/v1/auth/change-password')
         .set('Authorization', `Bearer ${current}`)
         .send({ currentPassword: 'Wrong12345', newPassword: 'NewPass456' })
         .expect(401);
+      expect(wrong.body.code).toBe('AUTH_WRONG_PASSWORD');
       await api()
         .post('/api/v1/auth/change-password')
         .set('Authorization', `Bearer ${current}`)
@@ -374,7 +427,7 @@ describe('Auth (e2e)', () => {
 
       await api()
         .post('/api/v1/auth/invitations/staff')
-        .set('Authorization', `Bearer ${partner.body.accessToken}`)
+        .set('Authorization', `Bearer ${partner.body.data.accessToken}`)
         .send({ email: 'staff@hotel.com', fullName: 'Staff' })
         .expect(201);
 
@@ -389,11 +442,11 @@ describe('Auth (e2e)', () => {
         .post('/api/v1/auth/invitations/accept')
         .send({ token, password: PASSWORD })
         .expect(201);
-      expect(accepted.body.account).toMatchObject({
+      expect(accepted.body.data.account).toMatchObject({
         role: 'HOTEL_STAFF',
         status: 'ACTIVE',
         emailVerified: true,
-        profile: { hotelPartnerId: partner.body.account.profile.id },
+        profile: { hotelPartnerId: partner.body.data.account.profile.id },
       });
 
       await api()

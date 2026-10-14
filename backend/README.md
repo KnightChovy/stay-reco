@@ -10,7 +10,7 @@ cp .env.example .env        # then set JWT_ACCESS_SECRET
 npm run db:up               # Postgres in Docker (creates stayreco + stayreco_test)
 npm run db:migrate
 npm run db:seed             # creates the admin from SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD
-npm run start:dev           # http://localhost:3000/api/v1
+npm run dev                 # (= start:dev) http://localhost:3000/api/v1, Swagger: /api/docs
 ```
 
 Tests: `npm run test:e2e` (uses the `stayreco_test` database, see `.env.test`).
