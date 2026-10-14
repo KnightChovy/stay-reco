@@ -1,7 +1,8 @@
 # Hướng dẫn dùng API StayReco (cho FE web và mobile)
 
 > **Bản nháp.** Mục **Hiện tại** mô tả đúng hành vi của backend lúc này. Mục **Đề xuất** `TODO(họp)` là thứ sẽ đổi sau khi team chốt; FE đừng code theo phần đó cho đến khi tài liệu cập nhật.
-> Quy ước đặt URL: xem [CONVENTIONS.md](./CONVENTIONS.md#1-đặt-tên-url-api).
+> Quy ước đặt URL: xem [CONVENTIONS.md](../../backend/docs/CONVENTIONS.md#1-đặt-tên-url-api).
+> File này giữ **quy tắc chung** cho mọi API. Endpoint cụ thể của từng phase nằm trong [contracts/](./contracts/), trạng thái phase xem [README.md](./README.md).
 
 ## 1. Thông tin chung
 
@@ -44,45 +45,7 @@ FE web: đặt `NEXT_PUBLIC_API_URL=http://localhost:3000/api/v1`.
 
 ### 2.4 Các endpoint auth
 
-Cột Response là nội dung của trường `data` (xem mục 4.1).
-
-| Method | Path | Quyền | Body | Response |
-|---|---|---|---|---|
-| POST | `/auth/register/customer` | public | `{ email, password, fullName }` | `AuthResult` (201) |
-| POST | `/auth/register/partner` | public | `{ email, password, fullName, companyName? }` | `AuthResult` (201) |
-| POST | `/auth/login` | public | `{ email, password }` | `AuthResult` |
-| POST | `/auth/refresh` | public | web: `{}` · mobile: `{ refreshToken }` | web: `{ accessToken, expiresIn }` · mobile: `{ accessToken, refreshToken, expiresIn }` |
-| POST | `/auth/logout` | đăng nhập | | 204 |
-| POST | `/auth/logout-all` | đăng nhập | | 204 |
-| GET | `/auth/me` | đăng nhập | | `Account` |
-| GET | `/auth/sessions` | đăng nhập | | `Session[]` |
-| DELETE | `/auth/sessions/:id` | đăng nhập | | 204 |
-| POST | `/auth/verify-email` | public | `{ token }` | 204 |
-| POST | `/auth/resend-verification` | public | `{ email }` | 204 (luôn 204, không cho biết email có tồn tại hay không) |
-| POST | `/auth/forgot-password` | public | `{ email }` | 204 (luôn 204) |
-| POST | `/auth/reset-password` | public | `{ token, newPassword }` | 204 |
-| POST | `/auth/change-password` | đăng nhập | `{ currentPassword, newPassword }` | 204 |
-| POST | `/auth/invitations/staff` | HOTEL_PARTNER | `{ email, fullName }` | `{ id, email, status }` (201) |
-| POST | `/auth/invitations/platform-manager` | ADMIN | `{ email, fullName }` | `{ id, email, status }` (201) |
-| POST | `/auth/invitations/accept` | public | `{ token, password }` | `AuthResult` (201) |
-
-`AuthResult` gồm `account: Account`, `accessToken: string`, `expiresIn: number`. Riêng mobile có thêm `refreshToken: string`.
-
-```jsonc
-// Account
-{
-  "id": "uuid",
-  "email": "a@b.com",
-  "phone": null,
-  "role": "CUSTOMER",            // xem mục 2.6
-  "status": "ACTIVE",            // ACTIVE | INVITED | SUSPENDED | DELETED
-  "emailVerified": false,
-  "emailVerifiedAt": null,
-  "lastLoginAt": "2026-10-14T03:00:00.000Z",
-  "createdAt": "2026-10-14T03:00:00.000Z",
-  "profile": { "id": "uuid", "fullName": "Nguyễn Văn A" }  // field phụ thuộc role
-}
-```
+Danh sách endpoint, body, response (`AuthResult`, `Account`) nằm trong contract [phase 0](./contracts/phase-0-foundation.md#endpoint).
 
 ### 2.5 Các trang FE mà link trong email trỏ tới
 
@@ -104,11 +67,12 @@ Backend gửi email chứa link `WEB_APP_URL/<path>?token=...`. FE cần có 3 t
 | `PLATFORM_MANAGER` | `/manager` |
 | `ADMIN` | `/admin` |
 
-Kiểm tra quyền ở FE chỉ để điều hướng giao diện. Backend luôn kiểm tra lại quyền.
+Kiểm tra quyền ở FE chỉ để điều hướng giao diện. Backend luôn kiểm tra lại quyền. Giá trị role lấy từ `Role` trong `@stayreco/shared`, không gõ chuỗi tay.
 
 ## 3. Quy tắc dữ liệu
 
-- **Mật khẩu**: 8–128 ký tự, có ít nhất 1 chữ cái và 1 chữ số. FE nên kiểm tra giống hệt để báo lỗi sớm (MSG08).
+- **Validate form**: dùng đúng schema backend dùng, import từ `@stayreco/shared` (ví dụ `loginSchema`, `registerCustomerSchema`). Không tự viết lại luật ở FE.
+- **Mật khẩu**: 8–128 ký tự, có ít nhất 1 chữ cái và 1 chữ số (`passwordSchema`, MSG08).
 - **Email**: backend tự trim và chuyển về chữ thường.
 - **Field lạ** trong body bị trả **400**. Chỉ gửi đúng các field trong bảng trên. Ví dụ form đăng ký hiện **không** nhận `phone`.
 - **Ngày giờ**: API nhận và trả chuỗi ISO 8601 theo UTC (`2026-10-14T03:00:00.000Z`). FE tự hiển thị theo `Asia/Ho_Chi_Minh`, dạng `dd/mm/yyyy`. Ngày không có giờ (check-in, check-out) dùng `YYYY-MM-DD`.
@@ -116,7 +80,7 @@ Kiểm tra quyền ở FE chỉ để điều hướng giao diện. Backend luô
 
 ## 4. Format response (đã chốt)
 
-Dựa trên kiểu `APIResponse` mà FE đã phác (`frontend/src/types/response.type.ts`), bổ sung thêm `meta` cho danh sách và `code`, `details` cho lỗi. Mọi endpoint đều trả theo dạng này, trừ response **204** (không có body).
+Kiểu TypeScript nằm trong `@stayreco/shared` (`APIResponse`, `APIError`, `PageMeta`), backend và FE cùng import. Mọi endpoint đều trả theo dạng này, trừ response **204** (không có body).
 
 ### 4.1 Thành công
 
@@ -135,7 +99,7 @@ Dựa trên kiểu `APIResponse` mà FE đã phác (`frontend/src/types/response
 
 Cột **Response** trong các bảng endpoint (mục 2.4) mô tả nội dung của `data`.
 
-Type gợi ý cho FE:
+Type (định nghĩa trong `packages/shared/src/http.ts`):
 
 ```ts
 export interface APIResponse<T> {
@@ -148,7 +112,7 @@ export interface APIResponse<T> {
 export interface APIError {
   success: false;
   message: string;
-  code: string;
+  code: ErrorCode | string;
   details?: { field: string; message: string }[];
 }
 ```
@@ -167,8 +131,8 @@ Trường `status` trong body không dùng, vì HTTP status đã có ở `error.
   "message": "Validation failed",
   "code": "VALIDATION_ERROR",
   "details": [
-    { "field": "email", "message": "email must be an email" },
-    { "field": "password", "message": "password must be longer than or equal to 8 characters" }
+    { "field": "email", "message": "Invalid email address" },
+    { "field": "password", "message": "Too small: expected string to have >=8 characters" }
   ]
 }
 ```
@@ -176,6 +140,7 @@ Trường `status` trong body không dùng, vì HTTP status đã có ở `error.
 - **FE quyết định logic theo `code`**, không theo `message`. `message` là tiếng Anh dành cho dev và log, có thể đổi câu chữ bất cứ lúc nào.
 - `code` đã công bố thì không đổi tên. Khi cần mã mới, backend thêm mới và cập nhật bảng dưới đây.
 - Lỗi không có mã riêng thì nhận mã chung theo HTTP status.
+- Danh sách mã có sẵn dưới dạng hằng `ErrorCode` trong `@stayreco/shared`: so sánh `err.code === ErrorCode.UNAUTHENTICATED`, không gõ chuỗi.
 
 ### 4.3 Bảng mã lỗi
 
@@ -219,5 +184,5 @@ Dạng `meta` ở mục 4.1 đã chốt. Tên tham số query bên dưới vẫn
 - Swagger UI: `http://localhost:3000/api/docs`. Spec OpenAPI dạng JSON: `http://localhost:3000/api/docs-json` (dùng để import vào Postman hoặc sinh type cho FE).
 - Chỉ bật khi `NODE_ENV !== 'production'`.
 - Thử endpoint cần đăng nhập: gọi `/auth/login`, copy `accessToken`, bấm **Authorize** rồi dán vào. Swagger nhớ token qua các lần tải lại trang.
-- Swagger là nguồn chính cho danh sách endpoint và DTO. File này chỉ giữ luồng tổng quát và quy tắc chung.
+- Swagger phản ánh code **đang chạy**; contract trong `contracts/` là **thỏa thuận** giữa BE và FE (có thể đi trước code). Khi lệch nhau thì sửa cho khớp contract hoặc cập nhật contract.
 - Response body hiện **chưa có schema** trong Swagger, sẽ bổ sung sau khi chốt format response (mục 4.2).
