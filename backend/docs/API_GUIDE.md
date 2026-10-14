@@ -1,72 +1,72 @@
-# Hướng dẫn dùng API StayReco (cho FE web và mobile)
+# StayReco API Guide (for the web and mobile clients)
 
-> **Bản nháp.** Mục **Hiện tại** mô tả đúng hành vi của backend lúc này. Mục **Đề xuất** `TODO(họp)` là thứ sẽ đổi sau khi team chốt; FE đừng code theo phần đó cho đến khi tài liệu cập nhật.
-> Quy ước đặt URL: xem [CONVENTIONS.md](./CONVENTIONS.md#1-đặt-tên-url-api).
+> Describes the backend's current behavior. Items marked `TODO(meeting)` are proposals that will be decided in the team meeting; don't build against them until this document is updated.
+> URL naming rules: see [CONVENTIONS.md](./CONVENTIONS.md#1-api-url-naming).
 
-## 1. Thông tin chung
+## 1. General
 
 | | |
 |---|---|
 | Base URL (dev) | `http://localhost:3000/api/v1` |
-| Base URL (staging) | `TODO(họp)` |
-| Health check | `GET /health` trả `{ "status": "ok" }` |
-| Định dạng | JSON, `Content-Type: application/json` |
-| CORS (dev) | Cho phép `http://localhost:3001` (biến `CORS_ORIGINS`), có gửi kèm cookie |
-| ID | UUID dạng chuỗi |
-| Tên field | camelCase |
+| Base URL (staging) | `TODO(meeting)` |
+| Health check | `GET /health` returns `{ "success": true, "message": "OK", "data": { "status": "ok" } }` |
+| Format | JSON, `Content-Type: application/json` |
+| CORS (dev) | Allows `http://localhost:3001` (`CORS_ORIGINS` variable), with credentials (cookies) |
+| IDs | UUID strings |
+| Field names | camelCase |
 
-FE web: đặt `NEXT_PUBLIC_API_URL=http://localhost:3000/api/v1`.
+Web client: set `NEXT_PUBLIC_API_URL=http://localhost:3000/api/v1`.
 
-## 2. Xác thực
+## 2. Authentication
 
-### 2.1 Token
+### 2.1 Tokens
 
-- **Access token**: JWT, sống **15 phút** (`expiresIn` tính bằng giây). Gửi kèm mọi request cần đăng nhập:
+- **Access token**: JWT, valid for **15 minutes** (`expiresIn` is in seconds). Send it with every request that requires sign-in:
   `Authorization: Bearer <accessToken>`
-- **Refresh token**: chuỗi ngẫu nhiên, sống 30 ngày, **đổi mới sau mỗi lần refresh**. Dùng lại refresh token cũ thì cả phiên bị thu hồi và người dùng phải đăng nhập lại.
-- Sau khi logout hoặc tài khoản bị khóa, access token **bị từ chối ngay**, không cần chờ hết 15 phút.
+- **Refresh token**: random string, valid for 30 days, **rotated on every refresh**. Reusing an old refresh token revokes the whole session and the user must sign in again.
+- After logout or account suspension, the access token is **rejected immediately**, without waiting for the 15 minutes to expire.
 
-### 2.2 Web và mobile khác nhau ở đâu
+### 2.2 Web vs. mobile
 
 | | Web (Next.js) | Mobile (Expo) |
 |---|---|---|
-| Header bắt buộc | `X-Client-Type: web` cho các API login, register, refresh, accept invitation | Không gửi header này |
-| Nhận refresh token | Trong **cookie httpOnly** `refresh_token` (path `/api/v1/auth`). JS không đọc được cookie này, như vậy là đúng. | Trong **body** (`refreshToken`). Lưu bằng `expo-secure-store`, không dùng AsyncStorage. |
-| Gọi refresh | `POST /auth/refresh` với body rỗng `{}`, axios cần `withCredentials: true` | `POST /auth/refresh` với body `{ "refreshToken": "..." }` |
-| Lưu access token | Trong bộ nhớ (Zustand), **không** lưu localStorage | Trong bộ nhớ, hoặc secure-store nếu cần |
+| Required header | `X-Client-Type: web` on login, register, refresh and accept-invitation | Do not send this header |
+| Receiving the refresh token | In the **httpOnly cookie** `refresh_token` (path `/api/v1/auth`). JavaScript cannot read it, which is intended. | In the **body** (`refreshToken`). Store it with `expo-secure-store`, not AsyncStorage. |
+| Calling refresh | `POST /auth/refresh` with an empty body `{}`; axios needs `withCredentials: true` | `POST /auth/refresh` with body `{ "refreshToken": "..." }` |
+| Storing the access token | In memory (Zustand), **not** in localStorage | In memory, or secure-store if needed |
 
-### 2.3 Luồng đề xuất cho client
+### 2.3 Recommended client flow
 
-1. Login thành công: lưu `accessToken`, `account`, và với mobile thì lưu thêm `refreshToken`.
-2. Gọi API kèm `Authorization`.
-3. Nhận **401 với `code: "UNAUTHENTICATED"`**: gọi `/auth/refresh` **một lần** (gom các request đang chờ lại, không refresh song song), rồi gửi lại request gốc. Các lỗi 401 khác không refresh (xem mục 4.3).
-4. Refresh cũng trả 401: xóa trạng thái đăng nhập và chuyển về `/login?next=...`.
+1. On successful login, keep `accessToken` and `account`; mobile also keeps `refreshToken`.
+2. Call APIs with the `Authorization` header.
+3. On **401 with `code: "UNAUTHENTICATED"`**: call `/auth/refresh` **once** (queue pending requests; never refresh in parallel), then retry the original request. Other 401 errors must not trigger a refresh (see section 4.3).
+4. If refresh also returns 401: clear the signed-in state and redirect to `/login?next=...`.
 
-### 2.4 Các endpoint auth
+### 2.4 Auth endpoints
 
-Cột Response là nội dung của trường `data` (xem mục 4.1).
+The Response column describes the content of the `data` field (see section 4.1).
 
-| Method | Path | Quyền | Body | Response |
+| Method | Path | Access | Body | Response |
 |---|---|---|---|---|
 | POST | `/auth/register/customer` | public | `{ email, password, fullName }` | `AuthResult` (201) |
 | POST | `/auth/register/partner` | public | `{ email, password, fullName, companyName? }` | `AuthResult` (201) |
 | POST | `/auth/login` | public | `{ email, password }` | `AuthResult` |
 | POST | `/auth/refresh` | public | web: `{}` · mobile: `{ refreshToken }` | web: `{ accessToken, expiresIn }` · mobile: `{ accessToken, refreshToken, expiresIn }` |
-| POST | `/auth/logout` | đăng nhập | | 204 |
-| POST | `/auth/logout-all` | đăng nhập | | 204 |
-| GET | `/auth/me` | đăng nhập | | `Account` |
-| GET | `/auth/sessions` | đăng nhập | | `Session[]` |
-| DELETE | `/auth/sessions/:id` | đăng nhập | | 204 |
+| POST | `/auth/logout` | signed in | | 204 |
+| POST | `/auth/logout-all` | signed in | | 204 |
+| GET | `/auth/me` | signed in | | `Account` |
+| GET | `/auth/sessions` | signed in | | `Session[]` |
+| DELETE | `/auth/sessions/:id` | signed in | | 204 |
 | POST | `/auth/verify-email` | public | `{ token }` | 204 |
-| POST | `/auth/resend-verification` | public | `{ email }` | 204 (luôn 204, không cho biết email có tồn tại hay không) |
-| POST | `/auth/forgot-password` | public | `{ email }` | 204 (luôn 204) |
+| POST | `/auth/resend-verification` | public | `{ email }` | 204 (always 204; never reveals whether the email exists) |
+| POST | `/auth/forgot-password` | public | `{ email }` | 204 (always 204) |
 | POST | `/auth/reset-password` | public | `{ token, newPassword }` | 204 |
-| POST | `/auth/change-password` | đăng nhập | `{ currentPassword, newPassword }` | 204 |
+| POST | `/auth/change-password` | signed in | `{ currentPassword, newPassword }` | 204 |
 | POST | `/auth/invitations/staff` | HOTEL_PARTNER | `{ email, fullName }` | `{ id, email, status }` (201) |
 | POST | `/auth/invitations/platform-manager` | ADMIN | `{ email, fullName }` | `{ id, email, status }` (201) |
 | POST | `/auth/invitations/accept` | public | `{ token, password }` | `AuthResult` (201) |
 
-`AuthResult` gồm `account: Account`, `accessToken: string`, `expiresIn: number`. Riêng mobile có thêm `refreshToken: string`.
+`AuthResult` contains `account: Account`, `accessToken: string` and `expiresIn: number`. Mobile also receives `refreshToken: string`.
 
 ```jsonc
 // Account
@@ -74,27 +74,27 @@ Cột Response là nội dung của trường `data` (xem mục 4.1).
   "id": "uuid",
   "email": "a@b.com",
   "phone": null,
-  "role": "CUSTOMER",            // xem mục 2.6
+  "role": "CUSTOMER",            // see section 2.6
   "status": "ACTIVE",            // ACTIVE | INVITED | SUSPENDED | DELETED
   "emailVerified": false,
   "emailVerifiedAt": null,
   "lastLoginAt": "2026-10-14T03:00:00.000Z",
   "createdAt": "2026-10-14T03:00:00.000Z",
-  "profile": { "id": "uuid", "fullName": "Nguyễn Văn A" }  // field phụ thuộc role
+  "profile": { "id": "uuid", "fullName": "Nguyen Van A" }  // fields depend on the role
 }
 ```
 
-### 2.5 Các trang FE mà link trong email trỏ tới
+### 2.5 FE pages linked from emails
 
-Backend gửi email chứa link `WEB_APP_URL/<path>?token=...`. FE cần có 3 trang sau, mỗi trang đọc `token` trên URL rồi gọi API tương ứng:
+The backend sends emails containing `WEB_APP_URL/<path>?token=...`. The FE needs these 3 pages; each reads `token` from the URL and calls the matching API:
 
-| Trang FE | Gọi API |
+| FE page | API call |
 |---|---|
 | `/verify-email?token=` | `POST /auth/verify-email` |
-| `/reset-password?token=` | Form mật khẩu mới, rồi `POST /auth/reset-password` |
-| `/accept-invitation?token=` | Form đặt mật khẩu, rồi `POST /auth/invitations/accept` |
+| `/reset-password?token=` | New-password form, then `POST /auth/reset-password` |
+| `/accept-invitation?token=` | Set-password form, then `POST /auth/invitations/accept` |
 
-### 2.6 Role
+### 2.6 Roles
 
 | Backend (`role`) | FE route prefix |
 |---|---|
@@ -104,27 +104,27 @@ Backend gửi email chứa link `WEB_APP_URL/<path>?token=...`. FE cần có 3 t
 | `PLATFORM_MANAGER` | `/manager` |
 | `ADMIN` | `/admin` |
 
-Kiểm tra quyền ở FE chỉ để điều hướng giao diện. Backend luôn kiểm tra lại quyền.
+Role checks in the FE only drive navigation. The backend always re-checks permissions.
 
-## 3. Quy tắc dữ liệu
+## 3. Data rules
 
-- **Mật khẩu**: 8–128 ký tự, có ít nhất 1 chữ cái và 1 chữ số. FE nên kiểm tra giống hệt để báo lỗi sớm (MSG08).
-- **Email**: backend tự trim và chuyển về chữ thường.
-- **Field lạ** trong body bị trả **400**. Chỉ gửi đúng các field trong bảng trên. Ví dụ form đăng ký hiện **không** nhận `phone`.
-- **Ngày giờ**: API nhận và trả chuỗi ISO 8601 theo UTC (`2026-10-14T03:00:00.000Z`). FE tự hiển thị theo `Asia/Ho_Chi_Minh`, dạng `dd/mm/yyyy`. Ngày không có giờ (check-in, check-out) dùng `YYYY-MM-DD`.
-- **Tiền**: `TODO(họp)`, đề xuất số nguyên VND (không có phần thập phân), FE tự định dạng `2.250.000 ₫`.
+- **Password**: 8–128 characters, with at least one letter and one digit. The FE should apply the same rule to report errors early (MSG08).
+- **Email**: the backend trims it and converts it to lowercase.
+- **Unknown fields** in the body return **400**. Send only the fields listed above; for example, registration does **not** accept `phone`.
+- **Dates and times**: the API accepts and returns ISO 8601 strings in UTC (`2026-10-14T03:00:00.000Z`). The FE displays them in `Asia/Ho_Chi_Minh` as `dd/mm/yyyy`. Dates without a time (check-in, check-out) use `YYYY-MM-DD`.
+- **Money**: `TODO(meeting)`. Proposal: integer VND (no decimals); the FE formats it as `2.250.000 ₫`.
 
-## 4. Format response (đã chốt)
+## 4. Response format (decided)
 
-Dựa trên kiểu `APIResponse` mà FE đã phác (`frontend/src/types/response.type.ts`), bổ sung thêm `meta` cho danh sách và `code`, `details` cho lỗi. Mọi endpoint đều trả theo dạng này, trừ response **204** (không có body).
+Based on the `APIResponse` type the FE drafted (`frontend/src/types/response.type.ts`), extended with `meta` for lists and `code`/`details` for errors. Every endpoint uses this format, except **204** responses (no body).
 
-### 4.1 Thành công
+### 4.1 Success
 
 ```jsonc
-// Một đối tượng
+// Single object
 { "success": true, "message": "OK", "data": { ... } }
 
-// Danh sách có phân trang
+// Paginated list
 {
   "success": true,
   "message": "OK",
@@ -133,9 +133,9 @@ Dựa trên kiểu `APIResponse` mà FE đã phác (`frontend/src/types/response
 }
 ```
 
-Cột **Response** trong các bảng endpoint (mục 2.4) mô tả nội dung của `data`.
+The **Response** column of the endpoint tables (section 2.4) describes the content of `data`.
 
-Type gợi ý cho FE:
+Suggested FE types:
 
 ```ts
 export interface APIResponse<T> {
@@ -153,15 +153,15 @@ export interface APIError {
 }
 ```
 
-Trường `status` trong body không dùng, vì HTTP status đã có ở `error.response.status`.
+There is no `status` field in the body; the HTTP status is already available as `error.response.status`.
 
-### 4.2 Lỗi
+### 4.2 Errors
 
 ```jsonc
-// Lỗi nghiệp vụ
+// Business error
 { "success": false, "message": "Invalid email or password", "code": "AUTH_INVALID_CREDENTIALS" }
 
-// Lỗi validate (400): details liệt kê từng field, field lồng nhau viết dạng "a.b"
+// Validation error (400): details lists each field; nested fields are written as "a.b"
 {
   "success": false,
   "message": "Validation failed",
@@ -173,51 +173,51 @@ Trường `status` trong body không dùng, vì HTTP status đã có ở `error.
 }
 ```
 
-- **FE quyết định logic theo `code`**, không theo `message`. `message` là tiếng Anh dành cho dev và log, có thể đổi câu chữ bất cứ lúc nào.
-- `code` đã công bố thì không đổi tên. Khi cần mã mới, backend thêm mới và cập nhật bảng dưới đây.
-- Lỗi không có mã riêng thì nhận mã chung theo HTTP status.
+- **The FE decides behavior by `code`**, never by `message`. `message` is English text for developers and logs, and its wording may change at any time.
+- A published `code` is never renamed. When a new code is needed, the backend adds it and updates the table below.
+- Errors without a specific code get a generic code derived from the HTTP status.
 
-### 4.3 Bảng mã lỗi
+### 4.3 Error codes
 
-| `code` | HTTP | Khi nào | Gợi ý FE (SRS) |
+| `code` | HTTP | When | FE suggestion (SRS) |
 |---|---|---|---|
-| `VALIDATION_ERROR` | 400 | Body hoặc query không hợp lệ, có field lạ | Hiện `details` dưới từng ô (MSG02–MSG04, MSG08) |
-| `BAD_REQUEST` | 400 | Lỗi 400 khác | Thông báo chung |
-| `UNAUTHENTICATED` | 401 | Thiếu access token, token sai hoặc hết hạn, phiên đã bị thu hồi | **Gọi refresh** (mục 2.3) |
-| `FORBIDDEN` | 403 | Đăng nhập rồi nhưng không đủ quyền | MSG25 |
-| `NOT_FOUND` | 404 | Không tìm thấy tài nguyên hoặc route | Trang 404 |
-| `CONFLICT` | 409 | Xung đột dữ liệu khác | Thông báo chung |
-| `TOO_MANY_REQUESTS` | 429 | Gọi quá nhanh (login 5 lần/phút, email 3 lần/15 phút) | "Vui lòng thử lại sau" |
-| `INTERNAL_ERROR` | 500 | Lỗi hệ thống | Thông báo chung, không hiện chi tiết |
-| `AUTH_INVALID_CREDENTIALS` | 401 | Sai email hoặc mật khẩu (kể cả email không tồn tại) | MSG05. **Không** gọi refresh. |
-| `AUTH_ACCOUNT_LOCKED` | 403 | Sai mật khẩu 5 lần, bị khóa 15 phút | "Bạn đã nhập sai quá nhiều lần…" |
-| `AUTH_ACCOUNT_SUSPENDED` | 403 | Tài khoản bị đình chỉ | MSG06 |
-| `AUTH_ACCOUNT_INACTIVE` | 403 | Đặt lại mật khẩu cho tài khoản không hoạt động | MSG06 |
-| `AUTH_EMAIL_TAKEN` | 409 | Email đã được đăng ký | MSG07 dưới ô email |
-| `AUTH_WRONG_PASSWORD` | 401 | Đổi mật khẩu nhưng nhập sai mật khẩu hiện tại | Lỗi dưới ô mật khẩu hiện tại. **Không** gọi refresh. |
-| `AUTH_TOKEN_INVALID` | 400 | Link xác thực email, đặt lại mật khẩu hoặc lời mời không hợp lệ, hết hạn, đã dùng | "Liên kết không hợp lệ hoặc đã hết hạn" |
-| `AUTH_REFRESH_TOKEN_INVALID` | 401 | Refresh token thiếu, sai, hết hạn hoặc bị dùng lại | Xóa trạng thái đăng nhập, chuyển về `/login` |
-| `AUTH_INVITATION_ACCEPTED` | 409 | Lời mời đã được chấp nhận | Chuyển sang đăng nhập |
-| `AUTH_SESSION_NOT_FOUND` | 404 | Thu hồi phiên không tồn tại | Tải lại danh sách phiên |
+| `VALIDATION_ERROR` | 400 | Invalid body or query, or unknown fields | Show `details` under each input (MSG02–MSG04, MSG08) |
+| `BAD_REQUEST` | 400 | Other 400 errors | Generic message |
+| `UNAUTHENTICATED` | 401 | Missing, invalid or expired access token, or revoked session | **Refresh** (section 2.3) |
+| `FORBIDDEN` | 403 | Signed in but not allowed | MSG25 |
+| `NOT_FOUND` | 404 | Resource or route not found | 404 page |
+| `CONFLICT` | 409 | Other data conflicts | Generic message |
+| `TOO_MANY_REQUESTS` | 429 | Rate limited (login 5/min, emails 3 per 15 min) | "Please try again later" |
+| `INTERNAL_ERROR` | 500 | Server error | Generic message, no details |
+| `AUTH_INVALID_CREDENTIALS` | 401 | Wrong email or password (including unknown email) | MSG05. **Do not** refresh. |
+| `AUTH_ACCOUNT_LOCKED` | 403 | 5 wrong passwords; locked for 15 minutes | "Too many failed attempts…" |
+| `AUTH_ACCOUNT_SUSPENDED` | 403 | Account suspended | MSG06 |
+| `AUTH_ACCOUNT_INACTIVE` | 403 | Password reset for an inactive account | MSG06 |
+| `AUTH_EMAIL_TAKEN` | 409 | Email already registered | MSG07 under the email input |
+| `AUTH_WRONG_PASSWORD` | 401 | Wrong current password when changing password | Error under the current-password input. **Do not** refresh. |
+| `AUTH_TOKEN_INVALID` | 400 | Email-verification, password-reset or invitation link is invalid, expired or already used | "This link is invalid or has expired" |
+| `AUTH_REFRESH_TOKEN_INVALID` | 401 | Refresh token missing, invalid, expired or reused | Clear the signed-in state and go to `/login` |
+| `AUTH_INVITATION_ACCEPTED` | 409 | Invitation already accepted | Go to sign-in |
+| `AUTH_SESSION_NOT_FOUND` | 404 | Revoking a session that doesn't exist | Reload the session list |
 
-Lưu ý quan trọng: **chỉ gọi refresh khi `status === 401` và `code === 'UNAUTHENTICATED'`.** Các lỗi 401 khác (`AUTH_INVALID_CREDENTIALS`, `AUTH_WRONG_PASSWORD`, `AUTH_REFRESH_TOKEN_INVALID`) mà cũng refresh thì sẽ bị lặp vô hạn hoặc đăng xuất nhầm.
+Important: **refresh only when `status === 401` and `code === 'UNAUTHENTICATED'`.** Refreshing on the other 401 errors (`AUTH_INVALID_CREDENTIALS`, `AUTH_WRONG_PASSWORD`, `AUTH_REFRESH_TOKEN_INVALID`) causes infinite loops or unexpected sign-outs.
 
-## 5. Danh sách, phân trang, lọc, sắp xếp
+## 5. Lists: pagination, filtering, sorting
 
-Dạng `meta` ở mục 4.1 đã chốt. Tên tham số query bên dưới vẫn là **đề xuất** `TODO(họp)`, sẽ chốt khi làm API danh sách đầu tiên:
+The `meta` shape in section 4.1 is decided. The query parameter names below are still a **proposal** `TODO(meeting)` and will be fixed with the first list API:
 
-| Tham số | Ví dụ | Mặc định |
+| Parameter | Example | Default |
 |---|---|---|
 | `page` | `?page=2` | 1 |
-| `pageSize` | `?pageSize=20` | 10 (theo SRS 5.2), tối đa 100 |
-| `sort` | `?sort=-createdAt` (dấu `-` là giảm dần) | tùy tài nguyên |
-| `q` | `?q=riverside` (tìm kiếm tự do) | |
-| filter | `?status=pending&fromDate=2026-10-01` | |
+| `pageSize` | `?pageSize=20` | 10 (per SRS 5.2), max 100 |
+| `sort` | `?sort=-createdAt` (`-` means descending) | depends on the resource |
+| `q` | `?q=riverside` (free-text search) | |
+| filters | `?status=pending&fromDate=2026-10-01` | |
 
-## 6. Tài liệu API tự sinh (Swagger)
+## 6. Generated API docs (Swagger)
 
-- Swagger UI: `http://localhost:3000/api/docs`. Spec OpenAPI dạng JSON: `http://localhost:3000/api/docs-json` (dùng để import vào Postman hoặc sinh type cho FE).
-- Chỉ bật khi `NODE_ENV !== 'production'`.
-- Thử endpoint cần đăng nhập: gọi `/auth/login`, copy `accessToken`, bấm **Authorize** rồi dán vào. Swagger nhớ token qua các lần tải lại trang.
-- Swagger là nguồn chính cho danh sách endpoint và DTO. File này chỉ giữ luồng tổng quát và quy tắc chung.
-- Response body hiện **chưa có schema** trong Swagger, sẽ bổ sung sau khi chốt format response (mục 4.2).
+- Swagger UI: `http://localhost:3000/api/docs`. OpenAPI spec as JSON: `http://localhost:3000/api/docs-json` (import into Postman or generate FE types from it).
+- Enabled only when `NODE_ENV !== 'production'`.
+- To try authenticated endpoints: call `/auth/login`, copy `accessToken`, click **Authorize** and paste it. Swagger keeps the token across page reloads.
+- Swagger is the primary source for endpoints and DTOs. This file keeps only the overall flows and shared rules.
+- Response bodies **don't have schemas** in Swagger yet; they will be added together with the first list API.
