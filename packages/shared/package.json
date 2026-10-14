@@ -1,0 +1,21 @@
+{
+  "name": "@stayreco/shared",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Zod schemas, enums, error codes and response types shared by backend, frontend and mobile",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc -w"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  },
+  "dependencies": {
+    "zod": "^4.6.5"
+  }
+}
