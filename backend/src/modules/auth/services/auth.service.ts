@@ -6,16 +6,16 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import {
-  AccountStatus,
-  Prisma,
-  Role,
-  VerificationTokenType,
-} from '@prisma/client';
 import { AuthUser } from '../../../common/decorators/current-user.decorator';
 import { RequestMeta } from '../../../common/decorators/request-meta.decorator';
 import { ErrorCode } from '../../../common/errors/error-code';
 import { Env } from '../../../config/env';
+import {
+  AccountStatus,
+  Prisma,
+  UserRole,
+  VerificationTokenType,
+} from '../../../generated/prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { AuditAction, AuditService } from '../../audit/audit.service';
 import { MailService } from '../../mail/mail.service';
@@ -23,6 +23,7 @@ import {
   AcceptInvitationDto,
   ChangePasswordDto,
   InviteAccountDto,
+  InviteStaffDto,
   LoginDto,
   RegisterCustomerDto,
   RegisterPartnerDto,
@@ -36,22 +37,19 @@ const MAX_FAILED_LOGINS = 5;
 const LOCK_DURATION_MS = 15 * 60 * 1000;
 
 const accountSelect = {
-  id: true,
+  userAccountId: true,
   email: true,
+  fullName: true,
   phone: true,
+  avatarUrl: true,
   role: true,
   status: true,
   emailVerifiedAt: true,
   lastLoginAt: true,
   createdAt: true,
-  customer: { select: { id: true, fullName: true } },
-  hotelPartner: { select: { id: true, fullName: true, companyName: true } },
-  hotelStaff: {
-    select: { id: true, fullName: true, hotelPartnerId: true },
-  },
-  platformManager: { select: { id: true, fullName: true } },
-  admin: { select: { id: true, fullName: true } },
-} satisfies Prisma.AccountSelect;
+  hotelPartner: { select: { partnerName: true, status: true } },
+  hotelStaff: { select: { hotelId: true, position: true } },
+} satisfies Prisma.UserAccountSelect;
 
 // Same code and message for wrong password, unknown email and inactive account (no account enumeration).
 const invalidCredentials = () =>
@@ -66,7 +64,7 @@ const emailTaken = () =>
     message: 'Email is already registered',
   });
 
-type AccountWithProfiles = Prisma.AccountGetPayload<{
+type AccountWithProfiles = Prisma.UserAccountGetPayload<{
   select: typeof accountSelect;
 }>;
 
@@ -75,22 +73,19 @@ export type AccountResponse = ReturnType<typeof toAccountResponse>;
 /** Explicit field list so extra selected columns (e.g. password_hash) never leak. */
 function toAccountResponse(a: AccountWithProfiles) {
   return {
-    id: a.id,
+    id: a.userAccountId,
     email: a.email,
+    fullName: a.fullName,
     phone: a.phone,
+    avatarUrl: a.avatarUrl,
     role: a.role,
     status: a.status,
     emailVerified: !!a.emailVerifiedAt,
     emailVerifiedAt: a.emailVerifiedAt,
     lastLoginAt: a.lastLoginAt,
     createdAt: a.createdAt,
-    profile:
-      a.customer ??
-      a.hotelPartner ??
-      a.hotelStaff ??
-      a.platformManager ??
-      a.admin ??
-      null,
+    // Role-specific data; customers, admins and platform managers have none yet.
+    profile: a.hotelPartner ?? a.hotelStaff ?? null,
   };
 }
 
@@ -111,8 +106,7 @@ export class AuthService {
   registerCustomer(dto: RegisterCustomerDto, meta: RequestMeta) {
     return this.register(
       dto,
-      Role.CUSTOMER,
-      { customer: { create: { fullName: dto.fullName } } },
+      { role: UserRole.CUSTOMER, customer: { create: {} } },
       meta,
     );
   }
@@ -120,10 +114,18 @@ export class AuthService {
   registerPartner(dto: RegisterPartnerDto, meta: RequestMeta) {
     return this.register(
       dto,
-      Role.HOTEL_PARTNER,
       {
+        role: UserRole.HOTEL_PARTNER,
+        phone: dto.phone,
         hotelPartner: {
-          create: { fullName: dto.fullName, companyName: dto.companyName },
+          create: {
+            partnerName: dto.companyName ?? dto.fullName,
+            contactEmail: dto.email,
+            contactPhone: dto.phone,
+            commissionRate: this.config.get('DEFAULT_COMMISSION_RATE', {
+              infer: true,
+            }),
+          },
         },
       },
       meta,
@@ -131,20 +133,20 @@ export class AuthService {
   }
 
   private async register(
-    dto: { email: string; password: string },
-    role: Role,
-    profile: Partial<Prisma.AccountCreateInput>,
+    dto: { email: string; password: string; fullName: string },
+    roleData: Pick<Prisma.UserAccountCreateInput, 'role'> &
+      Partial<Prisma.UserAccountCreateInput>,
     meta: RequestMeta,
   ) {
     const passwordHash = await this.passwords.hash(dto.password);
     const account = await this.createAccountOrConflict({
       email: dto.email,
+      fullName: dto.fullName,
       passwordHash,
-      role,
-      ...profile,
+      ...roleData,
     });
 
-    await this.sendVerificationEmail(account.id, account.email);
+    await this.sendVerificationEmail(account.userAccountId, account.email);
     const tokens = await this.tokens.createSession(account, meta);
     return { account: toAccountResponse(account), tokens };
   }
@@ -155,7 +157,7 @@ export class AuthService {
     dto: LoginDto,
     meta: RequestMeta,
   ): Promise<{ account: AccountResponse; tokens: TokenPair }> {
-    const account = await this.prisma.account.findUnique({
+    const account = await this.prisma.userAccount.findUnique({
       where: { email: dto.email },
       select: {
         ...accountSelect,
@@ -176,14 +178,12 @@ export class AuthService {
       dto.password,
     );
     if (!account || !valid) {
-      if (account) await this.recordFailedLogin(account.id, meta);
+      if (account) await this.recordFailedLogin(account.userAccountId, meta);
       await this.audit.log(
         AuditAction.LOGIN_FAILED,
-        account?.id ?? null,
+        account?.userAccountId ?? null,
         meta,
-        {
-          email: dto.email,
-        },
+        { email: dto.email },
       );
       throw invalidCredentials();
     }
@@ -198,25 +198,29 @@ export class AuthService {
       throw invalidCredentials();
     }
 
-    await this.prisma.account.update({
-      where: { id: account.id },
+    await this.prisma.userAccount.update({
+      where: { userAccountId: account.userAccountId },
       data: { failedLoginCount: 0, lockedUntil: null, lastLoginAt: new Date() },
     });
     const tokens = await this.tokens.createSession(account, meta);
-    await this.audit.log(AuditAction.LOGIN_SUCCESS, account.id, meta);
+    await this.audit.log(
+      AuditAction.LOGIN_SUCCESS,
+      account.userAccountId,
+      meta,
+    );
 
     return { account: toAccountResponse(account), tokens };
   }
 
   private async recordFailedLogin(accountId: string, meta: RequestMeta) {
-    const { failedLoginCount } = await this.prisma.account.update({
-      where: { id: accountId },
+    const { failedLoginCount } = await this.prisma.userAccount.update({
+      where: { userAccountId: accountId },
       data: { failedLoginCount: { increment: 1 } },
       select: { failedLoginCount: true },
     });
     if (failedLoginCount >= MAX_FAILED_LOGINS) {
-      await this.prisma.account.update({
-        where: { id: accountId },
+      await this.prisma.userAccount.update({
+        where: { userAccountId: accountId },
         data: {
           failedLoginCount: 0,
           lockedUntil: new Date(Date.now() + LOCK_DURATION_MS),
@@ -245,13 +249,13 @@ export class AuthService {
   async listSessions(user: AuthUser) {
     const sessions = await this.prisma.authSession.findMany({
       where: {
-        accountId: user.accountId,
+        userAccountId: user.accountId,
         revokedAt: null,
         expiresAt: { gt: new Date() },
       },
       select: {
-        id: true,
-        ip: true,
+        authSessionId: true,
+        ipAddress: true,
         userAgent: true,
         createdAt: true,
         lastUsedAt: true,
@@ -259,7 +263,12 @@ export class AuthService {
       },
       orderBy: { lastUsedAt: 'desc' },
     });
-    return sessions.map((s) => ({ ...s, current: s.id === user.sessionId }));
+    return sessions.map(({ authSessionId, ipAddress, ...rest }) => ({
+      id: authSessionId,
+      ip: ipAddress,
+      ...rest,
+      current: authSessionId === user.sessionId,
+    }));
   }
 
   async revokeSession(user: AuthUser, sessionId: string, meta: RequestMeta) {
@@ -276,8 +285,8 @@ export class AuthService {
   }
 
   async me(accountId: string) {
-    const account = await this.prisma.account.findUniqueOrThrow({
-      where: { id: accountId },
+    const account = await this.prisma.userAccount.findUniqueOrThrow({
+      where: { userAccountId: accountId },
       select: accountSelect,
     });
     return toAccountResponse(account);
@@ -290,8 +299,8 @@ export class AuthService {
       token,
       VerificationTokenType.EMAIL_VERIFY,
     );
-    await this.prisma.account.updateMany({
-      where: { id: accountId, emailVerifiedAt: null },
+    await this.prisma.userAccount.updateMany({
+      where: { userAccountId: accountId, emailVerifiedAt: null },
       data: { emailVerifiedAt: new Date() },
     });
     await this.audit.log(AuditAction.EMAIL_VERIFIED, accountId, meta);
@@ -299,7 +308,9 @@ export class AuthService {
 
   /** Silent when the email is unknown or already verified (no account enumeration). */
   async resendVerification(email: string) {
-    const account = await this.prisma.account.findUnique({ where: { email } });
+    const account = await this.prisma.userAccount.findUnique({
+      where: { email },
+    });
     if (
       !account ||
       account.emailVerifiedAt ||
@@ -307,7 +318,7 @@ export class AuthService {
     ) {
       return;
     }
-    await this.sendVerificationEmail(account.id, account.email);
+    await this.sendVerificationEmail(account.userAccountId, account.email);
   }
 
   private async sendVerificationEmail(accountId: string, email: string) {
@@ -326,11 +337,13 @@ export class AuthService {
 
   /** Silent when the email is unknown (no account enumeration). */
   async forgotPassword(email: string) {
-    const account = await this.prisma.account.findUnique({ where: { email } });
+    const account = await this.prisma.userAccount.findUnique({
+      where: { email },
+    });
     if (!account || account.status !== AccountStatus.ACTIVE) return;
 
     const token = await this.verification.issue(
-      account.id,
+      account.userAccountId,
       VerificationTokenType.PASSWORD_RESET,
     );
     await this.mail.send({
@@ -345,8 +358,8 @@ export class AuthService {
       dto.token,
       VerificationTokenType.PASSWORD_RESET,
     );
-    const account = await this.prisma.account.findUniqueOrThrow({
-      where: { id: accountId },
+    const account = await this.prisma.userAccount.findUniqueOrThrow({
+      where: { userAccountId: accountId },
     });
     if (account.status !== AccountStatus.ACTIVE) {
       throw new ForbiddenException({
@@ -355,8 +368,8 @@ export class AuthService {
       });
     }
 
-    await this.prisma.account.update({
-      where: { id: accountId },
+    await this.prisma.userAccount.update({
+      where: { userAccountId: accountId },
       data: {
         passwordHash: await this.passwords.hash(dto.newPassword),
         // Receiving the reset email proves mailbox ownership.
@@ -374,8 +387,8 @@ export class AuthService {
     dto: ChangePasswordDto,
     meta: RequestMeta,
   ) {
-    const account = await this.prisma.account.findUniqueOrThrow({
-      where: { id: user.accountId },
+    const account = await this.prisma.userAccount.findUniqueOrThrow({
+      where: { userAccountId: user.accountId },
     });
     const valid = await this.passwords.verify(
       account.passwordHash,
@@ -388,8 +401,8 @@ export class AuthService {
       });
     }
 
-    await this.prisma.account.update({
-      where: { id: user.accountId },
+    await this.prisma.userAccount.update({
+      where: { userAccountId: user.accountId },
       data: { passwordHash: await this.passwords.hash(dto.newPassword) },
     });
     // Keep the device that changed the password signed in.
@@ -399,40 +412,57 @@ export class AuthService {
 
   // ── Invitations ──────────────────────────────────────────
 
-  async inviteStaff(user: AuthUser, dto: InviteAccountDto, meta: RequestMeta) {
-    const partner = await this.prisma.hotelPartner.findUniqueOrThrow({
-      where: { accountId: user.accountId },
+  async inviteStaff(user: AuthUser, dto: InviteStaffDto, meta: RequestMeta) {
+    // A partner's account id is also its hotel_partner id; one staff member works at one hotel.
+    const hotel = await this.prisma.hotel.findFirst({
+      where: { hotelId: dto.hotelId, hotelPartnerId: user.accountId },
+      select: { hotelId: true },
     });
+    if (!hotel) {
+      throw new NotFoundException({
+        code: ErrorCode.HOTEL_NOT_FOUND,
+        message: 'Hotel not found',
+      });
+    }
 
-    const existing = await this.prisma.account.findUnique({
+    const existing = await this.prisma.userAccount.findUnique({
       where: { email: dto.email },
       include: { hotelStaff: true },
     });
     const canResend =
       existing?.status === AccountStatus.INVITED &&
-      existing.hotelStaff?.hotelPartnerId === partner.id;
+      existing.hotelStaff?.hotelId === hotel.hotelId;
     if (existing && !canResend) throw emailTaken();
 
     const account =
       existing ??
       (await this.createAccountOrConflict({
         email: dto.email,
-        role: Role.HOTEL_STAFF,
+        fullName: dto.fullName,
+        role: UserRole.HOTEL_STAFF,
         status: AccountStatus.INVITED,
         hotelStaff: {
           create: {
-            fullName: dto.fullName,
-            hotelPartner: { connect: { id: partner.id } },
+            position: dto.position,
+            hotel: { connect: { hotelId: hotel.hotelId } },
           },
         },
       }));
 
-    await this.sendInvitation(account.id, account.email, 'hotel staff');
+    await this.sendInvitation(
+      account.userAccountId,
+      account.email,
+      'hotel staff',
+    );
     await this.audit.log(AuditAction.ACCOUNT_INVITED, user.accountId, meta, {
-      invitedAccountId: account.id,
-      role: Role.HOTEL_STAFF,
+      invitedAccountId: account.userAccountId,
+      role: UserRole.HOTEL_STAFF,
     });
-    return { id: account.id, email: account.email, status: account.status };
+    return {
+      id: account.userAccountId,
+      email: account.email,
+      status: account.status,
+    };
   }
 
   async invitePlatformManager(
@@ -440,29 +470,38 @@ export class AuthService {
     dto: InviteAccountDto,
     meta: RequestMeta,
   ) {
-    const existing = await this.prisma.account.findUnique({
+    const existing = await this.prisma.userAccount.findUnique({
       where: { email: dto.email },
     });
     const canResend =
       existing?.status === AccountStatus.INVITED &&
-      existing.role === Role.PLATFORM_MANAGER;
+      existing.role === UserRole.PLATFORM_MANAGER;
     if (existing && !canResend) throw emailTaken();
 
     const account =
       existing ??
       (await this.createAccountOrConflict({
         email: dto.email,
-        role: Role.PLATFORM_MANAGER,
+        fullName: dto.fullName,
+        role: UserRole.PLATFORM_MANAGER,
         status: AccountStatus.INVITED,
-        platformManager: { create: { fullName: dto.fullName } },
+        platformManager: { create: {} },
       }));
 
-    await this.sendInvitation(account.id, account.email, 'platform manager');
+    await this.sendInvitation(
+      account.userAccountId,
+      account.email,
+      'platform manager',
+    );
     await this.audit.log(AuditAction.ACCOUNT_INVITED, user.accountId, meta, {
-      invitedAccountId: account.id,
-      role: Role.PLATFORM_MANAGER,
+      invitedAccountId: account.userAccountId,
+      role: UserRole.PLATFORM_MANAGER,
     });
-    return { id: account.id, email: account.email, status: account.status };
+    return {
+      id: account.userAccountId,
+      email: account.email,
+      status: account.status,
+    };
   }
 
   async acceptInvitation(dto: AcceptInvitationDto, meta: RequestMeta) {
@@ -470,8 +509,8 @@ export class AuthService {
       dto.token,
       VerificationTokenType.ACCOUNT_INVITE,
     );
-    const { count } = await this.prisma.account.updateMany({
-      where: { id: accountId, status: AccountStatus.INVITED },
+    const { count } = await this.prisma.userAccount.updateMany({
+      where: { userAccountId: accountId, status: AccountStatus.INVITED },
       data: {
         passwordHash: await this.passwords.hash(dto.password),
         status: AccountStatus.ACTIVE,
@@ -486,8 +525,8 @@ export class AuthService {
       });
     }
 
-    const account = await this.prisma.account.findUniqueOrThrow({
-      where: { id: accountId },
+    const account = await this.prisma.userAccount.findUniqueOrThrow({
+      where: { userAccountId: accountId },
       select: accountSelect,
     });
     const tokens = await this.tokens.createSession(account, meta);
@@ -513,9 +552,12 @@ export class AuthService {
 
   // ── Helpers ──────────────────────────────────────────────
 
-  private async createAccountOrConflict(data: Prisma.AccountCreateInput) {
+  private async createAccountOrConflict(data: Prisma.UserAccountCreateInput) {
     try {
-      return await this.prisma.account.create({ data, select: accountSelect });
+      return await this.prisma.userAccount.create({
+        data,
+        select: accountSelect,
+      });
     } catch (err) {
       if (
         err instanceof Prisma.PrismaClientKnownRequestError &&

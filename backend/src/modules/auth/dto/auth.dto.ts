@@ -5,6 +5,7 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  IsUUID,
   Matches,
   MaxLength,
   MinLength,
@@ -56,6 +57,11 @@ export class RegisterPartnerDto extends RegisterCustomerDto {
   @IsString()
   @MaxLength(200)
   companyName?: string;
+
+  /** Contact phone of the partner, e.g. 0901234567 or +84901234567. */
+  @Transform(trim)
+  @Matches(/^\+?\d{9,15}$/, { message: 'phone must be a valid phone number' })
+  phone!: string;
 }
 
 export class LoginDto extends EmailDto {
@@ -102,6 +108,18 @@ export class InviteAccountDto extends EmailDto {
   @IsNotEmpty()
   @MaxLength(100)
   fullName!: string;
+}
+
+export class InviteStaffDto extends InviteAccountDto {
+  /** Hotel the staff member works at; must belong to the inviting partner. */
+  @IsUUID()
+  hotelId!: string;
+
+  @Transform(trim)
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(50)
+  position!: string;
 }
 
 export class AcceptInvitationDto extends TokenDto {

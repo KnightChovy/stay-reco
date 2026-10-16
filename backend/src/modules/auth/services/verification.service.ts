@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { VerificationTokenType } from '@prisma/client';
 import { ErrorCode } from '../../../common/errors/error-code';
+import { VerificationTokenType } from '../../../generated/prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { generateToken, hashToken } from '../crypto.util';
 
@@ -25,12 +25,12 @@ export class VerificationService {
     const token = generateToken();
     await this.prisma.$transaction([
       this.prisma.verificationToken.updateMany({
-        where: { accountId, type, usedAt: null },
+        where: { userAccountId: accountId, type, usedAt: null },
         data: { usedAt: new Date() },
       }),
       this.prisma.verificationToken.create({
         data: {
-          accountId,
+          userAccountId: accountId,
           type,
           tokenHash: hashToken(token),
           expiresAt: new Date(Date.now() + TTL_MS[type]),
@@ -50,11 +50,11 @@ export class VerificationService {
     }
 
     const { count } = await this.prisma.verificationToken.updateMany({
-      where: { id: record.id, usedAt: null },
+      where: { verificationTokenId: record.verificationTokenId, usedAt: null },
       data: { usedAt: new Date() },
     });
     if (count === 0) throw invalidToken();
 
-    return record.accountId;
+    return record.userAccountId;
   }
 }

@@ -6,14 +6,14 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
-import { AccountStatus, Role } from '@prisma/client';
+import { AccountStatus, UserRole } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuthenticatedRequest } from '../decorators/current-user.decorator';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 
 export interface AccessTokenPayload {
   sub: string;
-  role: Role;
+  role: UserRole;
   sid: string;
 }
 
@@ -45,27 +45,27 @@ export class JwtAuthGuard implements CanActivate {
 
     // Checked on every request so logout / suspension takes effect immediately.
     const session = await this.prisma.authSession.findUnique({
-      where: { id: payload.sid },
+      where: { authSessionId: payload.sid },
       select: {
-        accountId: true,
+        userAccountId: true,
         revokedAt: true,
         expiresAt: true,
-        account: { select: { status: true, role: true } },
+        userAccount: { select: { status: true, role: true } },
       },
     });
     if (
       !session ||
-      session.accountId !== payload.sub ||
+      session.userAccountId !== payload.sub ||
       session.revokedAt ||
       session.expiresAt <= new Date() ||
-      session.account.status !== AccountStatus.ACTIVE
+      session.userAccount.status !== AccountStatus.ACTIVE
     ) {
       throw new UnauthorizedException();
     }
 
     req.user = {
       accountId: payload.sub,
-      role: session.account.role,
+      role: session.userAccount.role,
       sessionId: payload.sid,
     };
     return true;

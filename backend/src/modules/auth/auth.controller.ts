@@ -15,7 +15,6 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
-import { Role } from '@prisma/client';
 import type { Request, Response } from 'express';
 import { API_PREFIX } from '../../app.setup';
 import {
@@ -30,11 +29,13 @@ import {
 } from '../../common/decorators/request-meta.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { Env } from '../../config/env';
+import { UserRole } from '../../generated/prisma/client';
 import {
   AcceptInvitationDto,
   ChangePasswordDto,
   ForgotPasswordDto,
   InviteAccountDto,
+  InviteStaffDto,
   LoginDto,
   RefreshDto,
   RegisterCustomerDto,
@@ -213,17 +214,17 @@ export class AuthController {
     return this.auth.changePassword(user, dto, meta);
   }
 
-  @Roles(Role.HOTEL_PARTNER)
+  @Roles(UserRole.HOTEL_PARTNER)
   @Post('invitations/staff')
   inviteStaff(
     @CurrentUser() user: AuthUser,
-    @Body() dto: InviteAccountDto,
+    @Body() dto: InviteStaffDto,
     @ReqMeta() meta: RequestMeta,
   ) {
     return this.auth.inviteStaff(user, dto, meta);
   }
 
-  @Roles(Role.ADMIN)
+  @Roles(UserRole.ADMIN)
   @Post('invitations/platform-manager')
   invitePlatformManager(
     @CurrentUser() user: AuthUser,

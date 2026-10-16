@@ -1,11 +1,11 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { AccountStatus, Role } from '@prisma/client';
 import { RequestMeta } from '../../../common/decorators/request-meta.decorator';
 import { ErrorCode } from '../../../common/errors/error-code';
 import { AccessTokenPayload } from '../../../common/guards/jwt-auth.guard';
 import { Env } from '../../../config/env';
+import { AccountStatus, UserRole } from '../../../generated/prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { AuditAction, AuditService } from '../../audit/audit.service';
 import { generateToken, hashToken } from '../crypto.util';
@@ -16,6 +16,8 @@ export interface TokenPair {
   /** Seconds until the access token expires */
   expiresIn: number;
 }
+
+type TokenSubject = { userAccountId: string; role: UserRole };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -40,20 +42,20 @@ export class TokenService {
 
   /** Starts a new session (one per login/device). */
   async createSession(
-    account: { id: string; role: Role },
+    account: TokenSubject,
     meta: RequestMeta,
   ): Promise<TokenPair> {
     const refreshToken = generateToken();
     const session = await this.prisma.authSession.create({
       data: {
-        accountId: account.id,
-        ip: meta.ip,
+        userAccountId: account.userAccountId,
+        ipAddress: meta.ip,
         userAgent: meta.userAgent,
         expiresAt: new Date(Date.now() + this.refreshTtlMs),
         refreshTokens: { create: { tokenHash: hashToken(refreshToken) } },
       },
     });
-    return this.buildPair(account, session.id, refreshToken);
+    return this.buildPair(account, session.authSessionId, refreshToken);
   }
 
   /**
@@ -63,50 +65,54 @@ export class TokenService {
   async rotate(refreshToken: string, meta: RequestMeta): Promise<TokenPair> {
     const record = await this.prisma.refreshToken.findUnique({
       where: { tokenHash: hashToken(refreshToken) },
-      include: { session: { include: { account: true } } },
+      include: { authSession: { include: { userAccount: true } } },
     });
     if (!record) throw refreshFailed('Invalid refresh token');
 
-    const { session } = record;
+    const session = record.authSession;
     if (session.revokedAt || session.expiresAt <= new Date()) {
       throw refreshFailed('Session expired');
     }
-    if (session.account.status !== AccountStatus.ACTIVE) {
+    if (session.userAccount.status !== AccountStatus.ACTIVE) {
       throw refreshFailed('Invalid refresh token');
     }
 
     // Conditional update makes concurrent use of the same token race-safe.
     const claimed = await this.prisma.refreshToken.updateMany({
-      where: { id: record.id, usedAt: null },
+      where: { refreshTokenId: record.refreshTokenId, usedAt: null },
       data: { usedAt: new Date() },
     });
     if (claimed.count === 0) {
-      await this.revokeSession(session.id);
+      await this.revokeSession(session.authSessionId);
       await this.audit.log(
         AuditAction.REFRESH_TOKEN_REUSE,
-        session.accountId,
+        session.userAccountId,
         meta,
-        { sessionId: session.id },
+        { sessionId: session.authSessionId },
       );
       throw refreshFailed('Refresh token reuse detected');
     }
 
     const next = generateToken();
     await this.prisma.authSession.update({
-      where: { id: session.id },
+      where: { authSessionId: session.authSessionId },
       data: {
         lastUsedAt: new Date(),
-        ip: meta.ip,
+        ipAddress: meta.ip,
         userAgent: meta.userAgent,
         refreshTokens: { create: { tokenHash: hashToken(next) } },
       },
     });
-    return this.buildPair(session.account, session.id, next);
+    return this.buildPair(session.userAccount, session.authSessionId, next);
   }
 
   async revokeSession(sessionId: string, accountId?: string): Promise<boolean> {
     const { count } = await this.prisma.authSession.updateMany({
-      where: { id: sessionId, accountId, revokedAt: null },
+      where: {
+        authSessionId: sessionId,
+        userAccountId: accountId,
+        revokedAt: null,
+      },
       data: { revokedAt: new Date() },
     });
     return count > 0;
@@ -115,21 +121,21 @@ export class TokenService {
   async revokeAllSessions(accountId: string, exceptSessionId?: string) {
     await this.prisma.authSession.updateMany({
       where: {
-        accountId,
+        userAccountId: accountId,
         revokedAt: null,
-        ...(exceptSessionId && { id: { not: exceptSessionId } }),
+        ...(exceptSessionId && { authSessionId: { not: exceptSessionId } }),
       },
       data: { revokedAt: new Date() },
     });
   }
 
   private async buildPair(
-    account: { id: string; role: Role },
+    account: TokenSubject,
     sessionId: string,
     refreshToken: string,
   ): Promise<TokenPair> {
     const payload: AccessTokenPayload = {
-      sub: account.id,
+      sub: account.userAccountId,
       role: account.role,
       sid: sessionId,
     };
