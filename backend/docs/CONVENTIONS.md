@@ -1,6 +1,6 @@
 # StayReco Backend Conventions
 
-> **Draft.** Items marked `TODO(meeting)` will be decided in the team meeting. Once decided, the whole team follows this document.
+> The whole team follows this document. Items still marked `TODO(meeting)` are not decided yet.
 > Applies to `backend/` (NestJS 11 + Prisma + PostgreSQL). The API guide for web and mobile clients is [API_GUIDE.md](./API_GUIDE.md).
 
 ## 1. API URL naming
@@ -9,9 +9,9 @@ Goal: the URL alone tells you which resource an endpoint belongs to, and every e
 
 ### 1.1 One URL structure for the whole system
 
-`TODO(meeting)`: choose **one** of the two options. Option **A** is recommended.
+**Decided: URLs are organized by feature/resource (option A).** Role-based URLs (`/admin/...`, `/partner/...`) are not used. The comparison below is kept for reference.
 
-| | **A. By resource/feature (recommended)** | B. By role |
+| | **A. By resource/feature (chosen)** | B. By role |
 |---|---|---|
 | Example | `GET /bookings/:id`, `GET /hotels/:hotelId/rooms` | `GET /staff/bookings/:id`, `GET /partner/rooms` |
 | Authorization | `@Roles()` plus tenant checks in the service | URL prefix plus `@Roles()` |
@@ -20,8 +20,6 @@ Goal: the URL alone tells you which resource an endpoint belongs to, and every e
 | Fits existing code | Already: `/auth/...` | Everything must change |
 
 Why A: StayReco has 6 roles that share many resources (bookings, hotels, refunds, marketing content). Splitting by role multiplies the number of endpoints and duplicates logic.
-
-> The rest of section 1 follows option A. If the meeting picks option B, rewrite all of section 1; **never** mix the two.
 
 ### 1.2 General rules
 
@@ -44,7 +42,7 @@ Why A: StayReco has 6 roles that share many resources (bookings, hotels, refunds
 5. Nest at most **one level**, only when the child resource only makes sense inside its parent: `/hotels/:hotelId/room-types`.
    Once you have the child's id, access it flat: `GET /room-types/:id`, not `/hotels/:hotelId/room-types/:id`.
 6. Path parameters are `:id` (UUID), or `:<resource>Id` when there are several ids: `:hotelId`.
-7. Query strings use camelCase: `?checkIn=2026-10-20&guests=2&page=1&pageSize=10&sort=-createdAt`.
+7. Query strings use camelCase: `?checkIn=2026-10-20&guests=2&page=1&pageSize=10&sort=price-asc`. List parameters (pagination, sorting, search, filters) follow [API_GUIDE.md §5](./API_GUIDE.md#5-lists-pagination-filtering-sorting).
 8. JSON bodies and responses use **camelCase**. Database columns use snake_case, mapped with `@map` in Prisma as in the current schema.
 
 ### 1.3 Three data scopes
@@ -55,7 +53,7 @@ Why A: StayReco has 6 roles that share many resources (bookings, hotels, refunds
 | Per hotel (tenant) | `/hotels/:hotelId/...` | A partner or staff member manages the data of **one** hotel | `GET /hotels/:hotelId/bookings`, `POST /hotels/:hotelId/room-types`, `GET /hotels/:hotelId/staff` |
 | Platform-wide | `/<resource>` | Public data, or system-wide administration (Platform Manager, Admin) | `GET /hotels` (public), `GET /verification-requests`, `GET /accounts`, `GET /audit-logs` |
 
-Every `/hotels/:hotelId/...` endpoint **must** verify that the caller belongs to that hotel (see section 4). Never trust a `hotelId` sent by the client.
+Every `/hotels/:hotelId/...` endpoint **must** verify that the caller belongs to that hotel (see section 5). Never trust a `hotelId` sent by the client.
 
 ### 1.4 Sample mapping from SRS screens
 
@@ -74,7 +72,7 @@ Every `/hotels/:hotelId/...` endpoint **must** verify that the caller belongs to
 
 ### 1.5 The existing auth group
 
-`/auth/...` is a feature of its own, so it already follows option A; it is the one group allowed to use verbs (`login`, `refresh`, ...). `TODO(meeting)`: should `/auth/sessions` become `/me/sessions` to match section 1.3? The FE has not integrated yet, so changing it now is cheap.
+`/auth/...` is a feature of its own, so it already follows option A; it is the one group allowed to use verbs (`login`, `refresh`, ...). **Decided:** session management stays under `/auth/sessions` (it is not moved to `/me/sessions`).
 
 ## 2. Code structure
 
@@ -112,16 +110,41 @@ src/
 4. If two people create migrations in parallel, whoever merges second rebases, deletes their own migration and re-runs `db:migrate`.
 5. Schema naming: models in singular PascalCase (`RoomType`), fields in camelCase, tables and columns in snake_case via `@@map` and `@map`, UUID primary keys.
 6. Demo data lives in `prisma/seed.ts`. The seed must be re-runnable without errors (use `upsert`).
-7. `TODO(meeting)`: switch the image to `pgvector/pgvector:pg17` and enable the `vector` extension before building the AI or recommendation modules.
+7. The current Docker database (`postgres:17-alpine`) is a **temporary** setup until the full database design is ready. Switching to `pgvector/pgvector:pg17` and enabling the `vector` extension is **on hold** and will be decided then.
 
-## 4. Multi-tenancy
+## 4. Money
+
+**Storage and transport**
+
+- Amounts are Vietnamese đồng (VND) only, stored as `Decimal(14, 0)` in Prisma/PostgreSQL: exact whole đồng, up to 99,999 billion. Never use `Float` for money (binary floating point cannot represent decimal amounts exactly).
+- Percentages (discount, commission rate) are stored as `Decimal(5, 2)`, e.g. `15.00`.
+- The API sends amounts as **JSON integers** (`2250000`) and percentages as JSON numbers (`15` or `12.5`). Prisma returns `Decimal` objects, which serialize as strings, so convert them to `number` in the response mapping. Integers stay exact in JS up to 9,007,199,254,740,991.
+- Do all calculations in the backend with `Prisma.Decimal`, never with JS `number`. The FE displays the amounts it receives and does not recompute them.
+
+**Why rounding is still needed**
+
+There is no unit smaller than 1 đồng, and payment gateways (VNPay, SePay) only accept whole amounts. A percentage of a price is often not a whole number: 15% of 1,234,567 ₫ is 185,185.05 ₫. That 0.05 ₫ cannot be charged or refunded, so each derived amount must become a whole number at one defined point, with one rule. "Exact" here means: no floating-point error, and the same input always gives the same result in the backend, the invoice and the reports.
+
+**Rule**
+
+- Compute each derived amount (discount, commission, cancellation fee, refund) with `Decimal`, then round it **once** to whole đồng with `ROUND_HALF_UP` (`.toDecimalPlaces(0, Decimal.ROUND_HALF_UP)`). Never round intermediate values, and never round twice.
+- **Percentage discounts are based on the base price** (the effective price after pricing rules, before any discount, per BR-05). When a booking has both a promotion and a voucher (BR-06), each percentage is applied to the base price, not to the already-discounted price; the discounts are then subtracted. The final price is never below 0.
+
+```ts
+// base = 1_234_567, promotion 15%, voucher 50_000 (fixed)
+const promo = base.mul(15).div(100).toDecimalPlaces(0, Decimal.ROUND_HALF_UP); // 185_185
+const final = Decimal.max(base.sub(promo).sub(50_000), 0);                      // 999_382
+```
+
+## 5. Multi-tenancy
 
 - The tenant boundary is the **hotel** (`hotel_id`). Every hotel-owned table has a `hotel_id` column.
+- **A staff member belongs to exactly one hotel.** `hotel_staff` gets a required `hotel_id` when the `hotel` table is created (it currently links to the partner only; see the TODO in the schema).
 - Every query on hotel-owned data filters by `hotelId`. The `hotelId` comes from the caller's relationship (the partner owns the hotel, or the staff member is assigned to it), **not from the client**. A value in the URL only selects the hotel and must then be verified.
-- `TODO(meeting)`: write one shared helper or guard, e.g. `HotelAccessGuard`, that checks access to `:hotelId`, so services don't each check it their own way.
+- One shared `HotelAccessGuard` checks access to `:hotelId` for every `/hotels/:hotelId/...` route, so services don't each check it their own way. Owner: Khiêm.
 - Every module with tenant data must have an e2e test proving that partner A **cannot** read or modify partner B's data (risk #7 in Report 2).
 
-## 5. Git workflow
+## 6. Git workflow
 
 `TODO(meeting)`: decide, then update section 6.2 of Report 2 to match.
 

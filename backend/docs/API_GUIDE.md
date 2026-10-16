@@ -112,7 +112,7 @@ Role checks in the FE only drive navigation. The backend always re-checks permis
 - **Email**: the backend trims it and converts it to lowercase.
 - **Unknown fields** in the body return **400**. Send only the fields listed above; for example, registration does **not** accept `phone`.
 - **Dates and times**: the API accepts and returns ISO 8601 strings in UTC (`2026-10-14T03:00:00.000Z`). The FE displays them in `Asia/Ho_Chi_Minh` as `dd/mm/yyyy`. Dates without a time (check-in, check-out) use `YYYY-MM-DD`.
-- **Money**: `TODO(meeting)`. Proposal: integer VND (no decimals); the FE formats it as `2.250.000 ₫`.
+- **Money**: whole VND amounts as JSON integers (`2250000`); the FE formats them as `2.250.000 ₫`. Percentages are JSON numbers (`15`, `12.5`). All prices, discounts, fees and refunds are calculated by the backend; the FE displays them and never recomputes them. Rules: [CONVENTIONS.md §4](./CONVENTIONS.md#4-money).
 
 ## 4. Response format (decided)
 
@@ -204,15 +204,19 @@ Important: **refresh only when `status === 401` and `code === 'UNAUTHENTICATED'`
 
 ## 5. Lists: pagination, filtering, sorting
 
-The `meta` shape in section 4.1 is decided. The query parameter names below are still a **proposal** `TODO(meeting)` and will be fixed with the first list API:
+Decided to match what the FE already uses (`TablePagination`, `Pagination`, `AppFilter`, the sort select on the search page):
 
-| Parameter | Example | Default |
+| Parameter | Example | Rule |
 |---|---|---|
-| `page` | `?page=2` | 1 |
-| `pageSize` | `?pageSize=20` | 10 (per SRS 5.2), max 100 |
-| `sort` | `?sort=-createdAt` (`-` means descending) | depends on the resource |
-| `q` | `?q=riverside` (free-text search) | |
-| filters | `?status=pending&fromDate=2026-10-01` | |
+| `page` | `?page=2` | 1-based. Default 1. |
+| `pageSize` | `?pageSize=20` | Default 10 (SRS 5.2), max 100. |
+| `sort` | `?sort=price-asc` | One named option per request: `<field>-asc` / `<field>-desc`, or a special option such as `relevant` or `rating`. Each list endpoint documents the options it accepts (Swagger); unknown values return `VALIDATION_ERROR`. |
+| `search` | `?search=riverside` | Free-text search box (`SearchFilter`). |
+| filters | `?status=pending` | Named after the filter `key` in `AppFilter` (`status`, `type`, ...), camelCase. |
+| multi-select filter | `?status=pending&status=paid` | Repeat the key. With axios, set `paramsSerializer: { indexes: null }`; the default `status[]=` form is not accepted. |
+| date-range filter | `?from=2026-10-01&to=2026-10-31` | `YYYY-MM-DD`, both inclusive. If an endpoint has several date ranges, prefix them: `checkInFrom`, `checkInTo`. |
+
+The response `meta` (`page`, `pageSize`, `total`, `totalPages`) maps directly to the props of `TablePagination` / `Pagination`.
 
 ## 6. Generated API docs (Swagger)
 
