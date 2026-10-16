@@ -49,7 +49,7 @@ The Response column describes the content of the `data` field (see section 4.1).
 | Method | Path | Access | Body | Response |
 |---|---|---|---|---|
 | POST | `/auth/register/customer` | public | `{ email, password, fullName }` | `AuthResult` (201) |
-| POST | `/auth/register/partner` | public | `{ email, password, fullName, companyName? }` | `AuthResult` (201) |
+| POST | `/auth/register/partner` | public | `{ email, password, fullName, phone, companyName? }` | `AuthResult` (201) |
 | POST | `/auth/login` | public | `{ email, password }` | `AuthResult` |
 | POST | `/auth/refresh` | public | web: `{}` · mobile: `{ refreshToken }` | web: `{ accessToken, expiresIn }` · mobile: `{ accessToken, refreshToken, expiresIn }` |
 | POST | `/auth/logout` | signed in | | 204 |
@@ -62,7 +62,7 @@ The Response column describes the content of the `data` field (see section 4.1).
 | POST | `/auth/forgot-password` | public | `{ email }` | 204 (always 204) |
 | POST | `/auth/reset-password` | public | `{ token, newPassword }` | 204 |
 | POST | `/auth/change-password` | signed in | `{ currentPassword, newPassword }` | 204 |
-| POST | `/auth/invitations/staff` | HOTEL_PARTNER | `{ email, fullName }` | `{ id, email, status }` (201) |
+| POST | `/auth/invitations/staff` | HOTEL_PARTNER | `{ email, fullName, hotelId, position }` (the hotel must belong to the partner) | `{ id, email, status }` (201) |
 | POST | `/auth/invitations/platform-manager` | ADMIN | `{ email, fullName }` | `{ id, email, status }` (201) |
 | POST | `/auth/invitations/accept` | public | `{ token, password }` | `AuthResult` (201) |
 
@@ -73,14 +73,19 @@ The Response column describes the content of the `data` field (see section 4.1).
 {
   "id": "uuid",
   "email": "a@b.com",
+  "fullName": "Nguyen Van A",
   "phone": null,
+  "avatarUrl": null,
   "role": "CUSTOMER",            // see section 2.6
   "status": "ACTIVE",            // ACTIVE | INVITED | SUSPENDED | DELETED
   "emailVerified": false,
   "emailVerifiedAt": null,
   "lastLoginAt": "2026-10-14T03:00:00.000Z",
   "createdAt": "2026-10-14T03:00:00.000Z",
-  "profile": { "id": "uuid", "fullName": "Nguyen Van A" }  // fields depend on the role
+  // Role-specific data, null for CUSTOMER / ADMIN / PLATFORM_MANAGER:
+  //   HOTEL_PARTNER: { "partnerName": "Hotel Co", "status": "PENDING" }
+  //   HOTEL_STAFF:   { "hotelId": "uuid", "position": "Receptionist" }
+  "profile": null
 }
 ```
 
@@ -112,7 +117,7 @@ Role checks in the FE only drive navigation. The backend always re-checks permis
 - **Email**: the backend trims it and converts it to lowercase.
 - **Unknown fields** in the body return **400**. Send only the fields listed above; for example, registration does **not** accept `phone`.
 - **Dates and times**: the API accepts and returns ISO 8601 strings in UTC (`2026-10-14T03:00:00.000Z`). The FE displays them in `Asia/Ho_Chi_Minh` as `dd/mm/yyyy`. Dates without a time (check-in, check-out) use `YYYY-MM-DD`.
-- **Money**: whole VND amounts as JSON integers (`2250000`); the FE formats them as `2.250.000 ₫`. Percentages are JSON numbers (`15`, `12.5`). All prices, discounts, fees and refunds are calculated by the backend; the FE displays them and never recomputes them. Rules: [CONVENTIONS.md §4](./CONVENTIONS.md#4-money).
+- **Money**: VND amounts as JSON numbers with at most 2 decimals (`2250000`, `185185.05`); the FE formats them as `2.250.000 ₫`. Percentages are JSON numbers (`15`, `12.5`). All prices, discounts, fees and refunds are calculated by the backend; the FE displays them and never recomputes them. Rules: [CONVENTIONS.md §4](./CONVENTIONS.md#4-money).
 
 ## 4. Response format (decided)
 
@@ -199,6 +204,7 @@ There is no `status` field in the body; the HTTP status is already available as 
 | `AUTH_REFRESH_TOKEN_INVALID` | 401 | Refresh token missing, invalid, expired or reused | Clear the signed-in state and go to `/login` |
 | `AUTH_INVITATION_ACCEPTED` | 409 | Invitation already accepted | Go to sign-in |
 | `AUTH_SESSION_NOT_FOUND` | 404 | Revoking a session that doesn't exist | Reload the session list |
+| `HOTEL_NOT_FOUND` | 404 | Hotel doesn't exist or doesn't belong to the caller (not distinguished) | "Hotel not found" |
 
 Important: **refresh only when `status === 401` and `code === 'UNAUTHENTICATED'`.** Refreshing on the other 401 errors (`AUTH_INVALID_CREDENTIALS`, `AUTH_WRONG_PASSWORD`, `AUTH_REFRESH_TOKEN_INVALID`) causes infinite loops or unexpected sign-outs.
 
