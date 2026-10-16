@@ -1,7 +1,8 @@
+# Temporary local database for development until the team database is ready.
 services:
-  postgres:
-    image: postgres:17-alpine
-    container_name: stayreco-postgres
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: stayreco-db
     restart: unless-stopped
     environment:
       POSTGRES_USER: stayreco
@@ -10,8 +11,9 @@ services:
     ports:
       - '5432:5432'
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      - stayreco_pg:/var/lib/postgresql/data
+      # Creates the stayreco_test database used by the e2e tests.
       - ./docker/postgres-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
 
 volumes:
-  postgres-data:
+  stayreco_pg:
