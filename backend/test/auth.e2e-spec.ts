@@ -1,11 +1,11 @@
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { Role } from '@prisma/client';
 import * as argon2 from 'argon2';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/app.setup';
+import { UserRole } from '../src/generated/prisma/client';
 import { MailMessage, MailService } from '../src/modules/mail/mail.service';
 import { PrismaService } from '../src/prisma/prisma.service';
 
@@ -46,6 +46,32 @@ describe('Auth (e2e)', () => {
     return res.body.data as { accessToken: string; refreshToken: string };
   };
 
+  /** There is no hotel API yet, so tests insert hotels directly. */
+  const createHotel = (hotelPartnerId: string) =>
+    prisma.hotel.create({
+      data: {
+        hotelPartnerId,
+        name: 'Riverside Hotel',
+        address: '1 Bach Dang',
+        city: 'Da Nang',
+        country: 'Vietnam',
+        email: 'contact@riverside.test',
+      },
+    });
+
+  const registerPartner = async (email: string) => {
+    const res = await api()
+      .post('/api/v1/auth/register/partner')
+      .send({
+        email,
+        password: PASSWORD,
+        fullName: 'Owner',
+        phone: '0901234567',
+      })
+      .expect(201);
+    return res.body.data as { account: { id: string }; accessToken: string };
+  };
+
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(MailService)
@@ -66,7 +92,7 @@ describe('Auth (e2e)', () => {
   beforeEach(async () => {
     outbox.length = 0;
     await prisma.$executeRawUnsafe(
-      'TRUNCATE TABLE account, audit_log RESTART IDENTITY CASCADE',
+      'TRUNCATE TABLE user_account, audit_log RESTART IDENTITY CASCADE',
     );
   });
 
@@ -128,9 +154,10 @@ describe('Auth (e2e)', () => {
       expect(body.refreshToken).toEqual(expect.any(String));
       expect(body.account).toMatchObject({
         email: 'alice@example.com',
+        fullName: 'Alice',
         role: 'CUSTOMER',
         emailVerified: false,
-        profile: { fullName: 'Alice' },
+        profile: null,
       });
       expect(body.account).not.toHaveProperty('passwordHash');
       expect(outbox).toHaveLength(1);
@@ -144,6 +171,7 @@ describe('Auth (e2e)', () => {
           email: '  ALICE@example.com ',
           password: PASSWORD,
           fullName: 'A',
+          phone: '0901234567',
         })
         .expect(409);
       expect(dup.body.code).toBe('AUTH_EMAIL_TAKEN');
@@ -415,20 +443,32 @@ describe('Auth (e2e)', () => {
           password: PASSWORD,
           fullName: 'Owner',
           companyName: 'Hotel Co',
+          phone: '0901234567',
         })
         .expect(201);
+      expect(partner.body.data.account.profile).toMatchObject({
+        partnerName: 'Hotel Co',
+      });
+      const partnerToken = partner.body.data.accessToken as string;
+      const hotel = await createHotel(partner.body.data.account.id as string);
+      const invite = {
+        email: 'staff@hotel.com',
+        fullName: 'Staff',
+        hotelId: hotel.hotelId,
+        position: 'Receptionist',
+      };
 
       const { accessToken: customerToken } = await registerCustomer();
       await api()
         .post('/api/v1/auth/invitations/staff')
         .set('Authorization', `Bearer ${customerToken}`)
-        .send({ email: 'staff@hotel.com', fullName: 'Staff' })
+        .send(invite)
         .expect(403);
 
       await api()
         .post('/api/v1/auth/invitations/staff')
-        .set('Authorization', `Bearer ${partner.body.data.accessToken}`)
-        .send({ email: 'staff@hotel.com', fullName: 'Staff' })
+        .set('Authorization', `Bearer ${partnerToken}`)
+        .send(invite)
         .expect(201);
 
       // Invited account cannot log in before accepting.
@@ -446,7 +486,7 @@ describe('Auth (e2e)', () => {
         role: 'HOTEL_STAFF',
         status: 'ACTIVE',
         emailVerified: true,
-        profile: { hotelPartnerId: partner.body.data.account.profile.id },
+        profile: { hotelId: hotel.hotelId, position: 'Receptionist' },
       });
 
       await api()
@@ -456,13 +496,32 @@ describe('Auth (e2e)', () => {
       await login('staff@hotel.com');
     });
 
+    it("a partner cannot invite staff to another partner's hotel", async () => {
+      const a = await registerPartner('a@hotel.com');
+      const b = await registerPartner('b@hotel.com');
+      const hotelOfB = await createHotel(b.account.id);
+
+      const res = await api()
+        .post('/api/v1/auth/invitations/staff')
+        .set('Authorization', `Bearer ${a.accessToken}`)
+        .send({
+          email: 'staff@hotel.com',
+          fullName: 'Staff',
+          hotelId: hotelOfB.hotelId,
+          position: 'Receptionist',
+        })
+        .expect(404);
+      expect(res.body.code).toBe('HOTEL_NOT_FOUND');
+    });
+
     it('only admins can invite platform managers', async () => {
-      await prisma.account.create({
+      await prisma.userAccount.create({
         data: {
           email: 'admin@example.com',
+          fullName: 'Admin',
           passwordHash: await argon2.hash(PASSWORD),
-          role: Role.ADMIN,
-          admin: { create: { fullName: 'Admin' } },
+          role: UserRole.ADMIN,
+          admin: { create: {} },
         },
       });
       const { accessToken: adminToken } = await login('admin@example.com');

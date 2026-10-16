@@ -19,6 +19,8 @@ const envSchema = z.object({
   JWT_ACCESS_SECRET: z.string().min(32),
   JWT_ACCESS_TTL_SECONDS: z.coerce.number().int().positive().default(900),
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(30),
+  /** Platform commission (%) given to newly registered partners. Business rule: 8–15%. */
+  DEFAULT_COMMISSION_RATE: z.coerce.number().min(8).max(15),
 });
 
 export type Env = z.infer<typeof envSchema>;
