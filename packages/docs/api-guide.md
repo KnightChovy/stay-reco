@@ -115,7 +115,7 @@ Role checks in the FE only drive navigation. The backend always re-checks permis
 
 - **Password**: 8–128 characters, with at least one letter and one digit. The FE should apply the same rule to report errors early (MSG08).
 - **Email**: the backend trims it and converts it to lowercase.
-- **Unknown fields** in the body return **400**. Send only the fields listed above; for example, registration does **not** accept `phone`.
+- **Unknown fields** in the body return **400**. Send only the fields listed above; for example, customer registration does **not** accept `phone`.
 - **Dates and times**: the API accepts and returns ISO 8601 strings in UTC (`2026-10-14T03:00:00.000Z`). The FE displays them in `Asia/Ho_Chi_Minh` as `dd/mm/yyyy`. Dates without a time (check-in, check-out) use `YYYY-MM-DD`.
 - **Money**: VND amounts as JSON numbers with at most 2 decimals (`2250000`, `185185.05`); the FE formats them as `2.250.000 ₫`. Percentages are JSON numbers (`15`, `12.5`). All prices, discounts, fees and refunds are calculated by the backend; the FE displays them and never recomputes them. Rules: [CONVENTIONS.md §4](./CONVENTIONS.md#4-money).
 

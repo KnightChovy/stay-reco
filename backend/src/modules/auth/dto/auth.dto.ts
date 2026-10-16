@@ -1,126 +1,28 @@
 import {
-  IsEmail,
-  IsNotEmpty,
-  IsOptional,
-  IsString,
-  IsUUID,
-  Matches,
-  MaxLength,
-  MinLength,
-} from 'class-validator';
+  acceptInvitationSchema,
+  changePasswordSchema,
+  emailBodySchema,
+  inviteAccountSchema,
+  inviteStaffSchema,
+  loginSchema,
+  refreshSchema,
+  registerCustomerSchema,
+  registerPartnerSchema,
+  resetPasswordSchema,
+  tokenBodySchema,
+} from '@stayreco/shared';
+import { zodDto } from '../../../common/pipes/validation';
 
-const normalizeEmail = ({ value }: { value: unknown }) =>
-  typeof value === 'string' ? value.trim().toLowerCase() : value;
-const trim = ({ value }: { value: unknown }) =>
-  typeof value === 'string' ? value.trim() : value;
-
-function IsStrongPassword(): PropertyDecorator {
-  return (target, key) => {
-    // The Swagger plugin cannot see through this composite decorator, so describe the rule explicitly.
-    ApiProperty({
-      minLength: 8,
-      maxLength: 128,
-      description: 'At least one letter and one number',
-    })(target, key);
-    IsString()(target, key);
-    MinLength(8)(target, key);
-    MaxLength(128)(target, key);
-    Matches(/^(?=.*[A-Za-z])(?=.*\d).+$/, {
-      message: 'password must contain at least one letter and one number',
-    })(target, key);
-  };
-}
-
-class EmailDto {
-  @Transform(normalizeEmail)
-  @IsEmail()
-  @MaxLength(254)
-  email!: string;
-}
-
-export class RegisterCustomerDto extends EmailDto {
-  @IsStrongPassword()
-  password!: string;
-
-  @Transform(trim)
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(100)
-  fullName!: string;
-}
-
-export class RegisterPartnerDto extends RegisterCustomerDto {
-  @IsOptional()
-  @Transform(trim)
-  @IsString()
-  @MaxLength(200)
-  companyName?: string;
-
-  /** Contact phone of the partner, e.g. 0901234567 or +84901234567. */
-  @Transform(trim)
-  @Matches(/^\+?\d{9,15}$/, { message: 'phone must be a valid phone number' })
-  phone!: string;
-}
-
-export class LoginDto extends EmailDto {
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(128)
-  password!: string;
-}
-
-export class RefreshDto {
-  /** Mobile sends it in the body; web uses the httpOnly cookie. */
-  @IsOptional()
-  @IsString()
-  refreshToken?: string;
-}
-
-export class TokenDto {
-  @IsString()
-  @IsNotEmpty()
-  token!: string;
-}
-
-export class ResendVerificationDto extends EmailDto {}
-
-export class ForgotPasswordDto extends EmailDto {}
-
-export class ResetPasswordDto extends TokenDto {
-  @IsStrongPassword()
-  newPassword!: string;
-}
-
-export class ChangePasswordDto {
-  @IsString()
-  @IsNotEmpty()
-  currentPassword!: string;
-
-  @IsStrongPassword()
-  newPassword!: string;
-}
-
-export class InviteAccountDto extends EmailDto {
-  @Transform(trim)
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(100)
-  fullName!: string;
-}
-
-export class InviteStaffDto extends InviteAccountDto {
-  /** Hotel the staff member works at; must belong to the inviting partner. */
-  @IsUUID()
-  hotelId!: string;
-
-  @Transform(trim)
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(50)
-  position!: string;
-}
-
-export class AcceptInvitationDto extends TokenDto {
-  @IsStrongPassword()
-  password!: string;
-}
+// Rules live in packages/shared so web and mobile validate forms exactly like the API.
+export class RegisterCustomerDto extends zodDto(registerCustomerSchema) {}
+export class RegisterPartnerDto extends zodDto(registerPartnerSchema) {}
+export class LoginDto extends zodDto(loginSchema) {}
+export class RefreshDto extends zodDto(refreshSchema) {}
+export class TokenDto extends zodDto(tokenBodySchema) {}
+export class ResendVerificationDto extends zodDto(emailBodySchema) {}
+export class ForgotPasswordDto extends zodDto(emailBodySchema) {}
+export class ResetPasswordDto extends zodDto(resetPasswordSchema) {}
+export class ChangePasswordDto extends zodDto(changePasswordSchema) {}
+export class InviteAccountDto extends zodDto(inviteAccountSchema) {}
+export class InviteStaffDto extends zodDto(inviteStaffSchema) {}
+export class AcceptInvitationDto extends zodDto(acceptInvitationSchema) {}

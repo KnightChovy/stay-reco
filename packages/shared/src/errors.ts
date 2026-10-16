@@ -27,5 +27,9 @@ export const ErrorCode = {
   AUTH_REFRESH_TOKEN_INVALID: 'AUTH_REFRESH_TOKEN_INVALID',
   AUTH_INVITATION_ACCEPTED: 'AUTH_INVITATION_ACCEPTED',
   AUTH_SESSION_NOT_FOUND: 'AUTH_SESSION_NOT_FOUND',
+
+  // Hotel
+  /** Hotel does not exist or does not belong to the caller (the two cases are not distinguished). */
+  HOTEL_NOT_FOUND: 'HOTEL_NOT_FOUND',
 } as const;
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];

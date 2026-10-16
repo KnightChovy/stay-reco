@@ -21,6 +21,8 @@ export type RegisterCustomerInput = z.infer<typeof registerCustomerSchema>;
 
 export const registerPartnerSchema = registerCustomerSchema.extend({
   companyName: z.string().trim().max(200).optional(),
+  /** Contact phone of the partner, e.g. 0901234567 or +84901234567. */
+  phone: z.string().trim().regex(/^\+?\d{9,15}$/, 'phone must be a valid phone number'),
 });
 export type RegisterPartnerInput = z.infer<typeof registerPartnerSchema>;
 
@@ -59,6 +61,13 @@ export const inviteAccountSchema = z.strictObject({
   fullName: fullNameSchema,
 });
 export type InviteAccountInput = z.infer<typeof inviteAccountSchema>;
+
+export const inviteStaffSchema = inviteAccountSchema.extend({
+  /** Hotel the staff member works at; must belong to the inviting partner. */
+  hotelId: z.uuid(),
+  position: z.string().trim().min(1).max(50),
+});
+export type InviteStaffInput = z.infer<typeof inviteStaffSchema>;
 
 export const acceptInvitationSchema = z.strictObject({
   token: tokenSchema,

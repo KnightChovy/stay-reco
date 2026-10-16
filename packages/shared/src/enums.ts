@@ -1,4 +1,4 @@
-/** Mirrors the Prisma enums in backend/prisma/schema.prisma. Keep both in sync. */
+/** Mirrors the Prisma enums (UserRole, AccountStatus) in backend/prisma/schema.prisma. Keep both in sync. */
 export const Role = {
   CUSTOMER: 'CUSTOMER',
   HOTEL_PARTNER: 'HOTEL_PARTNER',

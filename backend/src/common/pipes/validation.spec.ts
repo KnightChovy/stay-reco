@@ -42,9 +42,12 @@ describe('ZodValidationPipe', () => {
   it('rejects unknown fields, even on extended schemas', () => {
     expect(
       details(() =>
-        pipe.transform({ ...valid, phone: '1' }, body(RegisterPartnerDto)),
+        pipe.transform(
+          { ...valid, phone: '0901234567', foo: '1' },
+          body(RegisterPartnerDto),
+        ),
       ),
-    ).toEqual(['phone']);
+    ).toEqual(['foo']);
   });
 
   it('reports each invalid field', () => {
