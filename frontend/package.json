@@ -3,7 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "shared:build": "npm --prefix ../packages/shared install && npm --prefix ../packages/shared run build",
+    "postinstall": "npm run shared:build",
+    "predev": "npm run shared:build",
     "dev": "next dev",
+    "prebuild": "npm run shared:build",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
@@ -11,6 +15,7 @@
   "dependencies": {
     "@base-ui/react": "^1.8.0",
     "@shadcn/react": "^0.3.1",
+    "@stayreco/shared": "file:../packages/shared",
     "@tanstack/react-query": "^5.102.8",
     "@tanstack/react-table": "^9.2.4",
     "axios": "^1.20.0",
