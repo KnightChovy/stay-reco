@@ -1,3 +1,4 @@
+import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import {
   IsEmail,
@@ -16,6 +17,12 @@ const trim = ({ value }: { value: unknown }) =>
 
 function IsStrongPassword(): PropertyDecorator {
   return (target, key) => {
+    // The Swagger plugin cannot see through this composite decorator, so describe the rule explicitly.
+    ApiProperty({
+      minLength: 8,
+      maxLength: 128,
+      description: 'At least one letter and one number',
+    })(target, key);
     IsString()(target, key);
     MinLength(8)(target, key);
     MaxLength(128)(target, key);

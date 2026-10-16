@@ -1,8 +1,11 @@
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { INestApplication } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
+import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { ResponseInterceptor } from './common/interceptors/response.interceptor';
+import { createValidationPipe } from './common/pipes/validation';
 import { Env } from './config/env';
 
 export const API_PREFIX = 'api/v1';
@@ -20,12 +23,9 @@ export function configureApp(app: INestApplication) {
     origin: config.get('CORS_ORIGINS', { infer: true }),
     credentials: true,
   });
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-    }),
-  );
+  app.useGlobalPipes(createValidationPipe());
+  // Response contract: { success, message, data, meta? } / { success: false, message, code, details? }
+  app.useGlobalInterceptors(new ResponseInterceptor());
+  app.useGlobalFilters(new HttpExceptionFilter());
   app.enableShutdownHooks();
 }

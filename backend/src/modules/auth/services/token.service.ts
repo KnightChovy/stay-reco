@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { AccountStatus, Role } from '@prisma/client';
 import { RequestMeta } from '../../../common/decorators/request-meta.decorator';
+import { ErrorCode } from '../../../common/errors/error-code';
 import { AccessTokenPayload } from '../../../common/guards/jwt-auth.guard';
 import { Env } from '../../../config/env';
 import { PrismaService } from '../../../prisma/prisma.service';
@@ -17,6 +18,12 @@ export interface TokenPair {
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+const refreshFailed = (message: string) =>
+  new UnauthorizedException({
+    code: ErrorCode.AUTH_REFRESH_TOKEN_INVALID,
+    message,
+  });
 
 @Injectable()
 export class TokenService {
@@ -58,14 +65,14 @@ export class TokenService {
       where: { tokenHash: hashToken(refreshToken) },
       include: { session: { include: { account: true } } },
     });
-    if (!record) throw new UnauthorizedException('Invalid refresh token');
+    if (!record) throw refreshFailed('Invalid refresh token');
 
     const { session } = record;
     if (session.revokedAt || session.expiresAt <= new Date()) {
-      throw new UnauthorizedException('Session expired');
+      throw refreshFailed('Session expired');
     }
     if (session.account.status !== AccountStatus.ACTIVE) {
-      throw new UnauthorizedException('Invalid refresh token');
+      throw refreshFailed('Invalid refresh token');
     }
 
     // Conditional update makes concurrent use of the same token race-safe.
@@ -81,7 +88,7 @@ export class TokenService {
         meta,
         { sessionId: session.id },
       );
-      throw new UnauthorizedException('Refresh token reuse detected');
+      throw refreshFailed('Refresh token reuse detected');
     }
 
     const next = generateToken();

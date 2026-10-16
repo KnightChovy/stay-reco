@@ -14,6 +14,7 @@ import {
 } from '@prisma/client';
 import { AuthUser } from '../../../common/decorators/current-user.decorator';
 import { RequestMeta } from '../../../common/decorators/request-meta.decorator';
+import { ErrorCode } from '../../../common/errors/error-code';
 import { Env } from '../../../config/env';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { AuditAction, AuditService } from '../../audit/audit.service';
@@ -51,6 +52,19 @@ const accountSelect = {
   platformManager: { select: { id: true, fullName: true } },
   admin: { select: { id: true, fullName: true } },
 } satisfies Prisma.AccountSelect;
+
+// Same code and message for wrong password, unknown email and inactive account (no account enumeration).
+const invalidCredentials = () =>
+  new UnauthorizedException({
+    code: ErrorCode.AUTH_INVALID_CREDENTIALS,
+    message: 'Invalid email or password',
+  });
+
+const emailTaken = () =>
+  new ConflictException({
+    code: ErrorCode.AUTH_EMAIL_TAKEN,
+    message: 'Email is already registered',
+  });
 
 type AccountWithProfiles = Prisma.AccountGetPayload<{
   select: typeof accountSelect;
@@ -151,9 +165,10 @@ export class AuthService {
     });
 
     if (account?.lockedUntil && account.lockedUntil > new Date()) {
-      throw new ForbiddenException(
-        'Too many failed attempts. Please try again later.',
-      );
+      throw new ForbiddenException({
+        code: ErrorCode.AUTH_ACCOUNT_LOCKED,
+        message: 'Too many failed attempts. Please try again later.',
+      });
     }
 
     const valid = await this.passwords.verify(
@@ -170,14 +185,17 @@ export class AuthService {
           email: dto.email,
         },
       );
-      throw new UnauthorizedException('Invalid email or password');
+      throw invalidCredentials();
     }
 
     if (account.status === AccountStatus.SUSPENDED) {
-      throw new ForbiddenException('Account is suspended');
+      throw new ForbiddenException({
+        code: ErrorCode.AUTH_ACCOUNT_SUSPENDED,
+        message: 'Account is suspended',
+      });
     }
     if (account.status !== AccountStatus.ACTIVE) {
-      throw new UnauthorizedException('Invalid email or password');
+      throw invalidCredentials();
     }
 
     await this.prisma.account.update({
@@ -246,7 +264,12 @@ export class AuthService {
 
   async revokeSession(user: AuthUser, sessionId: string, meta: RequestMeta) {
     const revoked = await this.tokens.revokeSession(sessionId, user.accountId);
-    if (!revoked) throw new NotFoundException('Session not found');
+    if (!revoked) {
+      throw new NotFoundException({
+        code: ErrorCode.AUTH_SESSION_NOT_FOUND,
+        message: 'Session not found',
+      });
+    }
     await this.audit.log(AuditAction.SESSION_REVOKED, user.accountId, meta, {
       sessionId,
     });
@@ -326,7 +349,10 @@ export class AuthService {
       where: { id: accountId },
     });
     if (account.status !== AccountStatus.ACTIVE) {
-      throw new ForbiddenException('Account is not active');
+      throw new ForbiddenException({
+        code: ErrorCode.AUTH_ACCOUNT_INACTIVE,
+        message: 'Account is not active',
+      });
     }
 
     await this.prisma.account.update({
@@ -355,8 +381,12 @@ export class AuthService {
       account.passwordHash,
       dto.currentPassword,
     );
-    if (!valid)
-      throw new UnauthorizedException('Current password is incorrect');
+    if (!valid) {
+      throw new UnauthorizedException({
+        code: ErrorCode.AUTH_WRONG_PASSWORD,
+        message: 'Current password is incorrect',
+      });
+    }
 
     await this.prisma.account.update({
       where: { id: user.accountId },
@@ -381,9 +411,7 @@ export class AuthService {
     const canResend =
       existing?.status === AccountStatus.INVITED &&
       existing.hotelStaff?.hotelPartnerId === partner.id;
-    if (existing && !canResend) {
-      throw new ConflictException('Email is already registered');
-    }
+    if (existing && !canResend) throw emailTaken();
 
     const account =
       existing ??
@@ -418,9 +446,7 @@ export class AuthService {
     const canResend =
       existing?.status === AccountStatus.INVITED &&
       existing.role === Role.PLATFORM_MANAGER;
-    if (existing && !canResend) {
-      throw new ConflictException('Email is already registered');
-    }
+    if (existing && !canResend) throw emailTaken();
 
     const account =
       existing ??
@@ -453,7 +479,12 @@ export class AuthService {
         lastLoginAt: new Date(),
       },
     });
-    if (count === 0) throw new ConflictException('Invitation already accepted');
+    if (count === 0) {
+      throw new ConflictException({
+        code: ErrorCode.AUTH_INVITATION_ACCEPTED,
+        message: 'Invitation already accepted',
+      });
+    }
 
     const account = await this.prisma.account.findUniqueOrThrow({
       where: { id: accountId },
@@ -490,7 +521,7 @@ export class AuthService {
         err instanceof Prisma.PrismaClientKnownRequestError &&
         err.code === 'P2002'
       ) {
-        throw new ConflictException('Email is already registered');
+        throw emailTaken();
       }
       throw err;
     }
