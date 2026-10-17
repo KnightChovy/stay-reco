@@ -19,6 +19,12 @@ export const ErrorCode = {
   AUTH_ACCOUNT_LOCKED: 'AUTH_ACCOUNT_LOCKED',
   AUTH_ACCOUNT_SUSPENDED: 'AUTH_ACCOUNT_SUSPENDED',
   AUTH_ACCOUNT_INACTIVE: 'AUTH_ACCOUNT_INACTIVE',
+  /** Correct password but the email has not been verified yet; show the OTP screen. */
+  AUTH_EMAIL_NOT_VERIFIED: 'AUTH_EMAIL_NOT_VERIFIED',
+  /** Wrong email OTP; the user may try again. */
+  AUTH_OTP_INVALID: 'AUTH_OTP_INVALID',
+  /** Email OTP expired, already used or too many wrong attempts; the user must request a new code. */
+  AUTH_OTP_EXPIRED: 'AUTH_OTP_EXPIRED',
   AUTH_EMAIL_TAKEN: 'AUTH_EMAIL_TAKEN',
   AUTH_WRONG_PASSWORD: 'AUTH_WRONG_PASSWORD',
   /** Email-verification, password-reset or invitation token is invalid, expired or already used. */
