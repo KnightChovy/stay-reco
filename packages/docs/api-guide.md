@@ -37,7 +37,19 @@ Web client: set `NEXT_PUBLIC_API_URL=http://localhost:3000/api/v1`.
 
 ### 2.3 Recommended client flow
 
-1. On successful login, keep `accessToken` and `account`; mobile also keeps `refreshToken`.
+**Sign-up (customer and partner):**
+
+1. `POST /auth/register/customer` (or `/register/partner`) returns `{ account }` with `status: "PENDING_VERIFICATION"` and **no tokens**. The backend emails a 6-digit code (valid 10 minutes).
+2. Show the **OTP screen** (6 inputs) for that email. "Resend code" calls `POST /auth/resend-verification`; the previous code stops working.
+3. `POST /auth/verify-email { email, code }`:
+   - correct: the account becomes `ACTIVE` and the response is an `AuthResult`, the same as login. Treat it as a successful login.
+   - `AUTH_OTP_INVALID`: wrong code, let the user retry.
+   - `AUTH_OTP_EXPIRED`: expired or 5 attempts used, ask the user to resend the code.
+4. If a pending user tries to log in, login answers **403 `AUTH_EMAIL_NOT_VERIFIED`**: go to the OTP screen for that email.
+
+**Signed-in requests:**
+
+1. On successful login (or verify-email), keep `accessToken` and `account`; mobile also keeps `refreshToken`.
 2. Call APIs with the `Authorization` header.
 3. On **401 with `code: "UNAUTHENTICATED"`**: call `/auth/refresh` **once** (queue pending requests; never refresh in parallel), then retry the original request. Other 401 errors must not trigger a refresh (see section 4.3).
 4. If refresh also returns 401: clear the signed-in state and redirect to `/login?next=...`.
@@ -48,8 +60,8 @@ The Response column describes the content of the `data` field (see section 4.1).
 
 | Method | Path | Access | Body | Response |
 |---|---|---|---|---|
-| POST | `/auth/register/customer` | public | `{ email, password, fullName }` | `AuthResult` (201) |
-| POST | `/auth/register/partner` | public | `{ email, password, fullName, phone, companyName? }` | `AuthResult` (201) |
+| POST | `/auth/register/customer` | public | `{ email, password, fullName }` | `RegisterResult` = `{ account }`, no tokens (201) |
+| POST | `/auth/register/partner` | public | `{ email, password, fullName, phone, companyName? }` | `RegisterResult` = `{ account }`, no tokens (201) |
 | POST | `/auth/login` | public | `{ email, password }` | `AuthResult` |
 | POST | `/auth/refresh` | public | web: `{}` · mobile: `{ refreshToken }` | web: `{ accessToken, expiresIn }` · mobile: `{ accessToken, refreshToken, expiresIn }` |
 | POST | `/auth/logout` | signed in | | 204 |
@@ -57,8 +69,8 @@ The Response column describes the content of the `data` field (see section 4.1).
 | GET | `/auth/me` | signed in | | `Account` |
 | GET | `/auth/sessions` | signed in | | `Session[]` |
 | DELETE | `/auth/sessions/:id` | signed in | | 204 |
-| POST | `/auth/verify-email` | public | `{ token }` | 204 |
-| POST | `/auth/resend-verification` | public | `{ email }` | 204 (always 204; never reveals whether the email exists) |
+| POST | `/auth/verify-email` | public | `{ email, code }` (`code` = 6 digits) | `AuthResult` (200), account activated and signed in |
+| POST | `/auth/resend-verification` | public | `{ email }` | 204 (always 204; mails a new code only to pending accounts) |
 | POST | `/auth/forgot-password` | public | `{ email }` | 204 (always 204) |
 | POST | `/auth/reset-password` | public | `{ token, newPassword }` | 204 |
 | POST | `/auth/change-password` | signed in | `{ currentPassword, newPassword }` | 204 |
@@ -68,7 +80,7 @@ The Response column describes the content of the `data` field (see section 4.1).
 
 `AuthResult` contains `account: Account`, `accessToken: string` and `expiresIn: number`. Mobile also receives `refreshToken: string`.
 
-TypeScript types for these responses come from `@stayreco/shared` (`Account`, `AuthResult`, `RefreshResult`, `SessionInfo`, `InvitationResult`, `PartnerProfile`, `StaffProfile`). Import them instead of redefining them. The backend fails to compile if `Account` drifts from what it actually returns.
+TypeScript types for these responses come from `@stayreco/shared` (`Account`, `RegisterResult`, `AuthResult`, `RefreshResult`, `SessionInfo`, `InvitationResult`, `PartnerProfile`, `StaffProfile`). Import them instead of redefining them. The backend fails to compile if `Account` drifts from what it actually returns.
 
 ```jsonc
 // Account
@@ -79,7 +91,7 @@ TypeScript types for these responses come from `@stayreco/shared` (`Account`, `A
   "phone": null,
   "avatarUrl": null,
   "role": "CUSTOMER",            // see section 2.6
-  "status": "ACTIVE",            // ACTIVE | INVITED | SUSPENDED | DELETED
+  "status": "ACTIVE",            // PENDING_VERIFICATION | ACTIVE | INVITED | SUSPENDED | DELETED
   "emailVerified": false,
   "emailVerifiedAt": null,
   "lastLoginAt": "2026-10-14T03:00:00.000Z",
@@ -91,15 +103,17 @@ TypeScript types for these responses come from `@stayreco/shared` (`Account`, `A
 }
 ```
 
-### 2.5 FE pages linked from emails
+### 2.5 FE pages for emails
 
-The backend sends emails containing `WEB_APP_URL/<path>?token=...`. The FE needs these 3 pages; each reads `token` from the URL and calls the matching API:
+Email verification uses a **6-digit code**; password reset and invitations use a **link** `WEB_APP_URL/<path>?token=...`:
 
 | FE page | API call |
 |---|---|
-| `/verify-email?token=` | `POST /auth/verify-email` |
+| OTP screen after sign-up (e.g. `/verify-email?email=`) | User types the code, then `POST /auth/verify-email { email, code }` |
 | `/reset-password?token=` | New-password form, then `POST /auth/reset-password` |
 | `/accept-invitation?token=` | Set-password form, then `POST /auth/invitations/accept` |
+
+The forgot-password flow is **link-based** (not OTP): `POST /auth/forgot-password { email }`, show "check your email", and the email link opens `/reset-password?token=`.
 
 ### 2.6 Roles
 
@@ -200,9 +214,12 @@ There is no `status` field in the body; the HTTP status is already available as 
 | `AUTH_ACCOUNT_LOCKED` | 403 | 5 wrong passwords; locked for 15 minutes | "Too many failed attempts…" |
 | `AUTH_ACCOUNT_SUSPENDED` | 403 | Account suspended | MSG06 |
 | `AUTH_ACCOUNT_INACTIVE` | 403 | Password reset for an inactive account | MSG06 |
+| `AUTH_EMAIL_NOT_VERIFIED` | 403 | Login with the correct password before the email code was entered | Go to the OTP screen for that email |
+| `AUTH_OTP_INVALID` | 400 | Wrong email code (also returned for unknown emails) | "Incorrect code", let the user retry |
+| `AUTH_OTP_EXPIRED` | 400 | Email code expired, already used, or 5 attempts used | "The code has expired", offer "Resend code" |
 | `AUTH_EMAIL_TAKEN` | 409 | Email already registered | MSG07 under the email input |
 | `AUTH_WRONG_PASSWORD` | 401 | Wrong current password when changing password | Error under the current-password input. **Do not** refresh. |
-| `AUTH_TOKEN_INVALID` | 400 | Email-verification, password-reset or invitation link is invalid, expired or already used | "This link is invalid or has expired" |
+| `AUTH_TOKEN_INVALID` | 400 | Password-reset or invitation link is invalid, expired or already used | "This link is invalid or has expired" |
 | `AUTH_REFRESH_TOKEN_INVALID` | 401 | Refresh token missing, invalid, expired or reused | Clear the signed-in state and go to `/login` |
 | `AUTH_INVITATION_ACCEPTED` | 409 | Invitation already accepted | Go to sign-in |
 | `AUTH_SESSION_NOT_FOUND` | 404 | Revoking a session that doesn't exist | Reload the session list |
