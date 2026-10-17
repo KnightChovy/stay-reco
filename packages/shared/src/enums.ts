@@ -9,6 +9,8 @@ export const Role = {
 export type Role = (typeof Role)[keyof typeof Role];
 
 export const AccountStatus = {
+  /** Registered but the email OTP has not been entered yet; cannot sign in. */
+  PENDING_VERIFICATION: 'PENDING_VERIFICATION',
   ACTIVE: 'ACTIVE',
   INVITED: 'INVITED',
   SUSPENDED: 'SUSPENDED',

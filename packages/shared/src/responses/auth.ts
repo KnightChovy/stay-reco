@@ -35,7 +35,15 @@ export interface Account {
 }
 
 /**
- * Returned by login, register/customer, register/partner and invitations/accept.
+ * Returned by register/customer and register/partner. The account is PENDING_VERIFICATION and no tokens
+ * are issued; the client shows the OTP screen and calls `POST /auth/verify-email`.
+ */
+export interface RegisterResult {
+  account: Account;
+}
+
+/**
+ * Returned by login, verify-email and invitations/accept.
  * `refreshToken` is only in the body for mobile; web (`X-Client-Type: web`) gets it as an httpOnly cookie.
  */
 export interface AuthResult {

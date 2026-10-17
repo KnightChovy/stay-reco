@@ -42,7 +42,7 @@ import {
   RegisterPartnerDto,
   ResendVerificationDto,
   ResetPasswordDto,
-  TokenDto,
+  VerifyEmailDto,
 } from './dto/auth.dto';
 import { AuthService } from './services/auth.service';
 import { type TokenPair, TokenService } from './services/token.service';
@@ -63,30 +63,25 @@ export class AuthController {
     private readonly config: ConfigService<Env, true>,
   ) {}
 
+  /** Creates a PENDING_VERIFICATION account and mails a code; no tokens until `verify-email`. */
   @Public()
   @Throttle(LOGIN_LIMIT)
   @Post('register/customer')
-  async registerCustomer(
+  registerCustomer(
     @Body() dto: RegisterCustomerDto,
     @ReqMeta() meta: RequestMeta,
-    @Req() req: Request,
-    @Res({ passthrough: true }) res: Response,
   ) {
-    const { account, tokens } = await this.auth.registerCustomer(dto, meta);
-    return { account, ...this.deliverTokens(req, res, tokens) };
+    return this.auth.registerCustomer(dto, meta);
   }
 
   @Public()
   @Throttle(LOGIN_LIMIT)
   @Post('register/partner')
-  async registerPartner(
+  registerPartner(
     @Body() dto: RegisterPartnerDto,
     @ReqMeta() meta: RequestMeta,
-    @Req() req: Request,
-    @Res({ passthrough: true }) res: Response,
   ) {
-    const { account, tokens } = await this.auth.registerPartner(dto, meta);
-    return { account, ...this.deliverTokens(req, res, tokens) };
+    return this.auth.registerPartner(dto, meta);
   }
 
   @Public()
@@ -173,11 +168,19 @@ export class AuthController {
     return this.auth.revokeSession(user, id, meta);
   }
 
+  /** Activates the account with the mailed 6-digit code and signs it in (same response as login). */
   @Public()
+  @Throttle(LOGIN_LIMIT)
   @Post('verify-email')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  verifyEmail(@Body() dto: TokenDto, @ReqMeta() meta: RequestMeta) {
-    return this.auth.verifyEmail(dto.token, meta);
+  @HttpCode(HttpStatus.OK)
+  async verifyEmail(
+    @Body() dto: VerifyEmailDto,
+    @ReqMeta() meta: RequestMeta,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { account, tokens } = await this.auth.verifyEmail(dto, meta);
+    return { account, ...this.deliverTokens(req, res, tokens) };
   }
 
   @Public()

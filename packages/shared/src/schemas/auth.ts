@@ -44,6 +44,15 @@ export type TokenInput = z.infer<typeof tokenBodySchema>;
 export const emailBodySchema = z.strictObject({ email: emailSchema });
 export type EmailInput = z.infer<typeof emailBodySchema>;
 
+/** 6-digit code mailed after registration. */
+export const otpCodeSchema = z.string().trim().regex(/^\d{6}$/, 'code must be 6 digits');
+
+export const verifyEmailSchema = z.strictObject({
+  email: emailSchema,
+  code: otpCodeSchema,
+});
+export type VerifyEmailInput = z.infer<typeof verifyEmailSchema>;
+
 export const resetPasswordSchema = z.strictObject({
   token: tokenSchema,
   newPassword: passwordSchema,

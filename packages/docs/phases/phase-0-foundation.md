@@ -21,7 +21,7 @@ Có khung chung để mọi phase sau chỉ việc thêm feature: đăng nhập 
 **Frontend web / mobile** (trang đã có UI trong `frontend/src/app`)
 
 - `(auth)/login`, `(auth)/register`, `(auth)/forgot-password`
-- Trang mới: `/verify-email`, `/reset-password`, `/accept-invitation` (api-guide §2.5)
+- Màn nhập mã OTP sau khi đăng ký (`/verify-email`); `forgot-password` đổi sang luồng link, thêm `/reset-password` và `/accept-invitation` (api-guide §2.3, §2.5)
 - `account/security` (đổi mật khẩu, phiên đăng nhập)
 - axios interceptor refresh token, `AuthRouteGuard` theo role
 - Mobile: màn hình đăng nhập/đăng ký, lưu refresh token bằng `expo-secure-store`
