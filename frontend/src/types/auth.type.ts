@@ -4,7 +4,7 @@ import type {
   RegisterCustomerInput,
   RegisterPartnerInput,
   ResetPasswordInput,
-  TokenInput,
+  VerifyEmailInput,
   EmailInput,
   ChangePasswordInput,
   AcceptInvitationInput,
@@ -13,6 +13,7 @@ import type {
 export type {
   Account,
   AuthResult,
+  RegisterResult,
   InvitationResult,
   PartnerProfile,
   RefreshResult,
@@ -24,11 +25,14 @@ export type LoginPayload = LoginInput;
 export type RegisterCustomerPayload = RegisterCustomerInput;
 export type RegisterPartnerPayload = RegisterPartnerInput;
 export type ResetPasswordPayload = ResetPasswordInput;
-export type VerifyEmailPayload = TokenInput;
+export type VerifyEmailPayload = VerifyEmailInput;
 export type ResendVerificationPayload = EmailInput;
 export type ForgotPasswordPayload = EmailInput;
 export type ChangePasswordPayload = ChangePasswordInput;
 export type AcceptInvitationPayload = AcceptInvitationInput;
 
-/** `data` of POST /auth/login: `{ account, accessToken, expiresIn }` (+ `refreshToken` on mobile). */
+/** `data` of POST /auth/login and /auth/verify-email: `{ account, accessToken, expiresIn }`. */
 export type AuthResponse = import("@stayreco/shared").AuthResult;
+
+/** `data` of POST /auth/register/customer and /auth/register/partner: `{ account }`, no tokens. */
+export type RegisterResponse = import("@stayreco/shared").RegisterResult;

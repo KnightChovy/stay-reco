@@ -1,12 +1,13 @@
 'use client';
 
-import React, { Suspense, useEffect, useState } from 'react';
+import React, { Suspense, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import { AuthSocialActions } from '@/features/auth/AuthSocialActions';
+import { OtpVerification } from '@/features/auth/OtpVerification';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -21,20 +22,16 @@ import {
   ArrowRight,
   Sparkles,
   CheckCircle2,
-  MailCheck,
-  RotateCw,
 } from 'lucide-react';
-import { useAuthStore } from '@/lib/auth-store';
-import { resendVerification } from '@/services/auth.service';
+import { getSafeNextPath, useAuthStore } from '@/lib/auth-store';
 
 function RegisterPageContent() {
+  const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isSubmitted, setIsSubmitted] = useState(false);
-  const [resendCountdown, setResendCountdown] = useState(0);
-  const [resendSuccess, setResendSuccess] = useState('');
+  const [pendingEmail, setPendingEmail] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     fullName: '',
@@ -49,14 +46,6 @@ function RegisterPageContent() {
   const register = useAuthStore((state) => state.register);
   const next = searchParams.get('next');
   const loginHref = next ? `/login?next=${encodeURIComponent(next)}` : '/login';
-
-  useEffect(() => {
-    if (resendCountdown <= 0) return;
-    const timer = setInterval(() => {
-      setResendCountdown((prev) => prev - 1);
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [resendCountdown]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -92,23 +81,9 @@ function RegisterPageContent() {
         return;
       }
 
-      setIsSubmitted(true);
-      setResendCountdown(60);
+      setPendingEmail(result.email);
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const handleResendEmail = async () => {
-    if (resendCountdown > 0) return;
-    setResendSuccess('');
-    setError('');
-    try {
-      await resendVerification({ email: formData.email });
-      setResendSuccess('Đã gửi lại email xác thực thành công. Vui lòng kiểm tra hộp thư.');
-      setResendCountdown(60);
-    } catch {
-      setError('Không thể gửi lại email xác thực lúc này. Vui lòng thử lại sau.');
     }
   };
 
@@ -179,62 +154,12 @@ function RegisterPageContent() {
           {/* Right / Content Section */}
           <div className="lg:col-span-7 p-6 sm:p-10 flex flex-col justify-center">
             <div className="max-w-md mx-auto w-full">
-              {isSubmitted ? (
-                /* Registration Success / Email Verification Pending */
-                <div className="py-4 text-center">
-                  <div className="size-16 rounded-full bg-emerald-500/10 text-emerald-600 flex items-center justify-center mx-auto mb-5">
-                    <MailCheck className="size-8" />
-                  </div>
-                  <h1 className="text-2xl font-bold text-foreground tracking-tight">
-                    Kiểm tra hộp thư của bạn
-                  </h1>
-                  <p className="text-muted-foreground text-sm mt-3 leading-relaxed">
-                    Tài khoản của bạn đã được tạo thành công! Chúng tôi đã gửi một liên kết xác thực đến địa chỉ:
-                  </p>
-                  <p className="font-semibold text-foreground text-base mt-2 bg-slate-50 py-2 px-3 rounded-lg border border-border inline-block break-all">
-                    {formData.email}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-3">
-                    Vui lòng mở email và nhấn vào liên kết xác thực để kích hoạt tài khoản của bạn (liên kết có hiệu lực trong 24 giờ).
-                  </p>
-
-                  {resendSuccess && (
-                    <p className="mt-4 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700" role="status">
-                      {resendSuccess}
-                    </p>
-                  )}
-                  {error && (
-                    <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-700" role="alert">
-                      {error}
-                    </p>
-                  )}
-
-                  <div className="mt-6 space-y-3">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={handleResendEmail}
-                      disabled={resendCountdown > 0}
-                      className="w-full h-11 text-sm font-medium gap-2"
-                    >
-                      <RotateCw className={`size-4 ${resendCountdown > 0 ? 'animate-spin' : ''}`} />
-                      <span>
-                        {resendCountdown > 0
-                          ? `Gửi lại email sau (${resendCountdown}s)`
-                          : 'Gửi lại email xác thực'}
-                      </span>
-                    </Button>
-
-                    <Link href={loginHref} className="block w-full">
-                      <Button
-                        type="button"
-                        className="w-full h-11 bg-primary text-primary-foreground hover:bg-[#193b56] font-semibold text-sm transition-all shadow-sm"
-                      >
-                        Đến trang Đăng nhập
-                      </Button>
-                    </Link>
-                  </div>
-                </div>
+              {pendingEmail ? (
+                /* Email OTP verification step */
+                <OtpVerification
+                  email={pendingEmail}
+                  onVerified={() => router.replace(getSafeNextPath(next))}
+                />
               ) : (
                 /* Registration Form */
                 <>

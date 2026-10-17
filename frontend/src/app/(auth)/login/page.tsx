@@ -33,6 +33,16 @@ function LoginPageContent() {
     try {
       const result = await login(email, password);
       if (!result.success) {
+        // Correct password but the email OTP has not been entered yet: go to the OTP screen.
+        if (result.code === 'AUTH_EMAIL_NOT_VERIFIED') {
+          const verifiedEmail = email.trim().toLowerCase();
+          router.push(
+            `/verify-email?email=${encodeURIComponent(verifiedEmail)}${
+              next ? `&next=${encodeURIComponent(next)}` : ''
+            }`,
+          );
+          return;
+        }
         setError(result.message);
         return;
       }

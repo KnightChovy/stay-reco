@@ -6,6 +6,7 @@ import type {
   LoginPayload,
   RegisterCustomerPayload,
   RegisterPartnerPayload,
+  RegisterResponse,
   ResendVerificationPayload,
   ResetPasswordPayload,
   VerifyEmailPayload,
@@ -22,10 +23,11 @@ export const login = async (
   return data;
 };
 
+/** Creates a PENDING_VERIFICATION account and mails a 6-digit code; no tokens are issued. */
 export const registerCustomer = async (
   payload: RegisterCustomerPayload,
-): Promise<APIResponse<AuthResponse>> => {
-  const { data } = await api.post<APIResponse<AuthResponse>>(
+): Promise<APIResponse<RegisterResponse>> => {
+  const { data } = await api.post<APIResponse<RegisterResponse>>(
     "/auth/register/customer",
     payload,
   );
@@ -34,18 +36,23 @@ export const registerCustomer = async (
 
 export const registerPartner = async (
   payload: RegisterPartnerPayload,
-): Promise<APIResponse<AuthResponse>> => {
-  const { data } = await api.post<APIResponse<AuthResponse>>(
+): Promise<APIResponse<RegisterResponse>> => {
+  const { data } = await api.post<APIResponse<RegisterResponse>>(
     "/auth/register/partner",
     payload,
   );
   return data;
 };
 
+/** Verifies the 6-digit code and signs the account in (returns the same result as login). */
 export const verifyEmail = async (
   payload: VerifyEmailPayload,
-): Promise<void> => {
-  await api.post("/auth/verify-email", payload);
+): Promise<APIResponse<AuthResponse>> => {
+  const { data } = await api.post<APIResponse<AuthResponse>>(
+    "/auth/verify-email",
+    payload,
+  );
+  return data;
 };
 
 export const resendVerification = async (
