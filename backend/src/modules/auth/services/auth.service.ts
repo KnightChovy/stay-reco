@@ -6,9 +6,11 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import type { Account } from '@stayreco/shared';
 import { AuthUser } from '../../../common/decorators/current-user.decorator';
 import { RequestMeta } from '../../../common/decorators/request-meta.decorator';
 import { ErrorCode } from '../../../common/errors/error-code';
+import { Serialized } from '../../../common/http/api-response';
 import { Env } from '../../../config/env';
 import {
   AccountStatus,
@@ -88,6 +90,10 @@ function toAccountResponse(a: AccountWithProfiles) {
     profile: a.hotelPartner ?? a.hotelStaff ?? null,
   };
 }
+
+// Compile-time contract: the JSON sent to clients must match the shared `Account` type used by web and mobile.
+const accountContract: Account = {} as Serialized<AccountResponse>;
+void accountContract;
 
 @Injectable()
 export class AuthService {

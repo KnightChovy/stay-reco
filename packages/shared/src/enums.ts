@@ -1,4 +1,4 @@
-/** Mirrors the Prisma enums (UserRole, AccountStatus) in backend/prisma/schema.prisma. Keep both in sync. */
+/** Mirrors the Prisma enums (UserRole, AccountStatus, PartnerStatus) in backend/prisma/schema.prisma. Keep both in sync. */
 export const Role = {
   CUSTOMER: 'CUSTOMER',
   HOTEL_PARTNER: 'HOTEL_PARTNER',
@@ -15,3 +15,11 @@ export const AccountStatus = {
   DELETED: 'DELETED',
 } as const;
 export type AccountStatus = (typeof AccountStatus)[keyof typeof AccountStatus];
+
+export const PartnerStatus = {
+  PENDING: 'PENDING',
+  APPROVED: 'APPROVED',
+  REJECTED: 'REJECTED',
+  SUSPENDED: 'SUSPENDED',
+} as const;
+export type PartnerStatus = (typeof PartnerStatus)[keyof typeof PartnerStatus];

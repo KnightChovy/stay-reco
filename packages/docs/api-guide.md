@@ -68,6 +68,8 @@ The Response column describes the content of the `data` field (see section 4.1).
 
 `AuthResult` contains `account: Account`, `accessToken: string` and `expiresIn: number`. Mobile also receives `refreshToken: string`.
 
+TypeScript types for these responses come from `@stayreco/shared` (`Account`, `AuthResult`, `RefreshResult`, `SessionInfo`, `InvitationResult`, `PartnerProfile`, `StaffProfile`). Import them instead of redefining them. The backend fails to compile if `Account` drifts from what it actually returns.
+
 ```jsonc
 // Account
 {
