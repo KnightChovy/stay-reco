@@ -40,4 +40,11 @@ Restrict by role with `@Roles(Role.ADMIN, ...)`; read the caller with `@CurrentU
 | POST | `/auth/invitations/platform-manager` | ADMIN |
 | POST | `/auth/invitations/accept` | public |
 
-Emails are printed to the console in development (`ConsoleMailService`); swap the provider in `MailModule` for production.
+## Email
+
+Sent with Nodemailer over SMTP, so any provider works by changing `.env` only.
+
+- **`SMTP_HOST` empty** (default, and in e2e tests): emails are printed to the console, including the 6-digit verification code.
+- **SMTP set**: fill `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM` (see `.env.example` for Gmail and Mailtrap). The connection is checked at startup (`SMTP ready` or `SMTP connection failed` in the log).
+- A failed send is logged with the SMTP server's answer and does not fail the request; users can ask to resend.
+- With Gmail, `MAIL_FROM` must be the same Gmail address as `SMTP_USER`. Sending "from" a Gmail address through another provider (Brevo, SendGrid…) gets rejected or lands in spam.
