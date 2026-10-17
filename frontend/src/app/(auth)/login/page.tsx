@@ -18,6 +18,7 @@ function LoginPageContent() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
   const login = useAuthStore((state) => state.login);
@@ -25,20 +26,25 @@ function LoginPageContent() {
   const registerHref = next ? `/register?next=${encodeURIComponent(next)}` : '/register';
   const forgotPasswordHref = next ? `/forgot-password?next=${encodeURIComponent(next)}` : '/forgot-password';
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    const result = login(email, password);
-    if (!result.success) {
-      setError(result.message);
-      return;
-    }
+    setIsLoading(true);
+    try {
+      const result = await login(email, password);
+      if (!result.success) {
+        setError(result.message);
+        return;
+      }
 
-    router.replace(
-      result.user.role === 'customer'
-        ? getSafeNextPath(next)
-        : roleDashboardPaths[result.user.role],
-    );
+      router.replace(
+        result.user.role === 'customer'
+          ? getSafeNextPath(next)
+          : roleDashboardPaths[result.user.role],
+      );
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -135,10 +141,11 @@ function LoginPageContent() {
 
                 <Button
                   type="submit"
-                  className="w-full h-10 sm:h-11 bg-primary text-primary-foreground hover:bg-[#193b56] font-semibold text-sm transition-all shadow-sm gap-2 mt-2"
+                  disabled={isLoading}
+                  className="w-full h-10 sm:h-11 bg-primary text-primary-foreground hover:bg-[#193b56] font-semibold text-sm transition-all shadow-sm gap-2 mt-2 disabled:opacity-70"
                 >
-                  <span>Đăng nhập</span>
-                  <ArrowRight className="size-4" />
+                  <span>{isLoading ? 'Đang đăng nhập...' : 'Đăng nhập'}</span>
+                  {!isLoading && <ArrowRight className="size-4" />}
                 </Button>
               </form>
 

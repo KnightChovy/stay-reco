@@ -33,11 +33,15 @@ import {
   Check
 } from 'lucide-react';
 
+import { useAuthStore } from '@/lib/auth-store';
+
 export default function ProfilePage() {
+  const user = useAuthStore((state) => state.user);
+
   const [formData, setFormData] = useState({
-    fullName: 'Nguyễn Minh Anh',
-    email: 'minhanh.nguyen@email.vn',
-    phone: '+84 0912 345 678',
+    fullName: user?.name || 'Nguyễn Minh Anh',
+    email: user?.email || 'minhanh.nguyen@email.vn',
+    phone: user?.phone || '+84 0912 345 678',
     birthDate: '18/08/1995',
     gender: 'female',
     address: 'Quận Hải Châu, TP. Đà Nẵng',
@@ -203,9 +207,15 @@ export default function ProfilePage() {
                     <Label htmlFor="email" className="text-xs sm:text-sm font-semibold">
                       Email liên hệ <span className="text-red-500">*</span>
                     </Label>
-                    <span className="text-[11px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 font-medium">
-                      Đã xác thực
-                    </span>
+                    {user?.emailVerified ? (
+                      <span className="text-[11px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 font-medium">
+                        Đã xác thực
+                      </span>
+                    ) : (
+                      <span className="text-[11px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200 font-medium">
+                        Chưa xác thực
+                      </span>
+                    )}
                   </div>
                   <div className="relative">
                     <Input
@@ -229,9 +239,6 @@ export default function ProfilePage() {
                     <Label htmlFor="phone" className="text-xs sm:text-sm font-semibold">
                       Số điện thoại <span className="text-red-500">*</span>
                     </Label>
-                    <span className="text-[11px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 font-medium">
-                      Đã xác thực OTP
-                    </span>
                   </div>
                   <div className="relative">
                     <Input
