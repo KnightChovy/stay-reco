@@ -19,6 +19,9 @@ const envSchema = z.object({
   JWT_ACCESS_SECRET: z.string().min(32),
   JWT_ACCESS_TTL_SECONDS: z.coerce.number().int().positive().default(900),
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(30),
+  /** Email verification code mailed after registration. */
+  EMAIL_OTP_TTL_MINUTES: z.coerce.number().int().positive().default(10),
+  EMAIL_OTP_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
   /** Platform commission (%) given to newly registered partners. Business rule: 8–15%. */
   DEFAULT_COMMISSION_RATE: z.coerce.number().min(8).max(15),
 });

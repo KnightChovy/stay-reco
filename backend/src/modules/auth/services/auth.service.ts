@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -30,6 +31,7 @@ import {
   RegisterCustomerDto,
   RegisterPartnerDto,
   ResetPasswordDto,
+  VerifyEmailDto,
 } from '../dto/auth.dto';
 import { PasswordService } from './password.service';
 import { TokenPair, TokenService } from './token.service';
@@ -138,23 +140,32 @@ export class AuthService {
     );
   }
 
+  /**
+   * Creates the account as PENDING_VERIFICATION and mails a 6-digit code.
+   * No tokens are issued: the account is activated and signed in by `verifyEmail`.
+   */
   private async register(
     dto: { email: string; password: string; fullName: string },
     roleData: Pick<Prisma.UserAccountCreateInput, 'role'> &
       Partial<Prisma.UserAccountCreateInput>,
     meta: RequestMeta,
-  ) {
+  ): Promise<{ account: AccountResponse }> {
     const passwordHash = await this.passwords.hash(dto.password);
     const account = await this.createAccountOrConflict({
       email: dto.email,
       fullName: dto.fullName,
       passwordHash,
+      status: AccountStatus.PENDING_VERIFICATION,
       ...roleData,
     });
 
     await this.sendVerificationEmail(account.userAccountId, account.email);
-    const tokens = await this.tokens.createSession(account, meta);
-    return { account: toAccountResponse(account), tokens };
+    await this.audit.log(
+      AuditAction.ACCOUNT_REGISTERED,
+      account.userAccountId,
+      meta,
+    );
+    return { account: toAccountResponse(account) };
   }
 
   // ── Login ────────────────────────────────────────────────
@@ -198,6 +209,13 @@ export class AuthService {
       throw new ForbiddenException({
         code: ErrorCode.AUTH_ACCOUNT_SUSPENDED,
         message: 'Account is suspended',
+      });
+    }
+    // Only revealed after the correct password, so it does not leak which emails are registered.
+    if (account.status === AccountStatus.PENDING_VERIFICATION) {
+      throw new ForbiddenException({
+        code: ErrorCode.AUTH_EMAIL_NOT_VERIFIED,
+        message: 'Email is not verified. Enter the code we sent to your email.',
       });
     }
     if (account.status !== AccountStatus.ACTIVE) {
@@ -300,42 +318,61 @@ export class AuthService {
 
   // ── Email verification ───────────────────────────────────
 
-  async verifyEmail(token: string, meta: RequestMeta) {
-    const accountId = await this.verification.consume(
-      token,
-      VerificationTokenType.EMAIL_VERIFY,
-    );
-    await this.prisma.userAccount.updateMany({
-      where: { userAccountId: accountId, emailVerifiedAt: null },
-      data: { emailVerifiedAt: new Date() },
+  /** Activates a PENDING_VERIFICATION account with the mailed code, then signs it in. */
+  async verifyEmail(
+    dto: VerifyEmailDto,
+    meta: RequestMeta,
+  ): Promise<{ account: AccountResponse; tokens: TokenPair }> {
+    const pending = await this.prisma.userAccount.findUnique({
+      where: { email: dto.email },
+      select: { userAccountId: true, status: true },
     });
-    await this.audit.log(AuditAction.EMAIL_VERIFIED, accountId, meta);
+    // Unknown and already verified emails get the same answer as a wrong code (no account enumeration).
+    if (pending?.status !== AccountStatus.PENDING_VERIFICATION) {
+      throw new BadRequestException({
+        code: ErrorCode.AUTH_OTP_INVALID,
+        message: 'Incorrect code',
+      });
+    }
+
+    await this.verification.verifyEmailOtp(pending.userAccountId, dto.code);
+    await this.prisma.userAccount.updateMany({
+      where: {
+        userAccountId: pending.userAccountId,
+        status: AccountStatus.PENDING_VERIFICATION,
+      },
+      data: { status: AccountStatus.ACTIVE, emailVerifiedAt: new Date() },
+    });
+
+    const account = await this.prisma.userAccount.findUniqueOrThrow({
+      where: { userAccountId: pending.userAccountId },
+      select: accountSelect,
+    });
+    const tokens = await this.tokens.createSession(account, meta);
+    await this.audit.log(
+      AuditAction.EMAIL_VERIFIED,
+      account.userAccountId,
+      meta,
+    );
+    return { account: toAccountResponse(account), tokens };
   }
 
-  /** Silent when the email is unknown or already verified (no account enumeration). */
+  /** Mails a new code. Silent when the email is unknown or already verified (no account enumeration). */
   async resendVerification(email: string) {
     const account = await this.prisma.userAccount.findUnique({
       where: { email },
     });
-    if (
-      !account ||
-      account.emailVerifiedAt ||
-      account.status !== AccountStatus.ACTIVE
-    ) {
-      return;
-    }
+    if (account?.status !== AccountStatus.PENDING_VERIFICATION) return;
     await this.sendVerificationEmail(account.userAccountId, account.email);
   }
 
   private async sendVerificationEmail(accountId: string, email: string) {
-    const token = await this.verification.issue(
-      accountId,
-      VerificationTokenType.EMAIL_VERIFY,
-    );
+    const code = await this.verification.issueEmailOtp(accountId);
+    const ttl = this.config.get('EMAIL_OTP_TTL_MINUTES', { infer: true });
     await this.mail.send({
       to: email,
-      subject: 'Verify your email',
-      text: `Open this link to verify your email (valid 24 hours):\n${this.link('verify-email', token)}`,
+      subject: 'Your StayReco verification code',
+      text: `Your verification code is ${code}. It expires in ${ttl} minutes.\n\nIf you did not create a StayReco account, ignore this email.`,
     });
   }
 

@@ -4,6 +4,7 @@ import { RequestMeta } from '../../common/decorators/request-meta.decorator';
 import { PrismaService } from '../../prisma/prisma.service';
 
 export enum AuditAction {
+  ACCOUNT_REGISTERED = 'ACCOUNT_REGISTERED',
   LOGIN_SUCCESS = 'LOGIN_SUCCESS',
   LOGIN_FAILED = 'LOGIN_FAILED',
   ACCOUNT_LOCKED = 'ACCOUNT_LOCKED',
