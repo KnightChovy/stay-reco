@@ -24,6 +24,7 @@ enum UserRole {
 }
 
 enum AccountStatus {
+  PENDING_VERIFICATION
   ACTIVE
   INVITED
   SUSPENDED
@@ -1090,6 +1091,8 @@ model VerificationToken {
   tokenHash           String                @unique @map("token_hash") @db.VarChar(64)
   expiresAt           DateTime              @map("expires_at") @db.Timestamptz(6)
   usedAt              DateTime?             @map("used_at") @db.Timestamptz(6)
+  /// Attempts made against an email OTP; the code is discarded once the limit is reached.
+  attemptCount        Int                   @default(0) @map("attempt_count")
   createdAt           DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
   userAccount         UserAccount           @relation(fields: [userAccountId], references: [userAccountId], onDelete: Cascade)
 

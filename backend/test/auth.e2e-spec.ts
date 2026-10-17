@@ -26,16 +26,39 @@ describe('Auth (e2e)', () => {
     return decodeURIComponent(match[1]);
   };
 
+  /** Extracts the 6-digit verification code from the last email sent to `to`. */
+  const lastCodeFor = (to: string) => {
+    const mail = [...outbox].reverse().find((m) => m.to === to);
+    const match = mail?.text.match(/code is (\d{6})/);
+    if (!match) throw new Error(`No code mailed to ${to}`);
+    return match[1];
+  };
+
+  type SignedIn = {
+    account: { id: string; status: string; emailVerified: boolean };
+    accessToken: string;
+    refreshToken: string;
+  };
+
+  /** Registration only: the account stays PENDING_VERIFICATION and no tokens are returned. */
   const registerCustomer = async (email = 'alice@example.com') => {
     const res = await api()
       .post('/api/v1/auth/register/customer')
       .send({ email, password: PASSWORD, fullName: 'Alice' })
       .expect(201);
     return res.body.data as {
-      account: { id: string; emailVerified: boolean };
-      accessToken: string;
-      refreshToken: string;
+      account: { id: string; status: string; emailVerified: boolean };
     };
+  };
+
+  const verifyEmail = (email: string, code: string) =>
+    api().post('/api/v1/auth/verify-email').send({ email, code });
+
+  /** Full sign-up: register, then verify with the mailed code (which signs the account in). */
+  const signUpCustomer = async (email = 'alice@example.com') => {
+    await registerCustomer(email);
+    const res = await verifyEmail(email, lastCodeFor(email)).expect(200);
+    return res.body.data as SignedIn;
   };
 
   const login = async (email: string, password = PASSWORD) => {
@@ -59,17 +82,23 @@ describe('Auth (e2e)', () => {
       },
     });
 
-  const registerPartner = async (email: string) => {
-    const res = await api()
+  /** Full partner sign-up (register + verify). */
+  const signUpPartner = async (email: string, companyName?: string) => {
+    await api()
       .post('/api/v1/auth/register/partner')
       .send({
         email,
         password: PASSWORD,
         fullName: 'Owner',
         phone: '0901234567',
+        companyName,
       })
       .expect(201);
-    return res.body.data as { account: { id: string }; accessToken: string };
+    const res = await verifyEmail(email, lastCodeFor(email)).expect(200);
+    return res.body.data as {
+      account: { id: string; profile: { partnerName: string } };
+      accessToken: string;
+    };
   };
 
   beforeAll(async () => {
@@ -147,20 +176,22 @@ describe('Auth (e2e)', () => {
   });
 
   describe('register', () => {
-    it('creates a customer, returns tokens and sends a verification email', async () => {
+    it('creates a pending customer, returns no tokens and mails a 6-digit code', async () => {
       const body = await registerCustomer();
 
-      expect(body.accessToken).toEqual(expect.any(String));
-      expect(body.refreshToken).toEqual(expect.any(String));
+      expect(body).not.toHaveProperty('accessToken');
+      expect(body).not.toHaveProperty('refreshToken');
       expect(body.account).toMatchObject({
         email: 'alice@example.com',
         fullName: 'Alice',
         role: 'CUSTOMER',
+        status: 'PENDING_VERIFICATION',
         emailVerified: false,
         profile: null,
       });
       expect(body.account).not.toHaveProperty('passwordHash');
       expect(outbox).toHaveLength(1);
+      expect(lastCodeFor('alice@example.com')).toMatch(/^\d{6}$/);
     });
 
     it('normalizes email and rejects duplicates', async () => {
@@ -196,7 +227,7 @@ describe('Auth (e2e)', () => {
 
   describe('login & me', () => {
     it('rejects wrong credentials with the same message', async () => {
-      await registerCustomer();
+      await signUpCustomer();
       const wrongPw = await api()
         .post('/api/v1/auth/login')
         .send({ email: 'alice@example.com', password: 'Wrong12345' })
@@ -211,7 +242,7 @@ describe('Auth (e2e)', () => {
     });
 
     it('logs in and reads /me', async () => {
-      await registerCustomer();
+      await signUpCustomer();
       const { accessToken } = await login('alice@example.com');
 
       const me = await api()
@@ -228,7 +259,7 @@ describe('Auth (e2e)', () => {
     });
 
     it('locks the account after 5 failed attempts', async () => {
-      await registerCustomer();
+      await signUpCustomer();
       for (let i = 0; i < 5; i++) {
         await api()
           .post('/api/v1/auth/login')
@@ -243,43 +274,76 @@ describe('Auth (e2e)', () => {
     });
   });
 
-  describe('email verification', () => {
-    it('verifies once with the mailed token', async () => {
-      const { accessToken } = await registerCustomer();
-      const token = lastTokenFor('alice@example.com');
+  describe('email verification (OTP)', () => {
+    const email = 'alice@example.com';
+    const wrongCodeFor = (code: string) =>
+      code === '000000' ? '111111' : '000000';
 
-      await api().post('/api/v1/auth/verify-email').send({ token }).expect(204);
-      await api().post('/api/v1/auth/verify-email').send({ token }).expect(400);
+    it('blocks login until the code is entered, then activates and signs in', async () => {
+      await registerCustomer();
 
-      const me = await api()
-        .get('/api/v1/auth/me')
-        .set('Authorization', `Bearer ${accessToken}`)
-        .expect(200);
-      expect(me.body.data.emailVerified).toBe(true);
+      const blocked = await api()
+        .post('/api/v1/auth/login')
+        .send({ email, password: PASSWORD })
+        .expect(403);
+      expect(blocked.body.code).toBe('AUTH_EMAIL_NOT_VERIFIED');
+
+      const code = lastCodeFor(email);
+      const wrong = await verifyEmail(email, wrongCodeFor(code)).expect(400);
+      expect(wrong.body.code).toBe('AUTH_OTP_INVALID');
+
+      const verified = await verifyEmail(email, code).expect(200);
+      expect(verified.body.data.accessToken).toEqual(expect.any(String));
+      expect(verified.body.data.account).toMatchObject({
+        status: 'ACTIVE',
+        emailVerified: true,
+      });
+
+      // The code works once.
+      await verifyEmail(email, code).expect(400);
+      await login(email);
     });
 
-    it('resend invalidates the previous token', async () => {
+    it('discards the code after too many attempts', async () => {
       await registerCustomer();
-      const first = lastTokenFor('alice@example.com');
+      const code = lastCodeFor(email);
+
+      for (let i = 0; i < 5; i++) {
+        const res = await verifyEmail(email, wrongCodeFor(code)).expect(400);
+        expect(res.body.code).toBe('AUTH_OTP_INVALID');
+      }
+      const expired = await verifyEmail(email, code).expect(400);
+      expect(expired.body.code).toBe('AUTH_OTP_EXPIRED');
+    });
+
+    it('resend invalidates the previous code', async () => {
+      await registerCustomer();
+      const first = lastCodeFor(email);
       await api()
         .post('/api/v1/auth/resend-verification')
-        .send({ email: 'alice@example.com' })
+        .send({ email })
         .expect(204);
+      const second = lastCodeFor(email);
 
-      await api()
-        .post('/api/v1/auth/verify-email')
-        .send({ token: first })
-        .expect(400);
-      await api()
-        .post('/api/v1/auth/verify-email')
-        .send({ token: lastTokenFor('alice@example.com') })
-        .expect(204);
+      if (first !== second) await verifyEmail(email, first).expect(400);
+      await verifyEmail(email, second).expect(200);
+    });
+
+    it('answers an unknown email like a wrong code', async () => {
+      const res = await verifyEmail('nobody@example.com', '123456').expect(400);
+      expect(res.body.code).toBe('AUTH_OTP_INVALID');
+    });
+
+    it('rejects codes that are not 6 digits', async () => {
+      await registerCustomer();
+      const res = await verifyEmail(email, '12ab').expect(400);
+      expect(res.body.code).toBe('VALIDATION_ERROR');
     });
   });
 
   describe('refresh & sessions', () => {
     it('rotates refresh tokens and revokes the session on reuse', async () => {
-      const { refreshToken: first } = await registerCustomer();
+      const { refreshToken: first } = await signUpCustomer();
 
       const rotated = await api()
         .post('/api/v1/auth/refresh')
@@ -306,7 +370,7 @@ describe('Auth (e2e)', () => {
     });
 
     it('logout revokes the access token immediately', async () => {
-      const { accessToken, refreshToken } = await registerCustomer();
+      const { accessToken, refreshToken } = await signUpCustomer();
 
       await api()
         .post('/api/v1/auth/logout')
@@ -323,7 +387,7 @@ describe('Auth (e2e)', () => {
     });
 
     it('lists sessions and revokes another device', async () => {
-      const { accessToken: a } = await registerCustomer();
+      const { accessToken: a } = await signUpCustomer();
       const { accessToken: b } = await login('alice@example.com');
 
       const list = await api()
@@ -350,7 +414,7 @@ describe('Auth (e2e)', () => {
     });
 
     it('web clients get the refresh token as an httpOnly cookie', async () => {
-      await registerCustomer();
+      await signUpCustomer();
       const res = await api()
         .post('/api/v1/auth/login')
         .set('X-Client-Type', 'web')
@@ -382,7 +446,7 @@ describe('Auth (e2e)', () => {
     });
 
     it('reset password revokes all sessions', async () => {
-      const { accessToken } = await registerCustomer();
+      const { accessToken } = await signUpCustomer();
       await api()
         .post('/api/v1/auth/forgot-password')
         .send({ email: 'alice@example.com' })
@@ -408,7 +472,7 @@ describe('Auth (e2e)', () => {
     });
 
     it('change password keeps the current session only', async () => {
-      const { accessToken: current } = await registerCustomer();
+      const { accessToken: current } = await signUpCustomer();
       const { accessToken: other } = await login('alice@example.com');
 
       const wrong = await api()
@@ -436,21 +500,12 @@ describe('Auth (e2e)', () => {
 
   describe('invitations', () => {
     it('partner invites staff who accepts and becomes active', async () => {
-      const partner = await api()
-        .post('/api/v1/auth/register/partner')
-        .send({
-          email: 'owner@hotel.com',
-          password: PASSWORD,
-          fullName: 'Owner',
-          companyName: 'Hotel Co',
-          phone: '0901234567',
-        })
-        .expect(201);
-      expect(partner.body.data.account.profile).toMatchObject({
+      const partner = await signUpPartner('owner@hotel.com', 'Hotel Co');
+      expect(partner.account.profile).toMatchObject({
         partnerName: 'Hotel Co',
       });
-      const partnerToken = partner.body.data.accessToken as string;
-      const hotel = await createHotel(partner.body.data.account.id as string);
+      const partnerToken = partner.accessToken;
+      const hotel = await createHotel(partner.account.id);
       const invite = {
         email: 'staff@hotel.com',
         fullName: 'Staff',
@@ -458,7 +513,7 @@ describe('Auth (e2e)', () => {
         position: 'Receptionist',
       };
 
-      const { accessToken: customerToken } = await registerCustomer();
+      const { accessToken: customerToken } = await signUpCustomer();
       await api()
         .post('/api/v1/auth/invitations/staff')
         .set('Authorization', `Bearer ${customerToken}`)
@@ -497,8 +552,8 @@ describe('Auth (e2e)', () => {
     });
 
     it("a partner cannot invite staff to another partner's hotel", async () => {
-      const a = await registerPartner('a@hotel.com');
-      const b = await registerPartner('b@hotel.com');
+      const a = await signUpPartner('a@hotel.com');
+      const b = await signUpPartner('b@hotel.com');
       const hotelOfB = await createHotel(b.account.id);
 
       const res = await api()
@@ -525,7 +580,7 @@ describe('Auth (e2e)', () => {
         },
       });
       const { accessToken: adminToken } = await login('admin@example.com');
-      const { accessToken: customerToken } = await registerCustomer();
+      const { accessToken: customerToken } = await signUpCustomer();
 
       await api()
         .post('/api/v1/auth/invitations/platform-manager')
