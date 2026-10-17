@@ -8,6 +8,15 @@ export type {
   PageMeta,
 } from '@stayreco/shared';
 
+/** Shape of `T` after JSON serialization: `Date` becomes an ISO string. Used to check responses against shared types. */
+export type Serialized<T> = T extends Date
+  ? string
+  : T extends (infer U)[]
+    ? Serialized<U>[]
+    : T extends object
+      ? { [K in keyof T]: Serialized<T[K]> }
+      : T;
+
 /** Return this from a service/controller to send a list with pagination `meta`. */
 export class Paginated<T> {
   constructor(
