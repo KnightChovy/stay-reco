@@ -1,6 +1,7 @@
-import { Pressable, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
+import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 import { colors, radius } from '@/constants/theme';
 import { Icon, type IconName } from './icon';
+import { PressableScale } from './pressable-scale';
 import { Text } from './text';
 
 const variants = {
@@ -18,19 +19,22 @@ type Props = {
   leadingIcon?: IconName;
   size?: 'sm' | 'md' | 'lg';
   style?: StyleProp<ViewStyle>;
+  disabled?: boolean;
 };
 
-export function Button({ label, onPress, variant = 'primary', icon, leadingIcon, size = 'md', style }: Props) {
+export function Button({ label, onPress, variant = 'primary', icon, leadingIcon, size = 'md', style, disabled }: Props) {
   const v = variants[variant];
   return (
-    <Pressable
+    <PressableScale
       accessibilityRole="button"
       onPress={onPress}
-      style={({ pressed }) => [
+      disabled={disabled}
+      accessibilityState={{ disabled }}
+      style={[
         styles.base,
         { backgroundColor: v.bg, borderColor: v.border, minHeight: size === 'lg' ? 52 : size === 'sm' ? 36 : 44 },
         size === 'sm' && { paddingHorizontal: 12 },
-        pressed && { opacity: 0.85 },
+        disabled && { opacity: 0.5 },
         style,
       ]}
     >
@@ -39,7 +43,7 @@ export function Button({ label, onPress, variant = 'primary', icon, leadingIcon,
         {label}
       </Text>
       {icon && <Icon name={icon} size={18} color={v.fg} />}
-    </Pressable>
+    </PressableScale>
   );
 }
 

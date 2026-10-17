@@ -9,6 +9,7 @@ import { Icon } from '@/components/ui/icon';
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
 import { colors, radius, shadow } from '@/constants/theme';
+import { useAuthStore } from '@/stores/auth.store';
 
 const standards = ['Tối thiểu 8 ký tự', 'Bao gồm chữ hoa', 'Có ít nhất 1 số', 'Ký tự đặc biệt'];
 
@@ -16,15 +17,21 @@ export default function ForgotPasswordScreen() {
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const forgotPassword = useAuthStore((s) => s.forgotPassword);
 
-  const submit = () => {
+  const submit = async () => {
+    if (loading) return;
     if (!emailSchema.safeParse(email).success) {
       setError('Email chưa đúng định dạng.');
       return;
     }
-    // shortcut: chưa gọi API quên mật khẩu, chỉ hiện trạng thái đã gửi.
     setError('');
-    setSent(true);
+    setLoading(true);
+    const result = await forgotPassword(email.trim());
+    setLoading(false);
+    if (result.success) setSent(true);
+    else setError(result.message);
   };
 
   return (
@@ -89,7 +96,13 @@ export default function ForgotPasswordScreen() {
                   {error}
                 </Text>
               )}
-              <Button label="Gửi liên kết khôi phục" icon="arrow_forward" size="lg" onPress={submit} />
+              <Button
+                label={loading ? 'Đang gửi...' : 'Gửi liên kết khôi phục'}
+                icon="arrow_forward"
+                size="lg"
+                onPress={submit}
+                disabled={loading}
+              />
             </>
           )}
         </View>

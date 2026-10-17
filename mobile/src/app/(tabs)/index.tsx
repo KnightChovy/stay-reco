@@ -1,6 +1,7 @@
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
+import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { DestinationCard } from '@/components/common/card/DestinationCard';
 import { HotelCard } from '@/components/common/card/HotelCard';
 import { AppHeader } from '@/components/layout/AppHeader';
@@ -70,7 +71,7 @@ export default function HomeScreen() {
         <View style={styles.hero}>
           <Image source={images.homeHero} style={StyleSheet.absoluteFill} contentFit="cover" />
           <View style={styles.heroOverlay} />
-          <View style={styles.heroText}>
+          <Animated.View entering={FadeInUp.duration(600).springify()} style={styles.heroText}>
             <View style={styles.heroBadge}>
               <Icon name="spa" size={14} color={colors.onPrimary} />
               <Text variant="caption" weight="semibold" color={colors.onPrimary}>
@@ -83,17 +84,17 @@ export default function HomeScreen() {
             <Text variant="small" color={colors.white}>
               Trải nghiệm không gian nghỉ dưỡng tuyển chọn, đậm dấu ấn bản địa
             </Text>
-          </View>
+          </Animated.View>
         </View>
 
-        <View style={styles.searchCard}>
+        <Animated.View entering={FadeInDown.delay(150).springify().damping(18)} style={styles.searchCard}>
           <SearchField icon="near_me" label="Điểm đến" value="Đà Nẵng, Hội An, Phú Quốc..." />
           <View style={styles.row}>
             <SearchField icon="calendar_month" label="Ngày lưu trú" value="18 Th04 - 20 Th04" style={styles.flex} />
             <SearchField icon="group" label="Số khách" value="2 khách, 1 phòng" style={styles.flex} />
           </View>
           <Button label="Tìm kiếm chỗ nghỉ" leadingIcon="search" size="lg" onPress={() => router.push('/search')} />
-        </View>
+        </Animated.View>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
           {quickFilters.map((f, i) => (
@@ -141,8 +142,8 @@ export default function HomeScreen() {
         <View style={styles.section}>
           <SectionTitle title="Khám phá cho chuyến đi của bạn" subtitle="Bộ sưu tập nơi lưu trú có thẩm mỹ & dịch vụ tận tâm" />
           <View style={styles.list}>
-            {hotels.map((h) => (
-              <HotelCard key={h.id} hotel={h} />
+            {hotels.map((h, i) => (
+              <HotelCard key={h.id} hotel={h} index={i} />
             ))}
           </View>
         </View>

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { Button } from '@/components/ui/button';
@@ -165,8 +166,10 @@ export default function SearchScreen() {
             </Text>
           </View>
         </View>
-        {hotels.map((h) => (
-          <ResultCard key={h.id} hotel={h} />
+        {hotels.map((h, i) => (
+          <Animated.View key={h.id} entering={FadeInDown.delay(i * 90).springify().damping(18)}>
+            <ResultCard hotel={h} />
+          </Animated.View>
         ))}
       </ScrollView>
 

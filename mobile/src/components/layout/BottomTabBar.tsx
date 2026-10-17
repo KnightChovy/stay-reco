@@ -1,7 +1,8 @@
 import type { ComponentProps } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import type { Tabs } from 'expo-router/js-tabs';
 import { Icon, type IconName } from '@/components/ui/icon';
+import { PressableScale } from '@/components/ui/pressable-scale';
 import { Text } from '@/components/ui/text';
 import { colors, radius, shadow } from '@/constants/theme';
 
@@ -29,8 +30,9 @@ export function BottomTabBar({ state, navigation, insets }: BottomTabBarProps) {
           const focused = active === tab.name;
           const color = focused ? colors.primaryContainer : colors.outline;
           return (
-            <Pressable
+            <PressableScale
               key={tab.name}
+              scaleTo={0.9}
               accessibilityRole="tab"
               accessibilityState={{ selected: focused }}
               accessibilityLabel={tab.label}
@@ -41,7 +43,7 @@ export function BottomTabBar({ state, navigation, insets }: BottomTabBarProps) {
               <Text variant="caption" weight={focused ? 'semibold' : 'medium'} color={color} style={styles.label}>
                 {tab.label}
               </Text>
-            </Pressable>
+            </PressableScale>
           );
         })}
       </View>
@@ -63,7 +65,16 @@ const styles = StyleSheet.create({
     borderColor: colors.surfaceContainerHigh,
     ...shadow.floating,
   },
-  item: { flex: 1, alignItems: 'center', gap: 2, paddingVertical: 6, borderRadius: radius.full },
+  item: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 2,
+    paddingVertical: 6,
+    borderRadius: radius.full,
+    // Nền tab đổi màu mượt khi chuyển tab (CSS transition của Reanimated 4).
+    transitionProperty: 'backgroundColor',
+    transitionDuration: 250,
+  },
   itemActive: { backgroundColor: colors.surfaceContainerLow },
   label: { fontSize: 11, lineHeight: 14 },
 });

@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
 import { colors, radius } from '@/constants/theme';
 import { AuthSocialActions } from '@/features/auth/AuthSocialActions';
+import { useAuthStore } from '@/stores/auth.store';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -17,15 +18,21 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [remember, setRemember] = useState(true);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const login = useAuthStore((s) => s.login);
 
-  const submit = () => {
-    // shortcut: chỉ validate bằng schema dùng chung, chưa gọi API đăng nhập.
+  const submit = async () => {
+    if (loading) return;
     if (!loginSchema.safeParse({ email, password }).success) {
       setError('Email hoặc mật khẩu chưa hợp lệ.');
       return;
     }
     setError('');
-    router.replace('/');
+    setLoading(true);
+    const result = await login(email.trim(), password, remember);
+    setLoading(false);
+    if (result.success) router.replace('/');
+    else setError(result.message);
   };
 
   return (
@@ -108,7 +115,13 @@ export default function LoginScreen() {
           </Link>
         </View>
 
-        <Button label="Đăng nhập" icon="arrow_forward" size="lg" onPress={submit} />
+        <Button
+          label={loading ? 'Đang đăng nhập...' : 'Đăng nhập'}
+          icon="arrow_forward"
+          size="lg"
+          onPress={submit}
+          disabled={loading}
+        />
         <AuthSocialActions />
 
         <View style={styles.links}>

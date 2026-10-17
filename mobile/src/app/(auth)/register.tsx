@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
-import { registerCustomerSchema } from '@stayreco/shared';
+import { otpCodeSchema, registerCustomerSchema } from '@stayreco/shared';
 import { BrandMark, ScreenHeader } from '@/components/layout/AppHeader';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -9,6 +9,7 @@ import { Icon } from '@/components/ui/icon';
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
 import { colors, radius } from '@/constants/theme';
+import { useAuthStore } from '@/stores/auth.store';
 
 function Required() {
   return (
@@ -37,6 +38,12 @@ export default function RegisterScreen() {
   const [agreed, setAgreed] = useState(false);
   const [newsletter, setNewsletter] = useState(true);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  // Có email nghĩa là đã đăng ký xong, đang chờ nhập mã OTP.
+  const [pendingEmail, setPendingEmail] = useState('');
+  const [code, setCode] = useState('');
+  const [notice, setNotice] = useState('');
+  const { register, verifyEmail, resendVerification } = useAuthStore();
 
   // Quy tắc khớp passwordSchema của @stayreco/shared (≥ 8 ký tự, có chữ và số).
   const rules = [
@@ -45,7 +52,8 @@ export default function RegisterScreen() {
     { label: 'Mật khẩu xác nhận trùng khớp', ok: confirm.length > 0 && confirm === password },
   ];
 
-  const submit = () => {
+  const submit = async () => {
+    if (loading) return;
     if (!registerCustomerSchema.safeParse({ email, password, fullName }).success || !rules.every((r) => r.ok)) {
       setError('Vui lòng kiểm tra lại họ tên, email và mật khẩu.');
       return;
@@ -54,10 +62,86 @@ export default function RegisterScreen() {
       setError('Bạn cần đồng ý với Điều khoản dịch vụ để tiếp tục.');
       return;
     }
-    // shortcut: chưa gọi API đăng ký, chỉ chuyển về màn đăng nhập.
     setError('');
-    router.replace('/login');
+    setLoading(true);
+    // Backend chưa nhận số điện thoại khi đăng ký khách hàng nên không gửi phone.
+    const result = await register({ fullName: fullName.trim(), email: email.trim(), password });
+    setLoading(false);
+    if (result.success) setPendingEmail(result.email);
+    else setError(result.message);
   };
+
+  const verify = async () => {
+    if (loading) return;
+    if (!otpCodeSchema.safeParse(code).success) {
+      setError('Mã xác thực gồm 6 chữ số.');
+      return;
+    }
+    setError('');
+    setLoading(true);
+    const result = await verifyEmail(pendingEmail, code.trim());
+    setLoading(false);
+    if (result.success) router.replace('/');
+    else setError(result.message);
+  };
+
+  const resend = async () => {
+    if (loading) return;
+    setLoading(true);
+    const result = await resendVerification(pendingEmail);
+    setLoading(false);
+    setError(result.success ? '' : result.message);
+    setNotice(result.success ? 'Đã gửi lại mã mới, vui lòng kiểm tra hộp thư.' : '');
+  };
+
+  if (pendingEmail) {
+    return (
+      <View style={styles.screen}>
+        <ScreenHeader title="Xác thực email" />
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          <View style={styles.gap8}>
+            <Text variant="hero">Nhập mã xác thực</Text>
+            <Text variant="body" color={colors.onSurfaceVariant}>
+              Chúng tôi đã gửi mã 6 chữ số tới{' '}
+              <Text variant="body" weight="bold">
+                {pendingEmail}
+              </Text>
+              .
+            </Text>
+          </View>
+          <Input
+            label="Mã xác thực"
+            icon="password"
+            placeholder="000000"
+            keyboardType="number-pad"
+            autoComplete="one-time-code"
+            maxLength={6}
+            value={code}
+            onChangeText={setCode}
+            onSubmitEditing={verify}
+          />
+          {!!error && (
+            <Text variant="small" color={colors.error} accessibilityLiveRegion="polite">
+              {error}
+            </Text>
+          )}
+          {!!notice && (
+            <Text variant="small" color={colors.tertiary} accessibilityLiveRegion="polite">
+              {notice}
+            </Text>
+          )}
+          <Button
+            label={loading ? 'Đang xử lý...' : 'Xác thực & Đăng nhập'}
+            icon="arrow_forward"
+            size="lg"
+            onPress={verify}
+            disabled={loading}
+          />
+          <Button label="Gửi lại mã" variant="secondary" onPress={resend} disabled={loading} />
+        </ScrollView>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.screen}>
@@ -181,7 +265,13 @@ export default function RegisterScreen() {
             {error}
           </Text>
         )}
-        <Button label="Tạo tài khoản & Tiếp tục" icon="arrow_forward" size="lg" onPress={submit} />
+        <Button
+          label={loading ? 'Đang tạo tài khoản...' : 'Tạo tài khoản & Tiếp tục'}
+          icon="arrow_forward"
+          size="lg"
+          onPress={submit}
+          disabled={loading}
+        />
 
         <View style={[styles.row, styles.center]}>
           <Text variant="small" color={colors.onSurfaceVariant}>

@@ -1,19 +1,26 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
+import { FadeInDown } from 'react-native-reanimated';
 import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
 import { Icon } from '@/components/ui/icon';
+import { PressableScale } from '@/components/ui/pressable-scale';
 import { Text } from '@/components/ui/text';
 import { colors, radius, shadow } from '@/constants/theme';
 import { formatVnd, type Hotel } from '@/lib/mock-data';
 
-export type HotelCardProps = { hotel: Hotel };
+export type HotelCardProps = { hotel: Hotel; /** Vị trí trong danh sách, dùng để xuất hiện lần lượt. */ index?: number };
 
-export function HotelCard({ hotel }: HotelCardProps) {
+export function HotelCard({ hotel, index = 0 }: HotelCardProps) {
   const open = () => router.push(`/hotels/${hotel.id}`);
   return (
-    <Pressable onPress={open} style={styles.card}>
+    <PressableScale
+      onPress={open}
+      scaleTo={0.98}
+      entering={FadeInDown.delay(index * 90).springify().damping(18)}
+      style={styles.card}
+    >
       <View>
         <Image source={hotel.image} style={styles.image} contentFit="cover" transition={200} />
         <View style={styles.tag}>
@@ -65,7 +72,7 @@ export function HotelCard({ hotel }: HotelCardProps) {
           <Button label="Xem phòng" icon="arrow_forward" size="sm" onPress={open} />
         </View>
       </View>
-    </Pressable>
+    </PressableScale>
   );
 }
 
