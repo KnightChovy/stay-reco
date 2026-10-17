@@ -3,6 +3,7 @@
   "main": "expo-router/entry",
   "version": "1.0.0",
   "dependencies": {
+    "@expo-google-fonts/be-vietnam-pro": "^0.4.1",
     "@expo/ui": "~57.0.17",
     "@stayreco/shared": "file:../packages/shared",
     "@tanstack/react-query": "^5.102.8",
