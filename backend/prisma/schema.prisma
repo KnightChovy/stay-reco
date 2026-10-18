@@ -41,6 +41,16 @@ enum VerificationTokenType {
   @@map("verification_token_type")
 }
 
+enum StaffPermission {
+  BOOKING
+  FRONT_DESK
+  CUSTOMER_CARE
+  REFUND
+  MARKETING
+
+  @@map("staff_permission")
+}
+
 enum Gender {
   MALE
   FEMALE
@@ -542,8 +552,26 @@ model Hotel {
   conversations        Conversation[]
   knowledgeArticles    KnowledgeArticle[]
   verificationRequests HotelVerificationRequest[]
+  hotelImages          HotelImage[]
 
   @@map("hotel")
+}
+
+/// Photos of a hotel; at most one is the cover shown in search results.
+model HotelImage {
+  hotelImageId String   @id @default(dbgenerated("gen_random_uuid()")) @map("hotel_image_id") @db.Uuid
+  hotelId      String   @map("hotel_id") @db.Uuid
+  imageUrl     String   @map("image_url") @db.VarChar(500)
+  /// Cloudinary public id, used to delete the file.
+  storageKey   String   @map("storage_key") @db.VarChar(255)
+  caption      String?  @db.VarChar(255)
+  isCover      Boolean  @default(false) @map("is_cover")
+  sortOrder    Int      @default(0) @map("sort_order")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  hotel        Hotel    @relation(fields: [hotelId], references: [hotelId], onDelete: Cascade)
+
+  @@index([hotelId])
+  @@map("hotel_image")
 }
 
 model HotelAmenity {
@@ -608,6 +636,8 @@ model HotelStaff {
   hotelStaffId      String             @id @map("hotel_staff_id") @db.Uuid
   hotelId           String             @map("hotel_id") @db.Uuid
   position          String             @db.VarChar(50)
+  /// Permission groups granted by the hotel partner (SRS UC62).
+  permissions       StaffPermission[]  @default([])
   userAccount       UserAccount        @relation(fields: [hotelStaffId], references: [userAccountId], onDelete: Cascade)
   hotel             Hotel              @relation(fields: [hotelId], references: [hotelId])
   auditLogs         AuditLog[]
@@ -987,8 +1017,25 @@ model RoomType {
   roomTypeAmenities RoomTypeAmenity[]
   recommendations   Recommendation[]
   bookings          Booking[]
+  roomTypeImages    RoomTypeImage[]
 
   @@map("room_type")
+}
+
+/// Photos of a room type shown to guests (the physical-room photos live in room_image).
+model RoomTypeImage {
+  roomTypeImageId String   @id @default(dbgenerated("gen_random_uuid()")) @map("room_type_image_id") @db.Uuid
+  roomTypeId      String   @map("room_type_id") @db.Uuid
+  imageUrl        String   @map("image_url") @db.VarChar(500)
+  /// Cloudinary public id, used to delete the file.
+  storageKey      String   @map("storage_key") @db.VarChar(255)
+  caption         String?  @db.VarChar(255)
+  sortOrder       Int      @default(0) @map("sort_order")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  roomType        RoomType @relation(fields: [roomTypeId], references: [roomTypeId], onDelete: Cascade)
+
+  @@index([roomTypeId])
+  @@map("room_type_image")
 }
 
 model RoomTypeAmenity {

@@ -34,8 +34,31 @@ export const ErrorCode = {
   AUTH_INVITATION_ACCEPTED: 'AUTH_INVITATION_ACCEPTED',
   AUTH_SESSION_NOT_FOUND: 'AUTH_SESSION_NOT_FOUND',
 
-  // Hotel
+  // Hotel (resources the caller cannot access are reported as not found, so existence is not revealed)
   /** Hotel does not exist or does not belong to the caller (the two cases are not distinguished). */
   HOTEL_NOT_FOUND: 'HOTEL_NOT_FOUND',
+  ROOM_TYPE_NOT_FOUND: 'ROOM_TYPE_NOT_FOUND',
+  ROOM_NOT_FOUND: 'ROOM_NOT_FOUND',
+  STAFF_NOT_FOUND: 'STAFF_NOT_FOUND',
+  /** The room number already exists in this hotel. */
+  ROOM_NUMBER_TAKEN: 'ROOM_NUMBER_TAKEN',
+  /** Creating the room would exceed `totalRooms` of the hotel's room configuration. */
+  ROOM_LIMIT_REACHED: 'ROOM_LIMIT_REACHED',
+  /** The room type still has physical rooms and cannot be deleted. */
+  ROOM_TYPE_IN_USE: 'ROOM_TYPE_IN_USE',
+  /** The room is occupied and cannot be locked. */
+  ROOM_NOT_LOCKABLE: 'ROOM_NOT_LOCKABLE',
+
+  // Verification
+  /** The hotel already has a request waiting for review. */
+  VERIFICATION_PENDING: 'VERIFICATION_PENDING',
+  /** A required document (business license, fire safety, security) is missing. */
+  VERIFICATION_DOCUMENTS_MISSING: 'VERIFICATION_DOCUMENTS_MISSING',
+  /** The request was already approved, rejected or sent back. */
+  VERIFICATION_ALREADY_DECIDED: 'VERIFICATION_ALREADY_DECIDED',
+
+  // Uploads
+  /** Unsupported file type or file larger than allowed. */
+  UPLOAD_INVALID_FILE: 'UPLOAD_INVALID_FILE',
 } as const;
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];

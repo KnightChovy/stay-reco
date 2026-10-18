@@ -224,6 +224,17 @@ There is no `status` field in the body; the HTTP status is already available as 
 | `AUTH_INVITATION_ACCEPTED` | 409 | Invitation already accepted | Go to sign-in |
 | `AUTH_SESSION_NOT_FOUND` | 404 | Revoking a session that doesn't exist | Reload the session list |
 | `HOTEL_NOT_FOUND` | 404 | Hotel doesn't exist or doesn't belong to the caller (not distinguished) | "Hotel not found" |
+| `ROOM_TYPE_NOT_FOUND` | 404 | Room type doesn't exist or belongs to another hotel | Reload the room type list |
+| `ROOM_NOT_FOUND` | 404 | Room doesn't exist or belongs to another hotel | Reload the room list |
+| `STAFF_NOT_FOUND` | 404 | Staff member doesn't exist or works at another hotel | Reload the staff list |
+| `ROOM_NUMBER_TAKEN` | 409 | Room number already used in this hotel | Error under the room number input |
+| `ROOM_LIMIT_REACHED` | 409 | More rooms than the declared total in the room configuration | "Room limit reached", link to room configuration |
+| `ROOM_TYPE_IN_USE` | 409 | Deleting a room type that still has rooms | "Remove its rooms first" |
+| `ROOM_NOT_LOCKABLE` | 409 | Locking a room that has a guest (`OCCUPIED`) | "The room is occupied" |
+| `VERIFICATION_PENDING` | 409 | A verification request is already waiting for review | Show the pending request |
+| `VERIFICATION_DOCUMENTS_MISSING` | 400 | A required document is missing (business license, fire safety, security certificate) | Highlight the missing documents |
+| `VERIFICATION_ALREADY_DECIDED` | 409 | Reviewing a request that already has a decision | Reload the request |
+| `UPLOAD_INVALID_FILE` | 400 | File is not PDF/JPG/PNG or is larger than 10 MB | Error under the upload field |
 
 Important: **refresh only when `status === 401` and `code === 'UNAUTHENTICATED'`.** Refreshing on the other 401 errors (`AUTH_INVALID_CREDENTIALS`, `AUTH_WRONG_PASSWORD`, `AUTH_REFRESH_TOKEN_INVALID`) causes infinite loops or unexpected sign-outs.
 
