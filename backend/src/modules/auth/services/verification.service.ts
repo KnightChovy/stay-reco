@@ -16,7 +16,7 @@ import {
 type LinkTokenType = Exclude<VerificationTokenType, 'EMAIL_VERIFY'>;
 
 const LINK_TTL_MS: Record<LinkTokenType, number> = {
-  PASSWORD_RESET: 30 * 60 * 1000,
+  PASSWORD_RESET: 15 * 60 * 1000,
   ACCOUNT_INVITE: 72 * 60 * 60 * 1000,
 };
 
