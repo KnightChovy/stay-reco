@@ -1,0 +1,80 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'backend/**'
+      - 'packages/shared/**'
+      - '.github/workflows/backend-ci.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'backend/**'
+      - 'packages/shared/**'
+      - '.github/workflows/backend-ci.yml'
+
+concurrency:
+  group: backend-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: backend
+
+    services:
+      postgres:
+        # Same image as backend/docker-compose.yml (the init migration needs the vector extension).
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: stayreco
+          POSTGRES_PASSWORD: stayreco
+          POSTGRES_DB: stayreco_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U stayreco -d stayreco_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # Prisma reads it in prisma.config.ts (generate, migrate); e2e tests load the rest from backend/.env.test.
+      DATABASE_URL: postgresql://stayreco:stayreco@localhost:5432/stayreco_test?schema=public
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            packages/shared/package-lock.json
+
+      # postinstall builds packages/shared and generates the Prisma client.
+      - name: Install
+        run: npm ci
+
+      - name: Lint
+        run: npx eslint "{src,test}/**/*.ts"
+
+      - name: Format
+        run: npx prettier --check "src/**/*.ts" "test/**/*.ts"
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Unit tests
+        run: npx jest --coverage
+
+      - name: E2E tests
+        run: npm run test:e2e
+
+      - name: Build
+        run: npm run build
