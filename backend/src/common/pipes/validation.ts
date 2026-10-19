@@ -7,6 +7,19 @@ import { z } from '@stayreco/shared';
 import { ErrorCode } from '../errors/error-code';
 
 /**
+ * zod writes a nullable field as `anyOf: [X, { type: 'null' }]`. Swagger needs a `type` on each property (without one
+ * it treats the property as a class and crashes), so rewrite it as `X` plus `nullable: true`.
+ */
+function toSwaggerProperty(prop: object): object {
+  const { anyOf, ...rest } = prop as { anyOf?: { type?: string }[] };
+  const nonNull = anyOf?.filter((s) => s.type !== 'null');
+  if (!anyOf || nonNull?.length !== 1 || nonNull.length === anyOf.length) {
+    return prop;
+  }
+  return { ...rest, ...nonNull[0], nullable: true };
+}
+
+/**
  * Turns a shared zod schema into a DTO class: Nest keeps it as the param's metatype (so the pipe finds the schema)
  * and the Swagger plugin reads its body schema from `_OPENAPI_METADATA_FACTORY`.
  */
@@ -22,7 +35,10 @@ export function zodDto<T extends z.ZodObject>(schema: T) {
       return Object.fromEntries(
         Object.entries(json.properties ?? {}).map(([key, prop]) => [
           key,
-          { ...prop, required: json.required?.includes(key) ?? false },
+          {
+            ...toSwaggerProperty(prop),
+            required: json.required?.includes(key) ?? false,
+          },
         ]),
       );
     }

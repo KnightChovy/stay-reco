@@ -1,8 +1,9 @@
 import { Controller, Get } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiExcludeController } from '@nestjs/swagger';
 import { Public } from './common/decorators/public.decorator';
 
-@ApiTags('health')
+/** Liveness probe for hosting and uptime monitors; infrastructure only, so it is kept out of the API docs. */
+@ApiExcludeController()
 @Controller()
 export class AppController {
   @Public()
