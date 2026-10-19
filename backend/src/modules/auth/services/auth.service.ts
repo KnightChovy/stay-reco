@@ -392,7 +392,7 @@ export class AuthService {
     await this.mail.send({
       to: account.email,
       subject: 'Reset your password',
-      text: `Open this link to reset your password (valid 30 minutes):\n${this.link('reset-password', token)}\n\nIf you did not request this, ignore this email.`,
+      text: `Open this link to reset your password (valid 15 minutes):\n${this.link('reset-password', token)}\n\nIf you did not request this, ignore this email.`,
     });
   }
 
