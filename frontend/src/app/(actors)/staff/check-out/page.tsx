@@ -267,7 +267,7 @@ export default function StaffCheckOutPage() {
                   <div>
                     <h4 className="font-bold text-amber-900 text-sm">Chuyển Trạng Thái Phòng P.602</h4>
                     <p className="text-xs text-amber-800 mt-0.5">
-                      Sau khi hoàn tất check-out, phòng **P.602** sẽ tự động chuyển sang trạng thái **"Cần dọn dẹp (Dirty)"** cho bộ phận buồng phòng.
+                      Sau khi hoàn tất check-out, phòng **P.602** sẽ tự động chuyển sang trạng thái **&ldquo;Cần dọn dẹp (Dirty)&rdquo;** cho bộ phận buồng phòng.
                     </p>
                   </div>
                   <Button 
