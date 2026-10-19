@@ -3,9 +3,11 @@ import { DocumentType, RoomStatus, StaffPermission, VerificationRequestType, Ver
 import { emailSchema } from './auth';
 import { listQuerySchema, moneySchema, reasonSchema } from './common';
 
+/** At most 20 characters in total, the size of the phone columns. */
 const phoneSchema = z
   .string()
   .trim()
+  .max(20)
   .regex(/^\+?[\d\s-]{8,20}$/, 'phone must be a valid phone number');
 /** "HH:mm", e.g. "14:00". */
 const timeSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'time must be HH:mm');
@@ -28,16 +30,29 @@ const hotelFields = {
   starRating: z.number().int().min(1).max(5).optional(),
   phone: phoneSchema.optional(),
   email: emailSchema,
-  website: z.url().max(500).optional(),
+  // http(s) only: other schemes such as `javascript:` would run script when the website is shown as a link.
+  website: z
+    .url({ protocol: /^https?$/ })
+    .max(500)
+    .optional(),
   checkInTime: timeSchema.optional(),
   checkOutTime: timeSchema.optional(),
 };
 
+/** Coordinates only make sense as a pair: both sent or both omitted, both numbers or both `null`. */
+const coordinatesTogether = {
+  check: (v: { latitude?: number | null; longitude?: number | null }) =>
+    (v.latitude === undefined) === (v.longitude === undefined) && (v.latitude === null) === (v.longitude === null),
+  params: { message: 'latitude and longitude must be sent together', path: ['longitude'] },
+};
+
 // Defaults only on create: in an update schema a default would overwrite the stored value when the field is omitted.
-export const createHotelSchema = z.strictObject({
-  ...hotelFields,
-  country: hotelFields.country.default('Vietnam'),
-});
+export const createHotelSchema = z
+  .strictObject({
+    ...hotelFields,
+    country: hotelFields.country.default('Vietnam'),
+  })
+  .refine(coordinatesTogether.check, coordinatesTogether.params);
 export type CreateHotelInput = z.infer<typeof createHotelSchema>;
 
 /** Every field optional; `null` clears an optional field (e.g. `website: null`). */
@@ -53,7 +68,8 @@ export const updateHotelSchema = z
     checkInTime: hotelFields.checkInTime.nullable(),
     checkOutTime: hotelFields.checkOutTime.nullable(),
   })
-  .partial();
+  .partial()
+  .refine(coordinatesTogether.check, coordinatesTogether.params);
 export type UpdateHotelInput = z.infer<typeof updateHotelSchema>;
 
 export const hotelAmenitiesSchema = z.strictObject({

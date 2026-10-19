@@ -139,6 +139,39 @@ describe('Hotels (e2e)', () => {
         'starRating',
       ]);
     });
+
+    it('rejects over-long phones, non-http websites and half coordinates with 400', async () => {
+      const { token, hotelId } = await partnerWithHotel();
+      const cases: [Record<string, unknown>, string][] = [
+        // 21 characters: longer than the phone column, so it must fail validation instead of the insert.
+        [{ phone: '+84 905 123 456 789 0' }, 'phone'],
+        [{ website: 'javascript:alert(1)' }, 'website'],
+        [{ latitude: 16.06 }, 'longitude'],
+        [{ latitude: null, longitude: 108.22 }, 'longitude'],
+      ];
+      for (const [patch, field] of cases) {
+        const res = await t
+          .api()
+          .patch(`/api/v1/hotels/${hotelId}`)
+          .set(auth(token))
+          .send(patch)
+          .expect(400);
+        expect(fields(res.body.details)).toEqual([field]);
+      }
+
+      await t
+        .api()
+        .post('/api/v1/hotels')
+        .set(auth(token))
+        .send({ ...newHotel, phone: '+84 905 123 456 789 0' })
+        .expect(400);
+      await t
+        .api()
+        .patch(`/api/v1/hotels/${hotelId}`)
+        .set(auth(token))
+        .send({ latitude: 16.06, longitude: 108.22, phone: '+84 905 123 456' })
+        .expect(200);
+    });
   });
 
   describe('tenant isolation', () => {
