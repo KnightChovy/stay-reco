@@ -37,6 +37,8 @@ export const ErrorCode = {
   // Hotel (resources the caller cannot access are reported as not found, so existence is not revealed)
   /** Hotel does not exist or does not belong to the caller (the two cases are not distinguished). */
   HOTEL_NOT_FOUND: 'HOTEL_NOT_FOUND',
+  /** The partner is suspended: its hotels stay readable, but it cannot create or change anything. */
+  PARTNER_SUSPENDED: 'PARTNER_SUSPENDED',
   ROOM_TYPE_NOT_FOUND: 'ROOM_TYPE_NOT_FOUND',
   ROOM_NOT_FOUND: 'ROOM_NOT_FOUND',
   STAFF_NOT_FOUND: 'STAFF_NOT_FOUND',

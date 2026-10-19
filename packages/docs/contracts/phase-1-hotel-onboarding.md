@@ -18,7 +18,7 @@
 | D1 | Thêm bảng `hotel_image` và `room_type_image` (ảnh khách sạn, ảnh loại phòng). `room_image` (ảnh phòng thực tế) giữ nguyên. |
 | D2 | `hotel_staff.permissions`: mảng các nhóm quyền theo SRS UC62: `BOOKING` (Đặt phòng), `FRONT_DESK` (Lễ tân), `CUSTOMER_CARE` (Chăm sóc khách), `REFUND` (Hoàn tiền), `MARKETING`. Không có nhóm "Kế toán". |
 | D3 | **Giá gốc của loại phòng** = một dòng `price` có `valid_from`, `valid_to`, `day_of_week` đều trống. Luật giá theo mùa (phase 2) là các dòng `price` khác; giá một đêm = dòng cụ thể nhất. |
-| D4 | **`hotel_room_config`** = cấu hình phòng của đối tác cho khách sạn: `total_rooms` là số phòng thực tế đối tác khai báo, `base_price` là giá gốc mặc định gợi ý khi tạo loại phòng mới. Không tạo được nhiều phòng thực tế hơn `total_rooms` (muốn thêm thì sửa cấu hình). Mỗi khách sạn một cấu hình. |
+| D4 | **`hotel_room_config`** = cấu hình phòng của đối tác cho khách sạn: `total_rooms` là số phòng thực tế đối tác khai báo, `base_price` là giá gốc mặc định gợi ý khi tạo loại phòng mới. Không tạo được nhiều phòng thực tế hơn `total_rooms` (muốn thêm thì sửa cấu hình). Mỗi khách sạn một cấu hình (`hotel_id` unique trong DB). |
 | D5 | File lưu trên **Cloudinary**, BE nhận file rồi đẩy lên. Giấy tờ xác minh lưu ở chế độ riêng tư, **chỉ chủ khách sạn và quản lý nền tảng xem được** (BE cấp link có hạn). |
 | D6 | Duyệt **theo từng khách sạn**. Lần duyệt đầu tiên đổi `hotel_partner.status` sang `APPROVED`. |
 | D7 | Một đối tác có thể có nhiều khách sạn. BE hỗ trợ đầy đủ; FE tự chọn cách hiển thị. |
@@ -41,6 +41,8 @@ room_status (D11):     AVAILABLE ⇄ MAINTENANCE (đối tác khóa / mở); OCC
 ```
 
 Khách sạn chỉ hiển thị cho khách khi `ACTIVE` (BR-01). Khi đang có hồ sơ `PENDING` thì không gửi thêm hồ sơ khác.
+
+Đối tác bị đình chỉ (`hotel_partner.status = SUSPENDED`): vẫn xem được khách sạn của mình, nhưng mọi thao tác tạo hoặc sửa của chủ khách sạn trả `403 PARTNER_SUSPENDED`.
 
 ## 3. Endpoint
 
@@ -181,6 +183,7 @@ Kiểu TypeScript đặt trong `@stayreco/shared` (`responses/hotel.ts`). Tiền
 | `code` | HTTP | Khi nào |
 |---|---|---|
 | `HOTEL_NOT_FOUND` | 404 | Khách sạn không tồn tại hoặc không thuộc người gọi (đã có) |
+| `PARTNER_SUSPENDED` | 403 | Đối tác bị đình chỉ: chỉ xem được, không tạo/sửa |
 | `ROOM_TYPE_NOT_FOUND`, `ROOM_NOT_FOUND`, `STAFF_NOT_FOUND` | 404 | Tương tự, theo tài nguyên |
 | `ROOM_NUMBER_TAKEN` | 409 | Số phòng đã có trong khách sạn |
 | `ROOM_LIMIT_REACHED` | 409 | Vượt `total_rooms` của cấu hình phòng |

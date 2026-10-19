@@ -239,6 +239,39 @@ describe('Hotels (e2e)', () => {
     });
   });
 
+  describe('suspended partner', () => {
+    it('can still read its hotels but cannot create or change them', async () => {
+      const { id, token, hotelId } = await partnerWithHotel();
+      await t.prisma.hotelPartner.update({
+        where: { hotelPartnerId: id },
+        data: { status: 'SUSPENDED' },
+      });
+
+      await t
+        .api()
+        .get(`/api/v1/hotels/${hotelId}`)
+        .set(auth(token))
+        .expect(200);
+      await t.api().get('/api/v1/me/hotels').set(auth(token)).expect(200);
+
+      // Built lazily: supertest opens a server per request when it is created.
+      const requests = [
+        () => t.api().post('/api/v1/hotels').send(newHotel),
+        () =>
+          t.api().patch(`/api/v1/hotels/${hotelId}`).send({ name: 'Renamed' }),
+        () =>
+          t
+            .api()
+            .put(`/api/v1/hotels/${hotelId}/room-config`)
+            .send({ totalRooms: 5, basePrice: 1000000 }),
+      ];
+      for (const send of requests) {
+        const res = await send().set(auth(token)).expect(403);
+        expect(res.body.code).toBe('PARTNER_SUSPENDED');
+      }
+    });
+  });
+
   describe('owner edits', () => {
     it('updates only the sent fields and clears fields set to null', async () => {
       const { token, hotelId } = await partnerWithHotel();

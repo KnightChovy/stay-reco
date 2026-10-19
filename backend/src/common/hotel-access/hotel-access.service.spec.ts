@@ -15,14 +15,14 @@ const user = (accountId: string, role: AuthUser['role']): AuthUser => ({
 });
 
 /** In-memory stand-in for the two Prisma queries the service makes. */
-function createService() {
+function createService(partnerStatus = 'APPROVED') {
   const prisma = {
     hotel: {
       findFirst: jest.fn(
         ({ where }: { where: { hotelId: string; hotelPartnerId: string } }) =>
           Promise.resolve(
             where.hotelId === HOTEL && where.hotelPartnerId === OWNER
-              ? { hotelId: HOTEL }
+              ? { hotelPartner: { status: partnerStatus } }
               : null,
           ),
       ),
@@ -59,6 +59,19 @@ describe('HotelAccessService', () => {
     await expect(
       service.assert(user(OWNER, 'HOTEL_PARTNER'), HOTEL, 'owner'),
     ).resolves.toMatchObject({ hotelId: HOTEL, role: 'OWNER' });
+  });
+
+  it('lets a suspended partner read its hotel but not change it', async () => {
+    const { service } = createService('SUSPENDED');
+    const owner = user(OWNER, 'HOTEL_PARTNER');
+    await expect(service.assert(owner, HOTEL, 'member')).resolves.toMatchObject(
+      { role: 'OWNER', partnerSuspended: true },
+    );
+    await expectCode(
+      service.assert(owner, HOTEL, 'owner'),
+      ForbiddenException,
+      'PARTNER_SUSPENDED',
+    );
   });
 
   it("hides another partner's hotel as not found", async () => {

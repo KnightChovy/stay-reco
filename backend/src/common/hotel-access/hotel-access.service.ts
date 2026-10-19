@@ -16,6 +16,8 @@ export interface HotelAccess {
   role: 'OWNER' | 'STAFF';
   /** Staff permission groups; the owner implicitly has all of them. */
   permissions: StaffPermission[];
+  /** The owning partner is suspended (`hotel_partner.status`): it can still read, but not change, its hotels. */
+  partnerSuspended: boolean;
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -30,6 +32,13 @@ const hotelNotFound = () =>
 // Staff already know the hotel exists, so missing rights are a plain "forbidden".
 const forbidden = (message: string) =>
   new ForbiddenException({ code: ErrorCode.FORBIDDEN, message });
+
+/** Raised for any change a suspended partner tries to make (creating hotels included). */
+export const partnerSuspended = () =>
+  new ForbiddenException({
+    code: ErrorCode.PARTNER_SUSPENDED,
+    message: 'The partner is suspended',
+  });
 
 /**
  * Tenant check for hotel data (CONVENTIONS §5). The hotel id given by the client is only a selector:
@@ -58,6 +67,9 @@ export class HotelAccessService {
         throw forbidden(`Missing staff permission ${permission}`);
       }
     }
+    if (level === 'owner' && access.partnerSuspended) {
+      throw partnerSuspended();
+    }
     return access;
   }
 
@@ -69,9 +81,16 @@ export class HotelAccessService {
       // A partner's account id is also its hotel_partner id.
       const hotel = await this.prisma.hotel.findFirst({
         where: { hotelId, hotelPartnerId: user.accountId },
-        select: { hotelId: true },
+        select: { hotelPartner: { select: { status: true } } },
       });
-      return hotel ? { hotelId, role: 'OWNER', permissions: [] } : null;
+      return hotel
+        ? {
+            hotelId,
+            role: 'OWNER',
+            permissions: [],
+            partnerSuspended: hotel.hotelPartner.status === 'SUSPENDED',
+          }
+        : null;
     }
 
     if (user.role === 'HOTEL_STAFF') {
@@ -79,8 +98,14 @@ export class HotelAccessService {
         where: { hotelStaffId: user.accountId, hotelId },
         select: { permissions: true },
       });
+      // Staff never reach owner-level actions, so the partner status is not needed here.
       return staff
-        ? { hotelId, role: 'STAFF', permissions: staff.permissions }
+        ? {
+            hotelId,
+            role: 'STAFF',
+            permissions: staff.permissions,
+            partnerSuspended: false,
+          }
         : null;
     }
 

@@ -30,8 +30,7 @@ export const hotelInclude = {
     },
     orderBy: { propertyKey: 'asc' },
   },
-  // One config per hotel (contract D4), enforced in HotelsService.setRoomConfig.
-  hotelRoomConfigs: { orderBy: { updatedAt: 'desc' }, take: 1 },
+  hotelRoomConfig: true,
 } satisfies Prisma.HotelInclude;
 
 export type HotelWithDetails = Prisma.HotelGetPayload<{
@@ -81,7 +80,7 @@ export const toHotelImage = (i: HotelImageRow): HotelImage => ({
 });
 
 export function toHotel(h: HotelWithDetails): Hotel {
-  const config = h.hotelRoomConfigs[0];
+  const config = h.hotelRoomConfig;
   return {
     id: h.hotelId,
     name: h.name,

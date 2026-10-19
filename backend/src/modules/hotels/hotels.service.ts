@@ -12,6 +12,7 @@ import type {
 } from '@stayreco/shared';
 import type { AuthUser } from '../../common/decorators/current-user.decorator';
 import { ErrorCode } from '../../common/errors/error-code';
+import { partnerSuspended } from '../../common/hotel-access/hotel-access.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   hotelInclude,
@@ -48,8 +49,14 @@ export class HotelsService {
     return hotels.map((h) => toHotelSummary(h, 'STAFF'));
   }
 
-  /** New hotels start as DRAFT until a verification request is approved. */
+  /** New hotels start as DRAFT until a verification request is approved. Suspended partners cannot add hotels. */
   async create(user: AuthUser, input: CreateHotelInput): Promise<Hotel> {
+    const partner = await this.prisma.hotelPartner.findUniqueOrThrow({
+      where: { hotelPartnerId: user.accountId },
+      select: { status: true },
+    });
+    if (partner.status === 'SUSPENDED') throw partnerSuspended();
+
     const hotel = await this.prisma.hotel.create({
       data: { ...toHotelData(input), hotelPartnerId: user.accountId },
       include: hotelInclude,
@@ -138,20 +145,12 @@ export class HotelsService {
         });
       }
 
-      const existing = await tx.hotelRoomConfig.findFirst({
+      // `hotel_id` is unique, so concurrent first calls cannot create two configs.
+      await tx.hotelRoomConfig.upsert({
         where: { hotelId },
-        select: { hotelRoomConfigId: true },
+        create: { hotelId, totalRooms, basePrice },
+        update: { totalRooms, basePrice },
       });
-      if (existing) {
-        await tx.hotelRoomConfig.update({
-          where: { hotelRoomConfigId: existing.hotelRoomConfigId },
-          data: { totalRooms, basePrice },
-        });
-      } else {
-        await tx.hotelRoomConfig.create({
-          data: { hotelId, totalRooms, basePrice },
-        });
-      }
     });
     return this.findOne(hotelId);
   }

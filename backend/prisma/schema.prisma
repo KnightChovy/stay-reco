@@ -535,7 +535,7 @@ model Hotel {
   updatedAt            DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(6)
   hotelPartner         HotelPartner               @relation(fields: [hotelPartnerId], references: [hotelPartnerId])
   hotelProperties      HotelProperties[]
-  hotelRoomConfigs     HotelRoomConfig[]
+  hotelRoomConfig      HotelRoomConfig?
   hotelStaffs          HotelStaff[]
   roomTypes            RoomType[]
   hotelAmenities       HotelAmenity[]
@@ -621,7 +621,8 @@ model HotelProperties {
 
 model HotelRoomConfig {
   hotelRoomConfigId String   @id @default(dbgenerated("gen_random_uuid()")) @map("hotel_room_config_id") @db.Uuid
-  hotelId           String   @map("hotel_id") @db.Uuid
+  /// One configuration per hotel (contract D4).
+  hotelId           String   @unique @map("hotel_id") @db.Uuid
   totalRooms        Int      @map("total_rooms")
   basePrice         Decimal  @map("base_price") @db.Decimal(14, 2)
   currency          String   @default("VND") @db.VarChar(10)
