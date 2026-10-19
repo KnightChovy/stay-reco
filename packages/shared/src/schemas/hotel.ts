@@ -40,7 +40,20 @@ export const createHotelSchema = z.strictObject({
 });
 export type CreateHotelInput = z.infer<typeof createHotelSchema>;
 
-export const updateHotelSchema = z.strictObject(hotelFields).partial();
+/** Every field optional; `null` clears an optional field (e.g. `website: null`). */
+export const updateHotelSchema = z
+  .strictObject({
+    ...hotelFields,
+    description: hotelFields.description.nullable(),
+    latitude: hotelFields.latitude.nullable(),
+    longitude: hotelFields.longitude.nullable(),
+    starRating: hotelFields.starRating.nullable(),
+    phone: hotelFields.phone.nullable(),
+    website: hotelFields.website.nullable(),
+    checkInTime: hotelFields.checkInTime.nullable(),
+    checkOutTime: hotelFields.checkOutTime.nullable(),
+  })
+  .partial();
 export type UpdateHotelInput = z.infer<typeof updateHotelSchema>;
 
 export const hotelAmenitiesSchema = z.strictObject({

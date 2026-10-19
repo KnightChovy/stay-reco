@@ -67,6 +67,11 @@ Cột Response là nội dung của `data`.
 | POST | `/hotels/:hotelId/images` | chủ | multipart `file`, `caption?`, `isCover?` | `HotelImage` (201) |
 | DELETE | `/hotel-images/:id` | chủ | | 204 |
 
+- `PATCH /hotels/:hotelId`: chỉ đổi field được gửi; gửi `null` để xóa field không bắt buộc (`description`, `latitude`, `longitude`, `starRating`, `phone`, `website`, `checkInTime`, `checkOutTime`).
+- `PUT .../amenities` và `PUT .../policies` **thay toàn bộ** danh sách (key không gửi lên sẽ bị xóa). Id tiện ích không tồn tại trả `VALIDATION_ERROR` (field `amenityIds`).
+- `PUT .../room-config`: `totalRooms` nhỏ hơn số phòng thực tế đang có trả `ROOM_LIMIT_REACHED`.
+- `GET /amenities`: tên và nhóm (`category`) bằng tiếng Việt, `icon` là tên icon của `lucide-react` (ví dụ `wifi`, `waves`).
+
 ### Loại phòng và phòng
 
 | Method | Path | Quyền | Body / Query | Response |

@@ -10,6 +10,8 @@ import { RolesGuard } from './common/guards/roles.guard';
 import { Env, validateEnv } from './config/env';
 import { AuditModule } from './modules/audit/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { CatalogModule } from './modules/catalog/catalog.module';
+import { HotelsModule } from './modules/hotels/hotels.module';
 import { MailModule } from './modules/mail/mail.module';
 import { PrismaModule } from './prisma/prisma.module';
 
@@ -38,6 +40,8 @@ import { PrismaModule } from './prisma/prisma.module';
     MailModule,
     AuditModule,
     AuthModule,
+    CatalogModule,
+    HotelsModule,
   ],
   controllers: [AppController],
   providers: [
