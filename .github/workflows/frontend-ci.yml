@@ -41,10 +41,8 @@ jobs:
       - name: Install
         run: npm ci
 
-      # TODO: remove continue-on-error once the existing lint errors are fixed (6 on 2026-10-18).
       - name: Lint
         run: npx eslint
-        continue-on-error: true
 
       # Generates Next's route types (PageProps, LayoutProps) so tsc can check without a full build.
       - name: Type-check

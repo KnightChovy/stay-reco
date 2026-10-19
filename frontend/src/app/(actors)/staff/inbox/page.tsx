@@ -313,7 +313,7 @@ export default function StaffInboxPage() {
                       </button>
                     </div>
                     <p className="text-xs text-slate-800 bg-white/80 p-2.5 rounded-lg border border-amber-200/60 leading-relaxed font-medium">
-                      "{aiSuggestedResponse}"
+                      &ldquo;{aiSuggestedResponse}&rdquo;
                     </p>
                   </div>
                 )}
