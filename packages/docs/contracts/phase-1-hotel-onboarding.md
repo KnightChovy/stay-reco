@@ -130,9 +130,9 @@ Cột Response là nội dung của `data`.
 | POST | `/hotels/:hotelId/reverification` | PLATFORM_MANAGER | `{ reason }` | `VerificationRequest` (`RENEWAL`, `NEEDS_REVISION`) (201) |
 
 - **Loại hồ sơ do backend xác định**, client không gửi: khách sạn `DRAFT` → `INITIAL`; khách sạn `ACTIVE` đang có yêu cầu xác minh lại → `RENEWAL`; khách sạn `ACTIVE` khác → `UPDATE`. Khách sạn ở trạng thái khác trả `HOTEL_STATUS_CONFLICT`.
-- **Nộp hồ sơ**: đủ 3 giấy tờ bắt buộc (`VERIFICATION_DOCUMENTS_MISSING`); mỗi `fileId` phải do chính đối tác tải lên và đúng định dạng (sai thì `VALIDATION_ERROR` ở `documents.<i>.fileId`); đang có hồ sơ chờ duyệt thì `VERIFICATION_PENDING`. Bấm gửi hai lần cũng chỉ tạo một hồ sơ.
+- **Nộp hồ sơ**: đủ 3 giấy tờ bắt buộc (`VERIFICATION_DOCUMENTS_MISSING`), mỗi giấy tờ là một file khác nhau (`VALIDATION_ERROR` ở `documents`); mỗi `fileId` phải do chính đối tác tải lên và đúng định dạng (sai thì `VALIDATION_ERROR` ở `documents.<i>.fileId`); đang có hồ sơ chờ duyệt thì `VERIFICATION_PENDING`. Bấm gửi hai lần cũng chỉ tạo một hồ sơ.
 - **Số tài khoản thụ hưởng** mã hóa AES-256-GCM khi lưu (khóa `BENEFICIARY_ENCRYPTION_KEY`); chi tiết hồ sơ hiện đầy đủ cho chủ khách sạn và quản lý nền tảng; lịch sử chỉ hiện 4 số cuối; hàng đợi không có thông tin thụ hưởng.
-- **Quyết định** chỉ áp dụng cho hồ sơ `PENDING` (người thứ hai nhận `VERIFICATION_ALREADY_DECIDED`). `INITIAL`: duyệt → khách sạn `ACTIVE`, đối tác `APPROVED` lần đầu; từ chối / yêu cầu bổ sung → khách sạn `DRAFT`. `UPDATE` / `RENEWAL` không đổi trạng thái khách sạn dù kết quả thế nào (đình chỉ khách sạn là quyết định riêng).
+- **Quyết định** chỉ áp dụng cho hồ sơ `PENDING` (người thứ hai nhận `VERIFICATION_ALREADY_DECIDED`). `INITIAL`: duyệt → khách sạn `ACTIVE`, đối tác `APPROVED` lần đầu (không duyệt được khi đối tác đang bị đình chỉ: `409 PARTNER_SUSPENDED`, vẫn từ chối hoặc yêu cầu bổ sung được); từ chối / yêu cầu bổ sung → khách sạn `DRAFT`. `UPDATE` / `RENEWAL` không đổi trạng thái khách sạn dù kết quả thế nào (đình chỉ khách sạn là quyết định riêng).
 - **Email kết quả** (duyệt, từ chối, yêu cầu bổ sung, yêu cầu xác minh lại, kèm lý do) gửi tới `legal.notificationEmail` của hồ sơ; yêu cầu xác minh lại dùng email của hồ sơ gần nhất, không có thì email liên hệ của đối tác.
 - **Hàng đợi** mặc định cũ nhất trước (`sort=submitted-asc`, hoặc `submitted-desc`); `search` tìm theo tên khách sạn.
 - Nhân viên khách sạn không xem được hồ sơ (403); người ngoài nhận `VERIFICATION_NOT_FOUND`.
@@ -211,7 +211,7 @@ Kiểu TypeScript đặt trong `@stayreco/shared` (`responses/hotel.ts`). Tiền
 | `code` | HTTP | Khi nào |
 |---|---|---|
 | `HOTEL_NOT_FOUND` | 404 | Khách sạn không tồn tại hoặc không thuộc người gọi (đã có) |
-| `PARTNER_SUSPENDED` | 403 | Đối tác bị đình chỉ: chỉ xem được, không tạo/sửa |
+| `PARTNER_SUSPENDED` | 403 / 409 | 403: đối tác bị đình chỉ chỉ xem được, không tạo/sửa. 409: quản lý duyệt hồ sơ `INITIAL` của đối tác đang bị đình chỉ |
 | `ROOM_TYPE_NOT_FOUND`, `ROOM_NOT_FOUND`, `STAFF_NOT_FOUND` | 404 | Tương tự, theo tài nguyên |
 | `STAFF_STATUS_CONFLICT` | 409 | Vô hiệu hóa nhân viên không ở trạng thái `ACTIVE`, kích hoạt nhân viên không ở `DEACTIVATED`, hoặc hủy lời mời đã được chấp nhận |
 | `AUTH_ACCOUNT_DEACTIVATED` | 403 | Nhân viên đã bị đối tác vô hiệu hóa đăng nhập (đúng mật khẩu) |

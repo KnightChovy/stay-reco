@@ -179,6 +179,21 @@ describe('Hotel verification (e2e)', () => {
       }).expect(400);
       expect(missing.body.code).toBe('VERIFICATION_DOCUMENTS_MISSING');
 
+      // One file cannot stand for several documents.
+      const reused = await submit(token, hotelId, {
+        ...body,
+        documents: body.documents.map((d) => ({
+          ...d,
+          fileId: body.documents[0].fileId,
+        })),
+      }).expect(400);
+      expect(reused.body.details).toEqual([
+        {
+          field: 'documents',
+          message: 'each document must be a different file',
+        },
+      ]);
+
       for (const fileId of [
         foreignFile,
         `stayreco/verification/${randomUUID()}/x.pdf`,
@@ -322,6 +337,30 @@ describe('Hotel verification (e2e)', () => {
         decide(m2.token, request.id, 'reject', 'Fake license'),
       ]);
       expect(results.map((r) => r.status).sort()).toEqual([200, 409]);
+    });
+
+    it('does not activate the hotel of a partner suspended after submitting', async () => {
+      const manager = await t.signIn('PLATFORM_MANAGER', 'pm@stayreco.test');
+      const { id: partnerId, token, hotelId } = await partnerWithHotel();
+      const request = requestOf(await submitNew(token, hotelId));
+      await t.prisma.hotelPartner.update({
+        where: { hotelPartnerId: partnerId },
+        data: { status: 'SUSPENDED' },
+      });
+
+      const refused = await decide(manager.token, request.id, 'approve').expect(
+        409,
+      );
+      expect(refused.body.code).toBe('PARTNER_SUSPENDED');
+      // Nothing changed: the request can still be reviewed.
+      expect(await hotelStatus(hotelId)).toBe('PENDING_VERIFICATION');
+      await decide(
+        manager.token,
+        request.id,
+        'request-changes',
+        'Partner suspended',
+      ).expect(200);
+      expect(await hotelStatus(hotelId)).toBe('DRAFT');
     });
 
     it('rejection and change requests send the hotel back to DRAFT with the reason, and a new request can follow', async () => {

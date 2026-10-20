@@ -226,7 +226,7 @@ There is no `status` field in the body; the HTTP status is already available as 
 | `AUTH_INVITATION_ACCEPTED` | 409 | Invitation already accepted | Go to sign-in |
 | `AUTH_SESSION_NOT_FOUND` | 404 | Revoking a session that doesn't exist | Reload the session list |
 | `HOTEL_NOT_FOUND` | 404 | Hotel doesn't exist or doesn't belong to the caller (not distinguished) | "Hotel not found" |
-| `PARTNER_SUSPENDED` | 403 | The partner is suspended: hotels stay readable, but creating or changing anything is refused | Show the suspension notice; hide edit actions |
+| `PARTNER_SUSPENDED` | 403 / 409 | 403: the suspended partner tries to create or change anything (hotels stay readable). 409: a platform manager approves the first verification of a suspended partner's hotel | Show the suspension notice; hide edit actions |
 | `ROOM_TYPE_NOT_FOUND` | 404 | Room type doesn't exist or belongs to another hotel | Reload the room type list |
 | `ROOM_NOT_FOUND` | 404 | Room doesn't exist or belongs to another hotel | Reload the room list |
 | `STAFF_NOT_FOUND` | 404 | Staff member doesn't exist or works at another hotel | Reload the staff list |

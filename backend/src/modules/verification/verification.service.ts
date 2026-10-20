@@ -271,6 +271,22 @@ export class VerificationService {
       }
       if (request.requestType !== 'INITIAL') return;
 
+      if (decision === 'APPROVED') {
+        // Locked read: a suspension cannot land between this check and the activation below.
+        const [partner] = await tx.$queryRaw<{ status: string }[]>`
+          SELECT status::text AS status FROM hotel_partner
+          WHERE hotel_partner_id = ${request.hotel.hotelPartnerId}::uuid FOR UPDATE`;
+        // A suspended partner keeps read-only access (#25), so its hotel must not go live; the manager can still
+        // reject or request changes. Throwing rolls back the decision above.
+        if (partner?.status === 'SUSPENDED') {
+          throw new ConflictException({
+            code: ErrorCode.PARTNER_SUSPENDED,
+            message:
+              'The partner is suspended: lift the suspension before approving',
+          });
+        }
+      }
+
       // Conditional on PENDING_VERIFICATION, so a hotel suspended meanwhile is not reactivated.
       await tx.hotel.updateMany({
         where: { hotelId: request.hotelId, status: 'PENDING_VERIFICATION' },

@@ -255,7 +255,12 @@ export const submitVerificationSchema = z.strictObject({
       }),
     )
     .min(1)
-    .max(10),
+    .max(10)
+    // One PDF reused for every required type would satisfy D10 without real documents.
+    .refine(
+      (docs) => new Set(docs.map((d) => d.fileId)).size === docs.length,
+      'each document must be a different file',
+    ),
   /** Step 4: the partner confirms the information is accurate. */
   commitment: z.literal(true),
 });
