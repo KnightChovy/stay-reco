@@ -53,6 +53,7 @@ Web client: set `NEXT_PUBLIC_API_URL=http://localhost:3000/api/v1`.
 2. Call APIs with the `Authorization` header.
 3. On **401 with `code: "UNAUTHENTICATED"`**: call `/auth/refresh` **once** (queue pending requests; never refresh in parallel), then retry the original request. Other 401 errors must not trigger a refresh (see section 4.3).
 4. If refresh also returns 401: clear the signed-in state and redirect to `/login?next=...`.
+5. An account deactivated by the hotel (staff) or suspended while signed in follows the same path: the next request is 401, the refresh fails with `AUTH_REFRESH_TOKEN_INVALID`, and signing in again returns **403 `AUTH_ACCOUNT_DEACTIVATED`** or **`AUTH_ACCOUNT_SUSPENDED`**. Show that message on the login page instead of a generic sign-in error.
 
 ### 2.4 Auth endpoints
 

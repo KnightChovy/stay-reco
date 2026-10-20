@@ -129,6 +129,10 @@ describe('Hotel staff (e2e)', () => {
         .api()
         .post('/api/v1/auth/login')
         .send({ email: 'anna@hotel.test', password: PASSWORD });
+    // Mobile-style login: the refresh token comes back in the body.
+    const { refreshToken } = (await login().expect(200)).body.data as {
+      refreshToken: string;
+    };
 
     const res = await post(
       `/hotel-staff/${staff.id}/deactivate`,
@@ -136,6 +140,13 @@ describe('Hotel staff (e2e)', () => {
     ).expect(200);
     expect(res.body.data.status).toBe('DEACTIVATED');
     await me(staff.token).expect(401);
+    // What a signed-in client does next: the refresh is refused too.
+    const refresh = await t
+      .api()
+      .post('/api/v1/auth/refresh')
+      .send({ refreshToken })
+      .expect(401);
+    expect(refresh.body.code).toBe('AUTH_REFRESH_TOKEN_INVALID');
     const refused = await login().expect(403);
     expect(refused.body.code).toBe('AUTH_ACCOUNT_DEACTIVATED');
 
