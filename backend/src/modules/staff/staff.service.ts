@@ -134,6 +134,43 @@ export class StaffService {
     return this.load(staffId);
   }
 
+  /**
+   * Cancels an invitation that was never accepted: the INVITED account is deleted, which voids the link and frees
+   * the email (e.g. after a typo). Accounts that were ever used are deactivated instead, never deleted.
+   */
+  async cancelInvitation(
+    user: AuthUser,
+    staffId: string,
+    meta: RequestMeta,
+  ): Promise<void> {
+    await this.findForOwner(user, staffId);
+    const email = await this.prisma.$transaction(async (tx) => {
+      const account = await tx.userAccount.findUniqueOrThrow({
+        where: { userAccountId: staffId },
+        select: { email: true, status: true },
+      });
+      if (account.status !== 'INVITED') {
+        throw statusConflict('Only a pending invitation can be cancelled');
+      }
+      // notification has no ON DELETE CASCADE; the staff row and tokens do.
+      await tx.notification.deleteMany({ where: { userAccountId: staffId } });
+      // Conditional delete: an acceptance landing meanwhile turns the account ACTIVE and wins.
+      const { count } = await tx.userAccount.deleteMany({
+        where: { userAccountId: staffId, status: 'INVITED' },
+      });
+      if (!count) {
+        throw statusConflict('Only a pending invitation can be cancelled');
+      }
+      return account.email;
+    });
+    await this.audit.log(
+      AuditAction.STAFF_INVITATION_CANCELLED,
+      user.accountId,
+      meta,
+      { staffId, email },
+    );
+  }
+
   private async load(staffId: string): Promise<StaffMember> {
     return toStaffMember(
       await this.prisma.hotelStaff.findUniqueOrThrow({

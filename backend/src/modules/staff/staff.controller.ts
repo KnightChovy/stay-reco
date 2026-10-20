@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -63,5 +64,16 @@ export class StaffController {
     @ReqMeta() meta: RequestMeta,
   ) {
     return this.staff.activate(user, id, meta);
+  }
+
+  /** Only while the invitation is pending (INVITED); used accounts are deactivated instead. */
+  @Delete('hotel-staff/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  cancelInvitation(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @ReqMeta() meta: RequestMeta,
+  ) {
+    return this.staff.cancelInvitation(user, id, meta);
   }
 }

@@ -22,6 +22,7 @@ export enum AuditAction {
   STAFF_PERMISSIONS_CHANGED = 'STAFF_PERMISSIONS_CHANGED',
   STAFF_DEACTIVATED = 'STAFF_DEACTIVATED',
   STAFF_ACTIVATED = 'STAFF_ACTIVATED',
+  STAFF_INVITATION_CANCELLED = 'STAFF_INVITATION_CANCELLED',
 }
 
 /** audit_log has one actor column per role; the account id is the role row's id. */

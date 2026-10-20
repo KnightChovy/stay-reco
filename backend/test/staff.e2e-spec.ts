@@ -238,6 +238,68 @@ describe('Hotel staff (e2e)', () => {
       .expect(403);
   });
 
+  it('cancels a pending invitation: the link stops working and the email is free again', async () => {
+    const owner = await partnerWithHotel('a@hotel.test');
+    const other = await partnerWithHotel('b@hotel.test');
+    const invite = (token: string, hotelId: string) =>
+      t.api().post('/api/v1/auth/invitations/staff').set(auth(token)).send({
+        email: 'typo@hotel.test',
+        fullName: 'Typo',
+        hotelId,
+        position: 'Receptionist',
+      });
+
+    const invited = (await invite(owner.token, owner.hotelId).expect(201)).body
+      .data as { id: string };
+    const mail = t.outbox.find((m) => m.to === 'typo@hotel.test');
+    const link = decodeURIComponent(mail!.text.match(/token=([^\s]+)/)![1]);
+    // While the account exists, another hotel cannot invite the same email.
+    await invite(other.token, other.hotelId).expect(409);
+
+    await t
+      .api()
+      .delete(`/api/v1/hotel-staff/${invited.id}`)
+      .set(auth(owner.token))
+      .expect(204);
+    expect(
+      await t.prisma.userAccount.count({ where: { email: 'typo@hotel.test' } }),
+    ).toBe(0);
+    const accepted = await t
+      .api()
+      .post('/api/v1/auth/invitations/accept')
+      .send({ token: link, password: PASSWORD })
+      .expect(400);
+    expect(accepted.body.code).toBe('AUTH_TOKEN_INVALID');
+    await invite(other.token, other.hotelId).expect(201);
+
+    const logs = await t.prisma.auditLog.count({
+      where: { hotelPartnerId: owner.id, action: 'STAFF_INVITATION_CANCELLED' },
+    });
+    expect(logs).toBe(1);
+  });
+
+  it('cancels only pending invitations, and only for the owner', async () => {
+    const owner = await partnerWithHotel('a@hotel.test');
+    const other = await partnerWithHotel('b@hotel.test');
+    const active = await t.signInStaff(owner.hotelId, 'anna@hotel.test');
+    const invited = await invitedStaff(owner.hotelId, 'zed@hotel.test');
+    const cancel = (id: string, token: string) =>
+      t.api().delete(`/api/v1/hotel-staff/${id}`).set(auth(token));
+
+    const used = await cancel(active.id, owner.token).expect(409);
+    expect(used.body.code).toBe('STAFF_STATUS_CONFLICT');
+    const hidden = await cancel(invited.userAccountId, other.token).expect(404);
+    expect(hidden.body.code).toBe('STAFF_NOT_FOUND');
+    await cancel(invited.userAccountId, active.token).expect(403);
+    await cancel('not-a-uuid', owner.token).expect(404);
+
+    expect(
+      await t.prisma.userAccount.count({
+        where: { userAccountId: { in: [active.id, invited.userAccountId] } },
+      }),
+    ).toBe(2);
+  });
+
   it('a suspended partner cannot change its staff', async () => {
     const owner = await partnerWithHotel();
     const staff = await t.signInStaff(owner.hotelId, 'anna@hotel.test');
