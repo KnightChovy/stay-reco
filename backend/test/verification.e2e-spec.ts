@@ -160,6 +160,11 @@ describe('Hotel verification (e2e)', () => {
         .set(auth(token))
         .expect(200);
       expect(history.body.data[0].beneficiary.accountNumber).toBe('****6789');
+      // The representative's ID card number is masked in lists too, and full in the detail view.
+      expect(history.body.data[0].legal.representativeIdNumber).toBe(
+        '****6789',
+      );
+      expect(res.body.data.legal.representativeIdNumber).toBe('079123456789');
 
       const again = await submitNew(token, hotelId, 409);
       expect(again.body.code).toBe('VERIFICATION_PENDING');

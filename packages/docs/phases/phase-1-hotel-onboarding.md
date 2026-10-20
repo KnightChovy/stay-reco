@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Trạng thái | 🟡 Đang làm |
+| Trạng thái | 🟡 BE xong, FE đang tích hợp |
 | Contract | [contracts/phase-1-hotel-onboarding.md](../contracts/phase-1-hotel-onboarding.md) |
 
 ## Mục tiêu
@@ -30,6 +30,6 @@
 
 ## Definition of Done
 
-- [ ] E2e chứng minh đối tác A không đọc/sửa được khách sạn của đối tác B
-- [ ] Có seed ít nhất 3 khách sạn ACTIVE cho phase 2
+- [x] E2e chứng minh đối tác A không đọc/sửa được khách sạn của đối tác B
+- [x] Có seed ít nhất 3 khách sạn ACTIVE cho phase 2
 - [ ] Contract đã cập nhật đúng với code, trạng thái `Integrated`
