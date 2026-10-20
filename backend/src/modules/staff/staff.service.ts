@@ -134,6 +134,53 @@ export class StaffService {
     return this.load(staffId);
   }
 
+  /**
+   * Cancels an invitation that was never accepted: the INVITED account is deleted, which voids the link and frees
+   * the email (e.g. after a typo). Accounts that were ever used are deactivated instead, never deleted.
+   */
+  async cancelInvitation(
+    user: AuthUser,
+    staffId: string,
+    meta: RequestMeta,
+  ): Promise<void> {
+    await this.findForOwner(user, staffId);
+    const email = await this.prisma.$transaction(async (tx) => {
+      const status = async () =>
+        (
+          await tx.userAccount.findUnique({
+            where: { userAccountId: staffId },
+            select: { status: true },
+          })
+        )?.status;
+      // Gone = already cancelled (e.g. a double click): not found, not a status conflict.
+      const conflictOrGone = (current: string | undefined) =>
+        current
+          ? statusConflict('Only a pending invitation can be cancelled')
+          : staffNotFound();
+
+      const account = await tx.userAccount.findUnique({
+        where: { userAccountId: staffId },
+        select: { email: true, status: true },
+      });
+      if (account?.status !== 'INVITED') throw conflictOrGone(account?.status);
+
+      // notification has no ON DELETE CASCADE; the staff row and tokens do.
+      await tx.notification.deleteMany({ where: { userAccountId: staffId } });
+      // Conditional delete: an acceptance or another cancel landing meanwhile wins.
+      const { count } = await tx.userAccount.deleteMany({
+        where: { userAccountId: staffId, status: 'INVITED' },
+      });
+      if (!count) throw conflictOrGone(await status());
+      return account.email;
+    });
+    await this.audit.log(
+      AuditAction.STAFF_INVITATION_CANCELLED,
+      user.accountId,
+      meta,
+      { staffId, email },
+    );
+  }
+
   private async load(staffId: string): Promise<StaffMember> {
     return toStaffMember(
       await this.prisma.hotelStaff.findUniqueOrThrow({
