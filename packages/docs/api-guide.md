@@ -235,7 +235,10 @@ There is no `status` field in the body; the HTTP status is already available as 
 | `VERIFICATION_PENDING` | 409 | A verification request is already waiting for review | Show the pending request |
 | `VERIFICATION_DOCUMENTS_MISSING` | 400 | A required document is missing (business license, fire safety, security certificate) | Highlight the missing documents |
 | `VERIFICATION_ALREADY_DECIDED` | 409 | Reviewing a request that already has a decision | Reload the request |
-| `UPLOAD_INVALID_FILE` | 400 | File is not PDF/JPG/PNG or is larger than 10 MB | Error under the upload field |
+| `UPLOAD_INVALID_FILE` | 400 | File missing, of a type not allowed (images: JPG/PNG/WebP; documents: PDF/JPG/PNG) or larger than 10 MB, or a damaged file the storage refused | Error under the upload field |
+| `UPLOAD_UNAVAILABLE` | 503 | File storage not configured or unreachable | "Upload is temporarily unavailable" |
+| `IMAGE_NOT_FOUND` | 404 | Image doesn't exist or belongs to a hotel the caller doesn't manage | Reload the image list |
+| `IMAGE_LIMIT_REACHED` | 409 | The hotel already has 30 images | "Delete an image before adding more" |
 
 Important: **refresh only when `status === 401` and `code === 'UNAUTHENTICATED'`.** Refreshing on the other 401 errors (`AUTH_INVALID_CREDENTIALS`, `AUTH_WRONG_PASSWORD`, `AUTH_REFRESH_TOKEN_INVALID`) causes infinite loops or unexpected sign-outs.
 

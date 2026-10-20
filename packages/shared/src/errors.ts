@@ -62,5 +62,11 @@ export const ErrorCode = {
   // Uploads
   /** Unsupported file type or file larger than allowed. */
   UPLOAD_INVALID_FILE: 'UPLOAD_INVALID_FILE',
+  /** File storage is not configured or not reachable; try again later. */
+  UPLOAD_UNAVAILABLE: 'UPLOAD_UNAVAILABLE',
+  /** Hotel or room type image does not exist or belongs to a hotel the caller cannot manage. */
+  IMAGE_NOT_FOUND: 'IMAGE_NOT_FOUND',
+  /** The hotel or room type already has the maximum number of images. */
+  IMAGE_LIMIT_REACHED: 'IMAGE_LIMIT_REACHED',
 } as const;
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];

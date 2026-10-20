@@ -111,6 +111,11 @@ export interface StaffMember {
   permissions: StaffPermission[];
 }
 
+/** `POST /uploads/verification-documents`: pass `fileId` in `documents[]` when submitting a verification request. */
+export interface UploadedDocument {
+  fileId: string;
+}
+
 export interface VerificationDocument {
   id: string;
   documentType: DocumentType;
