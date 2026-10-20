@@ -17,6 +17,8 @@ const PREFIX = {
 } as const;
 const ACCOUNT_NUMBER_KEY = `${PREFIX.beneficiary}accountNumber`;
 
+const mask = (value: string) => `****${value.slice(-4)}`;
+
 export const requestInclude = {
   hotel: { select: { name: true } },
   hotelProperties: { orderBy: { propertyKey: 'asc' } },
@@ -76,13 +78,13 @@ export const toVerificationSummary = (
 });
 
 /**
- * `fullAccountNumber`: the detail view shows the whole number to the owner and platform managers; lists show only
- * the last 4 digits (contract D12).
+ * `full`: the detail view shows the account and ID card numbers in full to the owner and platform managers; lists
+ * show only their last 4 digits (contract D12).
  */
 export function toVerificationRequest(
   r: RequestWithDetails,
   cipher: FieldCipher,
-  { fullAccountNumber }: { fullAccountNumber: boolean },
+  { full }: { full: boolean },
 ): VerificationRequest {
   const section = (prefix: string) =>
     Object.fromEntries(
@@ -96,18 +98,21 @@ export function toVerificationRequest(
     (p) => p.propertyKey === ACCOUNT_NUMBER_KEY,
   )?.propertyValue;
   const accountNumber = encrypted ? cipher.decrypt(encrypted) : '';
+  const legal = section(PREFIX.legal);
+  // The representative's ID card number is personal data (Decree 13/2023): lists show the last 4 digits only.
+  if (!full && legal.representativeIdNumber) {
+    legal.representativeIdNumber = mask(legal.representativeIdNumber);
+  }
 
   return {
     ...toVerificationSummary(r),
     reason: r.notes,
-    legal: section(PREFIX.legal),
+    legal,
     // A manager's re-verification request has no answers yet.
     beneficiary: encrypted
       ? {
           bankName: beneficiary.bankName,
-          accountNumber: fullAccountNumber
-            ? accountNumber
-            : `****${accountNumber.slice(-4)}`,
+          accountNumber: full ? accountNumber : mask(accountNumber),
           accountHolder: beneficiary.accountHolder,
         }
       : null,
