@@ -66,13 +66,16 @@ Cột Response là nội dung của `data`.
 | PUT | `/hotels/:hotelId/amenities` | chủ | `{ amenityIds: string[] }` | `Hotel` |
 | PUT | `/hotels/:hotelId/policies` | chủ | `{ policies: Record<string, string> }` | `Hotel` |
 | PUT | `/hotels/:hotelId/room-config` | chủ | `{ totalRooms, basePrice }` | `Hotel` |
-| POST | `/hotels/:hotelId/images` | chủ | multipart `file`, `caption?`, `isCover?` | `HotelImage` (201) |
+| POST | `/hotels/:hotelId/images` | chủ | multipart `file`, `caption?`, `isCover?` (`uploadHotelImageSchema`) | `HotelImage` (201) |
+| PATCH | `/hotel-images/:id` | chủ | `{ caption?, isCover?: true, sortOrder? }` (`updateHotelImageSchema`) | `HotelImage` |
 | DELETE | `/hotel-images/:id` | chủ | | 204 |
 
 - `PATCH /hotels/:hotelId`: chỉ đổi field được gửi; gửi `null` để xóa field không bắt buộc (`description`, `latitude`, `longitude`, `starRating`, `phone`, `website`, `checkInTime`, `checkOutTime`).
 - `PUT .../amenities` và `PUT .../policies` **thay toàn bộ** danh sách (key không gửi lên sẽ bị xóa). Id tiện ích không tồn tại trả `VALIDATION_ERROR` (field `amenityIds`).
 - `PUT .../room-config`: `totalRooms` nhỏ hơn số phòng thực tế đang có trả `ROOM_LIMIT_REACHED`.
 - `GET /amenities`: tên và nhóm (`category`) bằng tiếng Việt, `icon` là tên icon của `lucide-react` (ví dụ `wifi`, `waves`).
+- **Ảnh** (luật trong `UPLOAD_RULES` của shared): JPG/PNG/WebP, tối đa 10 MB, tối đa 30 ảnh mỗi khách sạn (`IMAGE_LIMIT_REACHED`). BE đọc loại file từ nội dung, không tin tên file. Ảnh đầu tiên tự thành ảnh bìa; luôn có đúng một ảnh bìa: `isCover: true` chuyển bìa sang ảnh đó, xóa ảnh bìa thì ảnh kế tiếp (theo `sortOrder`) thành bìa. Ảnh không tồn tại hoặc không thuộc khách sạn của người gọi trả `IMAGE_NOT_FOUND`. Chưa cấu hình Cloudinary trả `503 UPLOAD_UNAVAILABLE`.
+- **Giấy tờ xác minh**: PDF/JPG/PNG, tối đa 10 MB, lưu riêng tư theo từng đối tác; `fileId` chỉ dùng được trong hồ sơ của chính đối tác đã tải lên.
 
 ### Loại phòng và phòng
 
@@ -192,7 +195,10 @@ Kiểu TypeScript đặt trong `@stayreco/shared` (`responses/hotel.ts`). Tiền
 | `VERIFICATION_PENDING` | 409 | Đã có hồ sơ đang chờ duyệt |
 | `VERIFICATION_DOCUMENTS_MISSING` | 400 | Thiếu tài liệu bắt buộc (D10) |
 | `VERIFICATION_ALREADY_DECIDED` | 409 | Duyệt / từ chối hồ sơ đã có kết quả |
-| `UPLOAD_INVALID_FILE` | 400 | Sai định dạng hoặc quá 10 MB |
+| `UPLOAD_INVALID_FILE` | 400 | Thiếu file, sai định dạng hoặc quá 10 MB |
+| `UPLOAD_UNAVAILABLE` | 503 | Chưa cấu hình hoặc không kết nối được Cloudinary |
+| `IMAGE_NOT_FOUND` | 404 | Ảnh không tồn tại hoặc không thuộc khách sạn người gọi quản lý |
+| `IMAGE_LIMIT_REACHED` | 409 | Đã đủ 30 ảnh |
 
 ## 6. Việc của FE
 

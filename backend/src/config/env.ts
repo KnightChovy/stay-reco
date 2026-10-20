@@ -40,8 +40,26 @@ const envSchema = z
     SMTP_PASS: z.string().optional(),
     /** Sender shown to users, e.g. "StayReco <stayreco.noreply@gmail.com>". */
     MAIL_FROM: z.string().optional(),
+    /** Cloudinary for hotel images and verification documents. Leave empty to disable uploads (they answer 503). */
+    CLOUDINARY_CLOUD_NAME: z.string().optional(),
+    CLOUDINARY_API_KEY: z.string().optional(),
+    CLOUDINARY_API_SECRET: z.string().optional(),
   })
   .superRefine((env, ctx) => {
+    if (env.CLOUDINARY_CLOUD_NAME) {
+      for (const key of [
+        'CLOUDINARY_API_KEY',
+        'CLOUDINARY_API_SECRET',
+      ] as const) {
+        if (!env[key]) {
+          ctx.addIssue({
+            code: 'custom',
+            path: [key],
+            message: `${key} is required when CLOUDINARY_CLOUD_NAME is set`,
+          });
+        }
+      }
+    }
     if (!env.SMTP_HOST) return;
     for (const key of ['SMTP_USER', 'SMTP_PASS', 'MAIL_FROM'] as const) {
       if (!env[key]) {

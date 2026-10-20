@@ -22,6 +22,9 @@ export interface HotelAccess {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** Ids come from the URL; check them before querying, since Postgres rejects a malformed uuid with an error. */
+export const isUuid = (value: string) => UUID.test(value);
+
 // Outsiders get "not found" so they cannot probe which hotels exist.
 const hotelNotFound = () =>
   new NotFoundException({
@@ -54,9 +57,7 @@ export class HotelAccessService {
     level: HotelAccessLevel,
     permission?: StaffPermission,
   ): Promise<HotelAccess> {
-    const access = UUID.test(hotelId)
-      ? await this.resolve(user, hotelId)
-      : null;
+    const access = isUuid(hotelId) ? await this.resolve(user, hotelId) : null;
     if (!access) throw hotelNotFound();
 
     if (access.role === 'STAFF') {
@@ -71,6 +72,26 @@ export class HotelAccessService {
       throw partnerSuspended();
     }
     return access;
+  }
+
+  /**
+   * For routes addressed by a child resource (`/hotel-images/:id`, `/rooms/:id`): pass the resource's hotel id, or
+   * null when the resource does not exist. A missing resource and a hotel the caller cannot see both raise
+   * `notFound`, so outsiders cannot tell them apart. Staff without the right still get 403.
+   */
+  async assertResource(
+    user: AuthUser,
+    hotelId: string | null | undefined,
+    level: HotelAccessLevel,
+    notFound: () => Error,
+    permission?: StaffPermission,
+  ): Promise<HotelAccess> {
+    if (!hotelId) throw notFound();
+    try {
+      return await this.assert(user, hotelId, level, permission);
+    } catch (err) {
+      throw err instanceof NotFoundException ? notFound() : err;
+    }
   }
 
   private async resolve(

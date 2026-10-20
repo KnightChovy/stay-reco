@@ -92,6 +92,34 @@ export const roomConfigSchema = z.strictObject({
 });
 export type RoomConfigInput = z.infer<typeof roomConfigSchema>;
 
+// ── Uploads and images ──────────────────────────────────────
+
+const MB = 1024 * 1024;
+
+/** Upload rules (contract D5, D10). Clients can check files with them before sending. */
+export const UPLOAD_RULES = {
+  image: { maxBytes: 10 * MB, mimeTypes: ['image/jpeg', 'image/png', 'image/webp'] },
+  document: { maxBytes: 10 * MB, mimeTypes: ['application/pdf', 'image/jpeg', 'image/png'] },
+  /** Maximum images per hotel and per room type. */
+  maxImages: 30,
+} as const;
+
+/** Text fields sent with the image file. The request is multipart/form-data, so values arrive as strings. */
+export const uploadHotelImageSchema = z.strictObject({
+  caption: z.string().trim().max(255).optional(),
+  /** "true" makes this the cover image. The first image of a hotel always becomes the cover. */
+  isCover: z.stringbool().optional(),
+});
+export type UploadHotelImageInput = z.infer<typeof uploadHotelImageSchema>;
+
+export const updateHotelImageSchema = z.strictObject({
+  caption: z.string().trim().max(255).nullable().optional(),
+  /** Moves the cover to this image. The cover cannot be removed, only moved. */
+  isCover: z.literal(true).optional(),
+  sortOrder: z.number().int().min(0).max(1000).optional(),
+});
+export type UpdateHotelImageInput = z.infer<typeof updateHotelImageSchema>;
+
 // ── Room types and rooms ────────────────────────────────────
 
 const roomTypeFields = {

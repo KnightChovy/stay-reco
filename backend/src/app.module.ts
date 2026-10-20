@@ -13,6 +13,8 @@ import { AuthModule } from './modules/auth/auth.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
 import { HotelsModule } from './modules/hotels/hotels.module';
 import { MailModule } from './modules/mail/mail.module';
+import { StorageModule } from './modules/storage/storage.module';
+import { VerificationModule } from './modules/verification/verification.module';
 import { PrismaModule } from './prisma/prisma.module';
 
 @Module({
@@ -38,10 +40,12 @@ import { PrismaModule } from './prisma/prisma.module';
     PrismaModule,
     HotelAccessModule,
     MailModule,
+    StorageModule,
     AuditModule,
     AuthModule,
     CatalogModule,
     HotelsModule,
+    VerificationModule,
   ],
   controllers: [AppController],
   providers: [
