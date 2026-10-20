@@ -10,6 +10,7 @@ import {
   type UploadHotelImageInput,
 } from '@stayreco/shared';
 import type { AuthUser } from '../../common/decorators/current-user.decorator';
+import { lockHotel } from '../../common/db/locks';
 import { ErrorCode } from '../../common/errors/error-code';
 import {
   HotelAccessService,
@@ -61,7 +62,7 @@ export class HotelImagesService {
     try {
       const image = await this.prisma.$transaction(async (tx) => {
         // Lock the hotel row so concurrent uploads to the same hotel count and pick the cover one after another.
-        await tx.$executeRaw`SELECT 1 FROM hotel WHERE hotel_id = ${hotelId}::uuid FOR UPDATE`;
+        await lockHotel(tx, hotelId);
         const count = await tx.hotelImage.count({ where: { hotelId } });
         if (count >= UPLOAD_RULES.maxImages) throw imageLimitReached();
 

@@ -86,7 +86,8 @@ export interface RoomType {
   description: string | null;
   maxOccupancy: number;
   areaSqm: number;
-  basePrice: number;
+  /** Price per night before seasonal rules. `null` only for a room type created outside the API; `PATCH basePrice` sets it. */
+  basePrice: number | null;
   beds: { bedTypeId: string; name: string; quantity: number }[];
   amenities: Amenity[];
   images: RoomTypeImage[];

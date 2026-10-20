@@ -12,12 +12,15 @@ export const listQuerySchema = z.object({
 });
 export type ListQuery = z.infer<typeof listQuerySchema>;
 
+/** For `Decimal(x, 2)` columns: without it, extra decimals are rounded by the database without telling the client. */
+export const hasAtMost2Decimals = (v: number) => Math.abs(v * 100 - Math.round(v * 100)) < 1e-6;
+
 /** VND amount with at most 2 decimals, matching Decimal(14, 2) in the database. */
 export const moneySchema = z
   .number()
   .min(0)
   .max(999_999_999_999.99)
-  .refine((v) => Math.abs(v * 100 - Math.round(v * 100)) < 1e-6, 'at most 2 decimal places');
+  .refine(hasAtMost2Decimals, 'at most 2 decimal places');
 
 /** Free-text reason given by a reviewer (reject, request changes, re-verification). */
 export const reasonSchema = z.string().trim().min(1).max(2000);

@@ -85,14 +85,20 @@ Cột Response là nội dung của `data`.
 | POST | `/hotels/:hotelId/room-types` | chủ | `createRoomTypeSchema` | `RoomType` (201) |
 | GET | `/room-types/:id` | thành viên | | `RoomType` |
 | PATCH | `/room-types/:id` | chủ | `updateRoomTypeSchema` | `RoomType` |
-| DELETE | `/room-types/:id` | chủ | | 204 (lỗi nếu còn phòng thực tế) |
-| POST | `/room-types/:id/images` | chủ | multipart `file`, `caption?` | `RoomTypeImage` (201) |
+| DELETE | `/room-types/:id` | chủ | | 204 (`ROOM_TYPE_IN_USE` nếu còn phòng thực tế hoặc đơn đặt phòng) |
+| POST | `/room-types/:id/images` | chủ | multipart `file`, `caption?` (`uploadRoomTypeImageSchema`) | `RoomTypeImage` (201) |
+| PATCH | `/room-type-images/:id` | chủ | `{ caption?, sortOrder? }` (`updateRoomTypeImageSchema`) | `RoomTypeImage` |
 | DELETE | `/room-type-images/:id` | chủ | | 204 |
-| GET | `/hotels/:hotelId/rooms` | thành viên | `?roomTypeId=&status=&page=&pageSize=` | `Room[]` + `meta` |
+| GET | `/hotels/:hotelId/rooms` | thành viên | `?roomTypeId=&status=&search=&sort=&page=&pageSize=` (`roomListQuerySchema`) | `Room[]` + `meta` |
 | POST | `/hotels/:hotelId/rooms` | chủ | `createRoomSchema` | `Room` (201) |
 | PATCH | `/rooms/:id` | chủ | `updateRoomSchema` | `Room` |
 | POST | `/rooms/:id/lock` | chủ | `{ reason? }` | `Room` (`MAINTENANCE`) |
 | POST | `/rooms/:id/unlock` | chủ | | `Room` (`AVAILABLE`) |
+
+- **Loại phòng**: giá gốc lưu thành dòng `price` không có phòng, ngày, thứ (D3). `PATCH` gửi `beds` / `amenityIds` thì **thay cả danh sách**, không gửi thì giữ nguyên; `description: null` để xóa. Loại giường hoặc tiện ích không tồn tại trả `VALIDATION_ERROR` (field `beds` / `amenityIds`). Ảnh loại phòng giống ảnh khách sạn nhưng không có ảnh bìa (hiển thị theo `sortOrder`), tối đa 30 ảnh. `areaSqm` tối đa 2 chữ số thập phân. `basePrice` chỉ là `null` với loại phòng tạo ngoài API (seed, sửa tay); `PATCH basePrice` sẽ tạo lại giá gốc.
+- **Phòng**: phải có cấu hình phòng trước; tổng số phòng không vượt `totalRooms` (`ROOM_LIMIT_REACHED`). Số phòng không trùng trong cùng khách sạn, không phân biệt hoa thường (`ROOM_NUMBER_TAKEN`). `roomTypeId` phải thuộc cùng khách sạn (`ROOM_TYPE_NOT_FOUND`). Trạng thái không sửa qua `PATCH`.
+- **Danh sách phòng**: `search` tìm theo số phòng (tìm đúng ký tự, `%` và `_` không phải ký tự đại diện); `sort` nhận `room-number-asc` (mặc định), `room-number-desc`, `floor-asc`, `floor-desc`. Số phòng sắp theo thứ tự số tự nhiên: `9`, `101`, `1001`.
+- **Khóa / mở phòng**: khóa chuyển sang `MAINTENANCE` (không khóa được phòng `OCCUPIED`); mở chỉ áp dụng cho phòng đang khóa. Cả hai trả `ROOM_NOT_LOCKABLE` khi không hợp lệ và được ghi audit log (kèm lý do khóa).
 
 ### Nhân viên (mời nhân viên dùng `POST /auth/invitations/staff` có sẵn)
 
@@ -189,9 +195,9 @@ Kiểu TypeScript đặt trong `@stayreco/shared` (`responses/hotel.ts`). Tiền
 | `PARTNER_SUSPENDED` | 403 | Đối tác bị đình chỉ: chỉ xem được, không tạo/sửa |
 | `ROOM_TYPE_NOT_FOUND`, `ROOM_NOT_FOUND`, `STAFF_NOT_FOUND` | 404 | Tương tự, theo tài nguyên |
 | `ROOM_NUMBER_TAKEN` | 409 | Số phòng đã có trong khách sạn |
-| `ROOM_LIMIT_REACHED` | 409 | Vượt `total_rooms` của cấu hình phòng |
-| `ROOM_TYPE_IN_USE` | 409 | Xóa loại phòng khi còn phòng thực tế |
-| `ROOM_NOT_LOCKABLE` | 409 | Khóa phòng đang có khách (`OCCUPIED`) |
+| `ROOM_LIMIT_REACHED` | 409 | Chưa có cấu hình phòng, hoặc vượt `total_rooms` (kể cả khi hạ `total_rooms` thấp hơn số phòng đang có) |
+| `ROOM_TYPE_IN_USE` | 409 | Xóa loại phòng khi còn phòng thực tế hoặc đơn đặt phòng |
+| `ROOM_NOT_LOCKABLE` | 409 | Khóa phòng đang có khách (`OCCUPIED`), hoặc mở phòng không ở trạng thái khóa |
 | `VERIFICATION_PENDING` | 409 | Đã có hồ sơ đang chờ duyệt |
 | `VERIFICATION_DOCUMENTS_MISSING` | 400 | Thiếu tài liệu bắt buộc (D10) |
 | `VERIFICATION_ALREADY_DECIDED` | 409 | Duyệt / từ chối hồ sơ đã có kết quả |
