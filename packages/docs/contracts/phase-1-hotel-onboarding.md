@@ -95,9 +95,9 @@ Cột Response là nội dung của `data`.
 | POST | `/rooms/:id/lock` | chủ | `{ reason? }` | `Room` (`MAINTENANCE`) |
 | POST | `/rooms/:id/unlock` | chủ | | `Room` (`AVAILABLE`) |
 
-- **Loại phòng**: giá gốc lưu thành dòng `price` không có phòng, ngày, thứ (D3). `PATCH` gửi `beds` / `amenityIds` thì **thay cả danh sách**, không gửi thì giữ nguyên; `description: null` để xóa. Loại giường hoặc tiện ích không tồn tại trả `VALIDATION_ERROR` (field `beds` / `amenityIds`). Ảnh loại phòng giống ảnh khách sạn nhưng không có ảnh bìa (hiển thị theo `sortOrder`), tối đa 30 ảnh.
+- **Loại phòng**: giá gốc lưu thành dòng `price` không có phòng, ngày, thứ (D3). `PATCH` gửi `beds` / `amenityIds` thì **thay cả danh sách**, không gửi thì giữ nguyên; `description: null` để xóa. Loại giường hoặc tiện ích không tồn tại trả `VALIDATION_ERROR` (field `beds` / `amenityIds`). Ảnh loại phòng giống ảnh khách sạn nhưng không có ảnh bìa (hiển thị theo `sortOrder`), tối đa 30 ảnh. `areaSqm` tối đa 2 chữ số thập phân. `basePrice` chỉ là `null` với loại phòng tạo ngoài API (seed, sửa tay); `PATCH basePrice` sẽ tạo lại giá gốc.
 - **Phòng**: phải có cấu hình phòng trước; tổng số phòng không vượt `totalRooms` (`ROOM_LIMIT_REACHED`). Số phòng không trùng trong cùng khách sạn, không phân biệt hoa thường (`ROOM_NUMBER_TAKEN`). `roomTypeId` phải thuộc cùng khách sạn (`ROOM_TYPE_NOT_FOUND`). Trạng thái không sửa qua `PATCH`.
-- **Danh sách phòng**: `search` tìm theo số phòng; `sort` nhận `room-number-asc` (mặc định), `room-number-desc`, `floor-asc`, `floor-desc`.
+- **Danh sách phòng**: `search` tìm theo số phòng (tìm đúng ký tự, `%` và `_` không phải ký tự đại diện); `sort` nhận `room-number-asc` (mặc định), `room-number-desc`, `floor-asc`, `floor-desc`. Số phòng sắp theo thứ tự số tự nhiên: `9`, `101`, `1001`.
 - **Khóa / mở phòng**: khóa chuyển sang `MAINTENANCE` (không khóa được phòng `OCCUPIED`); mở chỉ áp dụng cho phòng đang khóa. Cả hai trả `ROOM_NOT_LOCKABLE` khi không hợp lệ và được ghi audit log (kèm lý do khóa).
 
 ### Nhân viên (mời nhân viên dùng `POST /auth/invitations/staff` có sẵn)

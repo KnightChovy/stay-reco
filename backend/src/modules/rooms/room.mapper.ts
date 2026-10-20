@@ -53,8 +53,9 @@ export const toRoomType = (rt: RoomTypeWithDetails): RoomType => ({
   description: rt.description,
   maxOccupancy: rt.maxOccupancy,
   areaSqm: toNumber(rt.baseAreaSqm),
-  // Every room type is created with its base price row, in the same insert.
-  basePrice: toNumber(rt.prices[0].pricePerNight),
+  // The API creates the base price row with the room type; a type inserted another way may lack it, and one such
+  // row must not break the whole list.
+  basePrice: toNumber(rt.prices[0]?.pricePerNight ?? null),
   beds: rt.roomTypeBeds.map((b) => ({
     bedTypeId: b.bedTypeId,
     name: b.bedType.name,

@@ -114,10 +114,20 @@ export class RoomTypesService {
         });
       }
       if (basePrice !== undefined) {
-        await tx.price.updateMany({
+        const { count } = await tx.price.updateMany({
           where: { roomTypeId, ...basePriceWhere },
           data: { pricePerNight: basePrice },
         });
+        // Room types created outside the API may lack the row; setting the price creates it.
+        if (!count) {
+          await tx.price.create({
+            data: {
+              roomTypeId,
+              name: BASE_PRICE_NAME,
+              pricePerNight: basePrice,
+            },
+          });
+        }
       }
     });
     return this.load(roomTypeId);

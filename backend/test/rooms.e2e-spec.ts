@@ -153,6 +153,8 @@ describe('Room types and rooms (e2e)', () => {
         ],
         [{ amenityIds: [randomUUID()] }, 'amenityIds'],
         [{ areaSqm: 10000 }, 'areaSqm'],
+        // Decimal(6,2) would silently round it to 32.56.
+        [{ areaSqm: 32.555 }, 'areaSqm'],
       ];
       for (const [overrides, field] of cases) {
         const res = await t
@@ -164,6 +166,34 @@ describe('Room types and rooms (e2e)', () => {
         expect(fields(res.body.details)).toEqual([field]);
       }
       expect(await t.prisma.roomType.count()).toBe(0);
+    });
+
+    it('lists a room type that has no base price row, and PATCH basePrice creates it', async () => {
+      const { token, hotelId } = await partnerWithHotel();
+      // Inserted outside the API (seed, manual fix): no `price` row.
+      const raw = await t.prisma.roomType.create({
+        data: { hotelId, name: 'Legacy', maxOccupancy: 2, baseAreaSqm: 20 },
+      });
+
+      const list = await t
+        .api()
+        .get(`/api/v1/hotels/${hotelId}/room-types`)
+        .set(auth(token))
+        .expect(200);
+      expect(list.body.data).toEqual([
+        expect.objectContaining({ id: raw.roomTypeId, basePrice: null }),
+      ]);
+
+      const res = await t
+        .api()
+        .patch(`/api/v1/room-types/${raw.roomTypeId}`)
+        .set(auth(token))
+        .send({ basePrice: 900000 })
+        .expect(200);
+      expect(res.body.data.basePrice).toBe(900000);
+      expect(
+        await t.prisma.price.count({ where: { roomTypeId: raw.roomTypeId } }),
+      ).toBe(1);
     });
 
     it('updates fields, replaces beds and amenities, and keeps one base price row', async () => {
@@ -495,6 +525,41 @@ describe('Room types and rooms (e2e)', () => {
         .set(auth(token))
         .expect(400);
       expect(fields(badSort.body.details)).toEqual(['sort']);
+    });
+
+    it('orders room numbers naturally and searches them literally', async () => {
+      const { token, hotelId } = await partnerWithHotel();
+      await setRoomConfig(token, hotelId, 10);
+      const { id: roomTypeId } = await createRoomType(token, hotelId);
+      for (const roomNumber of ['1001', '101', '111', '1_1', '9']) {
+        await createRoom(token, hotelId, { roomTypeId, roomNumber }).expect(
+          201,
+        );
+      }
+      const list = async (query: Record<string, string>) =>
+        (
+          (
+            await t
+              .api()
+              .get(`/api/v1/hotels/${hotelId}/rooms`)
+              .query(query)
+              .set(auth(token))
+              .expect(200)
+          ).body.data as { roomNumber: string }[]
+        ).map((r) => r.roomNumber);
+
+      expect(await list({})).toEqual(['1_1', '9', '101', '111', '1001']);
+      expect(await list({ sort: 'room-number-desc' })).toEqual([
+        '1001',
+        '111',
+        '101',
+        '9',
+        '1_1',
+      ]);
+      // `_` and `%` are plain characters, not LIKE wildcards.
+      expect(await list({ search: '1_1' })).toEqual(['1_1']);
+      expect(await list({ search: '%' })).toEqual([]);
+      expect(await list({ pageSize: '2', page: '2' })).toEqual(['101', '111']);
     });
 
     it('updates a room, clears optional fields and moves it to another type of the hotel', async () => {

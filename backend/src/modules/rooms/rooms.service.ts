@@ -19,7 +19,7 @@ import {
 } from '../../common/hotel-access/hotel-access.service';
 import { Paginated } from '../../common/http/api-response';
 import { pageArgs } from '../../common/http/pagination';
-import type { Prisma } from '../../generated/prisma/client';
+import type { Prisma, Room as RoomRow } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditAction, AuditService } from '../audit/audit.service';
 import { toRoom } from './room.mapper';
@@ -34,20 +34,33 @@ const roomNotFound = () =>
 const notLockable = (message: string) =>
   new ConflictException({ code: ErrorCode.ROOM_NOT_LOCKABLE, message });
 
-const ORDER_BY: Record<
+/**
+ * Prisma turns `contains` and case-insensitive `equals` into ILIKE without escaping: escape the wildcards so
+ * `1_1` neither matches `101` in a search nor counts as a duplicate of `111`.
+ */
+const escapeLike = (value: string) => value.replace(/[\\%_]/g, (c) => `\\${c}`);
+
+// Numeric-aware, so room 101 comes before 1001 (a plain string sort puts 1001 first).
+const collator = new Intl.Collator('en', {
+  numeric: true,
+  sensitivity: 'base',
+});
+const byNumber = (a: string, b: string) => collator.compare(a, b);
+const floorOrder = (floor: number | null, direction: 1 | -1) =>
+  floor === null ? Number.POSITIVE_INFINITY : floor * direction;
+
+const COMPARE: Record<
   RoomListQuery['sort'],
-  Prisma.RoomOrderByWithRelationInput[]
+  (a: RoomRow, b: RoomRow) => number
 > = {
-  'room-number-asc': [{ roomNumber: 'asc' }],
-  'room-number-desc': [{ roomNumber: 'desc' }],
-  'floor-asc': [
-    { floor: { sort: 'asc', nulls: 'last' } },
-    { roomNumber: 'asc' },
-  ],
-  'floor-desc': [
-    { floor: { sort: 'desc', nulls: 'last' } },
-    { roomNumber: 'asc' },
-  ],
+  'room-number-asc': (a, b) => byNumber(a.roomNumber, b.roomNumber),
+  'room-number-desc': (a, b) => byNumber(b.roomNumber, a.roomNumber),
+  'floor-asc': (a, b) =>
+    floorOrder(a.floor, 1) - floorOrder(b.floor, 1) ||
+    byNumber(a.roomNumber, b.roomNumber),
+  'floor-desc': (a, b) =>
+    floorOrder(a.floor, -1) - floorOrder(b.floor, -1) ||
+    byNumber(a.roomNumber, b.roomNumber),
 };
 
 /**
@@ -62,25 +75,27 @@ export class RoomsService {
     private readonly audit: AuditService,
   ) {}
 
-  /** `hotelId` was checked by `HotelAccessRequired`. `search` matches the room number. */
+  /**
+   * `hotelId` was checked by `HotelAccessRequired`. `search` matches the room number. Sorting and paging happen in
+   * memory because the database cannot order room numbers naturally; a hotel has at most `totalRooms` rooms.
+   */
   async list(hotelId: string, query: RoomListQuery): Promise<Paginated<Room>> {
-    const where: Prisma.RoomWhereInput = {
-      roomType: { hotelId },
-      roomTypeId: query.roomTypeId,
-      status: query.status,
-      ...(query.search && {
-        roomNumber: { contains: query.search, mode: 'insensitive' },
-      }),
-    };
-    const [rooms, total] = await Promise.all([
-      this.prisma.room.findMany({
-        where,
-        orderBy: ORDER_BY[query.sort],
-        ...pageArgs(query),
-      }),
-      this.prisma.room.count({ where }),
-    ]);
-    return Paginated.of(rooms.map(toRoom), { ...query, total });
+    const rooms = await this.prisma.room.findMany({
+      where: {
+        roomType: { hotelId },
+        roomTypeId: query.roomTypeId,
+        status: query.status,
+        ...(query.search && {
+          roomNumber: {
+            contains: escapeLike(query.search),
+            mode: 'insensitive',
+          },
+        }),
+      },
+    });
+    const { skip, take } = pageArgs(query);
+    const page = rooms.sort(COMPARE[query.sort]).slice(skip, skip + take);
+    return Paginated.of(page.map(toRoom), { ...query, total: rooms.length });
   }
 
   /** Needs a room configuration first: `totalRooms` is the cap (contract D4). */
@@ -212,7 +227,7 @@ export class RoomsService {
     const taken = await tx.room.count({
       where: {
         roomType: { hotelId },
-        roomNumber: { equals: roomNumber, mode: 'insensitive' },
+        roomNumber: { equals: escapeLike(roomNumber), mode: 'insensitive' },
         ...(exceptRoomId && { roomId: { not: exceptRoomId } }),
       },
     });

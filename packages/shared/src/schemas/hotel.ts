@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { DocumentType, RoomStatus, StaffPermission, VerificationRequestType, VerificationStatus } from '../enums';
 import { emailSchema } from './auth';
-import { listQuerySchema, moneySchema, reasonSchema } from './common';
+import { hasAtMost2Decimals, listQuerySchema, moneySchema, reasonSchema } from './common';
 
 /** At most 20 characters in total, the size of the phone columns. */
 const phoneSchema = z
@@ -138,7 +138,7 @@ const roomTypeFields = {
   name: z.string().trim().min(1).max(100),
   description: z.string().trim().max(5000).optional(),
   maxOccupancy: z.number().int().min(1).max(50),
-  areaSqm: z.number().positive().max(9999.99),
+  areaSqm: z.number().positive().max(9999.99).refine(hasAtMost2Decimals, 'at most 2 decimal places'),
   basePrice: moneySchema,
   beds: z
     .array(
