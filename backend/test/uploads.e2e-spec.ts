@@ -223,7 +223,7 @@ describe('Uploads (e2e)', () => {
       expect(webp.body.code).toBe('UPLOAD_INVALID_FILE');
     });
 
-    it('only partners can upload documents', async () => {
+    it('only active partners can upload documents', async () => {
       const customer = await t.signIn('CUSTOMER', 'guest@mail.test');
       await t
         .api()
@@ -231,6 +231,19 @@ describe('Uploads (e2e)', () => {
         .set(auth(customer.token))
         .attach('file', FILES.pdf, 'license.pdf')
         .expect(403);
+
+      const partner = await t.signIn('HOTEL_PARTNER', 'owner@hotel.test');
+      await t.prisma.hotelPartner.update({
+        where: { hotelPartnerId: partner.id },
+        data: { status: 'SUSPENDED' },
+      });
+      const res = await t
+        .api()
+        .post('/api/v1/uploads/verification-documents')
+        .set(auth(partner.token))
+        .attach('file', FILES.pdf, 'license.pdf')
+        .expect(403);
+      expect(res.body.code).toBe('PARTNER_SUSPENDED');
       expect(t.storage.uploads).toEqual([]);
     });
   });

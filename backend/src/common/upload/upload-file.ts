@@ -9,13 +9,19 @@ import {
   NestInterceptor,
   UseInterceptors,
 } from '@nestjs/common';
-import { ApiConsumes } from '@nestjs/swagger';
-import { UPLOAD_RULES } from '@stayreco/shared';
+import { ApiBody, ApiConsumes } from '@nestjs/swagger';
+import { UPLOAD_RULES, z } from '@stayreco/shared';
 import type { Request, Response } from 'express';
 import multer from 'multer';
 import { ErrorCode } from '../errors/error-code';
 
 export type UploadKind = 'image' | 'document';
+
+// ApiBody's options are a union; the `schema` variant is the one used here.
+type BodySchema = Extract<
+  Parameters<typeof ApiBody>[0],
+  { schema: unknown }
+>['schema'];
 
 const invalidFile = (message: string) =>
   new BadRequestException({ code: ErrorCode.UPLOAD_INVALID_FILE, message });
@@ -68,10 +74,32 @@ function uploadInterceptor(kind: UploadKind) {
   return mixin(UploadInterceptor);
 }
 
-/** Accepts one multipart field `file` (other fields go to `@Body()`); read it with `@UploadedFileOf(kind)`. */
-export function UploadFile(kind: UploadKind) {
+/**
+ * Accepts one multipart field `file`; the other fields go to `@Body()` and are described by `fields` (the shared
+ * schema of that body). Read the file with `@UploadedFileOf(kind)`.
+ */
+export function UploadFile(kind: UploadKind, fields?: z.ZodObject) {
+  const { mimeTypes, maxBytes } = UPLOAD_RULES[kind];
+  const fieldProperties = fields
+    ? (z.toJSONSchema(fields, { io: 'input' }) as { properties?: object })
+        .properties
+    : {};
+  // Swagger cannot infer the file part, so the multipart body is described explicitly.
+  const schema = {
+    type: 'object',
+    required: ['file'],
+    properties: {
+      file: {
+        type: 'string',
+        format: 'binary',
+        description: `${mimeTypes.join(', ')}; at most ${maxBytes / 1024 / 1024} MB`,
+      },
+      ...fieldProperties,
+    },
+  } as BodySchema;
   return applyDecorators(
     ApiConsumes('multipart/form-data'),
+    ApiBody({ schema }),
     UseInterceptors(uploadInterceptor(kind)),
   );
 }

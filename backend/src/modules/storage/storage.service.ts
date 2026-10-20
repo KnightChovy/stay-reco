@@ -1,4 +1,8 @@
-import { Logger, ServiceUnavailableException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Logger,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { v2 as cloudinary, type UploadApiResponse } from 'cloudinary';
 import { ErrorCode } from '../../common/errors/error-code';
 
@@ -6,6 +10,12 @@ const unavailable = () =>
   new ServiceUnavailableException({
     code: ErrorCode.UPLOAD_UNAVAILABLE,
     message: 'File storage is unavailable',
+  });
+
+const rejectedFile = (reason: string) =>
+  new BadRequestException({
+    code: ErrorCode.UPLOAD_INVALID_FILE,
+    message: `The file was rejected: ${reason}`,
   });
 
 /** Swap the provider in StorageModule without touching callers. */
@@ -112,6 +122,11 @@ export class CloudinaryStorageService extends StorageService {
         // PDFs are stored as the image resource type too, so one signed-link format covers every document.
         .upload_stream({ ...options, resource_type: 'image' }, (err, res) => {
           if (res) return resolve(res);
+          // 4xx: Cloudinary refused the file itself (e.g. "Invalid image file" for a broken body behind a valid
+          // signature), so it is the client's file, not an outage.
+          if (err?.http_code && err.http_code < 500) {
+            return reject(rejectedFile(err.message));
+          }
           this.logger.error(`Upload failed: ${err?.message ?? 'no response'}`);
           reject(unavailable());
         })

@@ -195,7 +195,7 @@ Kiểu TypeScript đặt trong `@stayreco/shared` (`responses/hotel.ts`). Tiền
 | `VERIFICATION_PENDING` | 409 | Đã có hồ sơ đang chờ duyệt |
 | `VERIFICATION_DOCUMENTS_MISSING` | 400 | Thiếu tài liệu bắt buộc (D10) |
 | `VERIFICATION_ALREADY_DECIDED` | 409 | Duyệt / từ chối hồ sơ đã có kết quả |
-| `UPLOAD_INVALID_FILE` | 400 | Thiếu file, sai định dạng hoặc quá 10 MB |
+| `UPLOAD_INVALID_FILE` | 400 | Thiếu file, sai định dạng, quá 10 MB, hoặc file hỏng (Cloudinary từ chối) |
 | `UPLOAD_UNAVAILABLE` | 503 | Chưa cấu hình hoặc không kết nối được Cloudinary |
 | `IMAGE_NOT_FOUND` | 404 | Ảnh không tồn tại hoặc không thuộc khách sạn người gọi quản lý |
 | `IMAGE_LIMIT_REACHED` | 409 | Đã đủ 30 ảnh |

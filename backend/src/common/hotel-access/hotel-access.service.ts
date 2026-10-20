@@ -94,6 +94,15 @@ export class HotelAccessService {
     }
   }
 
+  /** For partner actions not tied to an existing hotel (creating one, uploading documents). */
+  async assertPartnerNotSuspended(hotelPartnerId: string): Promise<void> {
+    const partner = await this.prisma.hotelPartner.findUniqueOrThrow({
+      where: { hotelPartnerId },
+      select: { status: true },
+    });
+    if (partner.status === 'SUSPENDED') throw partnerSuspended();
+  }
+
   private async resolve(
     user: AuthUser,
     hotelId: string,

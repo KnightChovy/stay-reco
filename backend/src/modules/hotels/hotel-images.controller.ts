@@ -9,6 +9,7 @@ import {
   Post,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { uploadHotelImageSchema } from '@stayreco/shared';
 import {
   type AuthUser,
   CurrentUser,
@@ -24,7 +25,7 @@ export class HotelImagesController {
   constructor(private readonly images: HotelImagesService) {}
 
   @HotelAccessRequired('owner')
-  @UploadFile('image')
+  @UploadFile('image', uploadHotelImageSchema)
   @Post('hotels/:hotelId/images')
   upload(
     @Param('hotelId') hotelId: string,
