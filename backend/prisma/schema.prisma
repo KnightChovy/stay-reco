@@ -1,193 +1,1231 @@
+// StayReco — Prisma schema sinh từ trang "Physical" (stayReco_conceptual.drawio)
+// Nullability của cột thường là suy đoán, cần rà lại trước khi migrate lần đầu.
+
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client"
+  output          = "../src/generated/prisma"
+  moduleFormat    = "cjs"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider   = "postgresql"
+  extensions = [pgcrypto, vector]
 }
 
-// ─────────────────────────────────────────────
-// Auth / identity
-// ─────────────────────────────────────────────
-
-enum Role {
+enum UserRole {
   CUSTOMER
-  HOTEL_PARTNER
   HOTEL_STAFF
-  PLATFORM_MANAGER
+  HOTEL_PARTNER
   ADMIN
+  PLATFORM_MANAGER
+
+  @@map("user_role")
 }
 
 enum AccountStatus {
+  PENDING_VERIFICATION
   ACTIVE
-  INVITED // created by someone else, password not set yet
+  INVITED
   SUSPENDED
   DELETED
+
+  @@map("account_status")
 }
 
 enum VerificationTokenType {
   EMAIL_VERIFY
   PASSWORD_RESET
   ACCOUNT_INVITE
+
+  @@map("verification_token_type")
 }
 
-/// Login credentials shared by every actor. Business data lives in the 1-1 profile tables.
-model Account {
-  id               String        @id @default(uuid()) @db.Uuid
-  email            String        @unique
-  phone            String?       @unique
-  passwordHash     String?       @map("password_hash")
-  role             Role
-  status           AccountStatus @default(ACTIVE)
-  emailVerifiedAt  DateTime?     @map("email_verified_at")
-  failedLoginCount Int           @default(0) @map("failed_login_count")
-  lockedUntil      DateTime?     @map("locked_until")
-  lastLoginAt      DateTime?     @map("last_login_at")
-  createdAt        DateTime      @default(now()) @map("created_at")
-  updatedAt        DateTime      @updatedAt @map("updated_at")
+enum StaffPermission {
+  BOOKING
+  FRONT_DESK
+  CUSTOMER_CARE
+  REFUND
+  MARKETING
 
-  customer           Customer?
-  hotelPartner       HotelPartner?
-  hotelStaff         HotelStaff?
-  platformManager    PlatformManager?
-  admin              Admin?
-  sessions           AuthSession[]
-  verificationTokens VerificationToken[]
-  auditLogs          AuditLog[]
-
-  @@map("account")
+  @@map("staff_permission")
 }
 
-/// One login on one device. Stays stable while its refresh tokens rotate.
-model AuthSession {
-  id         String    @id @default(uuid()) @db.Uuid
-  accountId  String    @map("account_id") @db.Uuid
-  userAgent  String?   @map("user_agent")
-  ip         String?
-  expiresAt  DateTime  @map("expires_at")
-  revokedAt  DateTime? @map("revoked_at")
-  lastUsedAt DateTime  @default(now()) @map("last_used_at")
-  createdAt  DateTime  @default(now()) @map("created_at")
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
 
-  account       Account        @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  refreshTokens RefreshToken[]
-
-  @@index([accountId])
-  @@map("auth_session")
+  @@map("gender")
 }
 
-/// Every refresh token ever issued for a session. A used token presented again = token theft.
-model RefreshToken {
-  id        String    @id @default(uuid()) @db.Uuid
-  sessionId String    @map("session_id") @db.Uuid
-  tokenHash String    @unique @map("token_hash")
-  usedAt    DateTime? @map("used_at")
-  createdAt DateTime  @default(now()) @map("created_at")
+enum PartnerStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
 
-  session AuthSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-
-  @@index([sessionId])
-  @@map("refresh_token")
+  @@map("partner_status")
 }
 
-model VerificationToken {
-  id        String                @id @default(uuid()) @db.Uuid
-  accountId String                @map("account_id") @db.Uuid
-  type      VerificationTokenType
-  tokenHash String                @unique @map("token_hash")
-  expiresAt DateTime              @map("expires_at")
-  usedAt    DateTime?             @map("used_at")
-  createdAt DateTime              @default(now()) @map("created_at")
+enum HotelStatus {
+  DRAFT
+  PENDING_VERIFICATION
+  ACTIVE
+  SUSPENDED
+  INACTIVE
 
-  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  @@map("hotel_status")
+}
 
-  @@index([accountId, type])
-  @@map("verification_token")
+enum VerificationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  NEEDS_REVISION
+
+  @@map("verification_status")
+}
+
+enum VerificationRequestType {
+  INITIAL
+  UPDATE
+  RENEWAL
+
+  @@map("verification_request_type")
+}
+
+enum DocumentType {
+  BUSINESS_LICENSE
+  SECURITY_CERTIFICATE
+  FIRE_SAFETY
+  ID_CARD
+  OTHER
+
+  @@map("document_type")
+}
+
+enum RoomStatus {
+  AVAILABLE
+  OCCUPIED
+  CLEANING
+  MAINTENANCE
+
+  @@map("room_status")
+}
+
+enum CalendarStatus {
+  AVAILABLE
+  HELD
+  BOOKED
+  BLOCKED
+
+  @@map("calendar_status")
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CHECKED_IN
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+
+  @@map("booking_status")
+}
+
+enum PaymentMethod {
+  VNPAY
+  SEPAY
+  WALLET
+  CASH
+  MIXED
+
+  @@map("payment_method")
+}
+
+enum PaymentStatus {
+  UNPAID
+  PAID
+  PARTIALLY_REFUNDED
+  REFUNDED
+  FAILED
+
+  @@map("payment_status")
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED_AMOUNT
+
+  @@map("discount_type")
+}
+
+enum DayOfWeek {
+  MON
+  TUE
+  WED
+  THU
+  FRI
+  SAT
+  SUN
+
+  @@map("day_of_week")
+}
+
+enum LoyaltyTier {
+  MEMBER
+  SILVER
+  GOLD
+  PLATINUM
+
+  @@map("loyalty_tier")
+}
+
+enum WalletTxnType {
+  BOOKING_PAYMENT
+  COMMISSION
+  PAYOUT
+  REFUND
+  TOPUP
+  ADJUSTMENT
+
+  @@map("wallet_txn_type")
+}
+
+enum ConversationChannel {
+  WEB
+  MOBILE
+
+  @@map("conversation_channel")
+}
+
+enum ConversationStatus {
+  OPEN
+  ESCALATED
+  CLOSED
+
+  @@map("conversation_status")
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+  STAFF
+  SYSTEM
+
+  @@map("message_role")
+}
+
+enum NotificationType {
+  BOOKING
+  PAYMENT
+  PROMOTION
+  REVIEW
+  ALERT
+  SYSTEM
+
+  @@map("notification_type")
+}
+
+enum InteractionType {
+  VIEW
+  SEARCH
+  CLICK
+  WISHLIST
+  BOOK
+
+  @@map("interaction_type")
+}
+
+enum ContentType {
+  POST
+  BLOG
+  CAPTION
+  PROMOTION
+
+  @@map("content_type")
+}
+
+enum ContentStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  SCHEDULED
+  PUBLISHED
+  REJECTED
+
+  @@map("content_status")
+}
+
+enum ScheduleStatus {
+  SCHEDULED
+  PUBLISHED
+  FAILED
+  CANCELLED
+
+  @@map("schedule_status")
+}
+
+enum SocialPlatform {
+  FACEBOOK
+  INSTAGRAM
+  TIKTOK
+
+  @@map("social_platform")
+}
+
+enum ViolationSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+
+  @@map("violation_severity")
+}
+
+enum ViolationStatus {
+  OPEN
+  INVESTIGATING
+  RESOLVED
+  DISMISSED
+
+  @@map("violation_status")
+}
+
+enum ModelRunStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+
+  @@map("model_run_status")
+}
+
+model Admin {
+  adminId     String      @id @map("admin_id") @db.Uuid
+  userAccount UserAccount @relation(fields: [adminId], references: [userAccountId], onDelete: Cascade)
+  auditLogs   AuditLog[]
+  aiConfigs   AiConfig[]
+
+  @@map("admin")
+}
+
+model AiConfig {
+  aiConfigId     String        @id @default(dbgenerated("gen_random_uuid()")) @map("ai_config_id") @db.Uuid
+  adminId        String?       @map("admin_id") @db.Uuid
+  hotelPartnerId String?       @map("hotel_partner_id") @db.Uuid
+  configKey      String        @map("config_key") @db.VarChar(100)
+  configValue    String        @map("config_value")
+  description    String?       @db.VarChar(500)
+  isActive       Boolean       @default(true) @map("is_active")
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+  admin          Admin?        @relation(fields: [adminId], references: [adminId])
+  hotelPartner   HotelPartner? @relation(fields: [hotelPartnerId], references: [hotelPartnerId])
+
+  @@map("ai_config")
+}
+
+model AiFunctionCall {
+  aiFunctionCallId String   @id @default(dbgenerated("gen_random_uuid()")) @map("ai_function_call_id") @db.Uuid
+  messageId        String   @map("message_id") @db.Uuid
+  bookingId        String?  @map("booking_id") @db.Uuid
+  functionName     String   @map("function_name") @db.VarChar(100)
+  arguments        Json?    @db.JsonB
+  result           Json?    @db.JsonB
+  durationMs       Int?     @map("duration_ms")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  message          Message  @relation(fields: [messageId], references: [messageId])
+  booking          Booking? @relation(fields: [bookingId], references: [bookingId])
+
+  @@map("ai_function_call")
+}
+
+model Amenity {
+  amenityId         String            @id @default(dbgenerated("gen_random_uuid()")) @map("amenity_id") @db.Uuid
+  name              String            @db.VarChar(100)
+  icon              String?           @db.VarChar(100)
+  category          String            @db.VarChar(50)
+  hotelAmenities    HotelAmenity[]
+  roomTypeAmenities RoomTypeAmenity[]
+
+  @@map("amenity")
 }
 
 model AuditLog {
-  id        String   @id @default(uuid()) @db.Uuid
-  accountId String?  @map("account_id") @db.Uuid
-  action    String
-  ip        String?
-  userAgent String?  @map("user_agent")
-  metadata  Json?
-  createdAt DateTime @default(now()) @map("created_at")
+  auditLogId        String           @id @default(dbgenerated("gen_random_uuid()")) @map("audit_log_id") @db.Uuid
+  customerId        String?          @map("customer_id") @db.Uuid
+  hotelStaffId      String?          @map("hotel_staff_id") @db.Uuid
+  hotelPartnerId    String?          @map("hotel_partner_id") @db.Uuid
+  adminId           String?          @map("admin_id") @db.Uuid
+  platformManagerId String?          @map("platform_manager_id") @db.Uuid
+  action            String           @db.VarChar(100)
+  entityType        String?          @map("entity_type") @db.VarChar(100)
+  entityId          String?          @map("entity_id") @db.Uuid
+  oldValue          String?          @map("old_value")
+  newValue          String?          @map("new_value")
+  ipAddress         String?          @map("ip_address") @db.VarChar(45)
+  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  customer          Customer?        @relation(fields: [customerId], references: [customerId])
+  hotelStaff        HotelStaff?      @relation(fields: [hotelStaffId], references: [hotelStaffId])
+  hotelPartner      HotelPartner?    @relation(fields: [hotelPartnerId], references: [hotelPartnerId])
+  admin             Admin?           @relation(fields: [adminId], references: [adminId])
+  platformManager   PlatformManager? @relation(fields: [platformManagerId], references: [platformManagerId])
 
-  account Account? @relation(fields: [accountId], references: [id], onDelete: SetNull)
-
-  @@index([accountId])
-  @@index([action, createdAt])
   @@map("audit_log")
 }
 
-// ─────────────────────────────────────────────
-// Actor profiles (minimal — extend when building each module)
-// ─────────────────────────────────────────────
+model BedType {
+  bedTypeId    String        @id @default(dbgenerated("gen_random_uuid()")) @map("bed_type_id") @db.Uuid
+  name         String        @db.VarChar(50)
+  description  String?       @db.VarChar(200)
+  capacity     Int?
+  roomTypeBeds RoomTypeBed[]
+
+  @@map("bed_type")
+}
+
+model Booking {
+  bookingId          String              @id @default(dbgenerated("gen_random_uuid()")) @map("booking_id") @db.Uuid
+  customerId         String              @map("customer_id") @db.Uuid
+  roomTypeId         String              @map("room_type_id") @db.Uuid
+  hotelStaffId       String?             @map("hotel_staff_id") @db.Uuid
+  voucherId          String?             @unique @map("voucher_id") @db.Uuid
+  promotionId        String?             @map("promotion_id") @db.Uuid
+  loyaltyProgramId   String?             @map("loyalty_program_id") @db.Uuid
+  recommendationId   String?             @map("recommendation_id") @db.Uuid
+  checkInDate        DateTime            @map("check_in_date") @db.Date
+  checkOutDate       DateTime            @map("check_out_date") @db.Date
+  numGuests          Int?                @map("num_guests")
+  totalAmount        Decimal             @map("total_amount") @db.Decimal(14, 2)
+  currency           String              @default("VND") @db.VarChar(10)
+  status             BookingStatus       @default(PENDING)
+  specialRequests    String?             @map("special_requests")
+  cancelledAt        DateTime?           @map("cancelled_at") @db.Timestamptz(6)
+  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+  customer           Customer            @relation(fields: [customerId], references: [customerId])
+  // Kept even after room_calendars rows are released (cancel / no-show), so the booking never loses its hotel.
+  roomType           RoomType            @relation(fields: [roomTypeId], references: [roomTypeId])
+  hotelStaff         HotelStaff?         @relation(fields: [hotelStaffId], references: [hotelStaffId])
+  voucher            Voucher?            @relation(fields: [voucherId], references: [voucherId])
+  promotion          Promotion?          @relation(fields: [promotionId], references: [promotionId])
+  loyaltyProgram     LoyaltyProgram?     @relation(fields: [loyaltyProgramId], references: [loyaltyProgramId])
+  recommendation     Recommendation?     @relation(fields: [recommendationId], references: [recommendationId])
+  roomCalendars      RoomCalendars[]
+  invoice            Invoice?
+  walletTransactions WalletTransaction[]
+  review             Review?
+  conversations      Conversation[]
+  aiFunctionCalls    AiFunctionCall[]
+
+  @@map("booking")
+}
+
+model ContentEmbedding {
+  contentEmbeddingId String                      @id @default(dbgenerated("gen_random_uuid()")) @map("content_embedding_id") @db.Uuid
+  knowledgeArticleId String?                     @map("knowledge_article_id") @db.Uuid
+  chunkIndex         Int?                        @map("chunk_index")
+  chunkText          String                      @map("chunk_text")
+  embedding          Unsupported("vector(768)")?
+  createdAt          DateTime                    @default(now()) @map("created_at") @db.Timestamptz(6)
+  knowledgeArticle   KnowledgeArticle?           @relation(fields: [knowledgeArticleId], references: [knowledgeArticleId])
+
+  @@map("content_embedding")
+}
+
+model ContentMetric {
+  contentMetricId   String          @id @default(dbgenerated("gen_random_uuid()")) @map("content_metric_id") @db.Uuid
+  contentScheduleId String          @map("content_schedule_id") @db.Uuid
+  platform          SocialPlatform
+  views             Int
+  likes             Int
+  shares            Int
+  comments          Int
+  recordedAt        DateTime        @default(now()) @map("recorded_at") @db.Timestamptz(6)
+  contentSchedule   ContentSchedule @relation(fields: [contentScheduleId], references: [contentScheduleId])
+
+  @@map("content_metric")
+}
+
+model ContentSchedule {
+  contentScheduleId  String           @id @default(dbgenerated("gen_random_uuid()")) @map("content_schedule_id") @db.Uuid
+  marketingContentId String           @map("marketing_content_id") @db.Uuid
+  socialAccountId    String           @map("social_account_id") @db.Uuid
+  scheduledAt        DateTime?        @map("scheduled_at") @db.Timestamptz(6)
+  publishedAt        DateTime?        @map("published_at") @db.Timestamptz(6)
+  status             ScheduleStatus   @default(SCHEDULED)
+  marketingContent   MarketingContent @relation(fields: [marketingContentId], references: [marketingContentId])
+  socialAccount      SocialAccount    @relation(fields: [socialAccountId], references: [socialAccountId])
+  contentMetrics     ContentMetric[]
+
+  @@map("content_schedule")
+}
+
+model Conversation {
+  conversationId String              @id @default(dbgenerated("gen_random_uuid()")) @map("conversation_id") @db.Uuid
+  customerId     String?             @map("customer_id") @db.Uuid
+  hotelStaffId   String?             @map("hotel_staff_id") @db.Uuid
+  bookingId      String?             @map("booking_id") @db.Uuid
+  hotelId        String?             @map("hotel_id") @db.Uuid
+  channel        ConversationChannel
+  status         ConversationStatus  @default(OPEN)
+  createdAt      DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+  customer       Customer?           @relation(fields: [customerId], references: [customerId])
+  hotelStaff     HotelStaff?         @relation(fields: [hotelStaffId], references: [hotelStaffId])
+  booking        Booking?            @relation(fields: [bookingId], references: [bookingId])
+  hotel          Hotel?              @relation(fields: [hotelId], references: [hotelId])
+  messages       Message[]
+
+  @@map("conversation")
+}
 
 model Customer {
-  id        String   @id @default(uuid()) @db.Uuid
-  accountId String   @unique @map("account_id") @db.Uuid
-  fullName  String   @map("full_name")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  customerId          String               @id @map("customer_id") @db.Uuid
+  dateOfBirth         DateTime?            @map("date_of_birth") @db.Date
+  gender              Gender?
+  nationality         String?              @db.VarChar(100)
+  userAccount         UserAccount          @relation(fields: [customerId], references: [userAccountId], onDelete: Cascade)
+  auditLogs           AuditLog[]
+  customerPreferences CustomerPreference[]
+  bookings            Booking[]
+  vouchers            Voucher[]
+  wallet              Wallet?
+  loyaltyAccounts     LoyaltyAccount[]
+  reviews             Review[]
+  userItemRatings     UserItemRating[]
+  userInteractions    UserInteraction[]
+  ratingPredictions   RatingPrediction[]
+  recommendations     Recommendation[]
+  conversations       Conversation[]
 
   @@map("customer")
 }
 
-model HotelPartner {
-  id          String   @id @default(uuid()) @db.Uuid
-  accountId   String   @unique @map("account_id") @db.Uuid
-  fullName    String   @map("full_name")
-  companyName String?  @map("company_name")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+model CustomerPreference {
+  customerPreferenceId String   @id @default(dbgenerated("gen_random_uuid()")) @map("customer_preference_id") @db.Uuid
+  customerId           String   @map("customer_id") @db.Uuid
+  preferenceKey        String   @map("preference_key") @db.VarChar(100)
+  preferenceValue      String   @map("preference_value")
+  updatedAt            DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  customer             Customer @relation(fields: [customerId], references: [customerId])
 
-  account Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  staff   HotelStaff[]
+  @@map("customer_preference")
+}
+
+model Hotel {
+  hotelId              String                     @id @default(dbgenerated("gen_random_uuid()")) @map("hotel_id") @db.Uuid
+  hotelPartnerId       String                     @map("hotel_partner_id") @db.Uuid
+  name                 String                     @db.VarChar(255)
+  description          String?
+  address              String                     @db.VarChar(500)
+  city                 String                     @db.VarChar(100)
+  country              String                     @db.VarChar(100)
+  latitude             Decimal?                   @db.Decimal(10, 7)
+  longitude            Decimal?                   @db.Decimal(10, 7)
+  starRating           Int?                       @map("star_rating")
+  phone                String?                    @db.VarChar(20)
+  email                String                     @db.VarChar(255)
+  website              String?                    @db.VarChar(500)
+  checkInTime          DateTime?                  @map("check_in_time") @db.Time(6)
+  checkOutTime         DateTime?                  @map("check_out_time") @db.Time(6)
+  status               HotelStatus                @default(DRAFT)
+  createdAt            DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(6)
+  hotelPartner         HotelPartner               @relation(fields: [hotelPartnerId], references: [hotelPartnerId])
+  hotelProperties      HotelProperties[]
+  hotelRoomConfig      HotelRoomConfig?
+  hotelStaffs          HotelStaff[]
+  roomTypes            RoomType[]
+  hotelAmenities       HotelAmenity[]
+  promotions           Promotion[]
+  wallet               Wallet?
+  loyaltyPrograms      LoyaltyProgram[]
+  reviews              Review[]
+  userItemRatings      UserItemRating[]
+  userInteractions     UserInteraction[]
+  ratingPredictions    RatingPrediction[]
+  recommendations      Recommendation[]
+  socialAccounts       SocialAccount[]
+  marketingContents    MarketingContent[]
+  conversations        Conversation[]
+  knowledgeArticles    KnowledgeArticle[]
+  verificationRequests HotelVerificationRequest[]
+  hotelImages          HotelImage[]
+
+  @@map("hotel")
+}
+
+/// Photos of a hotel; at most one is the cover shown in search results.
+model HotelImage {
+  hotelImageId String   @id @default(dbgenerated("gen_random_uuid()")) @map("hotel_image_id") @db.Uuid
+  hotelId      String   @map("hotel_id") @db.Uuid
+  imageUrl     String   @map("image_url") @db.VarChar(500)
+  /// Cloudinary public id, used to delete the file.
+  storageKey   String   @map("storage_key") @db.VarChar(255)
+  caption      String?  @db.VarChar(255)
+  isCover      Boolean  @default(false) @map("is_cover")
+  sortOrder    Int      @default(0) @map("sort_order")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  hotel        Hotel    @relation(fields: [hotelId], references: [hotelId], onDelete: Cascade)
+
+  @@index([hotelId])
+  @@map("hotel_image")
+}
+
+model HotelAmenity {
+  hotelAmenityId String  @id @default(dbgenerated("gen_random_uuid()")) @map("hotel_amenity_id") @db.Uuid
+  hotelId        String  @map("hotel_id") @db.Uuid
+  amenityId      String  @map("amenity_id") @db.Uuid
+  hotel          Hotel   @relation(fields: [hotelId], references: [hotelId])
+  amenity        Amenity @relation(fields: [amenityId], references: [amenityId])
+
+  @@unique([hotelId, amenityId])
+  @@map("hotel_amenity")
+}
+
+model HotelPartner {
+  hotelPartnerId   String            @id @map("hotel_partner_id") @db.Uuid
+  partnerName      String            @map("partner_name") @db.VarChar(255)
+  contactEmail     String            @map("contact_email") @db.VarChar(255)
+  contactPhone     String            @map("contact_phone") @db.VarChar(20)
+  businessLicense  String?           @map("business_license") @db.VarChar(100)
+  commissionRate   Decimal           @map("commission_rate") @db.Decimal(5, 2)
+  status           PartnerStatus     @default(PENDING)
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  userAccount      UserAccount       @relation(fields: [hotelPartnerId], references: [userAccountId], onDelete: Cascade)
+  auditLogs        AuditLog[]
+  aiConfigs        AiConfig[]
+  hotels           Hotel[]
+  policyViolations PolicyViolation[]
 
   @@map("hotel_partner")
 }
 
-/// TODO: add hotel_id FK once the HOTEL table exists.
+model HotelProperties {
+  hotelPropertyId        String                     @id @default(dbgenerated("gen_random_uuid()")) @map("hotel_property_id") @db.Uuid
+  hotelId                String                     @map("hotel_id") @db.Uuid
+  verificationRequestId  String?                    @map("verification_request_id") @db.Uuid
+  verificationDocumentId String?                    @map("verification_document_id") @db.Uuid
+  propertyKey            String                     @map("property_key") @db.VarChar(100)
+  propertyValue          String                     @map("property_value")
+  createdAt              DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  hotel                  Hotel                      @relation(fields: [hotelId], references: [hotelId])
+  verificationRequest    HotelVerificationRequest?  @relation(fields: [verificationRequestId], references: [verificationRequestId])
+  verificationDocument   HotelVerificationDocument? @relation(fields: [verificationDocumentId], references: [verificationDocumentId])
+
+  @@map("hotel_properties")
+}
+
+model HotelRoomConfig {
+  hotelRoomConfigId String   @id @default(dbgenerated("gen_random_uuid()")) @map("hotel_room_config_id") @db.Uuid
+  /// One configuration per hotel (contract D4).
+  hotelId           String   @unique @map("hotel_id") @db.Uuid
+  totalRooms        Int      @map("total_rooms")
+  basePrice         Decimal  @map("base_price") @db.Decimal(14, 2)
+  currency          String   @default("VND") @db.VarChar(10)
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  hotel             Hotel    @relation(fields: [hotelId], references: [hotelId])
+
+  @@map("hotel_room_config")
+}
+
 model HotelStaff {
-  id             String   @id @default(uuid()) @db.Uuid
-  accountId      String   @unique @map("account_id") @db.Uuid
-  hotelPartnerId String   @map("hotel_partner_id") @db.Uuid
-  fullName       String   @map("full_name")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  hotelStaffId      String             @id @map("hotel_staff_id") @db.Uuid
+  hotelId           String             @map("hotel_id") @db.Uuid
+  position          String             @db.VarChar(50)
+  /// Permission groups granted by the hotel partner (SRS UC62).
+  permissions       StaffPermission[]  @default([])
+  userAccount       UserAccount        @relation(fields: [hotelStaffId], references: [userAccountId], onDelete: Cascade)
+  hotel             Hotel              @relation(fields: [hotelId], references: [hotelId])
+  auditLogs         AuditLog[]
+  bookings          Booking[]
+  marketingContents MarketingContent[]
+  conversations     Conversation[]
 
-  account      Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  hotelPartner HotelPartner @relation(fields: [hotelPartnerId], references: [id], onDelete: Cascade)
-
-  @@index([hotelPartnerId])
   @@map("hotel_staff")
 }
 
-model PlatformManager {
-  id        String   @id @default(uuid()) @db.Uuid
-  accountId String   @unique @map("account_id") @db.Uuid
-  fullName  String   @map("full_name")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+model HotelVerificationDocument {
+  verificationDocumentId String                      @id @default(dbgenerated("gen_random_uuid()")) @map("verification_document_id") @db.Uuid
+  verificationRequestId  String                      @map("verification_request_id") @db.Uuid
+  parentDocumentId       String?                     @map("parent_document_id") @db.Uuid
+  documentType           DocumentType                @map("document_type")
+  fileUrl                String                      @map("file_url") @db.VarChar(500)
+  uploadedAt             DateTime                    @default(now()) @map("uploaded_at") @db.Timestamptz(6)
+  verificationRequest    HotelVerificationRequest    @relation(fields: [verificationRequestId], references: [verificationRequestId])
+  parentDocument         HotelVerificationDocument?  @relation("DocumentHierarchy", fields: [parentDocumentId], references: [verificationDocumentId])
+  hotelProperties        HotelProperties[]
+  childDocuments         HotelVerificationDocument[] @relation("DocumentHierarchy")
 
-  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  @@map("hotel_verification_document")
+}
+
+model HotelVerificationRequest {
+  verificationRequestId      String                      @id @default(dbgenerated("gen_random_uuid()")) @map("verification_request_id") @db.Uuid
+  hotelId                    String                      @map("hotel_id") @db.Uuid
+  platformManagerId          String?                     @map("platform_manager_id") @db.Uuid
+  status                     VerificationStatus          @default(PENDING)
+  requestType                VerificationRequestType     @map("request_type")
+  notes                      String?
+  reviewedAt                 DateTime?                   @map("reviewed_at") @db.Timestamptz(6)
+  createdAt                  DateTime                    @default(now()) @map("created_at") @db.Timestamptz(6)
+  hotel                      Hotel                       @relation(fields: [hotelId], references: [hotelId])
+  platformManager            PlatformManager?            @relation(fields: [platformManagerId], references: [platformManagerId])
+  hotelProperties            HotelProperties[]
+  hotelVerificationDocuments HotelVerificationDocument[]
+
+  @@map("hotel_verification_request")
+}
+
+model Invoice {
+  invoiceId      String        @id @default(dbgenerated("gen_random_uuid()")) @map("invoice_id") @db.Uuid
+  bookingId      String        @unique @map("booking_id") @db.Uuid
+  invoiceNumber  String        @unique @map("invoice_number") @db.VarChar(50)
+  subtotal       Decimal       @db.Decimal(14, 2)
+  taxAmount      Decimal       @map("tax_amount") @db.Decimal(14, 2)
+  discountAmount Decimal       @map("discount_amount") @db.Decimal(14, 2)
+  totalAmount    Decimal       @map("total_amount") @db.Decimal(14, 2)
+  currency       String        @default("VND") @db.VarChar(10)
+  paymentMethod  PaymentMethod @map("payment_method")
+  paymentStatus  PaymentStatus @default(UNPAID) @map("payment_status")
+  vnpayTxnRef    String?       @map("vnpay_txn_ref") @db.VarChar(100)
+  paidAt         DateTime?     @map("paid_at") @db.Timestamptz(6)
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  booking        Booking       @relation(fields: [bookingId], references: [bookingId])
+
+  @@map("invoice")
+}
+
+model KnowledgeArticle {
+  knowledgeArticleId  String             @id @default(dbgenerated("gen_random_uuid()")) @map("knowledge_article_id") @db.Uuid
+  knowledgeCategoryId String             @map("knowledge_category_id") @db.Uuid
+  hotelId             String?            @map("hotel_id") @db.Uuid
+  title               String?            @db.VarChar(255)
+  content             String
+  isPublished         Boolean            @default(false) @map("is_published")
+  createdAt           DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+  knowledgeCategory   KnowledgeCategory  @relation(fields: [knowledgeCategoryId], references: [knowledgeCategoryId])
+  hotel               Hotel?             @relation(fields: [hotelId], references: [hotelId])
+  contentEmbeddings   ContentEmbedding[]
+
+  @@map("knowledge_article")
+}
+
+model KnowledgeCategory {
+  knowledgeCategoryId String             @id @default(dbgenerated("gen_random_uuid()")) @map("knowledge_category_id") @db.Uuid
+  name                String             @db.VarChar(100)
+  description         String?            @db.VarChar(500)
+  sortOrder           Int?               @map("sort_order")
+  knowledgeArticles   KnowledgeArticle[]
+
+  @@map("knowledge_category")
+}
+
+model LoyaltyAccount {
+  loyaltyAccountId String         @id @default(dbgenerated("gen_random_uuid()")) @map("loyalty_account_id") @db.Uuid
+  customerId       String         @map("customer_id") @db.Uuid
+  loyaltyProgramId String         @map("loyalty_program_id") @db.Uuid
+  pointsBalance    Int            @default(0) @map("points_balance")
+  tier             LoyaltyTier?
+  joinedAt         DateTime       @default(now()) @map("joined_at") @db.Timestamptz(6)
+  updatedAt        DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  customer         Customer       @relation(fields: [customerId], references: [customerId])
+  loyaltyProgram   LoyaltyProgram @relation(fields: [loyaltyProgramId], references: [loyaltyProgramId])
+
+  @@unique([customerId, loyaltyProgramId])
+  @@map("loyalty_account")
+}
+
+model LoyaltyProgram {
+  loyaltyProgramId  String           @id @default(dbgenerated("gen_random_uuid()")) @map("loyalty_program_id") @db.Uuid
+  hotelId           String           @map("hotel_id") @db.Uuid
+  name              String           @db.VarChar(200)
+  pointsPerCurrency Decimal          @map("points_per_currency") @db.Decimal(8, 4)
+  isActive          Boolean          @default(true) @map("is_active")
+  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  hotel             Hotel            @relation(fields: [hotelId], references: [hotelId])
+  bookings          Booking[]
+  loyaltyAccounts   LoyaltyAccount[]
+
+  @@map("loyalty_program")
+}
+
+model MarketingContent {
+  marketingContentId String            @id @default(dbgenerated("gen_random_uuid()")) @map("marketing_content_id") @db.Uuid
+  hotelId            String            @map("hotel_id") @db.Uuid
+  hotelStaffId       String?           @map("hotel_staff_id") @db.Uuid
+  title              String?           @db.VarChar(255)
+  body               String
+  mediaUrl           String?           @map("media_url") @db.VarChar(500)
+  contentType        ContentType       @map("content_type")
+  status             ContentStatus     @default(DRAFT)
+  createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  hotel              Hotel             @relation(fields: [hotelId], references: [hotelId])
+  hotelStaff         HotelStaff?       @relation(fields: [hotelStaffId], references: [hotelStaffId])
+  contentSchedules   ContentSchedule[]
+
+  @@map("marketing_content")
+}
+
+model Message {
+  messageId       String           @id @default(dbgenerated("gen_random_uuid()")) @map("message_id") @db.Uuid
+  conversationId  String           @map("conversation_id") @db.Uuid
+  role            MessageRole
+  content         String
+  metadata        Json?            @db.JsonB
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  conversation    Conversation     @relation(fields: [conversationId], references: [conversationId])
+  aiFunctionCalls AiFunctionCall[]
+
+  @@map("message")
+}
+
+model ModelRun {
+  modelRunId         String             @id @default(dbgenerated("gen_random_uuid()")) @map("model_run_id") @db.Uuid
+  algorithm          String             @db.VarChar(50)
+  version            String             @db.VarChar(20)
+  rmse               Decimal?           @db.Decimal(6, 4)
+  mae                Decimal?           @db.Decimal(6, 4)
+  k                  Int?
+  relevanceThreshold Decimal?           @map("relevance_threshold") @db.Decimal(3, 1)
+  precisionAtK       Decimal?           @map("precision_at_k") @db.Decimal(6, 4)
+  recallAtK          Decimal?           @map("recall_at_k") @db.Decimal(6, 4)
+  ndcgAtK            Decimal?           @map("ndcg_at_k") @db.Decimal(6, 4)
+  coldstartCoverage  Decimal?           @map("coldstart_coverage") @db.Decimal(6, 4)
+  hyperparameters    Json?              @db.JsonB
+  trainCutoffAt      DateTime?          @map("train_cutoff_at") @db.Timestamptz(6)
+  status             ModelRunStatus     @default(RUNNING)
+  startedAt          DateTime           @map("started_at") @db.Timestamptz(6)
+  finishedAt         DateTime?          @map("finished_at") @db.Timestamptz(6)
+  ratingPredictions  RatingPrediction[]
+  recommendations    Recommendation[]
+
+  @@map("model_run")
+}
+
+model Notification {
+  notificationId String           @id @default(dbgenerated("gen_random_uuid()")) @map("notification_id") @db.Uuid
+  userAccountId  String           @map("user_account_id") @db.Uuid
+  title          String?          @db.VarChar(255)
+  message        String
+  type           NotificationType
+  isRead         Boolean          @default(false) @map("is_read")
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  userAccount    UserAccount      @relation(fields: [userAccountId], references: [userAccountId])
+
+  @@map("notification")
+}
+
+model PlatformManager {
+  platformManagerId         String                     @id @map("platform_manager_id") @db.Uuid
+  department                String?                    @db.VarChar(100)
+  permissions               String?
+  createdAt                 DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  userAccount               UserAccount                @relation(fields: [platformManagerId], references: [userAccountId], onDelete: Cascade)
+  auditLogs                 AuditLog[]
+  hotelVerificationRequests HotelVerificationRequest[]
+  policyViolations          PolicyViolation[]
+  walletTransactions        WalletTransaction[]
 
   @@map("platform_manager")
 }
 
-model Admin {
-  id        String   @id @default(uuid()) @db.Uuid
-  accountId String   @unique @map("account_id") @db.Uuid
-  fullName  String   @map("full_name")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+model PolicyViolation {
+  policyViolationId String            @id @default(dbgenerated("gen_random_uuid()")) @map("policy_violation_id") @db.Uuid
+  platformManagerId String?           @map("platform_manager_id") @db.Uuid
+  hotelPartnerId    String            @map("hotel_partner_id") @db.Uuid
+  violationType     String            @map("violation_type") @db.VarChar(100)
+  description       String?
+  severity          ViolationSeverity
+  status            ViolationStatus   @default(OPEN)
+  createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  resolvedAt        DateTime?         @map("resolved_at") @db.Timestamptz(6)
+  platformManager   PlatformManager?  @relation(fields: [platformManagerId], references: [platformManagerId])
+  hotelPartner      HotelPartner      @relation(fields: [hotelPartnerId], references: [hotelPartnerId])
 
-  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  @@map("policy_violation")
+}
 
-  @@map("admin")
+model Price {
+  priceId       String     @id @default(dbgenerated("gen_random_uuid()")) @map("price_id") @db.Uuid
+  roomTypeId    String     @map("room_type_id") @db.Uuid
+  roomId        String?    @map("room_id") @db.Uuid
+  name          String     @db.VarChar(100)
+  pricePerNight Decimal    @map("price_per_night") @db.Decimal(14, 2)
+  currency      String     @default("VND") @db.VarChar(10)
+  validFrom     DateTime?  @map("valid_from") @db.Date
+  validTo       DateTime?  @map("valid_to") @db.Date
+  dayOfWeek     DayOfWeek? @map("day_of_week")
+  isActive      Boolean    @default(true) @map("is_active")
+  createdAt     DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  roomType      RoomType   @relation(fields: [roomTypeId], references: [roomTypeId])
+  room          Room?      @relation(fields: [roomId], references: [roomId])
+
+  @@map("price")
+}
+
+model Promotion {
+  promotionId      String       @id @default(dbgenerated("gen_random_uuid()")) @map("promotion_id") @db.Uuid
+  hotelId          String?      @map("hotel_id") @db.Uuid
+  name             String       @db.VarChar(200)
+  description      String?
+  discountType     DiscountType @map("discount_type")
+  discountValue    Decimal      @map("discount_value") @db.Decimal(14, 2)
+  minBookingAmount Decimal?     @map("min_booking_amount") @db.Decimal(14, 2)
+  maxUses          Int?         @map("max_uses")
+  currentUses      Int          @default(0) @map("current_uses")
+  validFrom        DateTime?    @map("valid_from") @db.Date
+  validTo          DateTime?    @map("valid_to") @db.Date
+  isActive         Boolean      @default(true) @map("is_active")
+  createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  hotel            Hotel?       @relation(fields: [hotelId], references: [hotelId])
+  bookings         Booking[]
+  vouchers         Voucher[]
+
+  @@map("promotion")
+}
+
+model RatingCriterion {
+  ratingCriterionId String             @id @default(dbgenerated("gen_random_uuid()")) @map("rating_criterion_id") @db.Uuid
+  name              String             @db.VarChar(100)
+  description       String?            @db.VarChar(255)
+  weight            Decimal            @db.Decimal(3, 2)
+  userItemRatings   UserItemRating[]
+  ratingPredictions RatingPrediction[]
+
+  @@map("rating_criterion")
+}
+
+model RatingPrediction {
+  ratingPredictionId String          @id @default(dbgenerated("gen_random_uuid()")) @map("rating_prediction_id") @db.Uuid
+  customerId         String          @map("customer_id") @db.Uuid
+  hotelId            String          @map("hotel_id") @db.Uuid
+  modelRunId         String          @map("model_run_id") @db.Uuid
+  ratingCriterionId  String          @map("rating_criterion_id") @db.Uuid
+  predictedScore     Decimal         @map("predicted_score") @db.Decimal(5, 3)
+  confidence         Decimal?        @db.Decimal(5, 3)
+  createdAt          DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  customer           Customer        @relation(fields: [customerId], references: [customerId])
+  hotel              Hotel           @relation(fields: [hotelId], references: [hotelId])
+  modelRun           ModelRun        @relation(fields: [modelRunId], references: [modelRunId])
+  ratingCriterion    RatingCriterion @relation(fields: [ratingCriterionId], references: [ratingCriterionId])
+
+  @@unique([modelRunId, customerId, hotelId, ratingCriterionId])
+  @@map("rating_prediction")
+}
+
+model Recommendation {
+  recommendationId String    @id @default(dbgenerated("gen_random_uuid()")) @map("recommendation_id") @db.Uuid
+  customerId       String?   @map("customer_id") @db.Uuid
+  hotelId          String?   @map("hotel_id") @db.Uuid
+  modelRunId       String    @map("model_run_id") @db.Uuid
+  roomTypeId       String?   @map("room_type_id") @db.Uuid
+  score            Decimal   @db.Decimal(5, 3)
+  rank             Int?
+  reason           String?
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  customer         Customer? @relation(fields: [customerId], references: [customerId])
+  hotel            Hotel?    @relation(fields: [hotelId], references: [hotelId])
+  modelRun         ModelRun  @relation(fields: [modelRunId], references: [modelRunId])
+  roomType         RoomType? @relation(fields: [roomTypeId], references: [roomTypeId])
+  bookings         Booking[]
+
+  @@map("recommendation")
+}
+
+model Review {
+  reviewId        String           @id @default(dbgenerated("gen_random_uuid()")) @map("review_id") @db.Uuid
+  customerId      String           @map("customer_id") @db.Uuid
+  hotelId         String           @map("hotel_id") @db.Uuid
+  bookingId       String           @unique @map("booking_id") @db.Uuid
+  overallRating   Decimal          @map("overall_rating") @db.Decimal(3, 1)
+  title           String?          @db.VarChar(255)
+  content         String
+  isVisible       Boolean          @default(true) @map("is_visible")
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  customer        Customer         @relation(fields: [customerId], references: [customerId])
+  hotel           Hotel            @relation(fields: [hotelId], references: [hotelId])
+  booking         Booking          @relation(fields: [bookingId], references: [bookingId])
+  userItemRatings UserItemRating[]
+
+  @@map("review")
+}
+
+model Room {
+  roomId        String          @id @default(dbgenerated("gen_random_uuid()")) @map("room_id") @db.Uuid
+  roomTypeId    String          @map("room_type_id") @db.Uuid
+  roomNumber    String          @map("room_number") @db.VarChar(20)
+  floor         Int?
+  status        RoomStatus      @default(AVAILABLE)
+  notes         String?
+  createdAt     DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+  roomType      RoomType        @relation(fields: [roomTypeId], references: [roomTypeId])
+  roomImages    RoomImage[]
+  roomCalendars RoomCalendars[]
+  prices        Price[]
+
+  @@map("room")
+}
+
+model RoomCalendars {
+  roomCalendarId String         @id @default(dbgenerated("gen_random_uuid()")) @map("room_calendar_id") @db.Uuid
+  roomId         String         @map("room_id") @db.Uuid
+  bookingId      String?        @map("booking_id") @db.Uuid
+  date           DateTime       @db.Date
+  status         CalendarStatus @default(AVAILABLE)
+  holdExpiresAt  DateTime?      @map("hold_expires_at") @db.Timestamptz(6)
+  priceOverride  Decimal?       @map("price_override") @db.Decimal(14, 2)
+  updatedAt      DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  room           Room           @relation(fields: [roomId], references: [roomId])
+  booking        Booking?       @relation(fields: [bookingId], references: [bookingId])
+
+  @@unique([roomId, date])
+  @@map("room_calendars")
+}
+
+model RoomImage {
+  roomImageId String   @id @default(dbgenerated("gen_random_uuid()")) @map("room_image_id") @db.Uuid
+  roomId      String   @map("room_id") @db.Uuid
+  imageUrl    String   @map("image_url") @db.VarChar(500)
+  caption     String?  @db.VarChar(255)
+  sortOrder   Int?     @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  room        Room     @relation(fields: [roomId], references: [roomId])
+
+  @@map("room_image")
+}
+
+model RoomType {
+  roomTypeId        String            @id @default(dbgenerated("gen_random_uuid()")) @map("room_type_id") @db.Uuid
+  hotelId           String            @map("hotel_id") @db.Uuid
+  name              String            @db.VarChar(100)
+  description       String?
+  maxOccupancy      Int               @map("max_occupancy")
+  baseAreaSqm       Decimal           @map("base_area_sqm") @db.Decimal(6, 2)
+  createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  hotel             Hotel             @relation(fields: [hotelId], references: [hotelId])
+  rooms             Room[]
+  prices            Price[]
+  roomTypeBeds      RoomTypeBed[]
+  roomTypeAmenities RoomTypeAmenity[]
+  recommendations   Recommendation[]
+  bookings          Booking[]
+  roomTypeImages    RoomTypeImage[]
+
+  @@map("room_type")
+}
+
+/// Photos of a room type shown to guests (the physical-room photos live in room_image).
+model RoomTypeImage {
+  roomTypeImageId String   @id @default(dbgenerated("gen_random_uuid()")) @map("room_type_image_id") @db.Uuid
+  roomTypeId      String   @map("room_type_id") @db.Uuid
+  imageUrl        String   @map("image_url") @db.VarChar(500)
+  /// Cloudinary public id, used to delete the file.
+  storageKey      String   @map("storage_key") @db.VarChar(255)
+  caption         String?  @db.VarChar(255)
+  sortOrder       Int      @default(0) @map("sort_order")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  roomType        RoomType @relation(fields: [roomTypeId], references: [roomTypeId], onDelete: Cascade)
+
+  @@index([roomTypeId])
+  @@map("room_type_image")
+}
+
+model RoomTypeAmenity {
+  roomTypeAmenityId String   @id @default(dbgenerated("gen_random_uuid()")) @map("room_type_amenity_id") @db.Uuid
+  roomTypeId        String   @map("room_type_id") @db.Uuid
+  amenityId         String   @map("amenity_id") @db.Uuid
+  roomType          RoomType @relation(fields: [roomTypeId], references: [roomTypeId])
+  amenity           Amenity  @relation(fields: [amenityId], references: [amenityId])
+
+  @@unique([roomTypeId, amenityId])
+  @@map("room_type_amenity")
+}
+
+model RoomTypeBed {
+  roomTypeBedId String   @id @default(dbgenerated("gen_random_uuid()")) @map("room_type_bed_id") @db.Uuid
+  roomTypeId    String   @map("room_type_id") @db.Uuid
+  bedTypeId     String   @map("bed_type_id") @db.Uuid
+  quantity      Int
+  roomType      RoomType @relation(fields: [roomTypeId], references: [roomTypeId])
+  bedType       BedType  @relation(fields: [bedTypeId], references: [bedTypeId])
+
+  @@unique([roomTypeId, bedTypeId])
+  @@map("room_type_bed")
+}
+
+model SocialAccount {
+  socialAccountId  String            @id @default(dbgenerated("gen_random_uuid()")) @map("social_account_id") @db.Uuid
+  hotelId          String            @map("hotel_id") @db.Uuid
+  platform         SocialPlatform
+  accountName      String            @map("account_name") @db.VarChar(255)
+  accessToken      String?           @map("access_token")
+  refreshToken     String?           @map("refresh_token")
+  expiresAt        DateTime?         @map("expires_at") @db.Timestamptz(6)
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  hotel            Hotel             @relation(fields: [hotelId], references: [hotelId])
+  contentSchedules ContentSchedule[]
+
+  @@map("social_account")
+}
+
+model UserAccount {
+  userAccountId      String              @id @default(dbgenerated("gen_random_uuid()")) @map("user_account_id") @db.Uuid
+  email              String              @unique @db.VarChar(255)
+  passwordHash       String?             @map("password_hash") @db.VarChar(255)
+  fullName           String              @map("full_name") @db.VarChar(255)
+  phone              String?             @db.VarChar(20)
+  avatarUrl          String?             @map("avatar_url") @db.VarChar(500)
+  role               UserRole
+  status             AccountStatus       @default(ACTIVE)
+  emailVerifiedAt    DateTime?           @map("email_verified_at") @db.Timestamptz(6)
+  failedLoginCount   Int                 @default(0) @map("failed_login_count")
+  lockedUntil        DateTime?           @map("locked_until") @db.Timestamptz(6)
+  lastLoginAt        DateTime?           @map("last_login_at") @db.Timestamptz(6)
+  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+  admin              Admin?
+  platformManager    PlatformManager?
+  hotelPartner       HotelPartner?
+  hotelStaff         HotelStaff?
+  notifications      Notification[]
+  customer           Customer?
+  authSessions       AuthSession[]
+  verificationTokens VerificationToken[]
+
+  @@map("user_account")
+}
+
+model AuthSession {
+  authSessionId String         @id @default(dbgenerated("gen_random_uuid()")) @map("auth_session_id") @db.Uuid
+  userAccountId String         @map("user_account_id") @db.Uuid
+  userAgent     String?        @map("user_agent") @db.VarChar(500)
+  ipAddress     String?        @map("ip_address") @db.VarChar(45)
+  expiresAt     DateTime       @map("expires_at") @db.Timestamptz(6)
+  revokedAt     DateTime?      @map("revoked_at") @db.Timestamptz(6)
+  lastUsedAt    DateTime       @default(now()) @map("last_used_at") @db.Timestamptz(6)
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  userAccount   UserAccount    @relation(fields: [userAccountId], references: [userAccountId], onDelete: Cascade)
+  refreshTokens RefreshToken[]
+
+  @@index([userAccountId])
+  @@map("auth_session")
+}
+
+model RefreshToken {
+  refreshTokenId String      @id @default(dbgenerated("gen_random_uuid()")) @map("refresh_token_id") @db.Uuid
+  authSessionId  String      @map("auth_session_id") @db.Uuid
+  tokenHash      String      @unique @map("token_hash") @db.VarChar(64)
+  usedAt         DateTime?   @map("used_at") @db.Timestamptz(6)
+  createdAt      DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  authSession    AuthSession @relation(fields: [authSessionId], references: [authSessionId], onDelete: Cascade)
+
+  @@index([authSessionId])
+  @@map("refresh_token")
+}
+
+model VerificationToken {
+  verificationTokenId String                @id @default(dbgenerated("gen_random_uuid()")) @map("verification_token_id") @db.Uuid
+  userAccountId       String                @map("user_account_id") @db.Uuid
+  type                VerificationTokenType
+  tokenHash           String                @unique @map("token_hash") @db.VarChar(64)
+  expiresAt           DateTime              @map("expires_at") @db.Timestamptz(6)
+  usedAt              DateTime?             @map("used_at") @db.Timestamptz(6)
+  /// Attempts made against an email OTP; the code is discarded once the limit is reached.
+  attemptCount        Int                   @default(0) @map("attempt_count")
+  createdAt           DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  userAccount         UserAccount           @relation(fields: [userAccountId], references: [userAccountId], onDelete: Cascade)
+
+  @@index([userAccountId, type])
+  @@map("verification_token")
+}
+
+model UserInteraction {
+  userInteractionId String          @id @default(dbgenerated("gen_random_uuid()")) @map("user_interaction_id") @db.Uuid
+  customerId        String?         @map("customer_id") @db.Uuid
+  hotelId           String?         @map("hotel_id") @db.Uuid
+  interactionType   InteractionType @map("interaction_type")
+  durationSeconds   Int?            @map("duration_seconds")
+  createdAt         DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  customer          Customer?       @relation(fields: [customerId], references: [customerId])
+  hotel             Hotel?          @relation(fields: [hotelId], references: [hotelId])
+
+  @@map("user_interaction")
+}
+
+model UserItemRating {
+  userItemRatingId  String          @id @default(dbgenerated("gen_random_uuid()")) @map("user_item_rating_id") @db.Uuid
+  customerId        String          @map("customer_id") @db.Uuid
+  hotelId           String          @map("hotel_id") @db.Uuid
+  ratingCriterionId String          @map("rating_criterion_id") @db.Uuid
+  reviewId          String?         @map("review_id") @db.Uuid
+  score             Decimal         @db.Decimal(3, 1)
+  createdAt         DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  customer          Customer        @relation(fields: [customerId], references: [customerId])
+  hotel             Hotel           @relation(fields: [hotelId], references: [hotelId])
+  ratingCriterion   RatingCriterion @relation(fields: [ratingCriterionId], references: [ratingCriterionId])
+  review            Review?         @relation(fields: [reviewId], references: [reviewId])
+
+  @@unique([customerId, hotelId, ratingCriterionId])
+  @@map("user_item_rating")
+}
+
+model Voucher {
+  voucherId     String       @id @default(dbgenerated("gen_random_uuid()")) @map("voucher_id") @db.Uuid
+  promotionId   String       @map("promotion_id") @db.Uuid
+  customerId    String       @map("customer_id") @db.Uuid
+  code          String       @unique @db.VarChar(50)
+  discountType  DiscountType @map("discount_type")
+  discountValue Decimal      @map("discount_value") @db.Decimal(14, 2)
+  maxDiscount   Decimal?     @map("max_discount") @db.Decimal(14, 2)
+  usedAt        DateTime?    @map("used_at") @db.Timestamptz(6)
+  expiresAt     DateTime?    @map("expires_at") @db.Timestamptz(6)
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  promotion     Promotion    @relation(fields: [promotionId], references: [promotionId])
+  customer      Customer     @relation(fields: [customerId], references: [customerId])
+  booking       Booking?
+
+  @@map("voucher")
+}
+
+model Wallet {
+  walletId           String              @id @default(dbgenerated("gen_random_uuid()")) @map("wallet_id") @db.Uuid
+  customerId         String?             @unique @map("customer_id") @db.Uuid
+  hotelId            String?             @unique @map("hotel_id") @db.Uuid
+  balanceAvailable   Decimal             @default(0) @map("balance_available") @db.Decimal(14, 2)
+  balancePending     Decimal             @default(0) @map("balance_pending") @db.Decimal(14, 2)
+  balanceReserved    Decimal             @default(0) @map("balance_reserved") @db.Decimal(14, 2)
+  currency           String              @default("VND") @db.VarChar(10)
+  updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+  customer           Customer?           @relation(fields: [customerId], references: [customerId])
+  hotel              Hotel?              @relation(fields: [hotelId], references: [hotelId])
+  walletTransactions WalletTransaction[]
+
+  @@map("wallet")
+}
+
+model WalletTransaction {
+  walletTransactionId String           @id @default(dbgenerated("gen_random_uuid()")) @map("wallet_transaction_id") @db.Uuid
+  walletId            String           @map("wallet_id") @db.Uuid
+  bookingId           String?          @map("booking_id") @db.Uuid
+  platformManagerId   String?          @map("platform_manager_id") @db.Uuid
+  type                WalletTxnType
+  amount              Decimal          @db.Decimal(14, 2)
+  balanceAfter        Decimal          @map("balance_after") @db.Decimal(14, 2)
+  description         String?          @db.VarChar(500)
+  idempotencyKey      String           @unique @map("idempotency_key") @db.VarChar(100)
+  createdAt           DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  wallet              Wallet           @relation(fields: [walletId], references: [walletId])
+  booking             Booking?         @relation(fields: [bookingId], references: [bookingId])
+  platformManager     PlatformManager? @relation(fields: [platformManagerId], references: [platformManagerId])
+
+  @@map("wallet_transaction")
 }

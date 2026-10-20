@@ -1,32 +1,21 @@
-import { ErrorCode } from '../errors/error-code';
+import type { PageMeta } from '@stayreco/shared';
 
-export interface PageMeta {
-  page: number;
-  pageSize: number;
-  total: number;
-  totalPages: number;
-}
+// Response shapes live in packages/shared; aliased here to keep backend imports stable.
+export type {
+  APIResponse as SuccessResponse,
+  APIError as ErrorResponse,
+  ErrorDetail,
+  PageMeta,
+} from '@stayreco/shared';
 
-/** Body of every successful response (wrapped by ResponseInterceptor). */
-export interface SuccessResponse<T> {
-  success: true;
-  message: string;
-  data: T;
-  meta?: PageMeta;
-}
-
-export interface ErrorDetail {
-  field: string;
-  message: string;
-}
-
-/** Body of every error response (built by HttpExceptionFilter). */
-export interface ErrorResponse {
-  success: false;
-  message: string;
-  code: ErrorCode | string;
-  details?: ErrorDetail[];
-}
+/** Shape of `T` after JSON serialization: `Date` becomes an ISO string. Used to check responses against shared types. */
+export type Serialized<T> = T extends Date
+  ? string
+  : T extends (infer U)[]
+    ? Serialized<U>[]
+    : T extends object
+      ? { [K in keyof T]: Serialized<T[K]> }
+      : T;
 
 /** Return this from a service/controller to send a list with pagination `meta`. */
 export class Paginated<T> {

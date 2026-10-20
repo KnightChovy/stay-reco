@@ -37,7 +37,19 @@ Web client: set `NEXT_PUBLIC_API_URL=http://localhost:3000/api/v1`.
 
 ### 2.3 Recommended client flow
 
-1. On successful login, keep `accessToken` and `account`; mobile also keeps `refreshToken`.
+**Sign-up (customer and partner):**
+
+1. `POST /auth/register/customer` (or `/register/partner`) returns `{ account }` with `status: "PENDING_VERIFICATION"` and **no tokens**. The backend emails a 6-digit code (valid 10 minutes).
+2. Show the **OTP screen** (6 inputs) for that email. "Resend code" calls `POST /auth/resend-verification`; the previous code stops working.
+3. `POST /auth/verify-email { email, code }`:
+   - correct: the account becomes `ACTIVE` and the response is an `AuthResult`, the same as login. Treat it as a successful login.
+   - `AUTH_OTP_INVALID`: wrong code, let the user retry.
+   - `AUTH_OTP_EXPIRED`: expired or 5 attempts used, ask the user to resend the code.
+4. If a pending user tries to log in, login answers **403 `AUTH_EMAIL_NOT_VERIFIED`**: go to the OTP screen for that email.
+
+**Signed-in requests:**
+
+1. On successful login (or verify-email), keep `accessToken` and `account`; mobile also keeps `refreshToken`.
 2. Call APIs with the `Authorization` header.
 3. On **401 with `code: "UNAUTHENTICATED"`**: call `/auth/refresh` **once** (queue pending requests; never refresh in parallel), then retry the original request. Other 401 errors must not trigger a refresh (see section 4.3).
 4. If refresh also returns 401: clear the signed-in state and redirect to `/login?next=...`.
@@ -48,8 +60,8 @@ The Response column describes the content of the `data` field (see section 4.1).
 
 | Method | Path | Access | Body | Response |
 |---|---|---|---|---|
-| POST | `/auth/register/customer` | public | `{ email, password, fullName }` | `AuthResult` (201) |
-| POST | `/auth/register/partner` | public | `{ email, password, fullName, companyName? }` | `AuthResult` (201) |
+| POST | `/auth/register/customer` | public | `{ email, password, fullName }` | `RegisterResult` = `{ account }`, no tokens (201) |
+| POST | `/auth/register/partner` | public | `{ email, password, fullName, phone, companyName? }` | `RegisterResult` = `{ account }`, no tokens (201) |
 | POST | `/auth/login` | public | `{ email, password }` | `AuthResult` |
 | POST | `/auth/refresh` | public | web: `{}` · mobile: `{ refreshToken }` | web: `{ accessToken, expiresIn }` · mobile: `{ accessToken, refreshToken, expiresIn }` |
 | POST | `/auth/logout` | signed in | | 204 |
@@ -57,42 +69,51 @@ The Response column describes the content of the `data` field (see section 4.1).
 | GET | `/auth/me` | signed in | | `Account` |
 | GET | `/auth/sessions` | signed in | | `Session[]` |
 | DELETE | `/auth/sessions/:id` | signed in | | 204 |
-| POST | `/auth/verify-email` | public | `{ token }` | 204 |
-| POST | `/auth/resend-verification` | public | `{ email }` | 204 (always 204; never reveals whether the email exists) |
+| POST | `/auth/verify-email` | public | `{ email, code }` (`code` = 6 digits) | `AuthResult` (200), account activated and signed in |
+| POST | `/auth/resend-verification` | public | `{ email }` | 204 (always 204; mails a new code only to pending accounts) |
 | POST | `/auth/forgot-password` | public | `{ email }` | 204 (always 204) |
 | POST | `/auth/reset-password` | public | `{ token, newPassword }` | 204 |
 | POST | `/auth/change-password` | signed in | `{ currentPassword, newPassword }` | 204 |
-| POST | `/auth/invitations/staff` | HOTEL_PARTNER | `{ email, fullName }` | `{ id, email, status }` (201) |
+| POST | `/auth/invitations/staff` | HOTEL_PARTNER | `{ email, fullName, hotelId, position }` (the hotel must belong to the partner) | `{ id, email, status }` (201) |
 | POST | `/auth/invitations/platform-manager` | ADMIN | `{ email, fullName }` | `{ id, email, status }` (201) |
 | POST | `/auth/invitations/accept` | public | `{ token, password }` | `AuthResult` (201) |
 
 `AuthResult` contains `account: Account`, `accessToken: string` and `expiresIn: number`. Mobile also receives `refreshToken: string`.
+
+TypeScript types for these responses come from `@stayreco/shared` (`Account`, `RegisterResult`, `AuthResult`, `RefreshResult`, `SessionInfo`, `InvitationResult`, `PartnerProfile`, `StaffProfile`). Import them instead of redefining them. The backend fails to compile if `Account` drifts from what it actually returns.
 
 ```jsonc
 // Account
 {
   "id": "uuid",
   "email": "a@b.com",
+  "fullName": "Nguyen Van A",
   "phone": null,
+  "avatarUrl": null,
   "role": "CUSTOMER",            // see section 2.6
-  "status": "ACTIVE",            // ACTIVE | INVITED | SUSPENDED | DELETED
+  "status": "ACTIVE",            // PENDING_VERIFICATION | ACTIVE | INVITED | SUSPENDED | DELETED
   "emailVerified": false,
   "emailVerifiedAt": null,
   "lastLoginAt": "2026-10-14T03:00:00.000Z",
   "createdAt": "2026-10-14T03:00:00.000Z",
-  "profile": { "id": "uuid", "fullName": "Nguyen Van A" }  // fields depend on the role
+  // Role-specific data, null for CUSTOMER / ADMIN / PLATFORM_MANAGER:
+  //   HOTEL_PARTNER: { "partnerName": "Hotel Co", "status": "PENDING" }
+  //   HOTEL_STAFF:   { "hotelId": "uuid", "position": "Receptionist" }
+  "profile": null
 }
 ```
 
-### 2.5 FE pages linked from emails
+### 2.5 FE pages for emails
 
-The backend sends emails containing `WEB_APP_URL/<path>?token=...`. The FE needs these 3 pages; each reads `token` from the URL and calls the matching API:
+Email verification uses a **6-digit code**; password reset and invitations use a **link** `WEB_APP_URL/<path>?token=...`:
 
 | FE page | API call |
 |---|---|
-| `/verify-email?token=` | `POST /auth/verify-email` |
+| OTP screen after sign-up (e.g. `/verify-email?email=`) | User types the code, then `POST /auth/verify-email { email, code }` |
 | `/reset-password?token=` | New-password form, then `POST /auth/reset-password` |
 | `/accept-invitation?token=` | Set-password form, then `POST /auth/invitations/accept` |
+
+The forgot-password flow is **link-based** (not OTP): `POST /auth/forgot-password { email }`, show "check your email", and the email link opens `/reset-password?token=`.
 
 ### 2.6 Roles
 
@@ -110,9 +131,9 @@ Role checks in the FE only drive navigation. The backend always re-checks permis
 
 - **Password**: 8–128 characters, with at least one letter and one digit. The FE should apply the same rule to report errors early (MSG08).
 - **Email**: the backend trims it and converts it to lowercase.
-- **Unknown fields** in the body return **400**. Send only the fields listed above; for example, registration does **not** accept `phone`.
+- **Unknown fields** in the body return **400**. Send only the fields listed above; for example, customer registration does **not** accept `phone`.
 - **Dates and times**: the API accepts and returns ISO 8601 strings in UTC (`2026-10-14T03:00:00.000Z`). The FE displays them in `Asia/Ho_Chi_Minh` as `dd/mm/yyyy`. Dates without a time (check-in, check-out) use `YYYY-MM-DD`.
-- **Money**: whole VND amounts as JSON integers (`2250000`); the FE formats them as `2.250.000 ₫`. Percentages are JSON numbers (`15`, `12.5`). All prices, discounts, fees and refunds are calculated by the backend; the FE displays them and never recomputes them. Rules: [CONVENTIONS.md §4](./CONVENTIONS.md#4-money).
+- **Money**: VND amounts as JSON numbers with at most 2 decimals (`2250000`, `185185.05`); the FE formats them as `2.250.000 ₫`. Percentages are JSON numbers (`15`, `12.5`). All prices, discounts, fees and refunds are calculated by the backend; the FE displays them and never recomputes them. Rules: [CONVENTIONS.md §4](./CONVENTIONS.md#4-money).
 
 ## 4. Response format (decided)
 
@@ -148,7 +169,7 @@ export interface APIResponse<T> {
 export interface APIError {
   success: false;
   message: string;
-  code: string;
+  code: ErrorCode | string;
   details?: { field: string; message: string }[];
 }
 ```
@@ -167,8 +188,8 @@ There is no `status` field in the body; the HTTP status is already available as 
   "message": "Validation failed",
   "code": "VALIDATION_ERROR",
   "details": [
-    { "field": "email", "message": "email must be an email" },
-    { "field": "password", "message": "password must be longer than or equal to 8 characters" }
+    { "field": "email", "message": "Invalid email address" },
+    { "field": "password", "message": "Too small: expected string to have >=8 characters" }
   ]
 }
 ```
@@ -193,12 +214,28 @@ There is no `status` field in the body; the HTTP status is already available as 
 | `AUTH_ACCOUNT_LOCKED` | 403 | 5 wrong passwords; locked for 15 minutes | "Too many failed attempts…" |
 | `AUTH_ACCOUNT_SUSPENDED` | 403 | Account suspended | MSG06 |
 | `AUTH_ACCOUNT_INACTIVE` | 403 | Password reset for an inactive account | MSG06 |
+| `AUTH_EMAIL_NOT_VERIFIED` | 403 | Login with the correct password before the email code was entered | Go to the OTP screen for that email |
+| `AUTH_OTP_INVALID` | 400 | Wrong email code (also returned for unknown emails) | "Incorrect code", let the user retry |
+| `AUTH_OTP_EXPIRED` | 400 | Email code expired, already used, or 5 attempts used | "The code has expired", offer "Resend code" |
 | `AUTH_EMAIL_TAKEN` | 409 | Email already registered | MSG07 under the email input |
 | `AUTH_WRONG_PASSWORD` | 401 | Wrong current password when changing password | Error under the current-password input. **Do not** refresh. |
-| `AUTH_TOKEN_INVALID` | 400 | Email-verification, password-reset or invitation link is invalid, expired or already used | "This link is invalid or has expired" |
+| `AUTH_TOKEN_INVALID` | 400 | Password-reset or invitation link is invalid, expired or already used | "This link is invalid or has expired" |
 | `AUTH_REFRESH_TOKEN_INVALID` | 401 | Refresh token missing, invalid, expired or reused | Clear the signed-in state and go to `/login` |
 | `AUTH_INVITATION_ACCEPTED` | 409 | Invitation already accepted | Go to sign-in |
 | `AUTH_SESSION_NOT_FOUND` | 404 | Revoking a session that doesn't exist | Reload the session list |
+| `HOTEL_NOT_FOUND` | 404 | Hotel doesn't exist or doesn't belong to the caller (not distinguished) | "Hotel not found" |
+| `PARTNER_SUSPENDED` | 403 | The partner is suspended: hotels stay readable, but creating or changing anything is refused | Show the suspension notice; hide edit actions |
+| `ROOM_TYPE_NOT_FOUND` | 404 | Room type doesn't exist or belongs to another hotel | Reload the room type list |
+| `ROOM_NOT_FOUND` | 404 | Room doesn't exist or belongs to another hotel | Reload the room list |
+| `STAFF_NOT_FOUND` | 404 | Staff member doesn't exist or works at another hotel | Reload the staff list |
+| `ROOM_NUMBER_TAKEN` | 409 | Room number already used in this hotel | Error under the room number input |
+| `ROOM_LIMIT_REACHED` | 409 | More rooms than the declared total in the room configuration | "Room limit reached", link to room configuration |
+| `ROOM_TYPE_IN_USE` | 409 | Deleting a room type that still has rooms | "Remove its rooms first" |
+| `ROOM_NOT_LOCKABLE` | 409 | Locking a room that has a guest (`OCCUPIED`) | "The room is occupied" |
+| `VERIFICATION_PENDING` | 409 | A verification request is already waiting for review | Show the pending request |
+| `VERIFICATION_DOCUMENTS_MISSING` | 400 | A required document is missing (business license, fire safety, security certificate) | Highlight the missing documents |
+| `VERIFICATION_ALREADY_DECIDED` | 409 | Reviewing a request that already has a decision | Reload the request |
+| `UPLOAD_INVALID_FILE` | 400 | File is not PDF/JPG/PNG or is larger than 10 MB | Error under the upload field |
 
 Important: **refresh only when `status === 401` and `code === 'UNAUTHENTICATED'`.** Refreshing on the other 401 errors (`AUTH_INVALID_CREDENTIALS`, `AUTH_WRONG_PASSWORD`, `AUTH_REFRESH_TOKEN_INVALID`) causes infinite loops or unexpected sign-outs.
 

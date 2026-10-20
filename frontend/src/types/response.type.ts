@@ -1,6 +1,2 @@
-export interface APIResponse<T> {
-  success: boolean;
-  message: string;
-  status?: number;
-  data: T;
-}
+// Response envelope is defined once in packages/shared (see packages/docs/api-guide.md §4).
+export type { APIResponse, APIError, PageMeta, ErrorDetail } from "@stayreco/shared";

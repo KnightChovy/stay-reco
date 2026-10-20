@@ -7,17 +7,32 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import { AuthSocialActions } from '@/features/auth/AuthSocialActions';
+import { OtpVerification } from '@/features/auth/OtpVerification';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Eye, EyeOff, Lock, Mail, User, Phone, ArrowRight, Sparkles, CheckCircle2 } from 'lucide-react';
+import {
+  Eye,
+  EyeOff,
+  Lock,
+  Mail,
+  User,
+  Phone,
+  ArrowRight,
+  Sparkles,
+  CheckCircle2,
+} from 'lucide-react';
 import { getSafeNextPath, useAuthStore } from '@/lib/auth-store';
 
 function RegisterPageContent() {
+  const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [pendingEmail, setPendingEmail] = useState<string | null>(null);
+
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
@@ -26,17 +41,22 @@ function RegisterPageContent() {
     confirmPassword: '',
     agreeTerms: false,
   });
-  const router = useRouter();
+
   const searchParams = useSearchParams();
   const register = useAuthStore((state) => state.register);
   const next = searchParams.get('next');
   const loginHref = next ? `/login?next=${encodeURIComponent(next)}` : '/login';
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
     if (formData.password.length < 8) {
       setError('Mật khẩu cần có ít nhất 8 ký tự.');
+      return;
+    }
+    if (!/^(?=.*[A-Za-z])(?=.*\d).+$/.test(formData.password)) {
+      setError('Mật khẩu phải chứa ít nhất một chữ cái và một chữ số.');
       return;
     }
     if (formData.password !== formData.confirmPassword) {
@@ -48,18 +68,23 @@ function RegisterPageContent() {
       return;
     }
 
-    const result = register({
-      name: formData.fullName,
-      email: formData.email,
-      phone: formData.phone,
-      password: formData.password,
-    });
-    if (!result.success) {
-      setError(result.message);
-      return;
-    }
+    setIsLoading(true);
+    try {
+      const result = await register({
+        name: formData.fullName,
+        email: formData.email,
+        password: formData.password,
+      });
 
-    router.replace(getSafeNextPath(next));
+      if (!result.success) {
+        setError(result.message);
+        return;
+      }
+
+      setPendingEmail(result.email);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -126,160 +151,171 @@ function RegisterPageContent() {
             </div>
           </div>
 
-          {/* Right / Register Form Section */}
+          {/* Right / Content Section */}
           <div className="lg:col-span-7 p-6 sm:p-10 flex flex-col justify-center">
             <div className="max-w-md mx-auto w-full">
-              <div className="mb-6">
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 text-amber-600 text-xs font-semibold mb-3">
-                  <Sparkles className="size-3.5" /> Ưu đãi thành viên mới
-                </span>
-                <h1 className="text-2xl sm:text-3xl font-bold text-foreground tracking-tight">
-                  Tạo tài khoản mới
-                </h1>
-                <p className="text-muted-foreground text-sm mt-1.5">
-                  Điền thông tin bên dưới để bắt đầu trải nghiệm dịch vụ StayReco.
-                </p>
-              </div>
-
-              <AuthSocialActions dividerLabel="hoặc đăng ký bằng Form" />
-
-              <form onSubmit={handleSubmit} className="space-y-3.5">
-                <div className="space-y-1">
-                  <Label htmlFor="fullName" className="text-xs sm:text-sm font-semibold">
-                    Họ và tên
-                  </Label>
-                  <div className="relative">
-                    <User className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                    <Input
-                      id="fullName"
-                      type="text"
-                      placeholder="Nguyễn Văn A"
-                      value={formData.fullName}
-                      onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
-                      className="pl-10 h-10 sm:h-11 text-sm focus-visible:ring-primary"
-                      required
-                    />
+              {pendingEmail ? (
+                /* Email OTP verification step */
+                <OtpVerification
+                  email={pendingEmail}
+                  onVerified={() => router.replace(getSafeNextPath(next))}
+                />
+              ) : (
+                /* Registration Form */
+                <>
+                  <div className="mb-6">
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 text-amber-600 text-xs font-semibold mb-3">
+                      <Sparkles className="size-3.5" /> Ưu đãi thành viên mới
+                    </span>
+                    <h1 className="text-2xl sm:text-3xl font-bold text-foreground tracking-tight">
+                      Tạo tài khoản mới
+                    </h1>
+                    <p className="text-muted-foreground text-sm mt-1.5">
+                      Điền thông tin bên dưới để bắt đầu trải nghiệm dịch vụ StayReco.
+                    </p>
                   </div>
-                </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <Label htmlFor="email" className="text-xs sm:text-sm font-semibold">
-                      Email
-                    </Label>
-                    <div className="relative">
-                      <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                      <Input
-                        id="email"
-                        type="email"
-                        placeholder="vidu@email.com"
-                        value={formData.email}
-                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                        className="pl-10 h-10 sm:h-11 text-sm focus-visible:ring-primary"
-                        required
-                      />
+                  <AuthSocialActions dividerLabel="hoặc đăng ký bằng Form" />
+
+                  <form onSubmit={handleSubmit} className="space-y-3.5">
+                    <div className="space-y-1">
+                      <Label htmlFor="fullName" className="text-xs sm:text-sm font-semibold">
+                        Họ và tên
+                      </Label>
+                      <div className="relative">
+                        <User className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                        <Input
+                          id="fullName"
+                          type="text"
+                          placeholder="Nguyễn Văn A"
+                          value={formData.fullName}
+                          onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+                          className="pl-10 h-10 sm:h-11 text-sm focus-visible:ring-primary"
+                          required
+                        />
+                      </div>
                     </div>
-                  </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="phone" className="text-xs sm:text-sm font-semibold">
-                      Số điện thoại
-                    </Label>
-                    <div className="relative">
-                      <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                      <Input
-                        id="phone"
-                        type="tel"
-                        placeholder="0912345678"
-                        value={formData.phone}
-                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                        className="pl-10 h-10 sm:h-11 text-sm focus-visible:ring-primary"
-                        required
-                      />
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <Label htmlFor="email" className="text-xs sm:text-sm font-semibold">
+                          Email
+                        </Label>
+                        <div className="relative">
+                          <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                          <Input
+                            id="email"
+                            type="email"
+                            placeholder="vidu@email.com"
+                            value={formData.email}
+                            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                            className="pl-10 h-10 sm:h-11 text-sm focus-visible:ring-primary"
+                            required
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="phone" className="text-xs sm:text-sm font-semibold">
+                          Số điện thoại
+                        </Label>
+                        <div className="relative">
+                          <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                          <Input
+                            id="phone"
+                            type="tel"
+                            placeholder="0912345678"
+                            value={formData.phone}
+                            onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                            className="pl-10 h-10 sm:h-11 text-sm focus-visible:ring-primary"
+                          />
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
 
-                <div className="space-y-1">
-                  <Label htmlFor="password" className="text-xs sm:text-sm font-semibold">
-                    Mật khẩu
-                  </Label>
-                  <div className="relative">
-                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                    <Input
-                      id="password"
-                      type={showPassword ? 'text' : 'password'}
-                      placeholder="Ít nhất 8 ký tự"
-                      value={formData.password}
-                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                      className="pl-10 pr-10 h-10 sm:h-11 text-sm focus-visible:ring-primary"
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                      aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                    <div className="space-y-1">
+                      <Label htmlFor="password" className="text-xs sm:text-sm font-semibold">
+                        Mật khẩu
+                      </Label>
+                      <div className="relative">
+                        <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                        <Input
+                          id="password"
+                          type={showPassword ? 'text' : 'password'}
+                          placeholder="Ít nhất 8 ký tự, có chữ và số"
+                          value={formData.password}
+                          onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                          className="pl-10 pr-10 h-10 sm:h-11 text-sm focus-visible:ring-primary"
+                          required
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                          aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                        >
+                          {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <Label htmlFor="confirmPassword" className="text-xs sm:text-sm font-semibold">
+                        Nhập lại mật khẩu
+                      </Label>
+                      <div className="relative">
+                        <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                        <Input
+                          id="confirmPassword"
+                          type={showConfirmPassword ? 'text' : 'password'}
+                          placeholder="Xác nhận mật khẩu"
+                          value={formData.confirmPassword}
+                          onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                          className="pl-10 pr-10 h-10 sm:h-11 text-sm focus-visible:ring-primary"
+                          required
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                          className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                          aria-label={showConfirmPassword ? 'Ẩn mật khẩu xác nhận' : 'Hiện mật khẩu xác nhận'}
+                        >
+                          {showConfirmPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="flex items-start space-x-2 pt-1">
+                      <Checkbox
+                        id="terms"
+                        checked={formData.agreeTerms}
+                        onCheckedChange={(checked) => setFormData({ ...formData, agreeTerms: !!checked })}
+                        className="mt-0.5"
+                      />
+                      <Label htmlFor="terms" className="text-xs text-muted-foreground leading-normal cursor-pointer">
+                        Tôi đồng ý với <Link href="/terms" className="text-primary hover:underline font-semibold">Điều khoản sử dụng</Link> và <Link href="/privacy" className="text-primary hover:underline font-semibold">Chính sách bảo mật</Link> của StayReco.
+                      </Label>
+                    </div>
+
+                    {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-700" role="alert">{error}</p>}
+
+                    <Button
+                      type="submit"
+                      disabled={isLoading}
+                      className="w-full h-10 sm:h-11 bg-primary text-primary-foreground hover:bg-[#193b56] font-semibold text-sm transition-all shadow-sm gap-2 mt-2 disabled:opacity-70"
                     >
-                      {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                    </button>
+                      <span>{isLoading ? 'Đang tạo tài khoản...' : 'Tạo tài khoản StayReco'}</span>
+                      {!isLoading && <ArrowRight className="size-4" />}
+                    </Button>
+                  </form>
+
+                  <div className="mt-6 text-center text-xs sm:text-sm text-muted-foreground">
+                    Đã có tài khoản?{' '}
+                    <Link href={loginHref} className="font-semibold text-primary hover:underline">
+                      Đăng nhập tại đây
+                    </Link>
                   </div>
-                </div>
-
-                <div className="space-y-1">
-                  <Label htmlFor="confirmPassword" className="text-xs sm:text-sm font-semibold">
-                    Nhập lại mật khẩu
-                  </Label>
-                  <div className="relative">
-                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                    <Input
-                      id="confirmPassword"
-                      type={showConfirmPassword ? 'text' : 'password'}
-                      placeholder="Xác nhận mật khẩu"
-                      value={formData.confirmPassword}
-                      onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                      className="pl-10 pr-10 h-10 sm:h-11 text-sm focus-visible:ring-primary"
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                      aria-label={showConfirmPassword ? 'Ẩn mật khẩu xác nhận' : 'Hiện mật khẩu xác nhận'}
-                    >
-                      {showConfirmPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex items-start space-x-2 pt-1">
-                  <Checkbox
-                    id="terms"
-                    checked={formData.agreeTerms}
-                    onCheckedChange={(checked) => setFormData({ ...formData, agreeTerms: !!checked })}
-                    className="mt-0.5"
-                  />
-                  <Label htmlFor="terms" className="text-xs text-muted-foreground leading-normal cursor-pointer">
-                    Tôi đồng ý với <Link href="/terms" className="text-primary hover:underline font-semibold">Điều khoản sử dụng</Link> và <Link href="/privacy" className="text-primary hover:underline font-semibold">Chính sách bảo mật</Link> của StayReco.
-                  </Label>
-                </div>
-
-                {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-700" role="alert">{error}</p>}
-
-                <Button
-                  type="submit"
-                  className="w-full h-10 sm:h-11 bg-primary text-primary-foreground hover:bg-[#193b56] font-semibold text-sm transition-all shadow-sm gap-2 mt-2"
-                >
-                  <span>Tạo tài khoản StayReco</span>
-                  <ArrowRight className="size-4" />
-                </Button>
-              </form>
-
-              <div className="mt-6 text-center text-xs sm:text-sm text-muted-foreground">
-                Đã có tài khoản?{' '}
-                <Link href={loginHref} className="font-semibold text-primary hover:underline">
-                  Đăng nhập tại đây
-                </Link>
-              </div>
+                </>
+              )}
             </div>
           </div>
 

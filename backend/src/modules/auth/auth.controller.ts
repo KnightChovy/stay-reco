@@ -15,7 +15,6 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
-import { Role } from '@prisma/client';
 import type { Request, Response } from 'express';
 import { API_PREFIX } from '../../app.setup';
 import {
@@ -30,18 +29,20 @@ import {
 } from '../../common/decorators/request-meta.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { Env } from '../../config/env';
+import { UserRole } from '../../generated/prisma/client';
 import {
   AcceptInvitationDto,
   ChangePasswordDto,
   ForgotPasswordDto,
   InviteAccountDto,
+  InviteStaffDto,
   LoginDto,
   RefreshDto,
   RegisterCustomerDto,
   RegisterPartnerDto,
   ResendVerificationDto,
   ResetPasswordDto,
-  TokenDto,
+  VerifyEmailDto,
 } from './dto/auth.dto';
 import { AuthService } from './services/auth.service';
 import { type TokenPair, TokenService } from './services/token.service';
@@ -62,30 +63,25 @@ export class AuthController {
     private readonly config: ConfigService<Env, true>,
   ) {}
 
+  /** Creates a PENDING_VERIFICATION account and mails a code; no tokens until `verify-email`. */
   @Public()
   @Throttle(LOGIN_LIMIT)
   @Post('register/customer')
-  async registerCustomer(
+  registerCustomer(
     @Body() dto: RegisterCustomerDto,
     @ReqMeta() meta: RequestMeta,
-    @Req() req: Request,
-    @Res({ passthrough: true }) res: Response,
   ) {
-    const { account, tokens } = await this.auth.registerCustomer(dto, meta);
-    return { account, ...this.deliverTokens(req, res, tokens) };
+    return this.auth.registerCustomer(dto, meta);
   }
 
   @Public()
   @Throttle(LOGIN_LIMIT)
   @Post('register/partner')
-  async registerPartner(
+  registerPartner(
     @Body() dto: RegisterPartnerDto,
     @ReqMeta() meta: RequestMeta,
-    @Req() req: Request,
-    @Res({ passthrough: true }) res: Response,
   ) {
-    const { account, tokens } = await this.auth.registerPartner(dto, meta);
-    return { account, ...this.deliverTokens(req, res, tokens) };
+    return this.auth.registerPartner(dto, meta);
   }
 
   @Public()
@@ -172,11 +168,19 @@ export class AuthController {
     return this.auth.revokeSession(user, id, meta);
   }
 
+  /** Activates the account with the mailed 6-digit code and signs it in (same response as login). */
   @Public()
+  @Throttle(LOGIN_LIMIT)
   @Post('verify-email')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  verifyEmail(@Body() dto: TokenDto, @ReqMeta() meta: RequestMeta) {
-    return this.auth.verifyEmail(dto.token, meta);
+  @HttpCode(HttpStatus.OK)
+  async verifyEmail(
+    @Body() dto: VerifyEmailDto,
+    @ReqMeta() meta: RequestMeta,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { account, tokens } = await this.auth.verifyEmail(dto, meta);
+    return { account, ...this.deliverTokens(req, res, tokens) };
   }
 
   @Public()
@@ -213,17 +217,17 @@ export class AuthController {
     return this.auth.changePassword(user, dto, meta);
   }
 
-  @Roles(Role.HOTEL_PARTNER)
+  @Roles(UserRole.HOTEL_PARTNER)
   @Post('invitations/staff')
   inviteStaff(
     @CurrentUser() user: AuthUser,
-    @Body() dto: InviteAccountDto,
+    @Body() dto: InviteStaffDto,
     @ReqMeta() meta: RequestMeta,
   ) {
     return this.auth.inviteStaff(user, dto, meta);
   }
 
-  @Roles(Role.ADMIN)
+  @Roles(UserRole.ADMIN)
   @Post('invitations/platform-manager')
   invitePlatformManager(
     @CurrentUser() user: AuthUser,

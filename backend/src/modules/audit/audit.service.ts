@@ -1,9 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, UserRole } from '../../generated/prisma/client';
 import { RequestMeta } from '../../common/decorators/request-meta.decorator';
 import { PrismaService } from '../../prisma/prisma.service';
 
 export enum AuditAction {
+  ACCOUNT_REGISTERED = 'ACCOUNT_REGISTERED',
   LOGIN_SUCCESS = 'LOGIN_SUCCESS',
   LOGIN_FAILED = 'LOGIN_FAILED',
   ACCOUNT_LOCKED = 'ACCOUNT_LOCKED',
@@ -18,13 +19,28 @@ export enum AuditAction {
   INVITATION_ACCEPTED = 'INVITATION_ACCEPTED',
 }
 
+/** audit_log has one actor column per role; the account id is the role row's id. */
+const ACTOR_COLUMN = {
+  CUSTOMER: 'customerId',
+  HOTEL_STAFF: 'hotelStaffId',
+  HOTEL_PARTNER: 'hotelPartnerId',
+  ADMIN: 'adminId',
+  PLATFORM_MANAGER: 'platformManagerId',
+} as const satisfies Record<
+  UserRole,
+  keyof Prisma.AuditLogUncheckedCreateInput
+>;
+
 @Injectable()
 export class AuditService {
   private readonly logger = new Logger(AuditService.name);
 
   constructor(private readonly prisma: PrismaService) {}
 
-  /** Never throws: an audit failure must not break the request. */
+  /**
+   * Never throws: an audit failure must not break the request.
+   * `accountId` is null for events without a known actor (e.g. a failed login with an unknown email).
+   */
   async log(
     action: AuditAction,
     accountId: string | null,
@@ -32,13 +48,21 @@ export class AuditService {
     metadata?: Prisma.InputJsonValue,
   ): Promise<void> {
     try {
+      const actor = accountId
+        ? await this.prisma.userAccount.findUnique({
+            where: { userAccountId: accountId },
+            select: { role: true },
+          })
+        : null;
+
       await this.prisma.auditLog.create({
         data: {
           action,
-          accountId,
-          ip: meta.ip,
-          userAgent: meta.userAgent,
-          metadata,
+          ...(actor && { [ACTOR_COLUMN[actor.role]]: accountId }),
+          entityType: accountId ? 'user_account' : null,
+          entityId: accountId,
+          newValue: metadata === undefined ? null : JSON.stringify(metadata),
+          ipAddress: meta.ip,
         },
       });
     } catch (err) {
