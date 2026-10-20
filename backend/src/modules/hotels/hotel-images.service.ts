@@ -25,6 +25,12 @@ const imageNotFound = () =>
     message: 'Image not found',
   });
 
+const imageLimitReached = () =>
+  new ConflictException({
+    code: ErrorCode.IMAGE_LIMIT_REACHED,
+    message: `A hotel can have at most ${UPLOAD_RULES.maxImages} images`,
+  });
+
 /** Hotel photos on Cloudinary. A hotel with images always has exactly one cover. */
 @Injectable()
 export class HotelImagesService {
@@ -40,12 +46,12 @@ export class HotelImagesService {
     file: Buffer,
     input: UploadHotelImageInput,
   ): Promise<HotelImage> {
-    const count = await this.prisma.hotelImage.count({ where: { hotelId } });
-    if (count >= UPLOAD_RULES.maxImages) {
-      throw new ConflictException({
-        code: ErrorCode.IMAGE_LIMIT_REACHED,
-        message: `A hotel can have at most ${UPLOAD_RULES.maxImages} images`,
-      });
+    // Early check so a full hotel does not cost a Cloudinary upload; the binding check is inside the transaction.
+    if (
+      (await this.prisma.hotelImage.count({ where: { hotelId } })) >=
+      UPLOAD_RULES.maxImages
+    ) {
+      throw imageLimitReached();
     }
 
     const { storageKey, url } = await this.storage.uploadImage(
@@ -54,6 +60,11 @@ export class HotelImagesService {
     );
     try {
       const image = await this.prisma.$transaction(async (tx) => {
+        // Lock the hotel row so concurrent uploads to the same hotel count and pick the cover one after another.
+        await tx.$executeRaw`SELECT 1 FROM hotel WHERE hotel_id = ${hotelId}::uuid FOR UPDATE`;
+        const count = await tx.hotelImage.count({ where: { hotelId } });
+        if (count >= UPLOAD_RULES.maxImages) throw imageLimitReached();
+
         const isCover = count === 0 || input.isCover === true;
         if (isCover) {
           await tx.hotelImage.updateMany({

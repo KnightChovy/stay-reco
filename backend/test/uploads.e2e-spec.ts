@@ -131,6 +131,27 @@ describe('Uploads (e2e)', () => {
       expect(t.storage.uploads).toEqual([]);
     });
 
+    it('keeps the limit when the last free slot is taken by concurrent uploads', async () => {
+      const { token, hotelId } = await partnerWithHotel();
+      await t.prisma.hotelImage.createMany({
+        data: Array.from({ length: 29 }, (_, i) => ({
+          hotelId,
+          imageUrl: `https://cdn.test/${i}.png`,
+          storageKey: `k${i}`,
+          sortOrder: i,
+        })),
+      });
+
+      const results = await Promise.all([
+        uploadImage(token, hotelId),
+        uploadImage(token, hotelId),
+      ]);
+      expect(results.map((r) => r.status).sort()).toEqual([201, 409]);
+      expect(await t.prisma.hotelImage.count({ where: { hotelId } })).toBe(30);
+      // The losing upload already reached storage, so its file is removed again.
+      expect(t.storage.deleted).toHaveLength(1);
+    });
+
     it('moves the cover, edits captions and promotes the next image when the cover is deleted', async () => {
       const { token, hotelId } = await partnerWithHotel();
       const a = (await uploadImage(token, hotelId).expect(201)).body.data;

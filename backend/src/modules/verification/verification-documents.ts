@@ -5,5 +5,18 @@
 export const verificationFolder = (hotelPartnerId: string) =>
   `stayreco/verification/${hotelPartnerId}`;
 
-export const isOwnVerificationFile = (hotelPartnerId: string, fileId: string) =>
-  fileId.startsWith(`${verificationFolder(hotelPartnerId)}/`);
+/**
+ * Exact shape produced by `StorageService.uploadPrivate`: `<folder>/<public id>.<format>`. A prefix check alone would
+ * also accept crafted ids such as `<folder>/../<other partner>/x.pdf`.
+ */
+const FILE_NAME = /^[A-Za-z0-9_-]{1,100}\.(pdf|jpg|jpeg|png)$/;
+
+export const isOwnVerificationFile = (
+  hotelPartnerId: string,
+  fileId: string,
+) => {
+  const folder = `${verificationFolder(hotelPartnerId)}/`;
+  return (
+    fileId.startsWith(folder) && FILE_NAME.test(fileId.slice(folder.length))
+  );
+};
