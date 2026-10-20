@@ -18,6 +18,8 @@ export const ErrorCode = {
   AUTH_INVALID_CREDENTIALS: 'AUTH_INVALID_CREDENTIALS',
   AUTH_ACCOUNT_LOCKED: 'AUTH_ACCOUNT_LOCKED',
   AUTH_ACCOUNT_SUSPENDED: 'AUTH_ACCOUNT_SUSPENDED',
+  /** Staff account turned off by the hotel partner. */
+  AUTH_ACCOUNT_DEACTIVATED: 'AUTH_ACCOUNT_DEACTIVATED',
   AUTH_ACCOUNT_INACTIVE: 'AUTH_ACCOUNT_INACTIVE',
   /** Correct password but the email has not been verified yet; show the OTP screen. */
   AUTH_EMAIL_NOT_VERIFIED: 'AUTH_EMAIL_NOT_VERIFIED',
@@ -39,9 +41,13 @@ export const ErrorCode = {
   HOTEL_NOT_FOUND: 'HOTEL_NOT_FOUND',
   /** The partner is suspended: its hotels stay readable, but it cannot create or change anything. */
   PARTNER_SUSPENDED: 'PARTNER_SUSPENDED',
+  /** The hotel's status does not allow the action (e.g. verifying a suspended hotel). */
+  HOTEL_STATUS_CONFLICT: 'HOTEL_STATUS_CONFLICT',
   ROOM_TYPE_NOT_FOUND: 'ROOM_TYPE_NOT_FOUND',
   ROOM_NOT_FOUND: 'ROOM_NOT_FOUND',
   STAFF_NOT_FOUND: 'STAFF_NOT_FOUND',
+  /** The staff account is not in a state the action applies to (e.g. deactivating a pending invitation). */
+  STAFF_STATUS_CONFLICT: 'STAFF_STATUS_CONFLICT',
   /** The room number already exists in this hotel. */
   ROOM_NUMBER_TAKEN: 'ROOM_NUMBER_TAKEN',
   /** Creating the room would exceed `totalRooms` of the hotel's room configuration. */
@@ -52,6 +58,8 @@ export const ErrorCode = {
   ROOM_NOT_LOCKABLE: 'ROOM_NOT_LOCKABLE',
 
   // Verification
+  /** Verification request or document does not exist or the caller cannot see it. */
+  VERIFICATION_NOT_FOUND: 'VERIFICATION_NOT_FOUND',
   /** The hotel already has a request waiting for review. */
   VERIFICATION_PENDING: 'VERIFICATION_PENDING',
   /** A required document (business license, fire safety, security) is missing. */
@@ -62,5 +70,11 @@ export const ErrorCode = {
   // Uploads
   /** Unsupported file type or file larger than allowed. */
   UPLOAD_INVALID_FILE: 'UPLOAD_INVALID_FILE',
+  /** File storage is not configured or not reachable; try again later. */
+  UPLOAD_UNAVAILABLE: 'UPLOAD_UNAVAILABLE',
+  /** Hotel or room type image does not exist or belongs to a hotel the caller cannot manage. */
+  IMAGE_NOT_FOUND: 'IMAGE_NOT_FOUND',
+  /** The hotel or room type already has the maximum number of images. */
+  IMAGE_LIMIT_REACHED: 'IMAGE_LIMIT_REACHED',
 } as const;
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];

@@ -86,7 +86,8 @@ export interface RoomType {
   description: string | null;
   maxOccupancy: number;
   areaSqm: number;
-  basePrice: number;
+  /** Price per night before seasonal rules. `null` only for a room type created outside the API; `PATCH basePrice` sets it. */
+  basePrice: number | null;
   beds: { bedTypeId: string; name: string; quantity: number }[];
   amenities: Amenity[];
   images: RoomTypeImage[];
@@ -111,10 +112,21 @@ export interface StaffMember {
   permissions: StaffPermission[];
 }
 
+/** `POST /uploads/verification-documents`: pass `fileId` in `documents[]` when submitting a verification request. */
+export interface UploadedDocument {
+  fileId: string;
+}
+
 export interface VerificationDocument {
   id: string;
   documentType: DocumentType;
   uploadedAt: string;
+}
+
+/** `GET /verification-documents/:id/file`: a short-lived link to open the private file. */
+export interface VerificationFileLink {
+  url: string;
+  expiresAt: string;
 }
 
 /** One item of the platform manager's queue (`GET /verification-requests`). */

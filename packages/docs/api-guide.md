@@ -53,6 +53,7 @@ Web client: set `NEXT_PUBLIC_API_URL=http://localhost:3000/api/v1`.
 2. Call APIs with the `Authorization` header.
 3. On **401 with `code: "UNAUTHENTICATED"`**: call `/auth/refresh` **once** (queue pending requests; never refresh in parallel), then retry the original request. Other 401 errors must not trigger a refresh (see section 4.3).
 4. If refresh also returns 401: clear the signed-in state and redirect to `/login?next=...`.
+5. An account deactivated by the hotel (staff) or suspended while signed in follows the same path: the next request is 401, the refresh fails with `AUTH_REFRESH_TOKEN_INVALID`, and signing in again returns **403 `AUTH_ACCOUNT_DEACTIVATED`** or **`AUTH_ACCOUNT_SUSPENDED`**. Show that message on the login page instead of a generic sign-in error.
 
 ### 2.4 Auth endpoints
 
@@ -91,7 +92,7 @@ TypeScript types for these responses come from `@stayreco/shared` (`Account`, `R
   "phone": null,
   "avatarUrl": null,
   "role": "CUSTOMER",            // see section 2.6
-  "status": "ACTIVE",            // PENDING_VERIFICATION | ACTIVE | INVITED | SUSPENDED | DELETED
+  "status": "ACTIVE",            // PENDING_VERIFICATION | ACTIVE | INVITED | SUSPENDED | DEACTIVATED | DELETED
   "emailVerified": false,
   "emailVerifiedAt": null,
   "lastLoginAt": "2026-10-14T03:00:00.000Z",
@@ -213,6 +214,7 @@ There is no `status` field in the body; the HTTP status is already available as 
 | `AUTH_INVALID_CREDENTIALS` | 401 | Wrong email or password (including unknown email) | MSG05. **Do not** refresh. |
 | `AUTH_ACCOUNT_LOCKED` | 403 | 5 wrong passwords; locked for 15 minutes | "Too many failed attempts…" |
 | `AUTH_ACCOUNT_SUSPENDED` | 403 | Account suspended | MSG06 |
+| `AUTH_ACCOUNT_DEACTIVATED` | 403 | Login of a staff account turned off by the hotel partner (correct password) | "Your account was deactivated by the hotel" |
 | `AUTH_ACCOUNT_INACTIVE` | 403 | Password reset for an inactive account | MSG06 |
 | `AUTH_EMAIL_NOT_VERIFIED` | 403 | Login with the correct password before the email code was entered | Go to the OTP screen for that email |
 | `AUTH_OTP_INVALID` | 400 | Wrong email code (also returned for unknown emails) | "Incorrect code", let the user retry |
@@ -224,18 +226,24 @@ There is no `status` field in the body; the HTTP status is already available as 
 | `AUTH_INVITATION_ACCEPTED` | 409 | Invitation already accepted | Go to sign-in |
 | `AUTH_SESSION_NOT_FOUND` | 404 | Revoking a session that doesn't exist | Reload the session list |
 | `HOTEL_NOT_FOUND` | 404 | Hotel doesn't exist or doesn't belong to the caller (not distinguished) | "Hotel not found" |
-| `PARTNER_SUSPENDED` | 403 | The partner is suspended: hotels stay readable, but creating or changing anything is refused | Show the suspension notice; hide edit actions |
+| `PARTNER_SUSPENDED` | 403 / 409 | 403: the suspended partner tries to create or change anything (hotels stay readable). 409: a platform manager approves the first verification of a suspended partner's hotel | Show the suspension notice; hide edit actions |
 | `ROOM_TYPE_NOT_FOUND` | 404 | Room type doesn't exist or belongs to another hotel | Reload the room type list |
 | `ROOM_NOT_FOUND` | 404 | Room doesn't exist or belongs to another hotel | Reload the room list |
 | `STAFF_NOT_FOUND` | 404 | Staff member doesn't exist or works at another hotel | Reload the staff list |
+| `STAFF_STATUS_CONFLICT` | 409 | Deactivating a staff member who is not ACTIVE (pending invitation, suspended), activating one who is not DEACTIVATED, or cancelling an invitation that was already accepted | Reload the staff list |
 | `ROOM_NUMBER_TAKEN` | 409 | Room number already used in this hotel | Error under the room number input |
-| `ROOM_LIMIT_REACHED` | 409 | More rooms than the declared total in the room configuration | "Room limit reached", link to room configuration |
-| `ROOM_TYPE_IN_USE` | 409 | Deleting a room type that still has rooms | "Remove its rooms first" |
-| `ROOM_NOT_LOCKABLE` | 409 | Locking a room that has a guest (`OCCUPIED`) | "The room is occupied" |
+| `ROOM_LIMIT_REACHED` | 409 | No room configuration yet, or more rooms than its declared total (also when lowering the total below existing rooms) | "Room limit reached", link to room configuration |
+| `ROOM_TYPE_IN_USE` | 409 | Deleting a room type that still has rooms or bookings | "Remove its rooms first" |
+| `ROOM_NOT_LOCKABLE` | 409 | Locking a room that has a guest (`OCCUPIED`), or unlocking a room that is not locked | "The room is occupied" / reload the room |
 | `VERIFICATION_PENDING` | 409 | A verification request is already waiting for review | Show the pending request |
 | `VERIFICATION_DOCUMENTS_MISSING` | 400 | A required document is missing (business license, fire safety, security certificate) | Highlight the missing documents |
 | `VERIFICATION_ALREADY_DECIDED` | 409 | Reviewing a request that already has a decision | Reload the request |
-| `UPLOAD_INVALID_FILE` | 400 | File is not PDF/JPG/PNG or is larger than 10 MB | Error under the upload field |
+| `VERIFICATION_NOT_FOUND` | 404 | Verification request or document doesn't exist or the caller cannot see it | Reload the list |
+| `HOTEL_STATUS_CONFLICT` | 409 | The hotel's status does not allow the action (verifying a suspended hotel, re-verifying a hotel that is not active) | Reload the hotel |
+| `UPLOAD_INVALID_FILE` | 400 | File missing, of a type not allowed (images: JPG/PNG/WebP; documents: PDF/JPG/PNG) or larger than 10 MB, or a damaged file the storage refused | Error under the upload field |
+| `UPLOAD_UNAVAILABLE` | 503 | File storage not configured or unreachable | "Upload is temporarily unavailable" |
+| `IMAGE_NOT_FOUND` | 404 | Image doesn't exist or belongs to a hotel the caller doesn't manage | Reload the image list |
+| `IMAGE_LIMIT_REACHED` | 409 | The hotel already has 30 images | "Delete an image before adding more" |
 
 Important: **refresh only when `status === 401` and `code === 'UNAUTHENTICATED'`.** Refreshing on the other 401 errors (`AUTH_INVALID_CREDENTIALS`, `AUTH_WRONG_PASSWORD`, `AUTH_REFRESH_TOKEN_INVALID`) causes infinite loops or unexpected sign-outs.
 

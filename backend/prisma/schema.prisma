@@ -28,6 +28,8 @@ enum AccountStatus {
   ACTIVE
   INVITED
   SUSPENDED
+  /// Turned off by the hotel partner (staff only); the partner can turn it back on. Not an admin suspension.
+  DEACTIVATED
   DELETED
 
   @@map("account_status")

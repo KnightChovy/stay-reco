@@ -211,6 +211,12 @@ export class AuthService {
         message: 'Account is suspended',
       });
     }
+    if (account.status === AccountStatus.DEACTIVATED) {
+      throw new ForbiddenException({
+        code: ErrorCode.AUTH_ACCOUNT_DEACTIVATED,
+        message: 'Account was deactivated by the hotel',
+      });
+    }
     // Only revealed after the correct password, so it does not leak which emails are registered.
     if (account.status === AccountStatus.PENDING_VERIFICATION) {
       throw new ForbiddenException({

@@ -11,8 +11,9 @@ import type {
   UpdateHotelInput,
 } from '@stayreco/shared';
 import type { AuthUser } from '../../common/decorators/current-user.decorator';
+import { lockHotel } from '../../common/db/locks';
 import { ErrorCode } from '../../common/errors/error-code';
-import { partnerSuspended } from '../../common/hotel-access/hotel-access.service';
+import { HotelAccessService } from '../../common/hotel-access/hotel-access.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   hotelInclude,
@@ -29,7 +30,10 @@ import {
  */
 @Injectable()
 export class HotelsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly access: HotelAccessService,
+  ) {}
 
   /** Hotels the partner owns, or the one hotel a staff member works at. */
   async myHotels(user: AuthUser): Promise<HotelSummary[]> {
@@ -51,12 +55,7 @@ export class HotelsService {
 
   /** New hotels start as DRAFT until a verification request is approved. Suspended partners cannot add hotels. */
   async create(user: AuthUser, input: CreateHotelInput): Promise<Hotel> {
-    const partner = await this.prisma.hotelPartner.findUniqueOrThrow({
-      where: { hotelPartnerId: user.accountId },
-      select: { status: true },
-    });
-    if (partner.status === 'SUSPENDED') throw partnerSuspended();
-
+    await this.access.assertPartnerNotSuspended(user.accountId);
     const hotel = await this.prisma.hotel.create({
       data: { ...toHotelData(input), hotelPartnerId: user.accountId },
       include: hotelInclude,
@@ -137,6 +136,8 @@ export class HotelsService {
     { totalRooms, basePrice }: RoomConfigInput,
   ): Promise<Hotel> {
     await this.prisma.$transaction(async (tx) => {
+      // Same lock as room creation, so a room cannot be added while the limit is being lowered.
+      await lockHotel(tx, hotelId);
       const rooms = await tx.room.count({ where: { roomType: { hotelId } } });
       if (totalRooms < rooms) {
         throw new ConflictException({

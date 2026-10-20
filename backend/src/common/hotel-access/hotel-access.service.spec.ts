@@ -67,6 +67,9 @@ describe('HotelAccessService', () => {
     await expect(service.assert(owner, HOTEL, 'member')).resolves.toMatchObject(
       { role: 'OWNER', partnerSuspended: true },
     );
+    await expect(
+      service.assert(owner, HOTEL, 'owner-view'),
+    ).resolves.toMatchObject({ role: 'OWNER' });
     await expectCode(
       service.assert(owner, HOTEL, 'owner'),
       ForbiddenException,
@@ -90,13 +93,15 @@ describe('HotelAccessService', () => {
     ).resolves.toMatchObject({ role: 'STAFF', permissions: ['FRONT_DESK'] });
   });
 
-  it('forbids staff from owner-level actions', async () => {
+  it('forbids staff from owner-level actions and owner-only reads', async () => {
     const { service } = createService();
-    await expectCode(
-      service.assert(user(STAFF, 'HOTEL_STAFF'), HOTEL, 'owner'),
-      ForbiddenException,
-      'FORBIDDEN',
-    );
+    for (const level of ['owner', 'owner-view'] as const) {
+      await expectCode(
+        service.assert(user(STAFF, 'HOTEL_STAFF'), HOTEL, level),
+        ForbiddenException,
+        'FORBIDDEN',
+      );
+    }
   });
 
   it('forbids staff without the required permission', async () => {

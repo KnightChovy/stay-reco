@@ -27,4 +27,26 @@ describe('Swagger (e2e)', () => {
       nullable: true,
     });
   });
+
+  it('describes the file part of upload endpoints so Swagger UI can send it', () => {
+    const document = SwaggerModule.createDocument(
+      t.app,
+      new DocumentBuilder().build(),
+    );
+    const multipart = (path: string) =>
+      (
+        document.paths[path].post?.requestBody as {
+          content: Record<string, { schema: { properties: object } }>;
+        }
+      ).content['multipart/form-data'].schema.properties;
+
+    expect(multipart('/api/v1/hotels/{hotelId}/images')).toMatchObject({
+      file: { type: 'string', format: 'binary' },
+      caption: { type: 'string' },
+      isCover: { type: 'string' },
+    });
+    expect(multipart('/api/v1/uploads/verification-documents')).toEqual({
+      file: expect.objectContaining({ format: 'binary' }),
+    });
+  });
 });

@@ -8,8 +8,12 @@ import type { StaffPermission } from '../../generated/prisma/client';
 import type { AuthUser } from '../decorators/current-user.decorator';
 import { ErrorCode } from '../errors/error-code';
 
-/** `owner`: only the partner who owns the hotel. `member`: the owner or a staff member assigned to it. */
-export type HotelAccessLevel = 'owner' | 'member';
+/**
+ * `owner`: changes only the owning partner may make (refused while the partner is suspended).
+ * `owner-view`: reads only the owner may see, e.g. the staff list (still allowed while suspended).
+ * `member`: reads and actions open to the owner and the staff assigned to the hotel.
+ */
+export type HotelAccessLevel = 'owner' | 'owner-view' | 'member';
 
 export interface HotelAccess {
   hotelId: string;
@@ -21,6 +25,9 @@ export interface HotelAccess {
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Ids come from the URL; check them before querying, since Postgres rejects a malformed uuid with an error. */
+export const isUuid = (value: string) => UUID.test(value);
 
 // Outsiders get "not found" so they cannot probe which hotels exist.
 const hotelNotFound = () =>
@@ -54,13 +61,11 @@ export class HotelAccessService {
     level: HotelAccessLevel,
     permission?: StaffPermission,
   ): Promise<HotelAccess> {
-    const access = UUID.test(hotelId)
-      ? await this.resolve(user, hotelId)
-      : null;
+    const access = isUuid(hotelId) ? await this.resolve(user, hotelId) : null;
     if (!access) throw hotelNotFound();
 
     if (access.role === 'STAFF') {
-      if (level === 'owner') {
+      if (level !== 'member') {
         throw forbidden('Only the hotel owner can do this');
       }
       if (permission && !access.permissions.includes(permission)) {
@@ -71,6 +76,35 @@ export class HotelAccessService {
       throw partnerSuspended();
     }
     return access;
+  }
+
+  /**
+   * For routes addressed by a child resource (`/hotel-images/:id`, `/rooms/:id`): pass the resource's hotel id, or
+   * null when the resource does not exist. A missing resource and a hotel the caller cannot see both raise
+   * `notFound`, so outsiders cannot tell them apart. Staff without the right still get 403.
+   */
+  async assertResource(
+    user: AuthUser,
+    hotelId: string | null | undefined,
+    level: HotelAccessLevel,
+    notFound: () => Error,
+    permission?: StaffPermission,
+  ): Promise<HotelAccess> {
+    if (!hotelId) throw notFound();
+    try {
+      return await this.assert(user, hotelId, level, permission);
+    } catch (err) {
+      throw err instanceof NotFoundException ? notFound() : err;
+    }
+  }
+
+  /** For partner actions not tied to an existing hotel (creating one, uploading documents). */
+  async assertPartnerNotSuspended(hotelPartnerId: string): Promise<void> {
+    const partner = await this.prisma.hotelPartner.findUniqueOrThrow({
+      where: { hotelPartnerId },
+      select: { status: true },
+    });
+    if (partner.status === 'SUSPENDED') throw partnerSuspended();
   }
 
   private async resolve(

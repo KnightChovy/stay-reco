@@ -66,13 +66,16 @@ Cột Response là nội dung của `data`.
 | PUT | `/hotels/:hotelId/amenities` | chủ | `{ amenityIds: string[] }` | `Hotel` |
 | PUT | `/hotels/:hotelId/policies` | chủ | `{ policies: Record<string, string> }` | `Hotel` |
 | PUT | `/hotels/:hotelId/room-config` | chủ | `{ totalRooms, basePrice }` | `Hotel` |
-| POST | `/hotels/:hotelId/images` | chủ | multipart `file`, `caption?`, `isCover?` | `HotelImage` (201) |
+| POST | `/hotels/:hotelId/images` | chủ | multipart `file`, `caption?`, `isCover?` (`uploadHotelImageSchema`) | `HotelImage` (201) |
+| PATCH | `/hotel-images/:id` | chủ | `{ caption?, isCover?: true, sortOrder? }` (`updateHotelImageSchema`) | `HotelImage` |
 | DELETE | `/hotel-images/:id` | chủ | | 204 |
 
 - `PATCH /hotels/:hotelId`: chỉ đổi field được gửi; gửi `null` để xóa field không bắt buộc (`description`, `latitude`, `longitude`, `starRating`, `phone`, `website`, `checkInTime`, `checkOutTime`).
 - `PUT .../amenities` và `PUT .../policies` **thay toàn bộ** danh sách (key không gửi lên sẽ bị xóa). Id tiện ích không tồn tại trả `VALIDATION_ERROR` (field `amenityIds`).
 - `PUT .../room-config`: `totalRooms` nhỏ hơn số phòng thực tế đang có trả `ROOM_LIMIT_REACHED`.
 - `GET /amenities`: tên và nhóm (`category`) bằng tiếng Việt, `icon` là tên icon của `lucide-react` (ví dụ `wifi`, `waves`).
+- **Ảnh** (luật trong `UPLOAD_RULES` của shared): JPG/PNG/WebP, tối đa 10 MB, tối đa 30 ảnh mỗi khách sạn (`IMAGE_LIMIT_REACHED`). BE đọc loại file từ nội dung, không tin tên file. Ảnh đầu tiên tự thành ảnh bìa; luôn có đúng một ảnh bìa: `isCover: true` chuyển bìa sang ảnh đó, xóa ảnh bìa thì ảnh kế tiếp (theo `sortOrder`) thành bìa. Ảnh không tồn tại hoặc không thuộc khách sạn của người gọi trả `IMAGE_NOT_FOUND`. Chưa cấu hình Cloudinary trả `503 UPLOAD_UNAVAILABLE`.
+- **Giấy tờ xác minh**: PDF/JPG/PNG, tối đa 10 MB, lưu riêng tư theo từng đối tác; `fileId` chỉ dùng được trong hồ sơ của chính đối tác đã tải lên.
 
 ### Loại phòng và phòng
 
@@ -82,44 +85,69 @@ Cột Response là nội dung của `data`.
 | POST | `/hotels/:hotelId/room-types` | chủ | `createRoomTypeSchema` | `RoomType` (201) |
 | GET | `/room-types/:id` | thành viên | | `RoomType` |
 | PATCH | `/room-types/:id` | chủ | `updateRoomTypeSchema` | `RoomType` |
-| DELETE | `/room-types/:id` | chủ | | 204 (lỗi nếu còn phòng thực tế) |
-| POST | `/room-types/:id/images` | chủ | multipart `file`, `caption?` | `RoomTypeImage` (201) |
+| DELETE | `/room-types/:id` | chủ | | 204 (`ROOM_TYPE_IN_USE` nếu còn phòng thực tế hoặc đơn đặt phòng) |
+| POST | `/room-types/:id/images` | chủ | multipart `file`, `caption?` (`uploadRoomTypeImageSchema`) | `RoomTypeImage` (201) |
+| PATCH | `/room-type-images/:id` | chủ | `{ caption?, sortOrder? }` (`updateRoomTypeImageSchema`) | `RoomTypeImage` |
 | DELETE | `/room-type-images/:id` | chủ | | 204 |
-| GET | `/hotels/:hotelId/rooms` | thành viên | `?roomTypeId=&status=&page=&pageSize=` | `Room[]` + `meta` |
+| GET | `/hotels/:hotelId/rooms` | thành viên | `?roomTypeId=&status=&search=&sort=&page=&pageSize=` (`roomListQuerySchema`) | `Room[]` + `meta` |
 | POST | `/hotels/:hotelId/rooms` | chủ | `createRoomSchema` | `Room` (201) |
 | PATCH | `/rooms/:id` | chủ | `updateRoomSchema` | `Room` |
 | POST | `/rooms/:id/lock` | chủ | `{ reason? }` | `Room` (`MAINTENANCE`) |
 | POST | `/rooms/:id/unlock` | chủ | | `Room` (`AVAILABLE`) |
 
+- **Loại phòng**: giá gốc lưu thành dòng `price` không có phòng, ngày, thứ (D3). `PATCH` gửi `beds` / `amenityIds` thì **thay cả danh sách**, không gửi thì giữ nguyên; `description: null` để xóa. Loại giường hoặc tiện ích không tồn tại trả `VALIDATION_ERROR` (field `beds` / `amenityIds`). Ảnh loại phòng giống ảnh khách sạn nhưng không có ảnh bìa (hiển thị theo `sortOrder`), tối đa 30 ảnh. `areaSqm` tối đa 2 chữ số thập phân. `basePrice` chỉ là `null` với loại phòng tạo ngoài API (seed, sửa tay); `PATCH basePrice` sẽ tạo lại giá gốc.
+- **Phòng**: phải có cấu hình phòng trước; tổng số phòng không vượt `totalRooms` (`ROOM_LIMIT_REACHED`). Số phòng không trùng trong cùng khách sạn, không phân biệt hoa thường (`ROOM_NUMBER_TAKEN`). `roomTypeId` phải thuộc cùng khách sạn (`ROOM_TYPE_NOT_FOUND`). Trạng thái không sửa qua `PATCH`.
+- **Danh sách phòng**: `search` tìm theo số phòng (tìm đúng ký tự, `%` và `_` không phải ký tự đại diện); `sort` nhận `room-number-asc` (mặc định), `room-number-desc`, `floor-asc`, `floor-desc`. Số phòng sắp theo thứ tự số tự nhiên: `9`, `101`, `1001`.
+- **Khóa / mở phòng**: khóa chuyển sang `MAINTENANCE` (không khóa được phòng `OCCUPIED`); mở chỉ áp dụng cho phòng đang khóa. Cả hai trả `ROOM_NOT_LOCKABLE` khi không hợp lệ và được ghi audit log (kèm lý do khóa).
+
 ### Nhân viên (mời nhân viên dùng `POST /auth/invitations/staff` có sẵn)
 
 | Method | Path | Quyền | Body | Response |
 |---|---|---|---|---|
-| GET | `/hotels/:hotelId/staff` | chủ | | `StaffMember[]` |
+| GET | `/hotels/:hotelId/staff` | chủ (xem được cả khi đối tác bị đình chỉ) | | `StaffMember[]` (gồm cả lời mời chưa chấp nhận, `INVITED`) |
 | PATCH | `/hotel-staff/:id/permissions` | chủ | `{ permissions: StaffPermission[] }` | `StaffMember` |
 | POST | `/hotel-staff/:id/deactivate` | chủ | | `StaffMember` |
 | POST | `/hotel-staff/:id/activate` | chủ | | `StaffMember` |
+| DELETE | `/hotel-staff/:id` | chủ | | 204: hủy lời mời chưa chấp nhận (chỉ khi `INVITED`) |
+
+- **Quyền nhân viên**: `PATCH .../permissions` thay cả danh sách (mảng rỗng = chỉ xem); có hiệu lực từ request kế tiếp của nhân viên. Nhân viên, dù đủ 5 nhóm quyền, không quản lý được nhân viên khác.
+- **Vô hiệu hóa**: `ACTIVE → DEACTIVATED` (trạng thái riêng, khác `SUSPENDED` của admin), thu hồi mọi phiên đăng nhập ngay; đăng nhập trả `403 AUTH_ACCOUNT_DEACTIVATED`. **Kích hoạt lại**: `DEACTIVATED → ACTIVE`, phiên cũ vẫn bị thu hồi. Trạng thái khác (lời mời chưa chấp nhận, bị admin đình chỉ) trả `STAFF_STATUS_CONFLICT`: đối tác không thể gỡ đình chỉ của admin. Cả ba thao tác ghi audit log.
+- **Hủy lời mời**: chỉ khi nhân viên còn `INVITED`; xóa tài khoản mời nên link trong email hết hiệu lực (`AUTH_TOKEN_INVALID`) và email được dùng lại (ví dụ gõ sai). Tài khoản đã từng dùng thì không xóa, chỉ vô hiệu hóa (`STAFF_STATUS_CONFLICT`). Ghi audit log.
 
 ### Hồ sơ xác minh
 
 | Method | Path | Quyền | Body / Query | Response |
 |---|---|---|---|---|
 | POST | `/uploads/verification-documents` | HOTEL_PARTNER | multipart `file` | `{ fileId }` (201): file riêng tư, dùng khi nộp hồ sơ |
-| POST | `/hotels/:hotelId/verification-requests` | chủ | `submitVerificationSchema` | `VerificationRequest` (201); khách sạn sang `PENDING_VERIFICATION` |
-| GET | `/hotels/:hotelId/verification-requests` | chủ | | `VerificationRequest[]` (lịch sử, lý do) |
-| GET | `/verification-requests` | PLATFORM_MANAGER | `?status=&search=&page=&pageSize=&sort=` | `VerificationRequestSummary[]` + `meta` |
+| POST | `/hotels/:hotelId/verification-requests` | chủ | `submitVerificationSchema` | `VerificationRequest` (201); `INITIAL` thì khách sạn sang `PENDING_VERIFICATION` |
+| GET | `/hotels/:hotelId/verification-requests` | chủ (xem được cả khi đối tác bị đình chỉ) | | `VerificationRequest[]` (mới nhất trước, có lý do; số tài khoản che `****1234`) |
+| GET | `/verification-requests` | PLATFORM_MANAGER | `?status=&search=&sort=&page=&pageSize=` (`verificationListQuerySchema`) | `VerificationRequestSummary[]` + `meta` |
 | GET | `/verification-requests/:id` | PLATFORM_MANAGER, chủ khách sạn | | `VerificationRequest` (đầy đủ field, số tài khoản đầy đủ) |
-| GET | `/verification-documents/:id/file` | PLATFORM_MANAGER, chủ khách sạn | | Chuyển hướng tới link xem file có hạn |
+| GET | `/verification-documents/:id/file` | PLATFORM_MANAGER, chủ khách sạn | | `VerificationFileLink` `{ url, expiresAt }`: link xem file có hạn 5 phút (trả JSON, không chuyển hướng, vì tab mới của trình duyệt không gửi được Bearer token) |
 | POST | `/verification-requests/:id/approve` | PLATFORM_MANAGER | | `VerificationRequest` |
 | POST | `/verification-requests/:id/reject` | PLATFORM_MANAGER | `{ reason }` | `VerificationRequest` |
 | POST | `/verification-requests/:id/request-changes` | PLATFORM_MANAGER | `{ reason }` | `VerificationRequest` |
-| POST | `/hotels/:hotelId/reverification` | PLATFORM_MANAGER | `{ reason }` | `VerificationRequest` (`RENEWAL`, `NEEDS_REVISION`) |
+| POST | `/hotels/:hotelId/reverification` | PLATFORM_MANAGER | `{ reason }` | `VerificationRequest` (`RENEWAL`, `NEEDS_REVISION`) (201) |
+
+- **Loại hồ sơ do backend xác định**, client không gửi: khách sạn `DRAFT` → `INITIAL`; khách sạn `ACTIVE` đang có yêu cầu xác minh lại → `RENEWAL`; khách sạn `ACTIVE` khác → `UPDATE`. Khách sạn ở trạng thái khác trả `HOTEL_STATUS_CONFLICT`.
+- **Nộp hồ sơ**: đủ 3 giấy tờ bắt buộc (`VERIFICATION_DOCUMENTS_MISSING`), mỗi giấy tờ là một file khác nhau (`VALIDATION_ERROR` ở `documents`); mỗi `fileId` phải do chính đối tác tải lên và đúng định dạng (sai thì `VALIDATION_ERROR` ở `documents.<i>.fileId`); đang có hồ sơ chờ duyệt thì `VERIFICATION_PENDING`. Bấm gửi hai lần cũng chỉ tạo một hồ sơ.
+- **Số tài khoản thụ hưởng** mã hóa AES-256-GCM khi lưu (khóa `BENEFICIARY_ENCRYPTION_KEY`); chi tiết hồ sơ hiện đầy đủ cho chủ khách sạn và quản lý nền tảng; lịch sử chỉ hiện 4 số cuối; hàng đợi không có thông tin thụ hưởng.
+- **Quyết định** chỉ áp dụng cho hồ sơ `PENDING` (người thứ hai nhận `VERIFICATION_ALREADY_DECIDED`). `INITIAL`: duyệt → khách sạn `ACTIVE`, đối tác `APPROVED` lần đầu (không duyệt được khi đối tác đang bị đình chỉ: `409 PARTNER_SUSPENDED`, vẫn từ chối hoặc yêu cầu bổ sung được); từ chối / yêu cầu bổ sung → khách sạn `DRAFT`. `UPDATE` / `RENEWAL` không đổi trạng thái khách sạn dù kết quả thế nào (đình chỉ khách sạn là quyết định riêng).
+- **Email kết quả** (duyệt, từ chối, yêu cầu bổ sung, yêu cầu xác minh lại, kèm lý do) gửi tới `legal.notificationEmail` của hồ sơ; yêu cầu xác minh lại dùng email của hồ sơ gần nhất, không có thì email liên hệ của đối tác.
+- **Hàng đợi** mặc định cũ nhất trước (`sort=submitted-asc`, hoặc `submitted-desc`); `search` tìm theo tên khách sạn.
+- Nhân viên khách sạn không xem được hồ sơ (403); người ngoài nhận `VERIFICATION_NOT_FOUND`.
+- **Xem giấy tờ (FE)**: gọi `GET /verification-documents/:id/file` bằng axios (có Bearer), nhận `{ url, expiresAt }`, rồi mở `url` ở tab mới hoặc dùng làm `src` của `<img>` / `<iframe>`. Link có chữ ký, không cần đăng nhập, hết hạn sau 5 phút; mỗi lần xem thì xin link mới, không lưu quá `expiresAt`. Mở tab ngay trong sự kiện click để không bị chặn popup:
+
+  ```ts
+  const tab = window.open('', '_blank');
+  const { data } = await api.get(`/verification-documents/${id}/file`);
+  tab!.location.href = data.data.url;
+  ```
 
 `submitVerificationSchema`:
 
 ```jsonc
 {
-  "requestType": "INITIAL",            // INITIAL | UPDATE | RENEWAL
   "legal": {                           // bước 1 (Pháp nhân)
     "legalName": "…", "taxCode": "…", "businessType": "…",
     "representativeName": "…", "representativeTitle": "…", "representativeIdNumber": "…",
@@ -183,16 +211,23 @@ Kiểu TypeScript đặt trong `@stayreco/shared` (`responses/hotel.ts`). Tiền
 | `code` | HTTP | Khi nào |
 |---|---|---|
 | `HOTEL_NOT_FOUND` | 404 | Khách sạn không tồn tại hoặc không thuộc người gọi (đã có) |
-| `PARTNER_SUSPENDED` | 403 | Đối tác bị đình chỉ: chỉ xem được, không tạo/sửa |
+| `PARTNER_SUSPENDED` | 403 / 409 | 403: đối tác bị đình chỉ chỉ xem được, không tạo/sửa. 409: quản lý duyệt hồ sơ `INITIAL` của đối tác đang bị đình chỉ |
 | `ROOM_TYPE_NOT_FOUND`, `ROOM_NOT_FOUND`, `STAFF_NOT_FOUND` | 404 | Tương tự, theo tài nguyên |
+| `STAFF_STATUS_CONFLICT` | 409 | Vô hiệu hóa nhân viên không ở trạng thái `ACTIVE`, kích hoạt nhân viên không ở `DEACTIVATED`, hoặc hủy lời mời đã được chấp nhận |
+| `AUTH_ACCOUNT_DEACTIVATED` | 403 | Nhân viên đã bị đối tác vô hiệu hóa đăng nhập (đúng mật khẩu) |
 | `ROOM_NUMBER_TAKEN` | 409 | Số phòng đã có trong khách sạn |
-| `ROOM_LIMIT_REACHED` | 409 | Vượt `total_rooms` của cấu hình phòng |
-| `ROOM_TYPE_IN_USE` | 409 | Xóa loại phòng khi còn phòng thực tế |
-| `ROOM_NOT_LOCKABLE` | 409 | Khóa phòng đang có khách (`OCCUPIED`) |
+| `ROOM_LIMIT_REACHED` | 409 | Chưa có cấu hình phòng, hoặc vượt `total_rooms` (kể cả khi hạ `total_rooms` thấp hơn số phòng đang có) |
+| `ROOM_TYPE_IN_USE` | 409 | Xóa loại phòng khi còn phòng thực tế hoặc đơn đặt phòng |
+| `ROOM_NOT_LOCKABLE` | 409 | Khóa phòng đang có khách (`OCCUPIED`), hoặc mở phòng không ở trạng thái khóa |
 | `VERIFICATION_PENDING` | 409 | Đã có hồ sơ đang chờ duyệt |
 | `VERIFICATION_DOCUMENTS_MISSING` | 400 | Thiếu tài liệu bắt buộc (D10) |
 | `VERIFICATION_ALREADY_DECIDED` | 409 | Duyệt / từ chối hồ sơ đã có kết quả |
-| `UPLOAD_INVALID_FILE` | 400 | Sai định dạng hoặc quá 10 MB |
+| `VERIFICATION_NOT_FOUND` | 404 | Hồ sơ hoặc giấy tờ không tồn tại, hoặc người gọi không được xem |
+| `HOTEL_STATUS_CONFLICT` | 409 | Trạng thái khách sạn không cho phép thao tác (nộp hồ sơ khi bị đình chỉ, xác minh lại khách sạn chưa hoạt động) |
+| `UPLOAD_INVALID_FILE` | 400 | Thiếu file, sai định dạng, quá 10 MB, hoặc file hỏng (Cloudinary từ chối) |
+| `UPLOAD_UNAVAILABLE` | 503 | Chưa cấu hình hoặc không kết nối được Cloudinary |
+| `IMAGE_NOT_FOUND` | 404 | Ảnh không tồn tại hoặc không thuộc khách sạn người gọi quản lý |
+| `IMAGE_LIMIT_REACHED` | 409 | Đã đủ 30 ảnh |
 
 ## 6. Việc của FE
 
