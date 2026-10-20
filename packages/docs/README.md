@@ -17,7 +17,7 @@ Nơi BE, FE web và mobile thống nhất **đang làm phase nào** và **API tr
 | Phase | Nội dung | Trạng thái | Contract |
 |---|---|---|---|
 | [0](./phases/phase-0-foundation.md) | Nền tảng: auth, envelope, shared | 🟡 Đang làm | [BE Done](./contracts/phase-0-foundation.md) |
-| [1](./phases/phase-1-hotel-onboarding.md) | Đối tác đưa khách sạn lên, quản lý duyệt | 🟡 Đang làm | [Agreed (BE)](./contracts/phase-1-hotel-onboarding.md) |
+| [1](./phases/phase-1-hotel-onboarding.md) | Đối tác đưa khách sạn lên, quản lý duyệt | 🟡 BE xong, FE đang tích hợp | [BE Done](./contracts/phase-1-hotel-onboarding.md) |
 | [2](./phases/phase-2-search-booking.md) | Tìm kiếm, đặt phòng, thanh toán | ⬜ Chưa bắt đầu | |
 | [3](./phases/phase-3-operations.md) | Vận hành: check-in/out, hoàn tiền, inbox | ⬜ Chưa bắt đầu | |
 | [4](./phases/phase-4-loyalty-promotions.md) | Loyalty, khuyến mãi, đánh giá, ví | ⬜ Chưa bắt đầu | |
