@@ -44,6 +44,17 @@ const envSchema = z
     CLOUDINARY_CLOUD_NAME: z.string().optional(),
     CLOUDINARY_API_KEY: z.string().optional(),
     CLOUDINARY_API_SECRET: z.string().optional(),
+    /**
+     * AES-256-GCM key for beneficiary account numbers (contract D12): 32 random bytes in base64. Never change it once
+     * data exists, or stored numbers can no longer be read. Generate:
+     * node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+     */
+    BENEFICIARY_ENCRYPTION_KEY: z
+      .string()
+      .refine(
+        (v) => Buffer.from(v, 'base64').length === 32,
+        'must be 32 bytes encoded in base64',
+      ),
   })
   .superRefine((env, ctx) => {
     if (env.CLOUDINARY_CLOUD_NAME) {

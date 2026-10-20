@@ -123,6 +123,12 @@ export interface VerificationDocument {
   uploadedAt: string;
 }
 
+/** `GET /verification-documents/:id/file`: a short-lived link to open the private file. */
+export interface VerificationFileLink {
+  url: string;
+  expiresAt: string;
+}
+
 /** One item of the platform manager's queue (`GET /verification-requests`). */
 export interface VerificationRequestSummary {
   id: string;

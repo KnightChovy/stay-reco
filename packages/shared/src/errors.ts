@@ -41,6 +41,8 @@ export const ErrorCode = {
   HOTEL_NOT_FOUND: 'HOTEL_NOT_FOUND',
   /** The partner is suspended: its hotels stay readable, but it cannot create or change anything. */
   PARTNER_SUSPENDED: 'PARTNER_SUSPENDED',
+  /** The hotel's status does not allow the action (e.g. verifying a suspended hotel). */
+  HOTEL_STATUS_CONFLICT: 'HOTEL_STATUS_CONFLICT',
   ROOM_TYPE_NOT_FOUND: 'ROOM_TYPE_NOT_FOUND',
   ROOM_NOT_FOUND: 'ROOM_NOT_FOUND',
   STAFF_NOT_FOUND: 'STAFF_NOT_FOUND',
@@ -56,6 +58,8 @@ export const ErrorCode = {
   ROOM_NOT_LOCKABLE: 'ROOM_NOT_LOCKABLE',
 
   // Verification
+  /** Verification request or document does not exist or the caller cannot see it. */
+  VERIFICATION_NOT_FOUND: 'VERIFICATION_NOT_FOUND',
   /** The hotel already has a request waiting for review. */
   VERIFICATION_PENDING: 'VERIFICATION_PENDING',
   /** A required document (business license, fire safety, security) is missing. */

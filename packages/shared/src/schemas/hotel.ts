@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { DocumentType, RoomStatus, StaffPermission, VerificationRequestType, VerificationStatus } from '../enums';
+import { DocumentType, RoomStatus, StaffPermission, VerificationStatus } from '../enums';
 import { emailSchema } from './auth';
 import { hasAtMost2Decimals, listQuerySchema, moneySchema, reasonSchema } from './common';
 
@@ -207,8 +207,11 @@ export type StaffPermissionsInput = z.infer<typeof staffPermissionsSchema>;
 
 // ── Verification ────────────────────────────────────────────
 
+/**
+ * The 4-step wizard. The request type is not sent: the backend derives it from the hotel (DRAFT → INITIAL, a pending
+ * re-verification → RENEWAL, any other ACTIVE hotel → UPDATE).
+ */
 export const submitVerificationSchema = z.strictObject({
-  requestType: z.enum(VerificationRequestType).default('INITIAL'),
   legal: z.strictObject({
     legalName: z.string().trim().min(1).max(255),
     taxCode: z
@@ -252,7 +255,12 @@ export const submitVerificationSchema = z.strictObject({
       }),
     )
     .min(1)
-    .max(10),
+    .max(10)
+    // One PDF reused for every required type would satisfy D10 without real documents.
+    .refine(
+      (docs) => new Set(docs.map((d) => d.fileId)).size === docs.length,
+      'each document must be a different file',
+    ),
   /** Step 4: the partner confirms the information is accurate. */
   commitment: z.literal(true),
 });
@@ -263,7 +271,11 @@ export const verificationDecisionSchema = z.strictObject({
 });
 export type VerificationDecisionInput = z.infer<typeof verificationDecisionSchema>;
 
+export const VERIFICATION_SORTS = ['submitted-asc', 'submitted-desc'] as const;
+
+/** Manager queue: `search` matches the hotel name; oldest first by default (SLA). */
 export const verificationListQuerySchema = listQuerySchema.extend({
+  sort: z.enum(VERIFICATION_SORTS).default('submitted-asc'),
   status: z.enum(VerificationStatus).optional(),
 });
 export type VerificationListQuery = z.infer<typeof verificationListQuerySchema>;

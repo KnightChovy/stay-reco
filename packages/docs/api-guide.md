@@ -226,7 +226,7 @@ There is no `status` field in the body; the HTTP status is already available as 
 | `AUTH_INVITATION_ACCEPTED` | 409 | Invitation already accepted | Go to sign-in |
 | `AUTH_SESSION_NOT_FOUND` | 404 | Revoking a session that doesn't exist | Reload the session list |
 | `HOTEL_NOT_FOUND` | 404 | Hotel doesn't exist or doesn't belong to the caller (not distinguished) | "Hotel not found" |
-| `PARTNER_SUSPENDED` | 403 | The partner is suspended: hotels stay readable, but creating or changing anything is refused | Show the suspension notice; hide edit actions |
+| `PARTNER_SUSPENDED` | 403 / 409 | 403: the suspended partner tries to create or change anything (hotels stay readable). 409: a platform manager approves the first verification of a suspended partner's hotel | Show the suspension notice; hide edit actions |
 | `ROOM_TYPE_NOT_FOUND` | 404 | Room type doesn't exist or belongs to another hotel | Reload the room type list |
 | `ROOM_NOT_FOUND` | 404 | Room doesn't exist or belongs to another hotel | Reload the room list |
 | `STAFF_NOT_FOUND` | 404 | Staff member doesn't exist or works at another hotel | Reload the staff list |
@@ -238,6 +238,8 @@ There is no `status` field in the body; the HTTP status is already available as 
 | `VERIFICATION_PENDING` | 409 | A verification request is already waiting for review | Show the pending request |
 | `VERIFICATION_DOCUMENTS_MISSING` | 400 | A required document is missing (business license, fire safety, security certificate) | Highlight the missing documents |
 | `VERIFICATION_ALREADY_DECIDED` | 409 | Reviewing a request that already has a decision | Reload the request |
+| `VERIFICATION_NOT_FOUND` | 404 | Verification request or document doesn't exist or the caller cannot see it | Reload the list |
+| `HOTEL_STATUS_CONFLICT` | 409 | The hotel's status does not allow the action (verifying a suspended hotel, re-verifying a hotel that is not active) | Reload the hotel |
 | `UPLOAD_INVALID_FILE` | 400 | File missing, of a type not allowed (images: JPG/PNG/WebP; documents: PDF/JPG/PNG) or larger than 10 MB, or a damaged file the storage refused | Error under the upload field |
 | `UPLOAD_UNAVAILABLE` | 503 | File storage not configured or unreachable | "Upload is temporarily unavailable" |
 | `IMAGE_NOT_FOUND` | 404 | Image doesn't exist or belongs to a hotel the caller doesn't manage | Reload the image list |
