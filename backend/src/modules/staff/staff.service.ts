@@ -145,22 +145,32 @@ export class StaffService {
   ): Promise<void> {
     await this.findForOwner(user, staffId);
     const email = await this.prisma.$transaction(async (tx) => {
-      const account = await tx.userAccount.findUniqueOrThrow({
+      const status = async () =>
+        (
+          await tx.userAccount.findUnique({
+            where: { userAccountId: staffId },
+            select: { status: true },
+          })
+        )?.status;
+      // Gone = already cancelled (e.g. a double click): not found, not a status conflict.
+      const conflictOrGone = (current: string | undefined) =>
+        current
+          ? statusConflict('Only a pending invitation can be cancelled')
+          : staffNotFound();
+
+      const account = await tx.userAccount.findUnique({
         where: { userAccountId: staffId },
         select: { email: true, status: true },
       });
-      if (account.status !== 'INVITED') {
-        throw statusConflict('Only a pending invitation can be cancelled');
-      }
+      if (account?.status !== 'INVITED') throw conflictOrGone(account?.status);
+
       // notification has no ON DELETE CASCADE; the staff row and tokens do.
       await tx.notification.deleteMany({ where: { userAccountId: staffId } });
-      // Conditional delete: an acceptance landing meanwhile turns the account ACTIVE and wins.
+      // Conditional delete: an acceptance or another cancel landing meanwhile wins.
       const { count } = await tx.userAccount.deleteMany({
         where: { userAccountId: staffId, status: 'INVITED' },
       });
-      if (!count) {
-        throw statusConflict('Only a pending invitation can be cancelled');
-      }
+      if (!count) throw conflictOrGone(await status());
       return account.email;
     });
     await this.audit.log(

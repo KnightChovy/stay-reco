@@ -300,6 +300,24 @@ describe('Hotel staff (e2e)', () => {
     ).toBe(2);
   });
 
+  it('answers a double cancel with 404 for the late request', async () => {
+    const owner = await partnerWithHotel();
+    const invited = await invitedStaff(owner.hotelId, 'zed@hotel.test');
+    const cancel = () =>
+      t
+        .api()
+        .delete(`/api/v1/hotel-staff/${invited.userAccountId}`)
+        .set(auth(owner.token));
+
+    const results = await Promise.all([cancel(), cancel()]);
+    expect(results.map((r) => r.status).sort()).toEqual([204, 404]);
+    expect(results.find((r) => r.status === 404)!.body.code).toBe(
+      'STAFF_NOT_FOUND',
+    );
+    // Sequentially as well.
+    await cancel().expect(404);
+  });
+
   it('a suspended partner cannot change its staff', async () => {
     const owner = await partnerWithHotel();
     const staff = await t.signInStaff(owner.hotelId, 'anna@hotel.test');
