@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Trạng thái | ⬜ Chưa bắt đầu |
+| Trạng thái | 🟡 Đang làm |
 | Contract | [contracts/phase-1-hotel-onboarding.md](../contracts/phase-1-hotel-onboarding.md) |
 
 ## Mục tiêu
