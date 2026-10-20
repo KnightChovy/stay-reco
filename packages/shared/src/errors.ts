@@ -18,6 +18,8 @@ export const ErrorCode = {
   AUTH_INVALID_CREDENTIALS: 'AUTH_INVALID_CREDENTIALS',
   AUTH_ACCOUNT_LOCKED: 'AUTH_ACCOUNT_LOCKED',
   AUTH_ACCOUNT_SUSPENDED: 'AUTH_ACCOUNT_SUSPENDED',
+  /** Staff account turned off by the hotel partner. */
+  AUTH_ACCOUNT_DEACTIVATED: 'AUTH_ACCOUNT_DEACTIVATED',
   AUTH_ACCOUNT_INACTIVE: 'AUTH_ACCOUNT_INACTIVE',
   /** Correct password but the email has not been verified yet; show the OTP screen. */
   AUTH_EMAIL_NOT_VERIFIED: 'AUTH_EMAIL_NOT_VERIFIED',
@@ -42,6 +44,8 @@ export const ErrorCode = {
   ROOM_TYPE_NOT_FOUND: 'ROOM_TYPE_NOT_FOUND',
   ROOM_NOT_FOUND: 'ROOM_NOT_FOUND',
   STAFF_NOT_FOUND: 'STAFF_NOT_FOUND',
+  /** The staff account is not in a state the action applies to (e.g. deactivating a pending invitation). */
+  STAFF_STATUS_CONFLICT: 'STAFF_STATUS_CONFLICT',
   /** The room number already exists in this hotel. */
   ROOM_NUMBER_TAKEN: 'ROOM_NUMBER_TAKEN',
   /** Creating the room would exceed `totalRooms` of the hotel's room configuration. */

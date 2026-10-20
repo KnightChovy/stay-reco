@@ -14,6 +14,8 @@ export const AccountStatus = {
   ACTIVE: 'ACTIVE',
   INVITED: 'INVITED',
   SUSPENDED: 'SUSPENDED',
+  /** Staff turned off by their hotel partner, who can turn them back on (not an admin suspension). */
+  DEACTIVATED: 'DEACTIVATED',
   DELETED: 'DELETED',
 } as const;
 export type AccountStatus = (typeof AccountStatus)[keyof typeof AccountStatus];

@@ -49,7 +49,7 @@ Cột **Response** là nội dung của `data`. Cột BE/FE: ✅ xong · ⏳ đa
   "phone": null,
   "avatarUrl": null,
   "role": "CUSTOMER",            // xem api-guide mục 2.6
-  "status": "ACTIVE",            // PENDING_VERIFICATION | ACTIVE | INVITED | SUSPENDED | DELETED
+  "status": "ACTIVE",            // PENDING_VERIFICATION | ACTIVE | INVITED | SUSPENDED | DEACTIVATED | DELETED
   "emailVerified": false,
   "emailVerifiedAt": null,
   "lastLoginAt": "2026-10-14T03:00:00.000Z",
