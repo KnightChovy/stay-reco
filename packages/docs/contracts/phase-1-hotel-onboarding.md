@@ -104,10 +104,13 @@ Cột Response là nội dung của `data`.
 
 | Method | Path | Quyền | Body | Response |
 |---|---|---|---|---|
-| GET | `/hotels/:hotelId/staff` | chủ | | `StaffMember[]` |
+| GET | `/hotels/:hotelId/staff` | chủ (xem được cả khi đối tác bị đình chỉ) | | `StaffMember[]` (gồm cả lời mời chưa chấp nhận, `INVITED`) |
 | PATCH | `/hotel-staff/:id/permissions` | chủ | `{ permissions: StaffPermission[] }` | `StaffMember` |
 | POST | `/hotel-staff/:id/deactivate` | chủ | | `StaffMember` |
 | POST | `/hotel-staff/:id/activate` | chủ | | `StaffMember` |
+
+- **Quyền nhân viên**: `PATCH .../permissions` thay cả danh sách (mảng rỗng = chỉ xem); có hiệu lực từ request kế tiếp của nhân viên. Nhân viên, dù đủ 5 nhóm quyền, không quản lý được nhân viên khác.
+- **Vô hiệu hóa**: `ACTIVE → DEACTIVATED` (trạng thái riêng, khác `SUSPENDED` của admin), thu hồi mọi phiên đăng nhập ngay; đăng nhập trả `403 AUTH_ACCOUNT_DEACTIVATED`. **Kích hoạt lại**: `DEACTIVATED → ACTIVE`, phiên cũ vẫn bị thu hồi. Trạng thái khác (lời mời chưa chấp nhận, bị admin đình chỉ) trả `STAFF_STATUS_CONFLICT`: đối tác không thể gỡ đình chỉ của admin. Cả ba thao tác ghi audit log.
 
 ### Hồ sơ xác minh
 
@@ -194,6 +197,8 @@ Kiểu TypeScript đặt trong `@stayreco/shared` (`responses/hotel.ts`). Tiền
 | `HOTEL_NOT_FOUND` | 404 | Khách sạn không tồn tại hoặc không thuộc người gọi (đã có) |
 | `PARTNER_SUSPENDED` | 403 | Đối tác bị đình chỉ: chỉ xem được, không tạo/sửa |
 | `ROOM_TYPE_NOT_FOUND`, `ROOM_NOT_FOUND`, `STAFF_NOT_FOUND` | 404 | Tương tự, theo tài nguyên |
+| `STAFF_STATUS_CONFLICT` | 409 | Vô hiệu hóa nhân viên không ở trạng thái `ACTIVE`, hoặc kích hoạt nhân viên không ở `DEACTIVATED` |
+| `AUTH_ACCOUNT_DEACTIVATED` | 403 | Nhân viên đã bị đối tác vô hiệu hóa đăng nhập (đúng mật khẩu) |
 | `ROOM_NUMBER_TAKEN` | 409 | Số phòng đã có trong khách sạn |
 | `ROOM_LIMIT_REACHED` | 409 | Chưa có cấu hình phòng, hoặc vượt `total_rooms` (kể cả khi hạ `total_rooms` thấp hơn số phòng đang có) |
 | `ROOM_TYPE_IN_USE` | 409 | Xóa loại phòng khi còn phòng thực tế hoặc đơn đặt phòng |

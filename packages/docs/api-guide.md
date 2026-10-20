@@ -91,7 +91,7 @@ TypeScript types for these responses come from `@stayreco/shared` (`Account`, `R
   "phone": null,
   "avatarUrl": null,
   "role": "CUSTOMER",            // see section 2.6
-  "status": "ACTIVE",            // PENDING_VERIFICATION | ACTIVE | INVITED | SUSPENDED | DELETED
+  "status": "ACTIVE",            // PENDING_VERIFICATION | ACTIVE | INVITED | SUSPENDED | DEACTIVATED | DELETED
   "emailVerified": false,
   "emailVerifiedAt": null,
   "lastLoginAt": "2026-10-14T03:00:00.000Z",
@@ -213,6 +213,7 @@ There is no `status` field in the body; the HTTP status is already available as 
 | `AUTH_INVALID_CREDENTIALS` | 401 | Wrong email or password (including unknown email) | MSG05. **Do not** refresh. |
 | `AUTH_ACCOUNT_LOCKED` | 403 | 5 wrong passwords; locked for 15 minutes | "Too many failed attempts…" |
 | `AUTH_ACCOUNT_SUSPENDED` | 403 | Account suspended | MSG06 |
+| `AUTH_ACCOUNT_DEACTIVATED` | 403 | Login of a staff account turned off by the hotel partner (correct password) | "Your account was deactivated by the hotel" |
 | `AUTH_ACCOUNT_INACTIVE` | 403 | Password reset for an inactive account | MSG06 |
 | `AUTH_EMAIL_NOT_VERIFIED` | 403 | Login with the correct password before the email code was entered | Go to the OTP screen for that email |
 | `AUTH_OTP_INVALID` | 400 | Wrong email code (also returned for unknown emails) | "Incorrect code", let the user retry |
@@ -228,6 +229,7 @@ There is no `status` field in the body; the HTTP status is already available as 
 | `ROOM_TYPE_NOT_FOUND` | 404 | Room type doesn't exist or belongs to another hotel | Reload the room type list |
 | `ROOM_NOT_FOUND` | 404 | Room doesn't exist or belongs to another hotel | Reload the room list |
 | `STAFF_NOT_FOUND` | 404 | Staff member doesn't exist or works at another hotel | Reload the staff list |
+| `STAFF_STATUS_CONFLICT` | 409 | Deactivating a staff member who is not ACTIVE (pending invitation, suspended), or activating one who is not DEACTIVATED | Reload the staff list |
 | `ROOM_NUMBER_TAKEN` | 409 | Room number already used in this hotel | Error under the room number input |
 | `ROOM_LIMIT_REACHED` | 409 | No room configuration yet, or more rooms than its declared total (also when lowering the total below existing rooms) | "Room limit reached", link to room configuration |
 | `ROOM_TYPE_IN_USE` | 409 | Deleting a room type that still has rooms or bookings | "Remove its rooms first" |

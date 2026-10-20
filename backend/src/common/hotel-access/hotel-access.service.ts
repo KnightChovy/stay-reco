@@ -8,8 +8,12 @@ import type { StaffPermission } from '../../generated/prisma/client';
 import type { AuthUser } from '../decorators/current-user.decorator';
 import { ErrorCode } from '../errors/error-code';
 
-/** `owner`: only the partner who owns the hotel. `member`: the owner or a staff member assigned to it. */
-export type HotelAccessLevel = 'owner' | 'member';
+/**
+ * `owner`: changes only the owning partner may make (refused while the partner is suspended).
+ * `owner-view`: reads only the owner may see, e.g. the staff list (still allowed while suspended).
+ * `member`: reads and actions open to the owner and the staff assigned to the hotel.
+ */
+export type HotelAccessLevel = 'owner' | 'owner-view' | 'member';
 
 export interface HotelAccess {
   hotelId: string;
@@ -61,7 +65,7 @@ export class HotelAccessService {
     if (!access) throw hotelNotFound();
 
     if (access.role === 'STAFF') {
-      if (level === 'owner') {
+      if (level !== 'member') {
         throw forbidden('Only the hotel owner can do this');
       }
       if (permission && !access.permissions.includes(permission)) {
