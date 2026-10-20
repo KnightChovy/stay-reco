@@ -11,6 +11,7 @@ import type {
 } from '@stayreco/shared';
 import type { AuthUser } from '../../common/decorators/current-user.decorator';
 import type { RequestMeta } from '../../common/decorators/request-meta.decorator';
+import { escapeLike } from '../../common/db/like';
 import { lockHotel } from '../../common/db/locks';
 import { ErrorCode } from '../../common/errors/error-code';
 import {
@@ -33,12 +34,6 @@ const roomNotFound = () =>
 
 const notLockable = (message: string) =>
   new ConflictException({ code: ErrorCode.ROOM_NOT_LOCKABLE, message });
-
-/**
- * Prisma turns `contains` and case-insensitive `equals` into ILIKE without escaping: escape the wildcards so
- * `1_1` neither matches `101` in a search nor counts as a duplicate of `111`.
- */
-const escapeLike = (value: string) => value.replace(/[\\%_]/g, (c) => `\\${c}`);
 
 // Numeric-aware, so room 101 comes before 1001 (a plain string sort puts 1001 first).
 const collator = new Intl.Collator('en', {
