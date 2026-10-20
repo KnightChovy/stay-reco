@@ -22,7 +22,7 @@
 
 **Quy ước gọi API** (chi tiết ở [api-guide.md](../api-guide.md))
 
-- Gửi `Authorization: Bearer <accessToken>` cho mọi API trừ `/amenities`, `/bed-types`. Refresh token khi gặp `401 UNAUTHENTICATED` (api-guide §2.3).
+- Gửi `Authorization: Bearer <accessToken>` cho mọi API của phần này trừ `/amenities`, `/bed-types` (các API đăng ký, đăng nhập, xác thực email, chấp nhận lời mời cũng không cần token, xem api-guide §2.4). Refresh token khi gặp `401 UNAUTHENTICATED` (api-guide §2.3).
 - Mọi response có dạng `{ success, message, data, meta? }`; lỗi có `code`. **FE xử lý theo `code`**, không theo `message`. Bảng mã lỗi của phần này ở mục 5.
 - Danh sách có phân trang trả `meta: { page, pageSize, total, totalPages }`.
 - **Tải file**: `multipart/form-data`, field file tên là `file`; các field chữ đi kèm (`caption`, `isCover`) gửi dạng chuỗi (`isCover: "true"`). Ví dụ:

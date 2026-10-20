@@ -71,8 +71,20 @@ async function seedCatalog() {
 async function main() {
   await seedCatalog();
   await seedAdmin();
-  // Demo hotels, partners, staff and a platform manager; set SEED_DEMO=false to skip.
-  if (process.env.SEED_DEMO !== 'false') await seedDemo(prisma);
+  if (shouldSeedDemo()) await seedDemo(prisma);
+}
+
+/**
+ * Demo hotels, partners, staff and a platform manager share a public password, so they are never created in
+ * production unless SEED_DEMO=true is set on purpose. Elsewhere they are on by default; SEED_DEMO=false skips them.
+ */
+function shouldSeedDemo() {
+  const flag = process.env.SEED_DEMO;
+  if (process.env.NODE_ENV === 'production') {
+    if (flag !== 'true') console.log('Demo data skipped (production)');
+    return flag === 'true';
+  }
+  return flag !== 'false';
 }
 
 async function seedAdmin() {
