@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { PrismaPg } from '@prisma/adapter-pg';
 import * as argon2 from 'argon2';
 import { PrismaClient, UserRole } from '../src/generated/prisma/client';
+import { seedDemo } from './seed-demo';
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
@@ -69,7 +70,12 @@ async function seedCatalog() {
 
 async function main() {
   await seedCatalog();
+  await seedAdmin();
+  // Demo hotels, partners, staff and a platform manager; set SEED_DEMO=false to skip.
+  if (process.env.SEED_DEMO !== 'false') await seedDemo(prisma);
+}
 
+async function seedAdmin() {
   const email = process.env.SEED_ADMIN_EMAIL?.trim().toLowerCase();
   const password = process.env.SEED_ADMIN_PASSWORD;
   if (!email || !password) {
