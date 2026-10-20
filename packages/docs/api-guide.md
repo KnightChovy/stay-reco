@@ -229,9 +229,9 @@ There is no `status` field in the body; the HTTP status is already available as 
 | `ROOM_NOT_FOUND` | 404 | Room doesn't exist or belongs to another hotel | Reload the room list |
 | `STAFF_NOT_FOUND` | 404 | Staff member doesn't exist or works at another hotel | Reload the staff list |
 | `ROOM_NUMBER_TAKEN` | 409 | Room number already used in this hotel | Error under the room number input |
-| `ROOM_LIMIT_REACHED` | 409 | More rooms than the declared total in the room configuration | "Room limit reached", link to room configuration |
-| `ROOM_TYPE_IN_USE` | 409 | Deleting a room type that still has rooms | "Remove its rooms first" |
-| `ROOM_NOT_LOCKABLE` | 409 | Locking a room that has a guest (`OCCUPIED`) | "The room is occupied" |
+| `ROOM_LIMIT_REACHED` | 409 | No room configuration yet, or more rooms than its declared total (also when lowering the total below existing rooms) | "Room limit reached", link to room configuration |
+| `ROOM_TYPE_IN_USE` | 409 | Deleting a room type that still has rooms or bookings | "Remove its rooms first" |
+| `ROOM_NOT_LOCKABLE` | 409 | Locking a room that has a guest (`OCCUPIED`), or unlocking a room that is not locked | "The room is occupied" / reload the room |
 | `VERIFICATION_PENDING` | 409 | A verification request is already waiting for review | Show the pending request |
 | `VERIFICATION_DOCUMENTS_MISSING` | 400 | A required document is missing (business license, fire safety, security certificate) | Highlight the missing documents |
 | `VERIFICATION_ALREADY_DECIDED` | 409 | Reviewing a request that already has a decision | Reload the request |

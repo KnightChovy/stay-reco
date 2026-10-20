@@ -11,6 +11,7 @@ import type {
   UpdateHotelInput,
 } from '@stayreco/shared';
 import type { AuthUser } from '../../common/decorators/current-user.decorator';
+import { lockHotel } from '../../common/db/locks';
 import { ErrorCode } from '../../common/errors/error-code';
 import { HotelAccessService } from '../../common/hotel-access/hotel-access.service';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -135,6 +136,8 @@ export class HotelsService {
     { totalRooms, basePrice }: RoomConfigInput,
   ): Promise<Hotel> {
     await this.prisma.$transaction(async (tx) => {
+      // Same lock as room creation, so a room cannot be added while the limit is being lowered.
+      await lockHotel(tx, hotelId);
       const rooms = await tx.room.count({ where: { roomType: { hotelId } } });
       if (totalRooms < rooms) {
         throw new ConflictException({

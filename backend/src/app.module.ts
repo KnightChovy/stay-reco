@@ -12,6 +12,7 @@ import { AuditModule } from './modules/audit/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
 import { HotelsModule } from './modules/hotels/hotels.module';
+import { RoomsModule } from './modules/rooms/rooms.module';
 import { MailModule } from './modules/mail/mail.module';
 import { StorageModule } from './modules/storage/storage.module';
 import { VerificationModule } from './modules/verification/verification.module';
@@ -45,6 +46,7 @@ import { PrismaModule } from './prisma/prisma.module';
     AuthModule,
     CatalogModule,
     HotelsModule,
+    RoomsModule,
     VerificationModule,
   ],
   controllers: [AppController],

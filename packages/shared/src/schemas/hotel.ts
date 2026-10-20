@@ -120,6 +120,18 @@ export const updateHotelImageSchema = z.strictObject({
 });
 export type UpdateHotelImageInput = z.infer<typeof updateHotelImageSchema>;
 
+/** Room type images have no cover: the first one in `sortOrder` is shown first. */
+export const uploadRoomTypeImageSchema = z.strictObject({
+  caption: z.string().trim().max(255).optional(),
+});
+export type UploadRoomTypeImageInput = z.infer<typeof uploadRoomTypeImageSchema>;
+
+export const updateRoomTypeImageSchema = z.strictObject({
+  caption: z.string().trim().max(255).nullable().optional(),
+  sortOrder: z.number().int().min(0).max(1000).optional(),
+});
+export type UpdateRoomTypeImageInput = z.infer<typeof updateRoomTypeImageSchema>;
+
 // ── Room types and rooms ────────────────────────────────────
 
 const roomTypeFields = {
@@ -147,7 +159,10 @@ export const createRoomTypeSchema = z.strictObject({
 });
 export type CreateRoomTypeInput = z.infer<typeof createRoomTypeSchema>;
 
-export const updateRoomTypeSchema = z.strictObject(roomTypeFields).partial();
+/** `beds` and `amenityIds`, when sent, replace the whole list; `description: null` clears it. */
+export const updateRoomTypeSchema = z
+  .strictObject({ ...roomTypeFields, description: roomTypeFields.description.nullable() })
+  .partial();
 export type UpdateRoomTypeInput = z.infer<typeof updateRoomTypeSchema>;
 
 const roomFields = {
@@ -160,7 +175,10 @@ const roomFields = {
 export const createRoomSchema = z.strictObject(roomFields);
 export type CreateRoomInput = z.infer<typeof createRoomSchema>;
 
-export const updateRoomSchema = z.strictObject(roomFields).partial();
+/** The status is not edited here: use lock / unlock (and front-desk actions later). `null` clears floor or notes. */
+export const updateRoomSchema = z
+  .strictObject({ ...roomFields, floor: roomFields.floor.nullable(), notes: roomFields.notes.nullable() })
+  .partial();
 export type UpdateRoomInput = z.infer<typeof updateRoomSchema>;
 
 export const lockRoomSchema = z.strictObject({
@@ -168,7 +186,11 @@ export const lockRoomSchema = z.strictObject({
 });
 export type LockRoomInput = z.infer<typeof lockRoomSchema>;
 
+export const ROOM_SORTS = ['room-number-asc', 'room-number-desc', 'floor-asc', 'floor-desc'] as const;
+
+/** `search` matches the room number; default order is `room-number-asc`. */
 export const roomListQuerySchema = listQuerySchema.extend({
+  sort: z.enum(ROOM_SORTS).default('room-number-asc'),
   roomTypeId: z.uuid().optional(),
   status: z.enum(RoomStatus).optional(),
 });
