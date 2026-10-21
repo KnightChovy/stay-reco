@@ -2,7 +2,8 @@
 
 | | |
 |---|---|
-| Trạng thái | ⬜ Chưa bắt đầu |
+| Trạng thái phase | ⬜ Chưa bắt đầu |
+| Trạng thái API | Chưa có |
 | API | Chưa có. Khi phase bắt đầu: điền file này theo [`_template.md`](./_template.md), endpoint ghi vào [api/](../api/README.md). |
 
 ## Mục tiêu

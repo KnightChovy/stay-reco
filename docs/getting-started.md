@@ -76,7 +76,7 @@ Mật khẩu chung `Demo@123456` (đổi bằng `SEED_DEMO_PASSWORD`).
 | `partner.danang@stayreco.local` | Đối tác | 2 khách sạn: Sơn Trà Bay Resort & Spa (đang hoạt động, 3 loại phòng, 12 phòng), Mỹ Khê Boutique Hotel (đang chờ duyệt) |
 | `partner.hanoi@stayreco.local` | Đối tác | Hồ Gươm Heritage Hotel (đang hoạt động) |
 | `partner.hcm@stayreco.local` | Đối tác | Sài Gòn Riverside Grand Hotel (đang hoạt động) |
-| `staff.danang@stayreco.local`, `staff.hanoi@stayreco.local`, `staff.hcm@stayreco.local` | Nhân viên (Lễ tân, Đặt phòng) | Khách sạn đang hoạt động của thành phố đó |
+| `staff.danang@stayreco.local`, `staff.hanoi@stayreco.local`, `staff.hcm@stayreco.local` | Nhân viên: chức vụ Lễ tân, quyền `FRONT_DESK`, `BOOKING` | Khách sạn đang hoạt động của thành phố đó |
 | `pm@stayreco.local` | Quản lý nền tảng | Hàng đợi có 1 hồ sơ chờ duyệt (Mỹ Khê) |
 | `admin@stayreco.local` | Admin | Mật khẩu là `SEED_ADMIN_PASSWORD` trong `.env` (mặc định `Admin@123456`) |
 

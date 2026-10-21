@@ -27,7 +27,7 @@
 - **Hồ sơ `UPDATE` / `RENEWAL`** không đổi trạng thái khách sạn, dù kết quả thế nào.
 - **Xác minh lại**: chỉ cho khách sạn `ACTIVE` (khác thì `HOTEL_STATUS_CONFLICT`); đang có hồ sơ chờ hoặc đã yêu cầu xác minh lại thì `VERIFICATION_PENDING`. Khách sạn vẫn hoạt động trong lúc chờ đối tác nộp hồ sơ `RENEWAL`.
 - Mỗi kết quả và mỗi yêu cầu xác minh lại đều **gửi email** cho đối tác kèm lý do (tới `legal.notificationEmail` của hồ sơ; yêu cầu xác minh lại dùng email của hồ sơ gần nhất, không có thì email liên hệ của đối tác), và được ghi audit log.
-- Nhân viên khách sạn gọi các API này nhận 403; người ngoài nhận `VERIFICATION_NOT_FOUND`.
+- Quyền: hàng đợi, duyệt / từ chối / yêu cầu bổ sung và yêu cầu xác minh lại chỉ dành cho `PLATFORM_MANAGER`, mọi vai trò khác (kể cả chủ khách sạn) nhận `403 FORBIDDEN`. Riêng chi tiết hồ sơ và link xem file thì chủ khách sạn cũng xem được; nhân viên của khách sạn đó nhận 403, người ngoài nhận `VERIFICATION_NOT_FOUND`.
 
 ```jsonc
 // VerificationRequestSummary (hàng đợi)

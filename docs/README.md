@@ -22,7 +22,7 @@ Nơi BE, FE web và mobile thống nhất **đang làm phase nào** và **API tr
 
 ## Đang ở đâu
 
-> **Phase 1**: BE xong, FE web và mobile đang tích hợp. Phase 2 (tìm kiếm, đặt phòng, SePay) đang chuẩn bị contract.
+> **Phase 1**: BE xong, FE web và mobile đang tích hợp. Phase 2 (tìm kiếm, đặt phòng, SePay) sắp bắt đầu: đang viết trang API.
 > Cập nhật dòng này và bảng dưới trong cùng PR khi đổi trạng thái.
 
 | Phase | Nội dung | Trạng thái | API |

@@ -14,7 +14,7 @@ Các endpoint dưới đây được mô tả đầy đủ ở [partner.md](./pa
 | GET | `/hotels/:hotelId/rooms` | Danh sách phòng (lọc, tìm, phân trang) |
 | GET | `/amenities`, `/bed-types` | Danh mục công khai |
 
-Nhân viên **không** sửa được khách sạn, phòng, loại phòng, nhân viên, và không xem được hồ sơ xác minh: các thao tác đó trả `403 FORBIDDEN`. Khách sạn khác trả `404 HOTEL_NOT_FOUND`.
+Nhân viên **không** sửa được khách sạn, phòng, loại phòng, nhân viên, và không xem được hồ sơ xác minh: các thao tác đó trả `403 FORBIDDEN`. Tài nguyên của khách sạn khác trả 404 của đúng tài nguyên đó (`HOTEL_NOT_FOUND`, `ROOM_TYPE_NOT_FOUND`…).
 
 ## Nhóm quyền
 
