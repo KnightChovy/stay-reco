@@ -1,18 +1,21 @@
 # Temporary local database for development until the team database is ready.
+# Ports and credentials come from backend/.env (Compose reads it automatically),
+# so changing DB_PORT there is enough - no need to edit this file.
 services:
   db:
     image: pgvector/pgvector:pg16
-    container_name: stayreco-db
+    container_name: ${DB_CONTAINER_NAME:-stayreco-db}
     restart: unless-stopped
     environment:
-      POSTGRES_USER: stayreco
-      POSTGRES_PASSWORD: stayreco
-      POSTGRES_DB: stayreco
+      POSTGRES_USER: ${DB_USER:-stayreco}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-stayreco}
+      POSTGRES_DB: ${DB_NAME:-stayreco}
     ports:
-      - '5432:5432'
+      # host:container - only the host port is configurable
+      - '${DB_PORT:-5432}:5432'
     volumes:
       - stayreco_pg:/var/lib/postgresql/data
-      # Creates the stayreco_test database used by the e2e tests.
+      # Creates the stayreco_test database used by the e2e tests (see .env.test).
       - ./docker/postgres-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
 
 volumes:
