@@ -1,43 +1,43 @@
-# API: Tài khoản và đăng nhập (mọi vai trò)
+# API: Accounts and sign-in (every role)
 
-> Luồng phía client (lưu token, refresh, web dùng cookie còn mobile dùng body) ở [api-guide.md §2](../api-guide.md#2-authentication). Trang này liệt kê endpoint và kiểu dữ liệu.
-> Schema body ở `packages/shared/src/schemas/auth.ts`: email được trim và chuyển chữ thường; field lạ bị trả `VALIDATION_ERROR`.
+> Client-side flow (storing tokens, refresh, cookies on web vs. body on mobile) is in [api-guide.md §2](../api-guide.md#2-authentication). This page lists the endpoints and data types.
+> Body schemas are in `packages/shared/src/schemas/auth.ts`: emails are trimmed and lower-cased; unknown fields return `VALIDATION_ERROR`.
 
-## Endpoint
+## Endpoints
 
-| Method | Path | Quyền | Body (schema) | Response |
+| Method | Path | Access | Body (schema) | Response |
 |---|---|---|---|---|
-| POST | `/auth/register/customer` | công khai | `{ email, password, fullName }` (`registerCustomerSchema`) | `RegisterResult` = `{ account }` (201): tài khoản `PENDING_VERIFICATION`, chưa có token, gửi mã OTP 6 số |
-| POST | `/auth/register/partner` | công khai | `{ email, password, fullName, phone, companyName? }` (`registerPartnerSchema`) | `RegisterResult` (201), như trên |
-| POST | `/auth/verify-email` | công khai | `{ email, code }` (`verifyEmailSchema`) | `AuthResult` (200): kích hoạt tài khoản và đăng nhập luôn |
-| POST | `/auth/resend-verification` | công khai | `{ email }` (`emailBodySchema`) | 204 (luôn 204; chỉ gửi mã mới cho tài khoản đang chờ xác thực) |
-| POST | `/auth/login` | công khai | `{ email, password }` (`loginSchema`) | `AuthResult` |
-| POST | `/auth/refresh` | công khai | web: `{}` (cookie) · mobile: `{ refreshToken }` (`refreshSchema`) | web: `{ accessToken, expiresIn }` · mobile: thêm `refreshToken` |
-| POST | `/auth/logout` | đăng nhập | | 204 |
-| POST | `/auth/logout-all` | đăng nhập | | 204 |
-| GET | `/auth/me` | đăng nhập | | `Account` |
-| GET | `/auth/sessions` | đăng nhập | | `SessionInfo[]` |
-| DELETE | `/auth/sessions/:id` | đăng nhập | | 204 |
-| POST | `/auth/forgot-password` | công khai | `{ email }` (`emailBodySchema`) | 204 (luôn 204) |
-| POST | `/auth/reset-password` | công khai | `{ token, newPassword }` (`resetPasswordSchema`) | 204 |
-| POST | `/auth/change-password` | đăng nhập | `{ currentPassword, newPassword }` (`changePasswordSchema`) | 204 |
-| POST | `/auth/invitations/staff` | HOTEL_PARTNER | `{ email, fullName, hotelId, position }` (`inviteStaffSchema`; khách sạn phải thuộc đối tác) | `InvitationResult` = `{ id, email, status }` (201) |
+| POST | `/auth/register/customer` | public | `{ email, password, fullName }` (`registerCustomerSchema`) | `RegisterResult` = `{ account }` (201): account is `PENDING_VERIFICATION`, no tokens yet, a 6-digit OTP is emailed |
+| POST | `/auth/register/partner` | public | `{ email, password, fullName, phone, companyName? }` (`registerPartnerSchema`) | `RegisterResult` (201), as above |
+| POST | `/auth/verify-email` | public | `{ email, code }` (`verifyEmailSchema`) | `AuthResult` (200): activates the account and signs in |
+| POST | `/auth/resend-verification` | public | `{ email }` (`emailBodySchema`) | 204 (always 204; a new code is sent only to accounts waiting for verification) |
+| POST | `/auth/login` | public | `{ email, password }` (`loginSchema`) | `AuthResult` |
+| POST | `/auth/refresh` | public | web: `{}` (cookie) · mobile: `{ refreshToken }` (`refreshSchema`) | web: `{ accessToken, expiresIn }` · mobile: also `refreshToken` |
+| POST | `/auth/logout` | signed in | | 204 |
+| POST | `/auth/logout-all` | signed in | | 204 |
+| GET | `/auth/me` | signed in | | `Account` |
+| GET | `/auth/sessions` | signed in | | `SessionInfo[]` |
+| DELETE | `/auth/sessions/:id` | signed in | | 204 |
+| POST | `/auth/forgot-password` | public | `{ email }` (`emailBodySchema`) | 204 (always 204) |
+| POST | `/auth/reset-password` | public | `{ token, newPassword }` (`resetPasswordSchema`) | 204 |
+| POST | `/auth/change-password` | signed in | `{ currentPassword, newPassword }` (`changePasswordSchema`) | 204 |
+| POST | `/auth/invitations/staff` | HOTEL_PARTNER | `{ email, fullName, hotelId, position }` (`inviteStaffSchema`; the hotel must belong to the partner) | `InvitationResult` = `{ id, email, status }` (201) |
 | POST | `/auth/invitations/platform-manager` | ADMIN | `{ email, fullName }` (`inviteAccountSchema`) | `InvitationResult` (201) |
-| POST | `/auth/invitations/accept` | công khai | `{ token, password }` (`acceptInvitationSchema`) | `AuthResult` (201): đăng nhập luôn |
+| POST | `/auth/invitations/accept` | public | `{ token, password }` (`acceptInvitationSchema`) | `AuthResult` (201): signs in |
 
-## Luồng
+## Flows
 
-- **Đăng ký**: đăng ký → email chứa mã OTP 6 số (hạn 10 phút, tối đa 5 lần nhập) → màn nhập mã → `POST /auth/verify-email` → tài khoản `ACTIVE` và được đăng nhập. Đăng nhập khi chưa xác thực trả `403 AUTH_EMAIL_NOT_VERIFIED`: chuyển tới màn nhập mã. Mã sai: `AUTH_OTP_INVALID`; hết hạn hoặc quá số lần: `AUTH_OTP_EXPIRED` (cho bấm "Gửi lại mã").
-- **Quên mật khẩu** dùng **link**, không dùng OTP: `POST /auth/forgot-password` → email chứa `/reset-password?token=…` (hạn 15 phút) → form mật khẩu mới → `POST /auth/reset-password`.
-- **Lời mời** (nhân viên, quản lý nền tảng): email chứa `/accept-invitation?token=…` (hạn 72 giờ) → form đặt mật khẩu → `POST /auth/invitations/accept`. Đối tác hủy được lời mời chưa chấp nhận ([partner.md](./partner.md#nhân-viên)).
-- **Khóa tạm**: sai mật khẩu 5 lần thì khóa 15 phút (`AUTH_ACCOUNT_LOCKED`).
-- **Tài khoản bị chặn giữa chừng**: nhân viên bị khách sạn vô hiệu hóa hoặc tài khoản bị đình chỉ thì request kế tiếp nhận 401, refresh thất bại (`AUTH_REFRESH_TOKEN_INVALID`), đăng nhập lại nhận `403 AUTH_ACCOUNT_DEACTIVATED` hoặc `AUTH_ACCOUNT_SUSPENDED`.
+- **Sign-up**: register → an email with a 6-digit OTP (valid 10 minutes, at most 5 attempts) → code screen → `POST /auth/verify-email` → the account is `ACTIVE` and signed in. Signing in before verifying returns `403 AUTH_EMAIL_NOT_VERIFIED`: send the user to the code screen. Wrong code: `AUTH_OTP_INVALID`; expired or too many attempts: `AUTH_OTP_EXPIRED` (offer "Resend code").
+- **Forgot password** uses a **link**, not an OTP: `POST /auth/forgot-password` → an email with `/reset-password?token=…` (valid 15 minutes) → new-password form → `POST /auth/reset-password`.
+- **Invitations** (staff, platform managers): an email with `/accept-invitation?token=…` (valid 72 hours) → set-password form → `POST /auth/invitations/accept`. Partners can cancel an invitation that has not been accepted yet ([partner.md](./partner.md#staff)).
+- **Temporary lock**: 5 wrong passwords lock the account for 15 minutes (`AUTH_ACCOUNT_LOCKED`).
+- **Blocked while signed in**: when a hotel deactivates a staff member or an account is suspended, the next request gets 401, the refresh fails (`AUTH_REFRESH_TOKEN_INVALID`), and signing in again returns `403 AUTH_ACCOUNT_DEACTIVATED` or `AUTH_ACCOUNT_SUSPENDED`.
 
-Các trang FE cần có cho email: màn nhập OTP (ví dụ `/verify-email?email=`), `/reset-password?token=`, `/accept-invitation?token=` ([api-guide.md §2.5](../api-guide.md#25-fe-pages-for-emails)).
+FE pages needed for the emails: the OTP screen (for example `/verify-email?email=`), `/reset-password?token=`, `/accept-invitation?token=` ([api-guide.md §2.5](../api-guide.md#25-fe-pages-for-emails)).
 
-## Kiểu dữ liệu
+## Types
 
-`AuthResult` = `{ account: Account, accessToken, expiresIn }` (mobile có thêm `refreshToken`). Các kiểu `Account`, `RegisterResult`, `AuthResult`, `RefreshResult`, `SessionInfo`, `InvitationResult`, `PartnerProfile`, `StaffProfile` lấy từ `@stayreco/shared`.
+`AuthResult` = `{ account: Account, accessToken, expiresIn }` (mobile also gets `refreshToken`). The types `Account`, `RegisterResult`, `AuthResult`, `RefreshResult`, `SessionInfo`, `InvitationResult`, `PartnerProfile`, `StaffProfile` come from `@stayreco/shared`.
 
 ```jsonc
 // Account
@@ -53,13 +53,13 @@ Các trang FE cần có cho email: màn nhập OTP (ví dụ `/verify-email?emai
   "emailVerifiedAt": "2026-10-14T03:00:00.000Z",
   "lastLoginAt": "2026-10-14T03:00:00.000Z",
   "createdAt": "2026-10-14T03:00:00.000Z",
-  // Theo vai trò, null với CUSTOMER / ADMIN / PLATFORM_MANAGER:
+  // Role-specific, null for CUSTOMER / ADMIN / PLATFORM_MANAGER:
   //   HOTEL_PARTNER: { "partnerName": "Hotel Co", "status": "PENDING" }
   //   HOTEL_STAFF:   { "hotelId": "uuid", "position": "Lễ tân" }
   "profile": null
 }
 ```
 
-## Mã lỗi hay gặp
+## Common error codes
 
-`AUTH_INVALID_CREDENTIALS`, `AUTH_ACCOUNT_LOCKED`, `AUTH_ACCOUNT_SUSPENDED`, `AUTH_ACCOUNT_DEACTIVATED`, `AUTH_EMAIL_NOT_VERIFIED`, `AUTH_OTP_INVALID`, `AUTH_OTP_EXPIRED`, `AUTH_EMAIL_TAKEN`, `AUTH_WRONG_PASSWORD`, `AUTH_TOKEN_INVALID`, `AUTH_REFRESH_TOKEN_INVALID`, `AUTH_INVITATION_ACCEPTED`, `AUTH_SESSION_NOT_FOUND`. Ý nghĩa và cách xử lý ở [api-guide.md §4.3](../api-guide.md#43-error-codes). Chỉ refresh token khi `401` kèm `UNAUTHENTICATED`.
+`AUTH_INVALID_CREDENTIALS`, `AUTH_ACCOUNT_LOCKED`, `AUTH_ACCOUNT_SUSPENDED`, `AUTH_ACCOUNT_DEACTIVATED`, `AUTH_EMAIL_NOT_VERIFIED`, `AUTH_OTP_INVALID`, `AUTH_OTP_EXPIRED`, `AUTH_EMAIL_TAKEN`, `AUTH_WRONG_PASSWORD`, `AUTH_TOKEN_INVALID`, `AUTH_REFRESH_TOKEN_INVALID`, `AUTH_INVITATION_ACCEPTED`, `AUTH_SESSION_NOT_FOUND`. Meanings and handling: [api-guide.md §4.3](../api-guide.md#43-error-codes). Refresh the token only on `401` with `UNAUTHENTICATED`.

@@ -1,49 +1,49 @@
 # StayReco docs
 
-Nơi BE, FE web và mobile thống nhất **đang làm phase nào** và **API trông như thế nào**.
+Where BE, FE web and mobile agree on **which phase we are in** and **what the API looks like**.
 
-## Bắt đầu từ đâu
+## Where to start
 
-| Bạn là | Đọc theo thứ tự |
+| You are | Read in this order |
 |---|---|
-| Mới vào dự án | [getting-started.md](./getting-started.md) → [api-guide.md](./api-guide.md) → trang API của màn hình bạn làm |
-| FE web / mobile | [api-guide.md](./api-guide.md) (token, envelope, mã lỗi) → [api/](./api/README.md): [auth](./api/auth.md) · [đối tác](./api/partner.md) · [nhân viên](./api/staff.md) · [quản lý](./api/manager.md) · [khách hàng](./api/customer.md) |
-| BE | [../backend/docs/CONVENTIONS.md](../backend/docs/CONVENTIONS.md) (quy ước code) → [phases/](./phases/) (quyết định, phạm vi) → cập nhật [api/](./api/README.md) cùng PR với code |
-| Dùng schema chung | [../packages/shared/README.md](../packages/shared/README.md) |
+| New to the project | [getting-started.md](./getting-started.md) → [api-guide.md](./api-guide.md) → the API page for the screens you work on |
+| FE web / mobile | [api-guide.md](./api-guide.md) (tokens, envelope, error codes) → [api/](./api/README.md): [auth](./api/auth.md) · [partner](./api/partner.md) · [staff](./api/staff.md) · [manager](./api/manager.md) · [customer](./api/customer.md) |
+| BE | [../backend/docs/CONVENTIONS.md](../backend/docs/CONVENTIONS.md) (code conventions) → [phases/](./phases/) (decisions, scope) → update [api/](./api/README.md) in the same PR as the code |
+| Using the shared schemas | [../packages/shared/README.md](../packages/shared/README.md) |
 
-## Cấu trúc
+## Structure
 
-| Đường dẫn | Nội dung |
+| Path | Content |
 |---|---|
-| [getting-started.md](./getting-started.md) | Chạy backend và frontend ở máy, tài khoản demo, lỗi hay gặp |
-| [api-guide.md](./api-guide.md) | Quy tắc chung cho mọi API: base URL, token web/mobile, envelope, bảng mã lỗi, phân trang |
-| [api/](./api/README.md) | Endpoint theo vai trò người dùng: mỗi endpoint ghi một lần, kèm schema, kiểu response, luồng gọi |
-| [phases/](./phases/) | Mỗi phase một file: mục tiêu, phạm vi, quyết định đã chốt, trạng thái, việc của FE, Definition of Done, changelog |
+| [getting-started.md](./getting-started.md) | Run the backend and frontend locally, demo accounts, common errors |
+| [api-guide.md](./api-guide.md) | Rules for every API: base URL, web/mobile tokens, envelope, error codes, pagination |
+| [api/](./api/README.md) | Endpoints by user role: each endpoint is described once, with its schema, response type and call flow |
+| [phases/](./phases/) | One file per phase: goal, scope, agreed decisions, states, FE tasks, Definition of Done, changelog |
 
-## Đang ở đâu
+## Where we are
 
-> **Phase 1**: BE xong, FE web và mobile đang tích hợp. Phase 2 (tìm kiếm, đặt phòng, SePay) sắp bắt đầu: đang viết trang API.
-> Cập nhật dòng này và bảng dưới trong cùng PR khi đổi trạng thái.
+> **Phase 1**: BE done, FE web and mobile integrating. Phase 2 (search, booking, SePay) is about to start: API pages are being written.
+> Update this line and the table below in the same PR when a status changes.
 
-| Phase | Nội dung | Trạng thái | API |
+| Phase | Content | Status | API |
 |---|---|---|---|
-| [0](./phases/phase-0-foundation.md) | Nền tảng: auth, envelope, shared | 🟡 BE xong, FE đang tích hợp | [auth](./api/auth.md) |
-| [1](./phases/phase-1-hotel-onboarding.md) | Đối tác đưa khách sạn lên, quản lý duyệt | 🟡 BE xong, FE đang tích hợp | [đối tác](./api/partner.md), [nhân viên](./api/staff.md), [quản lý](./api/manager.md) |
-| [2](./phases/phase-2-search-booking.md) | Tìm kiếm, đặt phòng, thanh toán | ⬜ Chưa bắt đầu | |
-| [3](./phases/phase-3-operations.md) | Vận hành: check-in/out, hoàn tiền, inbox | ⬜ Chưa bắt đầu | |
-| [4](./phases/phase-4-loyalty-promotions.md) | Loyalty, khuyến mãi, đánh giá, ví | ⬜ Chưa bắt đầu | |
-| [5](./phases/phase-5-ai-marketing.md) | AI gợi ý, trợ lý, marketing | ⬜ Chưa bắt đầu | |
-| [6](./phases/phase-6-reporting-admin.md) | Báo cáo, quản trị | ⬜ Chưa bắt đầu | |
+| [0](./phases/phase-0-foundation.md) | Foundation: auth, envelope, shared package | 🟡 BE done, FE integrating | [auth](./api/auth.md) |
+| [1](./phases/phase-1-hotel-onboarding.md) | Partners list their hotels, managers verify them | 🟡 BE done, FE integrating | [partner](./api/partner.md), [staff](./api/staff.md), [manager](./api/manager.md) |
+| [2](./phases/phase-2-search-booking.md) | Search, booking, payment | ⬜ Not started | |
+| [3](./phases/phase-3-operations.md) | Operations: check-in/out, refunds, inbox | ⬜ Not started | |
+| [4](./phases/phase-4-loyalty-promotions.md) | Loyalty, promotions, reviews, wallet | ⬜ Not started | |
+| [5](./phases/phase-5-ai-marketing.md) | AI recommendations, assistant, marketing | ⬜ Not started | |
+| [6](./phases/phase-6-reporting-admin.md) | Reporting, administration | ⬜ Not started | |
 
-Trạng thái phase: ⬜ Chưa bắt đầu · 🟡 Đang làm · ✅ Xong.
-Trạng thái API của một phase: `Draft` → `Agreed` → `BE Done` → `Integrated` (ghi ở đầu file phase).
+Phase status: ⬜ Not started · 🟡 In progress · ✅ Done.
+API status of a phase: `Draft` → `Agreed` → `BE Done` → `Integrated` (shown at the top of the phase file).
 
-## Quy trình một phase
+## How a phase runs
 
-1. **Mở phase**: điền file `phases/phase-N-<tên>.md` theo [`phases/_template.md`](./phases/_template.md); endpoint đề xuất ghi thẳng vào trang `api/<vai trò>.md`, đánh dấu *(Draft)* (`Draft`).
-2. **Chốt**: PR chỉ chứa docs + schema trong `packages/shared`. BE và FE cùng review, merge thì chuyển `Agreed`.
-3. **Làm song song**: BE code endpoint theo schema; FE dựng form bằng chính schema đó và mock response theo trang API.
-4. **BE Done**: endpoint lên `develop`, Swagger khớp trang API. FE chuyển sang API thật.
-5. **Integrated**: web và mobile xong, tick Definition of Done, cập nhật bảng ở trên.
+1. **Open the phase**: fill in `phases/phase-N-<name>.md` from [`phases/_template.md`](./phases/_template.md); write the proposed endpoints straight into the `api/<role>.md` pages, marked *(Draft)* (`Draft`).
+2. **Agree**: a PR with only docs + schemas in `packages/shared`. BE and FE review it together; once merged it becomes `Agreed`.
+3. **Work in parallel**: BE builds the endpoints from the schemas; FE builds forms with the same schemas and mocks responses from the API pages.
+4. **BE Done**: the endpoints are on `develop` and Swagger matches the API pages. FE switches to the real API.
+5. **Integrated**: web and mobile are done, the Definition of Done is ticked, the table above is updated.
 
-Đổi API sau khi đã `Agreed`: sửa trang `api/`, thêm dòng *Changelog* ở file phase, báo bên còn lại. Không đổi tên field hay mã lỗi đã công bố, chỉ thêm mới.
+Changing the API after `Agreed`: edit the `api/` page, add a *Changelog* row in the phase file and tell the other side. Never rename a published field or error code; only add new ones.

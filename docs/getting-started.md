@@ -1,62 +1,62 @@
-# Chạy StayReco ở máy
+# Running StayReco locally
 
-Dành cho FE web, mobile và người mới: chạy backend ở máy để nối API.
+For FE web, mobile and newcomers: run the backend on your machine to wire up the API.
 
-## Cần cài sẵn (một lần)
+## Prerequisites (once)
 
-- **Node.js 20.19 trở lên** (hoặc 22). Kiểm tra: `node -v`. Prisma 7 không chạy trên Node cũ hơn.
-- **Docker Desktop**, phải đang chạy (database PostgreSQL chạy trong Docker).
-- Đã clone repo `stay-reco` và ở nhánh `develop`.
+- **Node.js 20.19 or later** (or 22). Check with `node -v`. Prisma 7 does not run on older versions.
+- **Docker Desktop**, running (PostgreSQL runs in Docker).
+- The `stay-reco` repo cloned, on the `develop` branch.
 
-## Backend: lần đầu tiên
+## Backend: first time
 
-Mở terminal ở thư mục `stay-reco/backend`:
+Open a terminal in `stay-reco/backend`:
 
 ```bash
 cp .env.example .env
 ```
 
-Mở `backend/.env` và sửa 2 chỗ:
+Open `backend/.env` and change 2 values:
 
-1. `JWT_ACCESS_SECRET=`: chuỗi bất kỳ dài ít nhất 32 ký tự.
-2. `BENEFICIARY_ENCRYPTION_KEY=`: **bắt buộc**, thiếu thì backend không chạy. Tạo bằng lệnh:
+1. `JWT_ACCESS_SECRET=`: any string of at least 32 characters.
+2. `BENEFICIARY_ENCRYPTION_KEY=`: **required**, the backend will not start without it. Generate it with:
 
    ```bash
    node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
    ```
 
-   Dán chuỗi in ra vào sau dấu `=`.
+   Paste the printed string after the `=`.
 
-Các biến khác giữ nguyên. Để trống `CLOUDINARY_*` thì chỉ các API tải ảnh và giấy tờ báo `503 UPLOAD_UNAVAILABLE`, mọi API khác vẫn dùng được. Cần thử tải file thật thì xin BE thông tin Cloudinary.
+Leave the other variables as they are. With `CLOUDINARY_*` empty, only the image and document upload APIs return `503 UPLOAD_UNAVAILABLE`; every other API works. Ask the BE for the Cloudinary settings if you need real uploads.
 
-Rồi chạy lần lượt:
+Then run, in order:
 
 ```bash
-npm install          # cài thư viện, tự build packages/shared và Prisma client
-npm run db:up        # bật PostgreSQL trong Docker
-npm run db:migrate   # tạo bảng
-npm run db:seed      # dữ liệu mẫu: tiện ích, loại giường, admin, khách sạn demo
-npm run dev          # chạy backend
+npm install          # installs packages, builds packages/shared and the Prisma client
+npm run db:up        # starts PostgreSQL in Docker
+npm run db:migrate   # creates the tables
+npm run db:seed      # sample data: amenities, bed types, admin, demo hotels
+npm run dev          # starts the backend
 ```
 
-Backend chạy ở **http://localhost:3000/api/v1**, xem và thử API ở **http://localhost:3000/api/docs** (Swagger: bấm Authorize, dán access token lấy từ `POST /auth/login`).
+The backend runs at **http://localhost:3000/api/v1**; browse and try the API at **http://localhost:3000/api/docs** (Swagger: click Authorize and paste an access token from `POST /auth/login`).
 
-## Backend: mỗi lần pull code mới
+## Backend: after each pull
 
-Trong `stay-reco/backend`:
+In `stay-reco/backend`:
 
 ```bash
 git pull
 npm install
-npm run db:up        # bỏ qua nếu database đang chạy
-npm run db:migrate   # áp thay đổi database mới (nếu có)
-npm run db:seed      # chạy lại an toàn, không tạo trùng
+npm run db:up        # skip if the database is already running
+npm run db:migrate   # applies new database changes (if any)
+npm run db:seed      # safe to re-run, creates no duplicates
 npm run dev
 ```
 
-## Frontend chạy cùng lúc
+## Running the frontend alongside
 
-Chạy backend trước, rồi chạy frontend ở **cổng 3001** (backend dùng cổng 3000 và chỉ cho phép CORS từ `localhost:3001`):
+Start the backend first, then run the frontend on **port 3001** (the backend uses port 3000 and only allows CORS from `localhost:3001`):
 
 ```bash
 cd frontend
@@ -64,36 +64,36 @@ npm install
 npm run dev -- -p 3001
 ```
 
-- Mở web ở **http://localhost:3001**. FE mặc định gọi API ở `http://localhost:3000/api/v1` (`frontend/src/lib/axios.ts`); muốn đổi thì đặt `NEXT_PUBLIC_API_URL` trong `frontend/.env.local`.
-- Các link trong email (xác thực, đặt lại mật khẩu, lời mời) trỏ về `http://localhost:3001`. Ở máy, email không gửi thật mà **in ra terminal của backend**, nên lấy mã OTP và link ở đó.
+- Open the web app at **http://localhost:3001**. The FE calls the API at `http://localhost:3000/api/v1` by default (`frontend/src/lib/axios.ts`); to change it, set `NEXT_PUBLIC_API_URL` in `frontend/.env.local`.
+- Links in emails (verification, password reset, invitations) point to `http://localhost:3001`. Locally, emails are not sent but **printed in the backend terminal**, so take the OTP and links from there.
 
-## Tài khoản demo
+## Demo accounts
 
-Mật khẩu chung `Demo@123456` (đổi bằng `SEED_DEMO_PASSWORD`).
+Shared password `Demo@123456` (change it with `SEED_DEMO_PASSWORD`).
 
-| Email | Vai trò | Có sẵn |
+| Email | Role | Data |
 |---|---|---|
-| `partner.danang@stayreco.local` | Đối tác | 2 khách sạn: Sơn Trà Bay Resort & Spa (đang hoạt động, 3 loại phòng, 12 phòng), Mỹ Khê Boutique Hotel (đang chờ duyệt) |
-| `partner.hanoi@stayreco.local` | Đối tác | Hồ Gươm Heritage Hotel (đang hoạt động) |
-| `partner.hcm@stayreco.local` | Đối tác | Sài Gòn Riverside Grand Hotel (đang hoạt động) |
-| `staff.danang@stayreco.local`, `staff.hanoi@stayreco.local`, `staff.hcm@stayreco.local` | Nhân viên: chức vụ Lễ tân, quyền `FRONT_DESK`, `BOOKING` | Khách sạn đang hoạt động của thành phố đó |
-| `pm@stayreco.local` | Quản lý nền tảng | Hàng đợi có 1 hồ sơ chờ duyệt (Mỹ Khê) |
-| `admin@stayreco.local` | Admin | Mật khẩu là `SEED_ADMIN_PASSWORD` trong `.env` (mặc định `Admin@123456`) |
+| `partner.danang@stayreco.local` | Partner | 2 hotels: Sơn Trà Bay Resort & Spa (active, 3 room types, 12 rooms), Mỹ Khê Boutique Hotel (waiting for verification) |
+| `partner.hanoi@stayreco.local` | Partner | Hồ Gươm Heritage Hotel (active) |
+| `partner.hcm@stayreco.local` | Partner | Sài Gòn Riverside Grand Hotel (active) |
+| `staff.danang@stayreco.local`, `staff.hanoi@stayreco.local`, `staff.hcm@stayreco.local` | Staff: position Lễ tân (receptionist), permissions `FRONT_DESK`, `BOOKING` | The active hotel in that city |
+| `pm@stayreco.local` | Platform manager | The queue has 1 pending request (Mỹ Khê) |
+| `admin@stayreco.local` | Admin | Password is `SEED_ADMIN_PASSWORD` in `.env` (default `Admin@123456`) |
 
-Tên khách sạn và pháp nhân là hư cấu; ảnh lấy từ picsum.photos; giấy tờ của dữ liệu demo không có file thật trên Cloudinary (link xem file sẽ báo không tìm thấy).
+Hotel and company names are fictional; images come from picsum.photos; demo documents have no real file on Cloudinary (the file link reports it as not found).
 
-## Lỗi hay gặp
+## Common errors
 
-| Lỗi | Cách xử lý |
+| Error | Fix |
 |---|---|
-| `P1001: Can't reach database server at localhost:5432` | Docker Desktop chưa bật, hoặc chưa chạy `npm run db:up` |
-| `Invalid environment variables ... BENEFICIARY_ENCRYPTION_KEY` | Chưa thêm khóa, hoặc khóa sai định dạng; tạo lại bằng lệnh ở trên |
-| `Port 3000 is already in use` | Đang có app khác (thường là frontend) chiếm cổng 3000: tắt nó, chạy backend trước, frontend chạy cổng 3001 |
-| Trình duyệt báo lỗi **CORS** | Frontend không chạy ở `localhost:3001`; chạy lại bằng `npm run dev -- -p 3001` |
-| `npm run db:migrate` hỏi có muốn **reset** database không | Chọn **No** và báo BE. Chỉ khi chấp nhận mất hết dữ liệu ở máy mình mới chạy `npx prisma migrate reset` (tự tạo lại bảng và dữ liệu mẫu) |
-| Gọi API báo `401 UNAUTHENTICATED` | Access token hết hạn (15 phút): axios tự refresh; nếu vẫn lỗi thì đăng nhập lại |
+| `P1001: Can't reach database server at localhost:5432` | Docker Desktop is not running, or `npm run db:up` was not run |
+| `Invalid environment variables ... BENEFICIARY_ENCRYPTION_KEY` | The key is missing or malformed; generate it again with the command above |
+| `Port 3000 is already in use` | Another app (usually the frontend) holds port 3000: stop it, start the backend first, run the frontend on port 3001 |
+| The browser reports a **CORS** error | The frontend is not running on `localhost:3001`; restart it with `npm run dev -- -p 3001` |
+| `npm run db:migrate` asks whether to **reset** the database | Answer **No** and tell the BE. Run `npx prisma migrate reset` (recreates the tables and sample data) only if you accept losing all local data |
+| API calls return `401 UNAUTHENTICATED` | The access token expired (15 minutes): axios refreshes it; if it still fails, sign in again |
 
-## Tiếp theo
+## Next
 
-- Quy tắc gọi API (token, envelope, mã lỗi, phân trang): [api-guide.md](./api-guide.md).
-- Endpoint theo màn hình bạn làm: [api/](./api/README.md).
+- API rules (tokens, envelope, error codes, pagination): [api-guide.md](./api-guide.md).
+- Endpoints for the screens you work on: [api/](./api/README.md).

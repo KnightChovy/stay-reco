@@ -1,39 +1,39 @@
-# Phase 2: Tìm kiếm và đặt phòng
+# Phase 2: Search and booking
 
 | | |
 |---|---|
-| Trạng thái phase | ⬜ Chưa bắt đầu |
-| Trạng thái API | Chưa có |
-| API | Chưa có. Khi phase bắt đầu: điền file này theo [`_template.md`](./_template.md), endpoint ghi vào [api/](../api/README.md). |
+| Phase status | ⬜ Not started |
+| API status | None yet |
+| API | None yet. When the phase starts: fill in this file from [`_template.md`](./_template.md) and write the endpoints in [api/](../api/README.md). |
 
-## Mục tiêu
+## Goal
 
-Khách hàng tìm khách sạn, xem chi tiết, đặt và thanh toán; quản lý chuyến đi của mình.
+Customers search for hotels, view details, book and pay, and manage their trips.
 
-## Phạm vi
+## Scope
 
 **Backend**
 
-- Tồn phòng và giá theo ngày
-- Tìm kiếm khách sạn theo điểm đến, ngày, số khách
-- Giữ phòng có hạn, tạo đơn đặt
-- Thanh toán qua SePay (VietQR, SePay báo về qua webhook), xác nhận
-- Chuyến đi của tôi, hủy, đổi ngày
+- Daily availability and prices
+- Hotel search by destination, dates and guests
+- Time-limited holds, booking creation
+- Payment with SePay (VietQR, SePay notifies us by webhook), confirmation
+- My trips, cancel, change dates
 
-**Frontend web / mobile** (trang đã có UI trong `frontend/src/app`)
+**Frontend web / mobile** (pages already have UI in `frontend/src/app`)
 
 - `search`, `hotels/[id]`, `hotels/[id]/rooms/[roomId]`
 - `booking`, `booking/payment`, `booking/confirmation`
 - `account/bookings`, `account/bookings/[id]` (+ `cancel`, `change`)
 - `partner/availability`, `partner/pricing`, `partner/bookings`
 
-## Ngoài phạm vi
+## Out of scope
 
-- Hoàn tiền xử lý bởi nhân viên → phase 3
-- Mã khuyến mãi → phase 4
+- Refunds handled by staff → phase 3
+- Promo codes → phase 4
 
 ## Definition of Done
 
-- [ ] Không bán vượt số phòng khi 2 người đặt cùng lúc (có test)
-- [ ] Đặt phòng chạy được end-to-end trên web và mobile
-- [ ] Các trang [api/](../api/README.md) của phase khớp với code, trạng thái API `Integrated`
+- [ ] No overbooking when 2 people book at the same time (with a test)
+- [ ] Booking works end to end on web and mobile
+- [ ] The phase's [api/](../api/README.md) pages match the code, API status `Integrated`

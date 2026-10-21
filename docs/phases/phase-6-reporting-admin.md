@@ -1,24 +1,24 @@
-# Phase 6: Báo cáo và quản trị
+# Phase 6: Reporting and administration
 
 | | |
 |---|---|
-| Trạng thái phase | ⬜ Chưa bắt đầu |
-| Trạng thái API | Chưa có |
-| API | Chưa có. Khi phase bắt đầu: điền file này theo [`_template.md`](./_template.md), endpoint ghi vào [api/](../api/README.md). |
+| Phase status | ⬜ Not started |
+| API status | None yet |
+| API | None yet. When the phase starts: fill in this file from [`_template.md`](./_template.md) and write the endpoints in [api/](../api/README.md). |
 
-## Mục tiêu
+## Goal
 
-Số liệu cho đối tác và quản lý nền tảng, công cụ quản trị hệ thống.
+Figures for partners and platform managers, and system administration tools.
 
-## Phạm vi
+## Scope
 
 **Backend**
 
-- Doanh thu, dashboard đối tác
-- Doanh thu, dòng tiền, tuân thủ, giao dịch toàn nền tảng
-- Admin: tài khoản, nhật ký, giao dịch, cấu hình thanh toán và AI
+- Revenue, partner dashboard
+- Platform-wide revenue, cash flow, compliance, transactions
+- Admin: accounts, logs, transactions, payment and AI settings
 
-**Frontend web / mobile** (trang đã có UI trong `frontend/src/app`)
+**Frontend web / mobile** (pages already have UI in `frontend/src/app`)
 
 - `partner/dashboard`, `partner/revenue`
 - `manager/dashboard`, `manager/revenue`, `manager/cashflow`, `manager/compliance`, `manager/transactions`
@@ -26,5 +26,5 @@ Số liệu cho đối tác và quản lý nền tảng, công cụ quản trị
 
 ## Definition of Done
 
-- [ ] Số liệu dashboard khớp dữ liệu giao dịch (có test truy vấn)
-- [ ] Các trang [api/](../api/README.md) của phase khớp với code, trạng thái API `Integrated`
+- [ ] Dashboard figures match the transaction data (with query tests)
+- [ ] The phase's [api/](../api/README.md) pages match the code, API status `Integrated`

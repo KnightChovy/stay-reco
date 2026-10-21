@@ -1,12 +1,12 @@
-# API: Khách hàng (`CUSTOMER`)
+# API: Customer (`CUSTOMER`)
 
-> Màn FE: trang chủ, `search`, `hotels/[id]`, `booking/*`, `account/*`.
+> FE screens: home page, `search`, `hotels/[id]`, `booking/*`, `account/*`.
 
-## Hiện có
+## Available now
 
-- Đăng ký, xác thực email (OTP), đăng nhập, quên / đổi mật khẩu, phiên đăng nhập: [auth.md](./auth.md).
-- Danh mục công khai `GET /amenities`, `GET /bed-types`: [partner.md](./partner.md#danh-mục-công-khai-không-cần-token) (dùng cho bộ lọc tìm kiếm).
+- Sign-up, email verification (OTP), sign-in, forgot / change password, sessions: [auth.md](./auth.md).
+- Public catalog `GET /amenities`, `GET /bed-types`: [partner.md](./partner.md#catalog-public-no-token) (for the search filters).
 
-## Đang làm (phase 2)
+## In progress (phase 2)
 
-Tìm kiếm khách sạn theo điểm đến, ngày và số khách; giá và tồn phòng theo ngày; giữ phòng và đặt phòng; thanh toán qua SePay (VietQR); chuyến đi của tôi (xem, hủy, đổi ngày). Endpoint sẽ được ghi vào trang này khi phase 2 chốt: [phases/phase-2-search-booking.md](../phases/phase-2-search-booking.md).
+Hotel search by destination, dates and guests; daily prices and availability; holds and bookings; payment with SePay (VietQR); my trips (view, cancel, change dates). Endpoints will be added to this page once phase 2 is agreed: [phases/phase-2-search-booking.md](../phases/phase-2-search-booking.md).
