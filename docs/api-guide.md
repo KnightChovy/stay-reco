@@ -1,7 +1,7 @@
 # StayReco API Guide (for the web and mobile clients)
 
 > Describes the backend's current behavior. Items marked `TODO(meeting)` are proposals that will be decided in the team meeting; don't build against them until this document is updated.
-> URL naming rules: see [CONVENTIONS.md](./CONVENTIONS.md#1-api-url-naming).
+> URL naming rules: see [CONVENTIONS.md](../backend/docs/CONVENTIONS.md#1-api-url-naming).
 
 ## 1. General
 
@@ -57,52 +57,9 @@ Web client: set `NEXT_PUBLIC_API_URL=http://localhost:3000/api/v1`.
 
 ### 2.4 Auth endpoints
 
-The Response column describes the content of the `data` field (see section 4.1).
+The full endpoint table, flows (OTP, password reset, invitations, lockout) and the `Account` type are in [api/auth.md](./api/auth.md). Endpoints for each user role are listed in [api/](./api/README.md).
 
-| Method | Path | Access | Body | Response |
-|---|---|---|---|---|
-| POST | `/auth/register/customer` | public | `{ email, password, fullName }` | `RegisterResult` = `{ account }`, no tokens (201) |
-| POST | `/auth/register/partner` | public | `{ email, password, fullName, phone, companyName? }` | `RegisterResult` = `{ account }`, no tokens (201) |
-| POST | `/auth/login` | public | `{ email, password }` | `AuthResult` |
-| POST | `/auth/refresh` | public | web: `{}` · mobile: `{ refreshToken }` | web: `{ accessToken, expiresIn }` · mobile: `{ accessToken, refreshToken, expiresIn }` |
-| POST | `/auth/logout` | signed in | | 204 |
-| POST | `/auth/logout-all` | signed in | | 204 |
-| GET | `/auth/me` | signed in | | `Account` |
-| GET | `/auth/sessions` | signed in | | `Session[]` |
-| DELETE | `/auth/sessions/:id` | signed in | | 204 |
-| POST | `/auth/verify-email` | public | `{ email, code }` (`code` = 6 digits) | `AuthResult` (200), account activated and signed in |
-| POST | `/auth/resend-verification` | public | `{ email }` | 204 (always 204; mails a new code only to pending accounts) |
-| POST | `/auth/forgot-password` | public | `{ email }` | 204 (always 204) |
-| POST | `/auth/reset-password` | public | `{ token, newPassword }` | 204 |
-| POST | `/auth/change-password` | signed in | `{ currentPassword, newPassword }` | 204 |
-| POST | `/auth/invitations/staff` | HOTEL_PARTNER | `{ email, fullName, hotelId, position }` (the hotel must belong to the partner) | `{ id, email, status }` (201) |
-| POST | `/auth/invitations/platform-manager` | ADMIN | `{ email, fullName }` | `{ id, email, status }` (201) |
-| POST | `/auth/invitations/accept` | public | `{ token, password }` | `AuthResult` (201) |
-
-`AuthResult` contains `account: Account`, `accessToken: string` and `expiresIn: number`. Mobile also receives `refreshToken: string`.
-
-TypeScript types for these responses come from `@stayreco/shared` (`Account`, `RegisterResult`, `AuthResult`, `RefreshResult`, `SessionInfo`, `InvitationResult`, `PartnerProfile`, `StaffProfile`). Import them instead of redefining them. The backend fails to compile if `Account` drifts from what it actually returns.
-
-```jsonc
-// Account
-{
-  "id": "uuid",
-  "email": "a@b.com",
-  "fullName": "Nguyen Van A",
-  "phone": null,
-  "avatarUrl": null,
-  "role": "CUSTOMER",            // see section 2.6
-  "status": "ACTIVE",            // PENDING_VERIFICATION | ACTIVE | INVITED | SUSPENDED | DEACTIVATED | DELETED
-  "emailVerified": false,
-  "emailVerifiedAt": null,
-  "lastLoginAt": "2026-10-14T03:00:00.000Z",
-  "createdAt": "2026-10-14T03:00:00.000Z",
-  // Role-specific data, null for CUSTOMER / ADMIN / PLATFORM_MANAGER:
-  //   HOTEL_PARTNER: { "partnerName": "Hotel Co", "status": "PENDING" }
-  //   HOTEL_STAFF:   { "hotelId": "uuid", "position": "Receptionist" }
-  "profile": null
-}
-```
+TypeScript types for auth responses come from `@stayreco/shared` (`Account`, `RegisterResult`, `AuthResult`, `RefreshResult`, `SessionInfo`, `InvitationResult`, `PartnerProfile`, `StaffProfile`). Import them instead of redefining them. The backend fails to compile if `Account` drifts from what it actually returns.
 
 ### 2.5 FE pages for emails
 
@@ -134,7 +91,7 @@ Role checks in the FE only drive navigation. The backend always re-checks permis
 - **Email**: the backend trims it and converts it to lowercase.
 - **Unknown fields** in the body return **400**. Send only the fields listed above; for example, customer registration does **not** accept `phone`.
 - **Dates and times**: the API accepts and returns ISO 8601 strings in UTC (`2026-10-14T03:00:00.000Z`). The FE displays them in `Asia/Ho_Chi_Minh` as `dd/mm/yyyy`. Dates without a time (check-in, check-out) use `YYYY-MM-DD`.
-- **Money**: VND amounts as JSON numbers with at most 2 decimals (`2250000`, `185185.05`); the FE formats them as `2.250.000 ₫`. Percentages are JSON numbers (`15`, `12.5`). All prices, discounts, fees and refunds are calculated by the backend; the FE displays them and never recomputes them. Rules: [CONVENTIONS.md §4](./CONVENTIONS.md#4-money).
+- **Money**: VND amounts as JSON numbers with at most 2 decimals (`2250000`, `185185.05`); the FE formats them as `2.250.000 ₫`. Percentages are JSON numbers (`15`, `12.5`). All prices, discounts, fees and refunds are calculated by the backend; the FE displays them and never recomputes them. Rules: [CONVENTIONS.md §4](../backend/docs/CONVENTIONS.md#4-money).
 
 ## 4. Response format (decided)
 
