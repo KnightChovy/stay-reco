@@ -1,36 +1,36 @@
-# Phase 3: Vận hành tại khách sạn
+# Phase 3: Hotel operations
 
 | | |
 |---|---|
-| Trạng thái phase | ⬜ Chưa bắt đầu |
-| Trạng thái API | Chưa có |
-| API | Chưa có. Khi phase bắt đầu: điền file này theo [`_template.md`](./_template.md), endpoint ghi vào [api/](../api/README.md). |
+| Phase status | ⬜ Not started |
+| API status | None yet |
+| API | None yet. When the phase starts: fill in this file from [`_template.md`](./_template.md) and write the endpoints in [api/](../api/README.md). |
 
-## Mục tiêu
+## Goal
 
-Nhân viên xử lý đơn hằng ngày: check-in, check-out, yêu cầu hoàn tiền, tin nhắn và cảnh báo.
+Staff handle daily bookings: check-in, check-out, refund requests, messages and alerts.
 
-## Phạm vi
+## Scope
 
 **Backend**
 
-- Danh sách đơn theo khách sạn
+- Bookings list per hotel
 - Check-in, check-out
-- Yêu cầu hoàn tiền và duyệt
-- Hộp thư với khách, cảnh báo, thông báo
+- Refund requests and approval
+- Inbox with customers, alerts, notifications
 
-**Frontend web / mobile** (trang đã có UI trong `frontend/src/app`)
+**Frontend web / mobile** (pages already have UI in `frontend/src/app`)
 
 - `staff/dashboard`, `staff/bookings`, `staff/bookings/[id]`, `staff/check-in`, `staff/check-out`
 - `staff/refunds`, `staff/inbox`, `staff/alerts`
 - `account/notifications`
 
-## Ngoài phạm vi
+## Out of scope
 
-- Marketing của nhân viên → phase 5
+- Staff marketing → phase 5
 
 ## Definition of Done
 
-- [ ] Mọi chuyển trạng thái đơn có audit log
-- [ ] Hoàn tiền khớp số tiền đã thanh toán (có test)
-- [ ] Các trang [api/](../api/README.md) của phase khớp với code, trạng thái API `Integrated`
+- [ ] Every booking status change has an audit log entry
+- [ ] Refunds match the amount paid (with a test)
+- [ ] The phase's [api/](../api/README.md) pages match the code, API status `Integrated`

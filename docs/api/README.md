@@ -1,19 +1,19 @@
-# Tra cứu API theo vai trò người dùng
+# API reference by user role
 
-Mỗi endpoint được mô tả **một lần**, ở trang của vai trò dùng nó nhiều nhất; các trang khác chỉ link tới. Quy tắc chung (envelope, mã lỗi, phân trang, token) ở [../api-guide.md](../api-guide.md); quyết định nghiệp vụ và lịch sử thay đổi ở [../phases/](../phases/).
+Each endpoint is described **once**, on the page of the role that uses it most; other pages link to it. Rules for every API (envelope, error codes, pagination, tokens) are in [../api-guide.md](../api-guide.md); business decisions and change history are in [../phases/](../phases/).
 
-| Trang | Ai dùng | Nội dung |
+| Page | Used by | Content |
 |---|---|---|
-| [auth.md](./auth.md) | Mọi vai trò | Đăng ký, đăng nhập, OTP, refresh, phiên đăng nhập, mật khẩu, lời mời |
-| [partner.md](./partner.md) | Đối tác (`HOTEL_PARTNER`) | Danh mục, khách sạn, ảnh, loại phòng, phòng, nhân viên, hồ sơ xác minh |
-| [staff.md](./staff.md) | Nhân viên khách sạn (`HOTEL_STAFF`) | Những gì nhân viên được xem; quyền theo 5 nhóm |
-| [manager.md](./manager.md) | Quản lý nền tảng (`PLATFORM_MANAGER`) | Hàng đợi xác minh, duyệt, xác minh lại |
-| [customer.md](./customer.md) | Khách hàng (`CUSTOMER`) | Tìm kiếm, đặt phòng (đang làm) |
+| [auth.md](./auth.md) | Every role | Sign-up, sign-in, OTP, refresh, sessions, passwords, invitations |
+| [partner.md](./partner.md) | Partner (`HOTEL_PARTNER`) | Catalog, hotels, images, room types, rooms, staff, verification requests |
+| [staff.md](./staff.md) | Hotel staff (`HOTEL_STAFF`) | What staff can read; the 5 permission groups |
+| [manager.md](./manager.md) | Platform manager (`PLATFORM_MANAGER`) | Verification queue, decisions, re-verification |
+| [customer.md](./customer.md) | Customer (`CUSTOMER`) | Search, booking (in progress) |
 
-Cách đọc mỗi bảng endpoint:
+How to read each endpoint table:
 
-- Cột **Response** là nội dung của `data` trong envelope `{ success, message, data, meta? }`.
-- Cột **Quyền**: *chủ* = đối tác sở hữu khách sạn; *thành viên* = chủ hoặc nhân viên được gán vào khách sạn đó. Người ngoài nhận 404 của đúng tài nguyên (không biết tài nguyên có tồn tại hay không), nhân viên thiếu quyền nhận 403.
-- Tên trong ngoặc (ví dụ `createHotelSchema`, `Hotel`) là zod schema và kiểu TypeScript trong `@stayreco/shared`: dùng chúng thay vì tự định nghĩa lại.
+- The **Response** column is the content of `data` in the envelope `{ success, message, data, meta? }`.
+- **Access**: *owner* = the partner who owns the hotel; *member* = the owner or a staff member assigned to that hotel. Outsiders get the 404 of the resource itself (they cannot tell whether it exists); staff without the right get 403.
+- Names in parentheses (for example `createHotelSchema`, `Hotel`) are zod schemas and TypeScript types from `@stayreco/shared`: use them instead of redefining them.
 
-Thêm endpoint mới: ghi vào trang của vai trò tương ứng (cùng PR với code), thêm mã lỗi mới vào [api-guide.md §4.3](../api-guide.md#43-error-codes), và ghi một dòng vào *Changelog* của phase.
+Adding an endpoint: write it on the matching role page (in the same PR as the code), add new error codes to [api-guide.md §4.3](../api-guide.md#43-error-codes), and add a row to the phase *Changelog*.

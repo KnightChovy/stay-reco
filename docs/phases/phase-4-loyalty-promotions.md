@@ -1,25 +1,25 @@
-# Phase 4: Khách hàng thân thiết, khuyến mãi, đánh giá
+# Phase 4: Loyalty, promotions, reviews
 
 | | |
 |---|---|
-| Trạng thái phase | ⬜ Chưa bắt đầu |
-| Trạng thái API | Chưa có |
-| API | Chưa có. Khi phase bắt đầu: điền file này theo [`_template.md`](./_template.md), endpoint ghi vào [api/](../api/README.md). |
+| Phase status | ⬜ Not started |
+| API status | None yet |
+| API | None yet. When the phase starts: fill in this file from [`_template.md`](./_template.md) and write the endpoints in [api/](../api/README.md). |
 
-## Mục tiêu
+## Goal
 
-Giữ chân khách: điểm thưởng, khuyến mãi, đánh giá sau lưu trú, ví, hồ sơ và sở thích.
+Keep customers coming back: reward points, promotions, post-stay reviews, wallet, profile and preferences.
 
-## Phạm vi
+## Scope
 
 **Backend**
 
-- Chương trình loyalty theo khách sạn
-- Khuyến mãi, mã giảm giá áp vào đặt phòng
-- Đánh giá sau khi check-out
-- Ví, hồ sơ, sở thích khách hàng
+- Loyalty programs per hotel
+- Promotions and discount codes applied to bookings
+- Reviews after check-out
+- Customer wallet, profile, preferences
 
-**Frontend web / mobile** (trang đã có UI trong `frontend/src/app`)
+**Frontend web / mobile** (pages already have UI in `frontend/src/app`)
 
 - `partner/loyalty`, `partner/promotions`
 - `account/rewards`, `account/wallet`, `account/profile`, `account/preferences`
@@ -27,5 +27,5 @@ Giữ chân khách: điểm thưởng, khuyến mãi, đánh giá sau lưu trú,
 
 ## Definition of Done
 
-- [ ] Giá sau khuyến mãi tính ở BE, FE chỉ hiển thị
-- [ ] Các trang [api/](../api/README.md) của phase khớp với code, trạng thái API `Integrated`
+- [ ] Discounted prices are calculated by the BE; the FE only displays them
+- [ ] The phase's [api/](../api/README.md) pages match the code, API status `Integrated`

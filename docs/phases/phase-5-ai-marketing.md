@@ -1,25 +1,25 @@
-# Phase 5: AI gợi ý và marketing
+# Phase 5: AI recommendations and marketing
 
 | | |
 |---|---|
-| Trạng thái phase | ⬜ Chưa bắt đầu |
-| Trạng thái API | Chưa có |
-| API | Chưa có. Khi phase bắt đầu: điền file này theo [`_template.md`](./_template.md), endpoint ghi vào [api/](../api/README.md). |
+| Phase status | ⬜ Not started |
+| API status | None yet |
+| API | None yet. When the phase starts: fill in this file from [`_template.md`](./_template.md) and write the endpoints in [api/](../api/README.md). |
 
-## Mục tiêu
+## Goal
 
-Gợi ý khách sạn bằng AI, trợ lý hội thoại, công cụ nội dung marketing cho khách sạn.
+AI hotel recommendations, a conversational assistant, and marketing content tools for hotels.
 
-## Phạm vi
+## Scope
 
 **Backend**
 
-- pgvector, embedding khách sạn (CONVENTIONS §3.7)
-- Gợi ý cá nhân hóa, trợ lý AI
-- AI brand cho đối tác, lịch và nội dung marketing
+- pgvector, hotel embeddings (CONVENTIONS §3.7)
+- Personalized recommendations, AI assistant
+- AI brand for partners, marketing calendar and content
 - Blog
 
-**Frontend web / mobile** (trang đã có UI trong `frontend/src/app`)
+**Frontend web / mobile** (pages already have UI in `frontend/src/app`)
 
 - `(landing-page)/recommendations`, `(landing-page)/assistant`, `blog`, `FloatingAiButton`
 - `partner/ai-brand`
@@ -27,5 +27,5 @@ Gợi ý khách sạn bằng AI, trợ lý hội thoại, công cụ nội dung 
 
 ## Definition of Done
 
-- [ ] Có giới hạn chi phí gọi model và log lượt gọi
-- [ ] Các trang [api/](../api/README.md) của phase khớp với code, trạng thái API `Integrated`
+- [ ] Model call costs are capped and every call is logged
+- [ ] The phase's [api/](../api/README.md) pages match the code, API status `Integrated`

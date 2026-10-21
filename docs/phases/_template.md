@@ -1,25 +1,25 @@
-# Phase N: <tên phase>
+# Phase N: <phase name>
 
 | | |
 |---|---|
-| Trạng thái phase | ⬜ Chưa bắt đầu · 🟡 Đang làm · ✅ Xong |
-| Trạng thái API | `Draft` · `Agreed` · `BE Done` · `Integrated` |
-| Ngày chốt (Agreed) | |
-| BE phụ trách | |
-| FE phụ trách | |
-| API | [api/<vai trò>.md](../api/README.md) |
+| Phase status | ⬜ Not started · 🟡 In progress · ✅ Done |
+| API status | `Draft` · `Agreed` · `BE Done` · `Integrated` |
+| Agreed on | |
+| BE owners | |
+| FE owners | |
+| API | [api/<role>.md](../api/README.md) |
 
-> Quy tắc chung (envelope, mã lỗi, phân trang, ngày giờ): [api-guide.md](../api-guide.md). Endpoint **không** ghi ở file này mà ở trang [api/](../api/README.md) của vai trò dùng nó.
+> Rules for every API (envelope, error codes, pagination, dates): [api-guide.md](../api-guide.md). Endpoints are **not** written in this file but on the [api/](../api/README.md) page of the role that uses them.
 >
-> Quy trình trạng thái API:
-> 1. **Draft**: BE hoặc FE viết đề xuất vào trang `api/`, đánh dấu *(Draft)*; ai cũng sửa được.
-> 2. **Agreed**: BE + FE đã duyệt (qua PR). Từ đây đổi gì cũng phải ghi vào *Changelog* và báo bên kia.
-> 3. **BE Done**: endpoint chạy được trên `develop`, Swagger khớp trang API. FE bỏ mock, gọi API thật.
-> 4. **Integrated**: FE web và mobile đã tích hợp xong.
+> API status flow:
+> 1. **Draft**: BE or FE writes the proposal on the `api/` page, marked *(Draft)*; anyone can edit it.
+> 2. **Agreed**: BE + FE approved it (in a PR). From now on every change goes into the *Changelog* and is announced to the other side.
+> 3. **BE Done**: the endpoints run on `develop` and Swagger matches the API page. FE drops the mocks and calls the real API.
+> 4. **Integrated**: FE web and mobile are done.
 
-## Mục tiêu
+## Goal
 
-## Phạm vi
+## Scope
 
 **Backend**
 
@@ -29,33 +29,33 @@
 
 -
 
-## Ngoài phạm vi
+## Out of scope
 
 -
 
-## Quyết định đã chốt
+## Agreed decisions
 
-| # | Quyết định |
+| # | Decision |
 |---|---|
 | D1 | |
 
-## Trạng thái
+## States
 
 ```
 <enum>: A → B → C
 ```
 
-## Khi thêm endpoint
+## Adding endpoints
 
-- Schema body/query trong `packages/shared/src/schemas/<feature>.ts`, thêm **trước** khi code để FE làm song song ([packages/shared/README.md](../../packages/shared/README.md)).
-- Endpoint, kiểu response, luồng gọi: trang `api/<vai trò>.md`.
-- Mã lỗi mới: `packages/shared/src/errors.ts` **và** bảng [api-guide.md §4.3](../api-guide.md#43-error-codes).
+- Body/query schemas go in `packages/shared/src/schemas/<feature>.ts`, added **before** the code so FE can work in parallel ([packages/shared/README.md](../../packages/shared/README.md)).
+- Endpoints, response types, call flows: the `api/<role>.md` page.
+- New error codes: `packages/shared/src/errors.ts` **and** the table in [api-guide.md §4.3](../api-guide.md#43-error-codes).
 
-## Việc của FE
+## FE tasks
 
 -
 
-## Câu hỏi còn mở
+## Open questions
 
 - [ ]
 
@@ -65,5 +65,5 @@
 
 ## Changelog
 
-| Ngày | Ai | Thay đổi |
+| Date | Who | Change |
 |---|---|---|
