@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Trạng thái | ⬜ Chưa bắt đầu |
-| Contract | Chưa có. Tạo từ [`_template.md`](../contracts/_template.md) khi phase bắt đầu. |
+| API | Chưa có. Khi phase bắt đầu: điền file này theo [`_template.md`](./_template.md), endpoint ghi vào [api/](../api/README.md). |
 
 ## Mục tiêu
 
@@ -26,4 +26,4 @@ Số liệu cho đối tác và quản lý nền tảng, công cụ quản trị
 ## Definition of Done
 
 - [ ] Số liệu dashboard khớp dữ liệu giao dịch (có test truy vấn)
-- [ ] Contract đã cập nhật đúng với code, trạng thái `Integrated`
+- [ ] Các trang [api/](../api/README.md) của phase khớp với code, trạng thái API `Integrated`

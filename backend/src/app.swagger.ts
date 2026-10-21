@@ -11,7 +11,7 @@ export function setupSwagger(app: INestApplication) {
       [
         'Every route requires `Authorization: Bearer <accessToken>` unless it is public.',
         'Web clients send `X-Client-Type: web` on login/register/refresh/accept-invitation to receive the refresh token as an httpOnly cookie; mobile receives it in the body.',
-        'Flows and conventions: packages/docs/api-guide.md. Endpoint contracts per phase: packages/docs/contracts/.',
+        'Flows and conventions: docs/api-guide.md. Endpoints by user role: docs/api/.',
       ].join('\n\n'),
     )
     .setVersion('1.0')

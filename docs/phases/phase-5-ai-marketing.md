@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Trạng thái | ⬜ Chưa bắt đầu |
-| Contract | Chưa có. Tạo từ [`_template.md`](../contracts/_template.md) khi phase bắt đầu. |
+| API | Chưa có. Khi phase bắt đầu: điền file này theo [`_template.md`](./_template.md), endpoint ghi vào [api/](../api/README.md). |
 
 ## Mục tiêu
 
@@ -27,4 +27,4 @@ Gợi ý khách sạn bằng AI, trợ lý hội thoại, công cụ nội dung 
 ## Definition of Done
 
 - [ ] Có giới hạn chi phí gọi model và log lượt gọi
-- [ ] Contract đã cập nhật đúng với code, trạng thái `Integrated`
+- [ ] Các trang [api/](../api/README.md) của phase khớp với code, trạng thái API `Integrated`

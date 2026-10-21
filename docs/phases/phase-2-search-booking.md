@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Trạng thái | ⬜ Chưa bắt đầu |
-| Contract | Chưa có. Tạo từ [`_template.md`](../contracts/_template.md) khi phase bắt đầu. |
+| API | Chưa có. Khi phase bắt đầu: điền file này theo [`_template.md`](./_template.md), endpoint ghi vào [api/](../api/README.md). |
 
 ## Mục tiêu
 
@@ -16,7 +16,7 @@ Khách hàng tìm khách sạn, xem chi tiết, đặt và thanh toán; quản l
 - Tồn phòng và giá theo ngày
 - Tìm kiếm khách sạn theo điểm đến, ngày, số khách
 - Giữ phòng có hạn, tạo đơn đặt
-- Thanh toán (cổng thanh toán chờ chốt), xác nhận
+- Thanh toán qua SePay (VietQR, SePay báo về qua webhook), xác nhận
 - Chuyến đi của tôi, hủy, đổi ngày
 
 **Frontend web / mobile** (trang đã có UI trong `frontend/src/app`)
@@ -35,4 +35,4 @@ Khách hàng tìm khách sạn, xem chi tiết, đặt và thanh toán; quản l
 
 - [ ] Không bán vượt số phòng khi 2 người đặt cùng lúc (có test)
 - [ ] Đặt phòng chạy được end-to-end trên web và mobile
-- [ ] Contract đã cập nhật đúng với code, trạng thái `Integrated`
+- [ ] Các trang [api/](../api/README.md) của phase khớp với code, trạng thái API `Integrated`

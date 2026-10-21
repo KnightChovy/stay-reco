@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Trạng thái | ⬜ Chưa bắt đầu |
-| Contract | Chưa có. Tạo từ [`_template.md`](../contracts/_template.md) khi phase bắt đầu. |
+| API | Chưa có. Khi phase bắt đầu: điền file này theo [`_template.md`](./_template.md), endpoint ghi vào [api/](../api/README.md). |
 
 ## Mục tiêu
 
@@ -27,4 +27,4 @@ Giữ chân khách: điểm thưởng, khuyến mãi, đánh giá sau lưu trú,
 ## Definition of Done
 
 - [ ] Giá sau khuyến mãi tính ở BE, FE chỉ hiển thị
-- [ ] Contract đã cập nhật đúng với code, trạng thái `Integrated`
+- [ ] Các trang [api/](../api/README.md) của phase khớp với code, trạng thái API `Integrated`

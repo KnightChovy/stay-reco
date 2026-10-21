@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Trạng thái | ⬜ Chưa bắt đầu |
-| Contract | Chưa có. Tạo từ [`_template.md`](../contracts/_template.md) khi phase bắt đầu. |
+| API | Chưa có. Khi phase bắt đầu: điền file này theo [`_template.md`](./_template.md), endpoint ghi vào [api/](../api/README.md). |
 
 ## Mục tiêu
 
@@ -32,4 +32,4 @@ Nhân viên xử lý đơn hằng ngày: check-in, check-out, yêu cầu hoàn t
 
 - [ ] Mọi chuyển trạng thái đơn có audit log
 - [ ] Hoàn tiền khớp số tiền đã thanh toán (có test)
-- [ ] Contract đã cập nhật đúng với code, trạng thái `Integrated`
+- [ ] Các trang [api/](../api/README.md) của phase khớp với code, trạng thái API `Integrated`
