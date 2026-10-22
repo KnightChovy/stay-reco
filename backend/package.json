@@ -6,7 +6,7 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
-    "shared:build": "npm --prefix ../packages/shared install && npm --prefix ../packages/shared run build",
+    "shared:build": "cd ../packages/shared && npm install && npm run build",
     "prebuild": "npm run shared:build",
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
