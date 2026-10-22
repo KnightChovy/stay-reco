@@ -319,7 +319,11 @@ export class AuthController {
       'The hotel must belong to the partner. Emails a link to `/accept-invitation?token=…`, valid 72 hours. Inviting the same email again to the same hotel while it is still `INVITED` resends the invitation.',
   })
   @ApiData(invitationResultResponseSchema, HttpStatus.CREATED)
-  @ApiErrors(ErrorCode.HOTEL_NOT_FOUND, ErrorCode.AUTH_EMAIL_TAKEN)
+  @ApiErrors(
+    ErrorCode.HOTEL_NOT_FOUND,
+    ErrorCode.PARTNER_SUSPENDED,
+    ErrorCode.AUTH_EMAIL_TAKEN,
+  )
   @Post('invitations/staff')
   inviteStaff(
     @CurrentUser() user: AuthUser,

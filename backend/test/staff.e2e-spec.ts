@@ -337,4 +337,34 @@ describe('Hotel staff (e2e)', () => {
     ).expect(403);
     expect(res.body.code).toBe('PARTNER_SUSPENDED');
   });
+
+  it('a suspended partner cannot invite staff; other hotels still answer 404', async () => {
+    const owner = await partnerWithHotel('a@hotel.test');
+    const other = await partnerWithHotel('b@hotel.test');
+    await t.prisma.hotelPartner.update({
+      where: { hotelPartnerId: owner.id },
+      data: { status: 'SUSPENDED' },
+    });
+    const invite = (hotelId: string) =>
+      t
+        .api()
+        .post('/api/v1/auth/invitations/staff')
+        .set(auth(owner.token))
+        .send({
+          email: 'new@hotel.test',
+          fullName: 'New Staff',
+          hotelId,
+          position: 'Receptionist',
+        });
+
+    const suspended = await invite(owner.hotelId).expect(403);
+    expect(suspended.body.code).toBe('PARTNER_SUSPENDED');
+    expect(
+      await t.prisma.userAccount.count({ where: { email: 'new@hotel.test' } }),
+    ).toBe(0);
+    expect(t.outbox.some((m) => m.to === 'new@hotel.test')).toBe(false);
+
+    const outsider = await invite(other.hotelId).expect(404);
+    expect(outsider.body.code).toBe('HOTEL_NOT_FOUND');
+  });
 });
