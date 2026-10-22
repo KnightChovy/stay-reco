@@ -20,10 +20,12 @@ describe('FieldCipher', () => {
     flipped[0] ^= 1;
     expect(() =>
       cipher.decrypt([v, iv, tag, flipped.toString('base64')].join(':')),
-    ).toThrow();
+    ).toThrow('encrypted with another key or altered');
 
     const other = new FieldCipher(randomBytes(32).toString('base64'));
-    expect(() => other.decrypt(stored)).toThrow();
+    expect(() => other.decrypt(stored)).toThrow(
+      'Check that BENEFICIARY_ENCRYPTION_KEY is the key this database was seeded with',
+    );
     expect(() => cipher.decrypt('plain-text')).toThrow(
       'Unknown encrypted value format',
     );
