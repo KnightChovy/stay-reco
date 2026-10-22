@@ -1,5 +1,5 @@
 import { Controller, Get } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
   amenityResponseSchema,
   bedTypeResponseSchema,
@@ -15,14 +15,17 @@ import { CatalogService } from './catalog.service';
 export class CatalogController {
   constructor(private readonly catalog: CatalogService) {}
 
-  /** List amenities (names and groups in Vietnamese, lucide-react icon names) */
+  @ApiOperation({
+    summary:
+      'List amenities (names and groups in Vietnamese, lucide-react icon names)',
+  })
   @ApiData(z.array(amenityResponseSchema))
   @Get('amenities')
   amenities() {
     return this.catalog.amenities();
   }
 
-  /** List bed types */
+  @ApiOperation({ summary: 'List bed types' })
   @ApiData(z.array(bedTypeResponseSchema))
   @Get('bed-types')
   bedTypes() {

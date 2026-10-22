@@ -45,7 +45,7 @@ export class RoomTypesController {
     private readonly images: RoomTypeImagesService,
   ) {}
 
-  /** List the hotel's room types */
+  @ApiOperation({ summary: "List the hotel's room types" })
   @HotelAccessRequired('member')
   @ApiData(z.array(roomTypeResponseSchema))
   @Get('hotels/:hotelId/room-types')
@@ -53,9 +53,9 @@ export class RoomTypesController {
     return this.roomTypes.list(hotelId);
   }
 
-  /** Create a room type */
   @HotelAccessRequired('owner')
   @ApiOperation({
+    summary: 'Create a room type',
     description:
       '`basePrice` is the nightly price before seasonal rules. Unknown bed types or amenities return `VALIDATION_ERROR` on `beds` / `amenityIds`.',
   })
@@ -65,7 +65,7 @@ export class RoomTypesController {
     return this.roomTypes.create(hotelId, dto);
   }
 
-  /** Get a room type */
+  @ApiOperation({ summary: 'Get a room type' })
   @ApiHotelAccess('member', ErrorCode.ROOM_TYPE_NOT_FOUND)
   @ApiData(roomTypeResponseSchema)
   @Get('room-types/:id')
@@ -73,9 +73,9 @@ export class RoomTypesController {
     return this.roomTypes.findOne(user, id);
   }
 
-  /** Update a room type */
   @ApiHotelAccess('owner', ErrorCode.ROOM_TYPE_NOT_FOUND)
   @ApiOperation({
+    summary: 'Update a room type',
     description:
       'Sending `beds` or `amenityIds` replaces the whole list; leaving them out keeps them. `description: null` clears it.',
   })
@@ -89,7 +89,7 @@ export class RoomTypesController {
     return this.roomTypes.update(user, id, dto);
   }
 
-  /** Delete a room type that has no rooms or bookings */
+  @ApiOperation({ summary: 'Delete a room type that has no rooms or bookings' })
   @ApiHotelAccess('owner', ErrorCode.ROOM_TYPE_NOT_FOUND)
   @ApiErrors(ErrorCode.ROOM_TYPE_IN_USE)
   @Delete('room-types/:id')
@@ -98,7 +98,9 @@ export class RoomTypesController {
     return this.roomTypes.remove(user, id);
   }
 
-  /** Upload a room type image (at most 30, shown by `sortOrder`) */
+  @ApiOperation({
+    summary: 'Upload a room type image (at most 30, shown by `sortOrder`)',
+  })
   @ApiHotelAccess('owner', ErrorCode.ROOM_TYPE_NOT_FOUND)
   @UploadFile('image', uploadRoomTypeImageSchema)
   @ApiData(roomTypeImageResponseSchema, HttpStatus.CREATED)
@@ -113,7 +115,7 @@ export class RoomTypesController {
     return this.images.upload(user, id, file, dto);
   }
 
-  /** Update a room type image: caption or order */
+  @ApiOperation({ summary: 'Update a room type image: caption or order' })
   @ApiHotelAccess('owner', ErrorCode.IMAGE_NOT_FOUND)
   @ApiData(roomTypeImageResponseSchema)
   @Patch('room-type-images/:id')
@@ -125,7 +127,7 @@ export class RoomTypesController {
     return this.images.update(user, id, dto);
   }
 
-  /** Delete a room type image */
+  @ApiOperation({ summary: 'Delete a room type image' })
   @ApiHotelAccess('owner', ErrorCode.IMAGE_NOT_FOUND)
   @Delete('room-type-images/:id')
   @HttpCode(HttpStatus.NO_CONTENT)

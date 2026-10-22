@@ -64,7 +64,10 @@ function tidySchemas(node: unknown): void {
   if (!node || typeof node !== 'object') return;
   const obj = node as Json;
   delete obj.$id;
-  if (obj.format && obj.pattern) delete obj.pattern;
+  // String values only: a `properties` map can have fields named `format` and `pattern`, whose values are objects.
+  if (typeof obj.format === 'string' && typeof obj.pattern === 'string') {
+    delete obj.pattern;
+  }
   if (obj.minimum === Number.MIN_SAFE_INTEGER) delete obj.minimum;
   if (obj.maximum === Number.MAX_SAFE_INTEGER) delete obj.maximum;
   Object.values(obj).forEach(tidySchemas);
@@ -164,7 +167,8 @@ const words = (segment: string) =>
 function describePathParams(path: string, op: Json) {
   const segments = path.split('/');
   for (const param of (op.parameters as Param[] | undefined) ?? []) {
-    if (param.in !== 'path') continue;
+    // Ids only: a future `:code` or `:slug` param is not a uuid.
+    if (param.in !== 'path' || !/^(id|[a-z]\w*Id)$/.test(param.name)) continue;
     param.schema = { ...param.schema, format: 'uuid' };
     if (param.description) continue;
     const label =

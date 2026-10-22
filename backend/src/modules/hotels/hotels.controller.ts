@@ -8,7 +8,7 @@ import {
   Post,
   Put,
 } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
   hotelResponseSchema,
   hotelSummaryResponseSchema,
@@ -37,7 +37,10 @@ import { HotelsService } from './hotels.service';
 export class HotelsController {
   constructor(private readonly hotels: HotelsService) {}
 
-  /** List my hotels: owned ones for a partner, the assigned one for staff */
+  @ApiOperation({
+    summary:
+      'List my hotels: owned ones for a partner, the assigned one for staff',
+  })
   @Roles(UserRole.HOTEL_PARTNER, UserRole.HOTEL_STAFF)
   @ApiData(z.array(hotelSummaryResponseSchema))
   @Get('me/hotels')
@@ -45,7 +48,7 @@ export class HotelsController {
     return this.hotels.myHotels(user);
   }
 
-  /** Create a hotel (status DRAFT) */
+  @ApiOperation({ summary: 'Create a hotel (status DRAFT)' })
   @Roles(UserRole.HOTEL_PARTNER)
   @ApiData(hotelResponseSchema, HttpStatus.CREATED)
   @ApiErrors(ErrorCode.PARTNER_SUSPENDED)
@@ -54,7 +57,9 @@ export class HotelsController {
     return this.hotels.create(user, dto);
   }
 
-  /** Get a hotel with its amenities, images, policies and room config */
+  @ApiOperation({
+    summary: 'Get a hotel with its amenities, images, policies and room config',
+  })
   @HotelAccessRequired('member')
   @ApiData(hotelResponseSchema)
   @Get('hotels/:hotelId')
@@ -62,7 +67,9 @@ export class HotelsController {
     return this.hotels.findOne(hotelId);
   }
 
-  /** Update hotel details; send `null` to clear an optional field */
+  @ApiOperation({
+    summary: 'Update hotel details; send `null` to clear an optional field',
+  })
   @HotelAccessRequired('owner')
   @ApiData(hotelResponseSchema)
   @Patch('hotels/:hotelId')
@@ -70,7 +77,9 @@ export class HotelsController {
     return this.hotels.update(hotelId, dto);
   }
 
-  /** Replace the hotel's amenities (ids from `GET /amenities`) */
+  @ApiOperation({
+    summary: "Replace the hotel's amenities (ids from `GET /amenities`)",
+  })
   @HotelAccessRequired('owner')
   @ApiData(hotelResponseSchema)
   @Put('hotels/:hotelId/amenities')
@@ -81,7 +90,9 @@ export class HotelsController {
     return this.hotels.setAmenities(hotelId, dto.amenityIds);
   }
 
-  /** Replace the hotel's policies; keys not sent are removed */
+  @ApiOperation({
+    summary: "Replace the hotel's policies; keys not sent are removed",
+  })
   @HotelAccessRequired('owner')
   @ApiData(hotelResponseSchema)
   @Put('hotels/:hotelId/policies')
@@ -92,7 +103,10 @@ export class HotelsController {
     return this.hotels.setPolicies(hotelId, dto.policies);
   }
 
-  /** Set the declared number of physical rooms and the default base price (required before creating rooms) */
+  @ApiOperation({
+    summary:
+      'Set the declared number of physical rooms and the default base price (required before creating rooms)',
+  })
   @HotelAccessRequired('owner')
   @ApiData(hotelResponseSchema)
   @ApiErrors(ErrorCode.ROOM_LIMIT_REACHED)

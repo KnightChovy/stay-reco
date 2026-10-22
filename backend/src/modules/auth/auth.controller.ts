@@ -80,10 +80,9 @@ export class AuthController {
     private readonly config: ConfigService<Env, true>,
   ) {}
 
-  /** Register a customer */
   @Public()
   @Throttle(LOGIN_LIMIT)
-  @ApiOperation({ description: REGISTER_NOTE })
+  @ApiOperation({ summary: 'Register a customer', description: REGISTER_NOTE })
   @ApiData(registerResultResponseSchema, HttpStatus.CREATED)
   @ApiErrors(ErrorCode.AUTH_EMAIL_TAKEN, ErrorCode.TOO_MANY_REQUESTS)
   @Post('register/customer')
@@ -94,10 +93,12 @@ export class AuthController {
     return this.auth.registerCustomer(dto, meta);
   }
 
-  /** Register a hotel partner */
   @Public()
   @Throttle(LOGIN_LIMIT)
-  @ApiOperation({ description: REGISTER_NOTE })
+  @ApiOperation({
+    summary: 'Register a hotel partner',
+    description: REGISTER_NOTE,
+  })
   @ApiData(registerResultResponseSchema, HttpStatus.CREATED)
   @ApiErrors(ErrorCode.AUTH_EMAIL_TAKEN, ErrorCode.TOO_MANY_REQUESTS)
   @Post('register/partner')
@@ -108,10 +109,10 @@ export class AuthController {
     return this.auth.registerPartner(dto, meta);
   }
 
-  /** Sign in with email and password */
   @Public()
   @Throttle(LOGIN_LIMIT)
   @ApiOperation({
+    summary: 'Sign in with email and password',
     description:
       '5 wrong passwords lock the account for 15 minutes. Before the email code is entered the answer is 403 `AUTH_EMAIL_NOT_VERIFIED`: show the OTP screen.',
   })
@@ -137,9 +138,9 @@ export class AuthController {
     return { account, ...this.deliverTokens(req, res, tokens) };
   }
 
-  /** Get a new access token */
   @Public()
   @ApiOperation({
+    summary: 'Get a new access token',
     description:
       'Web: send `{}`; the `refresh_token` cookie is read. Mobile: send `{ refreshToken }`. The refresh token rotates on every call, and reusing an old one revokes the session. Call it only after a 401 `UNAUTHENTICATED`.',
   })
@@ -173,7 +174,9 @@ export class AuthController {
     }
   }
 
-  /** Sign out of this device (also clears the refresh cookie) */
+  @ApiOperation({
+    summary: 'Sign out of this device (also clears the refresh cookie)',
+  })
   @Post('logout')
   @HttpCode(HttpStatus.NO_CONTENT)
   async logout(
@@ -185,7 +188,7 @@ export class AuthController {
     this.clearRefreshCookie(res);
   }
 
-  /** Sign out of every device */
+  @ApiOperation({ summary: 'Sign out of every device' })
   @Post('logout-all')
   @HttpCode(HttpStatus.NO_CONTENT)
   async logoutAll(
@@ -197,21 +200,21 @@ export class AuthController {
     this.clearRefreshCookie(res);
   }
 
-  /** Get the signed-in account */
+  @ApiOperation({ summary: 'Get the signed-in account' })
   @ApiData(accountResponseSchema)
   @Get('me')
   me(@CurrentUser() user: AuthUser) {
     return this.auth.me(user.accountId);
   }
 
-  /** List the devices where I am signed in */
+  @ApiOperation({ summary: 'List the devices where I am signed in' })
   @ApiData(z.array(sessionInfoResponseSchema))
   @Get('sessions')
   sessions(@CurrentUser() user: AuthUser) {
     return this.auth.listSessions(user);
   }
 
-  /** Sign out one of my devices */
+  @ApiOperation({ summary: 'Sign out one of my devices' })
   @ApiErrors(ErrorCode.AUTH_SESSION_NOT_FOUND, ErrorCode.BAD_REQUEST)
   @Delete('sessions/:id')
   @HttpCode(HttpStatus.NO_CONTENT)
@@ -223,10 +226,10 @@ export class AuthController {
     return this.auth.revokeSession(user, id, meta);
   }
 
-  /** Verify the email with the 6-digit code and sign in */
   @Public()
   @Throttle(LOGIN_LIMIT)
   @ApiOperation({
+    summary: 'Verify the email with the 6-digit code and sign in',
     description:
       'Activates the account and returns the same result as login. Wrong code: `AUTH_OTP_INVALID`; expired, used or 5 attempts reached: `AUTH_OTP_EXPIRED` (offer "Resend code").',
   })
@@ -249,10 +252,10 @@ export class AuthController {
     return { account, ...this.deliverTokens(req, res, tokens) };
   }
 
-  /** Send a new email verification code */
   @Public()
   @Throttle(EMAIL_LIMIT)
   @ApiOperation({
+    summary: 'Send a new email verification code',
     description:
       'Always 204, so it does not reveal which emails exist. A new code is sent only to accounts waiting for verification.',
   })
@@ -263,10 +266,10 @@ export class AuthController {
     return this.auth.resendVerification(dto.email);
   }
 
-  /** Email a password reset link */
   @Public()
   @Throttle(EMAIL_LIMIT)
   @ApiOperation({
+    summary: 'Email a password reset link',
     description:
       'Always 204, so it does not reveal which emails exist. The email links to `/reset-password?token=…`, valid 15 minutes.',
   })
@@ -277,10 +280,12 @@ export class AuthController {
     return this.auth.forgotPassword(dto.email);
   }
 
-  /** Set a new password with the emailed token */
   @Public()
   @Throttle(LOGIN_LIMIT)
-  @ApiOperation({ description: 'Signs out every device of the account.' })
+  @ApiOperation({
+    summary: 'Set a new password with the emailed token',
+    description: 'Signs out every device of the account.',
+  })
   @ApiErrors(
     ErrorCode.AUTH_TOKEN_INVALID,
     ErrorCode.AUTH_ACCOUNT_INACTIVE,
@@ -292,8 +297,8 @@ export class AuthController {
     return this.auth.resetPassword(dto, meta);
   }
 
-  /** Change my password */
   @ApiOperation({
+    summary: 'Change my password',
     description: 'Keeps this device signed in and signs out the others.',
   })
   @ApiErrors(ErrorCode.AUTH_WRONG_PASSWORD)
@@ -307,9 +312,9 @@ export class AuthController {
     return this.auth.changePassword(user, dto, meta);
   }
 
-  /** Invite a staff member to one of my hotels */
   @Roles(UserRole.HOTEL_PARTNER)
   @ApiOperation({
+    summary: 'Invite a staff member to one of my hotels',
     description:
       'The hotel must belong to the partner. Emails a link to `/accept-invitation?token=…`, valid 72 hours. Inviting the same email again to the same hotel while it is still `INVITED` resends the invitation.',
   })
@@ -324,7 +329,7 @@ export class AuthController {
     return this.auth.inviteStaff(user, dto, meta);
   }
 
-  /** Invite a platform manager */
+  @ApiOperation({ summary: 'Invite a platform manager' })
   @Roles(UserRole.ADMIN)
   @ApiData(invitationResultResponseSchema, HttpStatus.CREATED)
   @ApiErrors(ErrorCode.AUTH_EMAIL_TAKEN)
@@ -337,7 +342,7 @@ export class AuthController {
     return this.auth.invitePlatformManager(user, dto, meta);
   }
 
-  /** Accept an invitation: set a password and sign in */
+  @ApiOperation({ summary: 'Accept an invitation: set a password and sign in' })
   @Public()
   @Throttle(LOGIN_LIMIT)
   @ApiClientType()

@@ -25,10 +25,10 @@ export class UploadsController {
     private readonly access: HotelAccessService,
   ) {}
 
-  /** Upload one verification document */
   @Roles(UserRole.HOTEL_PARTNER)
   @UploadFile('document')
   @ApiOperation({
+    summary: 'Upload one verification document',
     description:
       'Stored privately (decision D5): only the hotel owner and platform managers get a link, later, through the request. Upload each document separately and pass the returned `fileId`s when submitting.',
   })

@@ -40,7 +40,9 @@ class StaffPermissionsDto extends zodDto(staffPermissionsSchema) {}
 export class StaffController {
   constructor(private readonly staff: StaffService) {}
 
-  /** List the hotel's staff, including pending invitations (INVITED) */
+  @ApiOperation({
+    summary: "List the hotel's staff, including pending invitations (INVITED)",
+  })
   @HotelAccessRequired('owner-view')
   @ApiData(z.array(staffMemberResponseSchema))
   @Get('hotels/:hotelId/staff')
@@ -48,9 +50,9 @@ export class StaffController {
     return this.staff.list(hotelId);
   }
 
-  /** Replace a staff member's permission groups */
   @ApiHotelAccess('owner', ErrorCode.STAFF_NOT_FOUND)
   @ApiOperation({
+    summary: "Replace a staff member's permission groups",
     description:
       "An empty array means read-only. Applies from the staff member's next request.",
   })
@@ -65,9 +67,9 @@ export class StaffController {
     return this.staff.setPermissions(user, id, dto.permissions, meta);
   }
 
-  /** Deactivate a staff member (ACTIVE → DEACTIVATED) */
   @ApiHotelAccess('owner', ErrorCode.STAFF_NOT_FOUND)
   @ApiOperation({
+    summary: 'Deactivate a staff member (ACTIVE → DEACTIVATED)',
     description:
       'Signs the staff member out of every device at once; their sign-in then returns `AUTH_ACCOUNT_DEACTIVATED`.',
   })
@@ -83,7 +85,9 @@ export class StaffController {
     return this.staff.deactivate(user, id, meta);
   }
 
-  /** Activate a deactivated staff member (DEACTIVATED → ACTIVE) */
+  @ApiOperation({
+    summary: 'Activate a deactivated staff member (DEACTIVATED → ACTIVE)',
+  })
   @ApiHotelAccess('owner', ErrorCode.STAFF_NOT_FOUND)
   @ApiData(staffMemberResponseSchema)
   @ApiErrors(ErrorCode.STAFF_STATUS_CONFLICT)
@@ -97,9 +101,9 @@ export class StaffController {
     return this.staff.activate(user, id, meta);
   }
 
-  /** Cancel a pending invitation */
   @ApiHotelAccess('owner', ErrorCode.STAFF_NOT_FOUND)
   @ApiOperation({
+    summary: 'Cancel a pending invitation',
     description:
       'Only while the invitation is pending (INVITED): the email link stops working and the email can be invited again. Used accounts are deactivated instead.',
   })

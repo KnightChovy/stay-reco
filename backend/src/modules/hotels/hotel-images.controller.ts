@@ -33,10 +33,10 @@ import { HotelImagesService } from './hotel-images.service';
 export class HotelImagesController {
   constructor(private readonly images: HotelImagesService) {}
 
-  /** Upload a hotel image */
   @HotelAccessRequired('owner')
   @UploadFile('image', uploadHotelImageSchema)
   @ApiOperation({
+    summary: 'Upload a hotel image',
     description:
       'At most 30 images per hotel. The first image becomes the cover; `isCover: "true"` moves the cover to this image.',
   })
@@ -51,7 +51,9 @@ export class HotelImagesController {
     return this.images.upload(hotelId, file, dto);
   }
 
-  /** Update a hotel image: caption, order, or make it the cover */
+  @ApiOperation({
+    summary: 'Update a hotel image: caption, order, or make it the cover',
+  })
   @ApiHotelAccess('owner', ErrorCode.IMAGE_NOT_FOUND)
   @ApiData(hotelImageResponseSchema)
   @Patch('hotel-images/:id')
@@ -63,7 +65,9 @@ export class HotelImagesController {
     return this.images.update(user, id, dto);
   }
 
-  /** Delete a hotel image; deleting the cover promotes the next image */
+  @ApiOperation({
+    summary: 'Delete a hotel image; deleting the cover promotes the next image',
+  })
   @ApiHotelAccess('owner', ErrorCode.IMAGE_NOT_FOUND)
   @Delete('hotel-images/:id')
   @HttpCode(HttpStatus.NO_CONTENT)

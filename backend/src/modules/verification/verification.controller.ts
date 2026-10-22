@@ -51,9 +51,9 @@ const OWNER_OR_MANAGER =
 export class VerificationController {
   constructor(private readonly verification: VerificationService) {}
 
-  /** Submit a verification request for a hotel */
   @HotelAccessRequired('owner')
   @ApiOperation({
+    summary: 'Submit a verification request for a hotel',
     description:
       'The 4 wizard steps in one body. The request type is derived by the backend: a DRAFT hotel → `INITIAL` (the hotel becomes PENDING_VERIFICATION); an active hotel asked to re-verify → `RENEWAL`; otherwise `UPDATE`. Each `fileId` must come from `POST /uploads/verification-documents` by the same partner, one file per document.',
   })
@@ -73,9 +73,9 @@ export class VerificationController {
     return this.verification.submit(user, hotelId, dto, meta);
   }
 
-  /** List a hotel's verification requests, newest first */
   @HotelAccessRequired('owner-view')
   @ApiOperation({
+    summary: "List a hotel's verification requests, newest first",
     description:
       'Includes the reviewer reasons. The beneficiary account number and the representative ID number are masked (`****1234`).',
   })
@@ -85,7 +85,7 @@ export class VerificationController {
     return this.verification.history(hotelId);
   }
 
-  /** Get a verification request in full */
+  @ApiOperation({ summary: 'Get a verification request in full' })
   @ApiAccess(OWNER_OR_MANAGER)
   @ApiData(verificationRequestResponseSchema)
   @ApiErrors(ErrorCode.VERIFICATION_NOT_FOUND, ErrorCode.FORBIDDEN)
@@ -94,9 +94,9 @@ export class VerificationController {
     return this.verification.detail(user, id);
   }
 
-  /** Get a short-lived link to view a document */
   @ApiAccess(OWNER_OR_MANAGER)
   @ApiOperation({
+    summary: 'Get a short-lived link to view a document',
     description:
       'Returns JSON, not a redirect, because a new browser tab cannot send the Bearer token. The link is valid 5 minutes; ask for a new one each time.',
   })
@@ -107,9 +107,9 @@ export class VerificationController {
     return this.verification.fileLink(user, id);
   }
 
-  /** The review queue, oldest first by default */
   @Roles(UserRole.PLATFORM_MANAGER)
   @ApiOperation({
+    summary: 'The review queue, oldest first by default',
     description:
       '`search` matches the hotel name. The queue has no beneficiary data; compute the SLA from `submittedAt`.',
   })
@@ -119,9 +119,9 @@ export class VerificationController {
     return this.verification.queue(query);
   }
 
-  /** Approve a pending request */
   @Roles(UserRole.PLATFORM_MANAGER)
   @ApiOperation({
+    summary: 'Approve a pending request',
     description:
       'An `INITIAL` request makes the hotel ACTIVE (and the partner APPROVED on their first hotel); it cannot be approved while the partner is suspended. `UPDATE` / `RENEWAL` requests do not change the hotel status. The partner is emailed.',
   })
@@ -146,9 +146,9 @@ export class VerificationController {
     return this.verification.decide(user, id, 'APPROVED', null, meta);
   }
 
-  /** Reject a pending request with a reason */
   @Roles(UserRole.PLATFORM_MANAGER)
   @ApiOperation({
+    summary: 'Reject a pending request with a reason',
     description:
       'An `INITIAL` request sends the hotel back to DRAFT. The partner is emailed with the reason.',
   })
@@ -168,9 +168,9 @@ export class VerificationController {
     return this.verification.decide(user, id, 'REJECTED', dto.reason, meta);
   }
 
-  /** Ask the partner for changes, with a reason */
   @Roles(UserRole.PLATFORM_MANAGER)
   @ApiOperation({
+    summary: 'Ask the partner for changes, with a reason',
     description:
       'An `INITIAL` request sends the hotel back to DRAFT; the partner edits it and submits a new request. The partner is emailed with the reason.',
   })
@@ -196,9 +196,9 @@ export class VerificationController {
     );
   }
 
-  /** Ask an active hotel to verify again, with a reason */
   @Roles(UserRole.PLATFORM_MANAGER)
   @ApiOperation({
+    summary: 'Ask an active hotel to verify again, with a reason',
     description:
       'Creates a `RENEWAL` request in NEEDS_REVISION (for example an expired license). The hotel stays ACTIVE while the partner submits the renewal. The partner is emailed with the reason.',
   })

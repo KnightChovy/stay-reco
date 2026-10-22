@@ -40,9 +40,9 @@ import { RoomsService } from './rooms.service';
 export class RoomsController {
   constructor(private readonly rooms: RoomsService) {}
 
-  /** List the hotel's physical rooms */
   @HotelAccessRequired('member')
   @ApiOperation({
+    summary: "List the hotel's physical rooms",
     description:
       '`search` matches the room number literally. Room numbers sort in natural order (9, 101, 1001).',
   })
@@ -52,9 +52,9 @@ export class RoomsController {
     return this.rooms.list(hotelId, query);
   }
 
-  /** Create a physical room */
   @HotelAccessRequired('owner')
   @ApiOperation({
+    summary: 'Create a physical room',
     description:
       'Needs the room config first; the room count cannot exceed `totalRooms`. Room numbers are unique per hotel, case-insensitive.',
   })
@@ -69,7 +69,9 @@ export class RoomsController {
     return this.rooms.create(hotelId, dto);
   }
 
-  /** Update a room (number, floor, type, notes; not the status) */
+  @ApiOperation({
+    summary: 'Update a room (number, floor, type, notes; not the status)',
+  })
   @ApiHotelAccess('owner', ErrorCode.ROOM_NOT_FOUND)
   @ApiData(roomResponseSchema)
   @ApiErrors(ErrorCode.ROOM_TYPE_NOT_FOUND, ErrorCode.ROOM_NUMBER_TAKEN)
@@ -82,9 +84,9 @@ export class RoomsController {
     return this.rooms.update(user, id, dto);
   }
 
-  /** Lock a room for maintenance (status MAINTENANCE) */
   @ApiHotelAccess('owner', ErrorCode.ROOM_NOT_FOUND)
   @ApiOperation({
+    summary: 'Lock a room for maintenance (status MAINTENANCE)',
     description:
       'A room with a guest (`OCCUPIED`) cannot be locked. Written to the audit log with the reason.',
   })
@@ -101,7 +103,7 @@ export class RoomsController {
     return this.rooms.lock(user, id, dto.reason, meta);
   }
 
-  /** Unlock a locked room (status AVAILABLE) */
+  @ApiOperation({ summary: 'Unlock a locked room (status AVAILABLE)' })
   @ApiHotelAccess('owner', ErrorCode.ROOM_NOT_FOUND)
   @ApiData(roomResponseSchema)
   @ApiErrors(ErrorCode.ROOM_NOT_LOCKABLE)
