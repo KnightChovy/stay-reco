@@ -41,9 +41,18 @@ export class FieldCipher {
       Buffer.from(iv, 'base64'),
     );
     decipher.setAuthTag(Buffer.from(tag, 'base64'));
-    return Buffer.concat([
-      decipher.update(Buffer.from(data, 'base64')),
-      decipher.final(),
-    ]).toString('utf8');
+    try {
+      return Buffer.concat([
+        decipher.update(Buffer.from(data, 'base64')),
+        decipher.final(),
+      ]).toString('utf8');
+    } catch (err) {
+      // GCM only says "unable to authenticate data"; in practice the server key no longer matches the stored data.
+      throw new Error(
+        'Cannot decrypt a stored value: it was encrypted with another key or altered. ' +
+          'Check that BENEFICIARY_ENCRYPTION_KEY is the key this database was seeded with.',
+        { cause: err },
+      );
+    }
   }
 }

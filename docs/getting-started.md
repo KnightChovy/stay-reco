@@ -25,7 +25,7 @@ Open `backend/.env` and change 2 values:
    node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
    ```
 
-   Paste the printed string after the `=`.
+   Paste the printed string after the `=`. Each person generates their own key for their own database; do not copy someone else's. Keep it once you have seeded: the data in your database can only be read with the key it was encrypted with. To switch keys, see *Common errors* below.
 
 Leave the other variables as they are. With `CLOUDINARY_*` empty, only the image and document upload APIs return `503 UPLOAD_UNAVAILABLE`; every other API works. Ask the BE for the Cloudinary settings if you need real uploads.
 
@@ -88,9 +88,10 @@ Hotel and company names are fictional; images come from picsum.photos; demo docu
 |---|---|
 | `P1001: Can't reach database server at localhost:5432` | Docker Desktop is not running, or `npm run db:up` was not run |
 | `Invalid environment variables ... BENEFICIARY_ENCRYPTION_KEY` | The key is missing or malformed; generate it again with the command above |
+| Verification APIs (request detail, history, approve, reject, submit) return `500 INTERNAL_ERROR`, and the backend terminal shows `Cannot decrypt a stored value` | `BENEFICIARY_ENCRYPTION_KEY` is not the key your database was seeded with (it was changed, or copied from someone else). Put the old key back, or keep the new one and recreate the local data: `npx prisma migrate reset`, then `npm run db:seed` (all local data is lost) |
 | `Port 3000 is already in use` | Another app (usually the frontend) holds port 3000: stop it, start the backend first, run the frontend on port 3001 |
 | The browser reports a **CORS** error | The frontend is not running on `localhost:3001`; restart it with `npm run dev -- -p 3001` |
-| `npm run db:migrate` asks whether to **reset** the database | Answer **No** and tell the BE. Run `npx prisma migrate reset` (recreates the tables and sample data) only if you accept losing all local data |
+| `npm run db:migrate` asks whether to **reset** the database | Answer **No** and tell the BE. Run `npx prisma migrate reset` (recreates the tables, empty) then `npm run db:seed` only if you accept losing all local data |
 | API calls return `401 UNAUTHENTICATED` | The access token expired (15 minutes): axios refreshes it; if it still fails, sign in again |
 
 ## Next
