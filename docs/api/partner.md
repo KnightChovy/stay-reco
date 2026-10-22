@@ -181,7 +181,7 @@ UC63, SRS 3.11.7: rooms on sale per room type and day.
 ```jsonc
 // AvailabilityDay (one per room type and date)
 { "roomTypeId": "uuid", "date": "2026-11-20",
-  "totalRooms": 12,        // physical rooms of the type in AVAILABLE status
+  "totalRooms": 12,        // physical rooms of the type not locked (MAINTENANCE)
   "booked": 5, "held": 1,  // nights sold, nights held for unpaid bookings
   "closed": 2,             // rooms taken off sale by the partner
   "onSale": 4 }            // totalRooms − booked − held − closed
@@ -210,7 +210,7 @@ UC57: the partner sees the bookings of the selected hotel, read-only.
 | Method | Path | Access | Query | Response |
 |---|---|---|---|---|
 | GET | `/hotels/:hotelId/bookings` | owner (also while suspended); staff with `BOOKING` or `REFUND` | `?status=&paymentStatus=&checkInFrom=&checkInTo=&search=&sort=&page=&pageSize=` (`hotelBookingsQuerySchema`) | `BookingSummary[]` + `meta` |
-| GET | `/bookings/:id` | members of the booking's hotel; the customer | | `Booking` ([customer.md](./customer.md#types)) |
+| GET | `/bookings/:id` | owner; staff with `BOOKING` or `REFUND`; the customer who booked | | `Booking` ([customer.md](./customer.md#types)) |
 
 - `search` matches the booking code or the guest name. `sort`: `check-in-asc` (default), `check-in-desc`, `created-desc`.
 

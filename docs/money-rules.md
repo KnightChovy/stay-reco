@@ -61,7 +61,7 @@ When the customer clicks "Continue to payment", the backend prices the stay agai
 
 ## 3. Availability and holds
 
-- Availability is per night. A room type is available for a stay when enough physical rooms in `AVAILABLE` status are not held, booked or closed on **every night** of the stay (BR-02, BR-27).
+- Availability is per night. A room type is available for a stay when enough physical rooms of the type are not held, booked or closed on **every night** of the stay (BR-02). Rooms locked for maintenance (`MAINTENANCE`) do not count until the partner unlocks them; `OCCUPIED` and `CLEANING` describe today only and do not reduce future dates (BR-27).
 - The partner can close dates or reduce the rooms on sale per day (UC63), but never below the rooms already booked.
 - When the customer confirms, the system holds enough rooms for every night for **15 minutes** (BR-03). Two customers cannot hold the same room for the same night (the database rejects it).
 - A job runs **every minute** to release expired holds; unpaid bookings become **expired** (SRS 3.5.4).
@@ -179,3 +179,4 @@ Per BR-20, only when: the booking was already refunded or the request is a dupli
 |---|---|
 | 2026-10-22 | First version: prices and pricing rules, holds, SePay, money flow on the invoice + wallet model, commission, cancellation policy, refund process from slide 08 |
 | 2026-10-23 | Added to the repo as the reference page |
+| 2026-10-23 | Availability: rooms locked for maintenance do not count; `OCCUPIED` / `CLEANING` (today's state) do not reduce future dates |

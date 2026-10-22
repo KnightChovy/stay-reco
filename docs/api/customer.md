@@ -43,7 +43,7 @@ Stay parameters used by several endpoints (`stayQuerySchema`):
 | Method | Path | Access | Body / Query | Response |
 |---|---|---|---|---|
 | POST | `/bookings` | CUSTOMER | `createBookingSchema` | `Booking` (201), `PENDING`, with `payment` |
-| GET | `/bookings/:id` | the customer who booked; members of the hotel | | `Booking` |
+| GET | `/bookings/:id` | the customer who booked; the hotel owner; staff with `BOOKING` or `REFUND` | | `Booking` |
 | GET | `/me/bookings` | CUSTOMER | `?tab=&search=&page=&pageSize=` (`myBookingsQuerySchema`) | `BookingSummary[]` + `meta` |
 | GET | `/bookings/:id/cancellation-quote` | the customer who booked | | `CancellationQuote` |
 | POST | `/bookings/:id/cancel` | the customer who booked | `{ reason }` (`cancelBookingSchema`) | `Booking` |
@@ -91,7 +91,7 @@ The booking becomes `CONFIRMED` only when SePay reports a transfer with this con
 2. `POST /bookings/:id/cancel { reason }` (reason required, max 500):
    - refund 0 (past the deadline with a 100% fee) → the booking is `CANCELLED` at once and the rooms are released;
    - refund > 0 → a refund request: the invoice becomes `REFUND_PENDING`, the booking **stays** `CONFIRMED` and keeps its rooms until the hotel decides ([partner.md](./partner.md#refund-requests-draft-phase-2)). Approved → `CANCELLED`, refund credited to the customer's wallet. Rejected → the booking stays, with the reason. Still undecided at check-in time → approved automatically.
-3. Only a `CONFIRMED` booking that is not checked in and has no pending refund can be cancelled (`409 BOOKING_STATUS_CONFLICT`). After check-in: `409 CANCELLATION_NOT_ALLOWED` (BR-09).
+3. Only a `CONFIRMED` booking without a pending refund can be cancelled. A `CHECKED_IN` booking returns `409 CANCELLATION_NOT_ALLOWED` (BR-09); any other status, or a refund already pending, returns `409 BOOKING_STATUS_CONFLICT`.
 
 Changing dates, room type or guests is not offered: cancel and book again (BR-09). Changing the guest name, phone, arrival time or special requests comes in phase 3 (UC25).
 
@@ -121,7 +121,7 @@ Changing dates, room type or guests is not offered: cancel and book again (BR-09
   "offer": {                               // null without dates
     "available": 3,                        // rooms of this type free on every night
     "fitsGuests": true,
-    "nights": [ { "date": "2026-11-20", "price": 1800000 }, { "date": "2026-11-21", "price": 1800000 } ],
+    "nightlyPrices": [ { "date": "2026-11-20", "price": 1800000 }, { "date": "2026-11-21", "price": 1800000 } ],
     "perRoomTotal": 3600000, "total": 3600000,   // total = perRoomTotal × rooms
     "freeCancellationUntil": "2026-11-17T07:00:00.000Z",   // null = no free cancellation
     "cancellationFeePercent": 50 } }
@@ -135,7 +135,7 @@ Changing dates, room type or guests is not offered: cancel and book again (BR-09
 
 // Booking = BookingSummary +
 { "guestName": "…", "contactPhone": "…", "arrivalTime": "14:00", "specialRequests": null,
-  "nights": [ { "date": "2026-11-20", "price": 1800000 } ],   // prices fixed at booking time
+  "nightlyPrices": [ { "date": "2026-11-20", "price": 1800000 } ],   // prices fixed at booking time
   "cancellation": { "freeUntil": "…", "feePercent": 50 },
   "holdExpiresAt": null,                  // set while PENDING
   "paidAt": "…",
