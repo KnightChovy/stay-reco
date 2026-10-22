@@ -9,7 +9,7 @@
 |---|---|
 | Base URL (dev) | `http://localhost:3000/api/v1` |
 | Base URL (staging) | `TODO(meeting)` |
-| Health check | `GET /health` returns `{ "success": true, "message": "OK", "data": { "status": "ok" } }` |
+| Health check | `GET /health` returns `{ "success": true, "message": "OK", "data": { "status": "ok" } }` when the database answers, otherwise 503 `SERVICE_UNAVAILABLE` |
 | Format | JSON, `Content-Type: application/json` |
 | CORS (dev) | Allows `http://localhost:3001` (`CORS_ORIGINS` variable), with credentials (cookies) |
 | IDs | UUID strings |
@@ -168,6 +168,7 @@ There is no `status` field in the body; the HTTP status is already available as 
 | `CONFLICT` | 409 | Other data conflicts | Generic message |
 | `TOO_MANY_REQUESTS` | 429 | Rate limited (login 5/min, emails 3 per 15 min) | "Please try again later" |
 | `INTERNAL_ERROR` | 500 | Server error | Generic message, no details |
+| `SERVICE_UNAVAILABLE` | 503 | The database is down or not answering | "The service is temporarily unavailable, please try again" |
 | `AUTH_INVALID_CREDENTIALS` | 401 | Wrong email or password (including unknown email) | MSG05. **Do not** refresh. |
 | `AUTH_ACCOUNT_LOCKED` | 403 | 5 wrong passwords; locked for 15 minutes | "Too many failed attempts…" |
 | `AUTH_ACCOUNT_SUSPENDED` | 403 | Account suspended | MSG06 |

@@ -13,6 +13,8 @@ export const ErrorCode = {
   CONFLICT: 'CONFLICT',
   TOO_MANY_REQUESTS: 'TOO_MANY_REQUESTS',
   INTERNAL_ERROR: 'INTERNAL_ERROR',
+  /** A dependency the backend needs (the database) is down or not answering; try again later. */
+  SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
 
   // Auth
   AUTH_INVALID_CREDENTIALS: 'AUTH_INVALID_CREDENTIALS',
