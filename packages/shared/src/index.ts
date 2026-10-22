@@ -5,6 +5,7 @@ export * from './errors';
 export * from './http';
 export * from './responses/auth';
 export * from './responses/hotel';
+export * from './responses/registry';
 export * from './schemas/auth';
 export * from './schemas/common';
 export * from './schemas/hotel';
