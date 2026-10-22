@@ -227,4 +227,5 @@ The response `meta` (`page`, `pageSize`, `total`, `totalPages`) maps directly to
 - Enabled only when `NODE_ENV !== 'production'`.
 - To try authenticated endpoints: call `/auth/login`, copy `accessToken`, click **Authorize** and paste it. Swagger keeps the token across page reloads.
 - Swagger is the primary source for endpoints and DTOs. This file keeps only the overall flows and shared rules.
-- Response bodies **don't have schemas** in Swagger yet; they will be added together with the first list API.
+- Every operation shows who may call it (**Access**), the success body (the envelope with the `data` schema, plus `meta` for lists) and every error code it can return, grouped by HTTP status with an example per code. Public routes have no lock.
+- Response schemas (`Hotel`, `Account`…) are generated from the zod schemas in `packages/shared/src/responses`, the same ones the TypeScript types come from.

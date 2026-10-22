@@ -9,7 +9,8 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { roomResponseSchema } from '@stayreco/shared';
 import {
   type AuthUser,
   CurrentUser,
@@ -18,7 +19,14 @@ import {
   ReqMeta,
   type RequestMeta,
 } from '../../common/decorators/request-meta.decorator';
+import { ErrorCode } from '../../common/errors/error-code';
 import { HotelAccessRequired } from '../../common/hotel-access/hotel-access.guard';
+import {
+  ApiData,
+  ApiErrors,
+  ApiHotelAccess,
+  ApiPage,
+} from '../../common/swagger/api-docs.decorators';
 import {
   CreateRoomDto,
   LockRoomDto,
@@ -32,18 +40,39 @@ import { RoomsService } from './rooms.service';
 export class RoomsController {
   constructor(private readonly rooms: RoomsService) {}
 
+  /** List the hotel's physical rooms */
   @HotelAccessRequired('member')
+  @ApiOperation({
+    description:
+      '`search` matches the room number literally. Room numbers sort in natural order (9, 101, 1001).',
+  })
+  @ApiPage(roomResponseSchema)
   @Get('hotels/:hotelId/rooms')
   list(@Param('hotelId') hotelId: string, @Query() query: RoomListQueryDto) {
     return this.rooms.list(hotelId, query);
   }
 
+  /** Create a physical room */
   @HotelAccessRequired('owner')
+  @ApiOperation({
+    description:
+      'Needs the room config first; the room count cannot exceed `totalRooms`. Room numbers are unique per hotel, case-insensitive.',
+  })
+  @ApiData(roomResponseSchema, HttpStatus.CREATED)
+  @ApiErrors(
+    ErrorCode.ROOM_TYPE_NOT_FOUND,
+    ErrorCode.ROOM_LIMIT_REACHED,
+    ErrorCode.ROOM_NUMBER_TAKEN,
+  )
   @Post('hotels/:hotelId/rooms')
   create(@Param('hotelId') hotelId: string, @Body() dto: CreateRoomDto) {
     return this.rooms.create(hotelId, dto);
   }
 
+  /** Update a room (number, floor, type, notes; not the status) */
+  @ApiHotelAccess('owner', ErrorCode.ROOM_NOT_FOUND)
+  @ApiData(roomResponseSchema)
+  @ApiErrors(ErrorCode.ROOM_TYPE_NOT_FOUND, ErrorCode.ROOM_NUMBER_TAKEN)
   @Patch('rooms/:id')
   update(
     @CurrentUser() user: AuthUser,
@@ -53,6 +82,14 @@ export class RoomsController {
     return this.rooms.update(user, id, dto);
   }
 
+  /** Lock a room for maintenance (status MAINTENANCE) */
+  @ApiHotelAccess('owner', ErrorCode.ROOM_NOT_FOUND)
+  @ApiOperation({
+    description:
+      'A room with a guest (`OCCUPIED`) cannot be locked. Written to the audit log with the reason.',
+  })
+  @ApiData(roomResponseSchema)
+  @ApiErrors(ErrorCode.ROOM_NOT_LOCKABLE)
   @Post('rooms/:id/lock')
   @HttpCode(HttpStatus.OK)
   lock(
@@ -64,6 +101,10 @@ export class RoomsController {
     return this.rooms.lock(user, id, dto.reason, meta);
   }
 
+  /** Unlock a locked room (status AVAILABLE) */
+  @ApiHotelAccess('owner', ErrorCode.ROOM_NOT_FOUND)
+  @ApiData(roomResponseSchema)
+  @ApiErrors(ErrorCode.ROOM_NOT_LOCKABLE)
   @Post('rooms/:id/unlock')
   @HttpCode(HttpStatus.OK)
   unlock(

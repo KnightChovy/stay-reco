@@ -5,7 +5,7 @@ Code shared by the backend, the web frontend and mobile: zod schemas for request
 | File | Content |
 |---|---|
 | `src/schemas/<feature>.ts` | Zod schemas for bodies and queries (`createHotelSchema`, `loginSchema`…) and their input types (`CreateHotelInput`) |
-| `src/responses/<feature>.ts` | TypeScript types of the response `data` (`Hotel`, `Account`…) |
+| `src/responses/<feature>.ts` | Zod schemas of the response `data` (`hotelResponseSchema`…) and their types (`Hotel`, `Account`…); the backend builds the Swagger response docs from them |
 | `src/enums.ts` | `Role`, `AccountStatus`, `HotelStatus`, `RoomStatus`… (must match `backend/prisma/schema.prisma`) |
 | `src/errors.ts` | `ErrorCode` (meanings in [docs/api-guide.md §4.3](../../docs/api-guide.md#43-error-codes)) |
 | `src/http.ts` | Envelope types `APIResponse`, `APIError`, `PageMeta`, `ErrorDetail` |
@@ -27,6 +27,6 @@ All 3 apps depend on it with `"@stayreco/shared": "file:../packages/shared"` (a 
 ## Add schemas for a new feature
 
 - Create `src/schemas/<feature>.ts` and export it from `src/index.ts`. Name it `xxxSchema` and add `export type XxxInput = z.infer<typeof xxxSchema>`. Use `z.strictObject` for bodies so unknown fields are rejected.
-- Response types go in `src/responses/<feature>.ts`.
+- Response shapes go in `src/responses/<feature>.ts` as `xxxResponseSchema = z.object({...}).register(responseSchemas, { id: 'Xxx' })` plus `export type Xxx = z.infer<typeof xxxResponseSchema>`. The `id` becomes the Swagger schema name; use `.describe()` on fields the FE needs explained.
 - Enums in `src/enums.ts` must match `backend/prisma/schema.prisma`. When a Prisma enum changes, change this file too.
 - New error codes: `src/errors.ts` **and** the table in [docs/api-guide.md §4.3](../../docs/api-guide.md#43-error-codes).

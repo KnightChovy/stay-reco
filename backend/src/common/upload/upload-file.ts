@@ -9,11 +9,12 @@ import {
   NestInterceptor,
   UseInterceptors,
 } from '@nestjs/common';
-import { ApiBody, ApiConsumes } from '@nestjs/swagger';
+import { ApiBody, ApiConsumes, ApiExtension } from '@nestjs/swagger';
 import { UPLOAD_RULES, z } from '@stayreco/shared';
 import type { Request, Response } from 'express';
 import multer from 'multer';
 import { ErrorCode } from '../errors/error-code';
+import { EXT } from '../swagger/api-docs.decorators';
 
 export type UploadKind = 'image' | 'document';
 
@@ -100,6 +101,7 @@ export function UploadFile(kind: UploadKind, fields?: z.ZodObject) {
   return applyDecorators(
     ApiConsumes('multipart/form-data'),
     ApiBody({ schema }),
+    ApiExtension(EXT.upload, true),
     UseInterceptors(uploadInterceptor(kind)),
   );
 }
