@@ -18,7 +18,8 @@ This document applies to the entire `frontend` directory and is intended for dev
 - The primary UI language is Vietnamese (`lang="vi"`), using Be Vietnam Pro via `next/font/google`.
 - Most screens currently use sample data and local state. A button, success message, payment page, or AI page existing in the UI does not imply a backend integration.
 - Authentication is currently mocked with Zustand and localStorage. An API client and React Query provider exist, but there are no business API calls in `src` yet.
-- Roles are `customer`, `partner`, `staff`, `manager`, and `admin`. Actor route trees now exist for all five roles. The `partner` and `manager` portals are UI prototypes under active migration, with their routes wired to `src/features/partner` and `src/features/manager` respectively.
+- Roles are `customer`, `partner`, `staff`, `manager`, and `admin`. Actor route trees now exist for all five roles. The `partner` and `manager` portals are under active migration, with their routes wired to `src/features/partner` and `src/features/manager` respectively.
+- Partner hotel onboarding is connected to the backend (`docs/api/partner.md`): `/partner/dashboard`, `/partner/hotel`, `/partner/rooms`, `/partner/staff`, and `/partner/verification`. The partner portal uses no mock data: routes whose API does not exist yet (bookings, revenue, availability, pricing, promotions, loyalty, AI brand) render `PartnerUnavailable` naming the phase in `docs/phases` that will deliver them.
 
 ## 2. Stack and development commands
 
@@ -53,7 +54,8 @@ npm run start             # Run after a successful build
 | `src/lib/auth-store.ts`           | Mock auth used by current screens                                                      |
 | `src/lib/admin-data.ts`           | Admin types and sample data                                                            |
 | `src/lib/manager-data.ts`         | Manager portal types and centralized mock datasets                                     |
-| `src/lib/partner-data.ts`         | Partner portal types and centralized mock datasets                                     |
+| `src/lib/api-error.ts`            | Error `code` → Vietnamese message, `details` → field errors, `validateWith` (shared zod) |
+| `src/services/partner.service.ts` | Hotel partner endpoints (hotels, room types, rooms, staff, verification)               |
 | `src/lib/utils.ts`                | Re-exports `cn` from the `cn` package                                                  |
 | `src/services/ApiService.ts`      | Axios instance `apiService`                                                            |
 | `src/provider/query-provider.tsx` | `Providers` wrapping `QueryClientProvider`                                             |
@@ -84,9 +86,10 @@ npm run start             # Run after a successful build
 ### Partner and manager portals (work in progress)
 
 - Both route groups use thin pages intended to select a screen by `mode`. Their layouts wrap the portal in `.partner-role` or `.manager-role`, then a role shell with the common sidebar/navbar and an inner `.sr-dense-ui` workspace.
-- The active prototype implementations are under `src/features/partner` and `src/features/manager`. They are mock UI built from hard-coded/sample data and local React state; no partner or manager business API is connected.
+- The implementations are under `src/features/partner` and `src/features/manager`. Manager screens are mock UI built from sample data and local React state.
+- Partner API screens (hotel, rooms, staff, verification) use the React Query hooks in `@/features/partner/api/partner-queries` (`partnerKeys`, `usePartnerMutation`, which shows the outcome with `showNotice` and invalidates the listed queries). `PartnerHotelProvider` loads `GET /me/hotels` and holds the selected hotel (remembered in localStorage); read it with `usePartnerHotel()` (`hotel`, `canEdit`, `isSuspended`). Forms validate with the zod schemas from `@stayreco/shared` through `validateWith` before sending, and map server `details` back to fields.
 - Manager pages import their route-specific screens directly from `@/features/manager/<feature>`. Shared manager-only components and action state live under `@/features/manager/components`; the layout wraps the portal with `ManagerActionProvider` and `ManagerShell`. Dashboard/workspace mock datasets and related types are centralized in `@/lib/manager-data`; keep new manager sample records there instead of embedding arrays in components.
-- Partner pages import their route-specific screens directly from `@/features/partner/<feature>`. Shared partner-only components and action state live under `@/features/partner/components`; the layout wraps the portal with `PartnerActionProvider` and `PartnerShell`. Specialized bookings, revenue, and verification screens own their interactions, while the remaining prototype routes compose the typed `PartnerWorkspace`. Active partner mock datasets and related types are centralized in `@/lib/partner-data`; keep new partner sample records there instead of embedding arrays in components.
+- Partner pages import their route-specific screens directly from `@/features/partner/<feature>`. Shared partner-only components (form fields, status badges, loading/error/empty panels, confirm dialog, image gallery) and action state live under `@/features/partner/components`; the layout wraps the portal with `PartnerActionProvider`, `PartnerHotelProvider` and `PartnerShell`. Status labels and money/date formatting are in `@/features/partner/lib/labels`. Do not add sample datasets to the partner portal; when a phase delivers an API, replace that route's `PartnerUnavailable` with a screen built on `partner.service.ts`.
 - The unused standalone manager and partner mockups with duplicated shell markup and DOM-driven interactions have been removed after their active data and interactions were migrated. New actor screens should extend the typed route-specific feature structure rather than reintroducing full-page standalone prototypes.
 - Only the routes listed in the table above currently have page files. Shell links such as `/partner/profile` and `/manager/profile`, and nested links found inside standalone mockups, are not proof that matching routes exist.
 

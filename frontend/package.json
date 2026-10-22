@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "shared:build": "npm --prefix ../packages/shared install && npm --prefix ../packages/shared run build",
+    "shared:build": "cd ../packages/shared && npm install && npm run build",
     "postinstall": "npm run shared:build",
     "predev": "npm run shared:build",
     "dev": "next dev",
