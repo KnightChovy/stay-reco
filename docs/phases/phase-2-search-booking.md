@@ -72,6 +72,8 @@ Customers find a hotel, see real prices and availability, book, pay by bank tran
 | enums | `booking_status` + `EXPIRED`; `payment_status` + `REFUND_PENDING`; new `price_rule_type`, `price_adjustment_type` |
 | extension | `unaccent` |
 
+Applied in migration `20261023085907_booking_pricing_rules`. Existing rows are filled before the new columns become required: prices without room, dates or weekday become `BASE`, other prices become `SEASON` rules that set the price; existing bookings take the booker's name and phone, a 100% fee with no free period, and the partner's current commission. Two CHECK constraints guard the data: `price_rule_shape` (a `BASE` row has a nightly price and no adjustment, any other rule has an adjustment) and `booking_terms_range` (both percentages between 0 and 100).
+
 The cancellation policy is stored in `hotel_properties` (keys `cancellation_free_days`, `cancellation_fee_percent`), and the cancel reason in `audit_log`: no column for either.
 
 ## States
@@ -131,7 +133,7 @@ room_calendars:  (free) ──hold──► HELD ──paid──► BOOKED ─�
 ## Definition of Done
 
 - [ ] No overbooking when 2 people book the last room at the same time (e2e test)
-- [ ] Price engine unit tests: overlapping rules, priority, weekday, early-bird / last-minute boundaries, rounding
+- [x] Price engine unit tests: overlapping rules, priority, weekday, early-bird / last-minute boundaries, rounding
 - [ ] SePay webhook tests: match, duplicate, wrong amount, unknown code, late after expiry, wrong API key
 - [ ] Refund flow tests: zero refund, approve, reject, auto-approval only for requests made before check-in time, wallet rows idempotent
 - [ ] Booking works end to end on web and mobile with a real transfer
@@ -141,6 +143,7 @@ room_calendars:  (free) ──hold──► HELD ──paid──► BOOKED ─�
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-10-23 | BE | Pricing rules and price preview built; schema migration applied (backfill and CHECK constraints noted under "Schema changes") |
 | 2026-10-23 | BE | Limits table completed: one guest per room at least, search filters, rooms on sale per day, rule name |
 | 2026-10-23 | BE | API `Agreed`; shared schemas for pricing rules, availability, cancellation policy, search, listings and bookings |
 | 2026-10-23 | BE | Decided: auto-approval only for refund requests made before the check-in time (P11), default cancellation policy (P14), suspended partners approve but do not reject refunds (P15), `listing` URLs kept (P13) |
