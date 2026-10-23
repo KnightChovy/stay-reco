@@ -71,6 +71,7 @@ Customers find a hotel, see real prices and availability, book, pay by bank tran
 | `price` | `rule_type` (`BASE`, `SEASON`, `EARLY_BIRD`, `LAST_MINUTE`), `adjustment_type` (`SET_PRICE`, `AMOUNT`, `PERCENT`), `adjustment_value` Decimal(14,2), `min_days_before`, `max_days_before`, `priority`; `price_per_night` becomes nullable (BASE only). Existing base rows become `BASE`. |
 | enums | `booking_status` + `EXPIRED`; `payment_status` + `REFUND_PENDING`; new `price_rule_type`, `price_adjustment_type` |
 | extension | `unaccent` |
+| `booking` (second migration, approved 2026-10-23) | `num_rooms` int 1–8 and `nightly_prices` jsonb (`[{ date, price }]` per room), both fixed at booking time: the `room_calendars` rows that would otherwise give them are deleted when the nights are released. Migration `20261023105156_booking_rooms_and_nightly_prices`; existing bookings get 1 room and `[]`. |
 
 Applied in migration `20261023085907_booking_pricing_rules`. Existing rows are filled before the new columns become required: prices without room, dates or weekday become `BASE`, other prices become `SEASON` rules that set the price; existing bookings take the booker's name and phone, a 100% fee with no free period, and the partner's current commission. Two CHECK constraints guard the data: `price_rule_shape` (a `BASE` row has a nightly price and no adjustment, any other rule has an adjustment) and `booking_terms_range` (both percentages between 0 and 100).
 
@@ -91,7 +92,7 @@ room_calendars:  (free) ──hold──► HELD ──paid──► BOOKED ─�
 
 ## SePay integration (backend only)
 
-- Payment details shown to the customer come from env: bank, account number, account name (`SEPAY_*`). The QR image is a VietQR image URL with the amount and the booking code filled in.
+- Payment details shown to the customer come from env: `SEPAY_BANK_CODE` (bank short name used by SePay), `SEPAY_BANK_NAME`, `SEPAY_ACCOUNT_NUMBER`, `SEPAY_ACCOUNT_NAME`, with demo defaults until deploy. The QR image is `https://qr.sepay.vn/img?acc=&bank=&amount=&des=` with the amount and the booking code filled in.
 - SePay calls `POST /payments/sepay/webhook` for every incoming transfer, authenticated with the API key configured in SePay (header checked by the backend; wrong key → 401, no processing). The handler matches the booking code in the transfer content and the amount, then confirms the booking in one transaction (invoice `PAID`, `BOOKING_PAYMENT` wallet row, `room_calendars` `HELD` → `BOOKED`) and answers success so SePay does not retry.
 - Payload field names, the authentication header and the expected answer follow SePay's webhook documentation; they are checked against it when the endpoint is built.
 - Local development needs a public URL for the webhook (ngrok).
@@ -132,7 +133,7 @@ room_calendars:  (free) ──hold──► HELD ──paid──► BOOKED ─�
 
 ## Definition of Done
 
-- [ ] No overbooking when 2 people book the last room at the same time (e2e test)
+- [x] No overbooking when 2 people book the last room at the same time (e2e test)
 - [x] Price engine unit tests: overlapping rules, priority, weekday, early-bird / last-minute boundaries, rounding
 - [ ] SePay webhook tests: match, duplicate, wrong amount, unknown code, late after expiry, wrong API key
 - [ ] Refund flow tests: zero refund, approve, reject, auto-approval only for requests made before check-in time, wallet rows idempotent
@@ -143,6 +144,7 @@ room_calendars:  (free) ──hold──► HELD ──paid──► BOOKED ─�
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-10-23 | BE | Bookings with the 15-minute hold, the booking page and the expiry job built; `booking.num_rooms` and `booking.nightly_prices` added (approved by the user) |
 | 2026-10-23 | BE | Search and public hotel / room type pages built (accent-insensitive destination, offers per room type) |
 | 2026-10-23 | BE | Availability calendar and cancellation policy built; `onSale` in the availability update means the rooms left to sell, as in the list (decided with the user) |
 | 2026-10-23 | BE | Pricing rules and price preview built; schema migration applied (backfill and CHECK constraints noted under "Schema changes") |

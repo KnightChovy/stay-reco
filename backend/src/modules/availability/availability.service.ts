@@ -105,12 +105,14 @@ export class AvailabilityService {
           reopen.push(...closedRows.slice(0, -change));
         }
       }
-      // An `AVAILABLE` row would collide with the new `BLOCKED` one; it carries nothing, so it is replaced.
+      // An `AVAILABLE` row would collide with a new `BLOCKED` one. It carries nothing, so all of them in the range go
+      // in one statement (one condition per room and day could pass Postgres' bind parameter limit).
       if (close.length) {
         await tx.roomCalendars.deleteMany({
           where: {
             status: 'AVAILABLE',
-            OR: close.map(({ roomId, date }) => ({ roomId, date })),
+            roomId: { in: [...new Set(close.map((c) => c.roomId))] },
+            date: { gte: fromCalendarDate(from), lte: fromCalendarDate(to) },
           },
         });
         await tx.roomCalendars.createMany({ data: close });
@@ -139,6 +141,40 @@ export class AvailabilityService {
       available.set(day.roomTypeId, Math.min(current, day.onSale));
     }
     return available;
+  }
+
+  /**
+   * Rooms to hold for a stay, per night (decision P1): null when some night has fewer than `rooms` on sale. Rooms
+   * free on the whole stay come first, so the guest keeps the same room when possible; staff can still move them at
+   * check-in (BR-10). Run inside the transaction that holds the room type lock.
+   */
+  async pickRooms(
+    db: Db,
+    roomTypeId: string,
+    checkIn: string,
+    checkOut: string,
+    rooms: number,
+  ): Promise<Map<string, string[]> | null> {
+    const states = await this.days(
+      db,
+      [roomTypeId],
+      checkIn,
+      addDays(checkOut, -1),
+    );
+    if (states.some((s) => s.day.onSale < rooms)) return null;
+
+    const wholeStay = states
+      .map((s) => new Set(s.openRooms))
+      .reduce((a, b) => new Set([...a].filter((id) => b.has(id))));
+    return new Map(
+      states.map((s) => [
+        s.day.date,
+        [
+          ...s.openRooms.filter((id) => wholeStay.has(id)),
+          ...s.openRooms.filter((id) => !wholeStay.has(id)),
+        ].slice(0, rooms),
+      ]),
+    );
   }
 
   private async days(
