@@ -62,7 +62,7 @@ Customers find a hotel, see real prices and availability, book, pay by bank tran
 | P13 | Public hotel and room type pages are `GET /hotels/:hotelId/listing` and `GET /room-types/:id/listing`, because `GET /hotels/:hotelId` and `GET /room-types/:id` already serve partners and staff (phase 1) and published URLs are not changed. Search is `GET /hotels` (CONVENTIONS §1.4). |
 | P14 | Default cancellation policy until the partner sets one: free until the check-in time 1 day before check-in, then a 100% fee. |
 | P15 | A suspended partner can still **approve** a refund (the money goes back to the customer) but cannot **reject** one (`403 PARTNER_SUSPENDED`). |
-| P16 | On payment the hotel wallet's pending balance gets the **full** amount; the commission is taken at check-out (phase 3). A **platform wallet** (`wallet.owner_type = PLATFORM`, exactly one) holds StayReco's revenue: commission moves as a pair (hotel −, platform +). Hotel and customer wallets are created on their first movement. A dev-only endpoint simulates a matching transfer (off in production). |
+| P16 | On payment the hotel wallet's pending balance gets the **full** amount; the commission is taken at check-out (phase 3). A **platform wallet** (`wallet.owner_type = PLATFORM`, exactly one) holds StayReco's revenue: commission moves as a pair (hotel −, platform +). Hotel and customer wallets are created on their first movement. A dev-only endpoint simulates a matching transfer: on only with `PAYMENT_SIMULATOR=true`, never when `NODE_ENV=production`. |
 
 ## Schema changes (one migration, approved 2026-10-22)
 

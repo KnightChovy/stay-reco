@@ -65,6 +65,11 @@ const envSchema = z
     SEPAY_BANK_NAME: z.string().min(1).default('MB Bank'),
     SEPAY_ACCOUNT_NUMBER: z.string().min(1).default('0000000000'),
     SEPAY_ACCOUNT_NAME: z.string().min(1).default('STAYRECO DEMO'),
+    /**
+     * Turns on `POST /dev/bookings/:id/simulate-payment`, which confirms a booking without a transfer. Off unless set
+     * to "true", and always off when NODE_ENV=production, so a server started without NODE_ENV never exposes it.
+     */
+    PAYMENT_SIMULATOR: booleanString,
   })
   .superRefine((env, ctx) => {
     if (env.CLOUDINARY_CLOUD_NAME) {
