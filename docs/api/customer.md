@@ -75,6 +75,8 @@ Stay parameters used by several endpoints (`stayQuerySchema`):
 - Two customers booking the last room at the same time: one gets the hold, the other `ROOM_SOLD_OUT`.
 - A hold not paid in time: the booking becomes `EXPIRED`, its invoice `FAILED`, and the rooms are released (a job runs every minute).
 
+**Testing without a transfer (development only).** `POST /dev/bookings/:id/simulate-payment` (the customer who booked) runs the same confirmation as a matching SePay transfer of exactly the total and returns the `CONFIRMED` booking. It answers `404` in production and `409 BOOKING_STATUS_CONFLICT` when the booking is no longer `PENDING`.
+
 **Payment (SePay).** While the booking is `PENDING`, `Booking.payment` holds what the payment page shows:
 
 ```jsonc

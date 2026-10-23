@@ -18,6 +18,8 @@ Sources: the SRS business rules (Report 3, section 5.1, BR-01 to BR-29), the pre
 | Refund approver | The partner (hotel owner), after staff with the Refund permission check it | Slide 08 |
 | Refund destination | The customer's StayReco wallet | Slide 08 |
 | Commission | Rate at booking time, default 8%, admin can set 8–15% | BR-13 |
+| Hotel share on payment | The **full** amount goes to the hotel wallet's pending balance; the commission is taken at check-out | BR-22, team decision |
+| Platform revenue | Kept in the **platform wallet**; the sum of all wallets reconciles with the platform's bank account | Team decision |
 
 ## 2. Room prices
 
@@ -72,7 +74,7 @@ When the customer clicks "Continue to payment", the backend prices the stay agai
 - Every booking has a **booking code** `SR-YYMMDD-XXXX` (for example SR-261022-0842), which is also the transfer content.
 - The payment page shows the VietQR code of the platform's bank account with the amount and the transfer content; the customer pays with a banking app.
 - SePay calls the StayReco webhook for every incoming transfer. The backend checks the API key, then matches the **booking code in the content** and the **exact amount**:
-  - match while the booking is still held → the booking is confirmed, a confirmation email is sent, an e-voucher QR is created;
+  - match while the booking is still `PENDING` → the booking is confirmed, a confirmation email is sent, an e-voucher QR is created. A transfer that arrives just after the 15 minutes but before the expiry job has run (at most about a minute) still counts;
   - a repeated notification for the same transaction → ignored; a booking is never confirmed twice;
   - no booking code, wrong amount, or no matching booking → not confirmed; logged for manual checking (SRS 3.5.5);
   - money arriving after the booking expired → logged and refunded to the customer (SRS 3.5.4).
@@ -86,7 +88,7 @@ There is **no** payment-transaction table and no refund-request table.
 
 - The **payment state** of a booking is its invoice's status: unpaid (`UNPAID`), paid (`PAID`), refund pending (`REFUND_PENDING`), partially refunded (`PARTIALLY_REFUNDED`), refunded (`REFUNDED`), failed (`FAILED`).
 - **Every real money movement** is one wallet transaction (`wallet_transaction`): booking payment, commission, payout, refund, top-up, adjustment. Amounts are signed: positive credits the wallet, negative debits it. Each transaction has an idempotency key, so a retried webhook or refund writes one row only.
-- A **wallet** belongs to a hotel or a customer and has a pending, an available and a reserved balance.
+- A **wallet** belongs to a hotel, a customer, or **the platform** (exactly one platform wallet) and has a pending, an available and a reserved balance. Hotel and customer wallets are created on their first movement. Each transaction records the wallet's available plus pending balance after it (`balance_after`).
 - The real money sits in the platform's bank account (received through SePay); wallets record each party's share.
 
 ### 5.2 Event by event
@@ -100,9 +102,19 @@ There is **no** payment-transaction table and no refund-request table.
 | Customer cancels, money to refund | stays `CONFIRMED` | `REFUND_PENDING` | none (waiting for the decision, section 7) |
 | Partner approves the refund | `CANCELLED` | `REFUNDED` or `PARTIALLY_REFUNDED` | hotel wallet debited, customer wallet credited (rooms released) |
 | Partner rejects the refund | stays `CONFIRMED` | back to `PAID` | none |
-| Customer checks out | `COMPLETED` | unchanged | commission recorded (BR-13); after the holding period, pending moves to available (BR-22), phase 3 |
+| Customer checks out | `COMPLETED` | unchanged | commission as a pair: hotel wallet −commission, **platform wallet +commission** (BR-13); after the holding period, pending moves to available (BR-22), phase 3 |
 
-### 5.3 Commission and payouts
+### 5.3 Platform wallet
+
+StayReco's own money is tracked like a party of its own, so revenue is managed precisely:
+
+- On payment the hotel wallet gets the **full** amount in its pending balance. The platform takes nothing yet, so a refund before check-out only moves money between the hotel and the customer.
+- At check-out the commission moves as a pair of transactions: hotel wallet −commission, platform wallet +commission (phase 3).
+- Costs or compensations the platform bears (goodwill credits to a customer, platform-funded promotions, bank fees) are debited from the platform wallet.
+- Platform revenue for a period = the platform wallet's commission transactions minus its debits; its balance is always at hand.
+- Reconciliation: money in the platform's bank account = sum of all wallet balances (hotels, customers, platform) once payouts are recorded.
+
+### 5.4 Commission and payouts
 
 - The platform commission is charged on every **completed** booking, at the partner's rate **at booking time** (fixed on the booking). Default 8%, the admin can set 8–15% (BR-13). Cancelled bookings pay no commission.
 - A refund creates a commission adjustment entry; the original entry is never edited (SRS 3.5.7).
@@ -175,7 +187,6 @@ Per BR-20, only when: the booking was already refunded or the request is a dupli
 - Paying with the customer wallet, withdrawing it: phase 4.
 - Moving pending to available, recording commission at check-out: phase 3. The holding period after check-out (BR-22) is set by the platform; value not agreed yet.
 - Partner withdrawals (BR-22): phase 6.
-- **Open:** on payment, credit the hotel's pending balance with the **full** amount and take the commission at check-out, or credit the amount **net of commission** from the start (BR-22 says "the hotel's share")?
 
 ## Changelog
 
@@ -188,3 +199,4 @@ Per BR-20, only when: the booking was already refunded or the request is a dupli
 | 2026-10-23 | Prices: a saved rule that would make a night 0 or less after a base price change is skipped, never applied |
 | 2026-10-23 | Cancellation: a booking made after its free-cancellation deadline has passed gets no free period |
 | 2026-10-23 | Rounding: nightly prices, and so booking totals, are rounded half up to whole dong so the transfer amount is exact |
+| 2026-10-23 | Wallets: the full amount goes to the hotel on payment (commission at check-out); a platform wallet holds StayReco's revenue; a transfer counts while the booking is still `PENDING` |

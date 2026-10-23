@@ -62,6 +62,7 @@ Customers find a hotel, see real prices and availability, book, pay by bank tran
 | P13 | Public hotel and room type pages are `GET /hotels/:hotelId/listing` and `GET /room-types/:id/listing`, because `GET /hotels/:hotelId` and `GET /room-types/:id` already serve partners and staff (phase 1) and published URLs are not changed. Search is `GET /hotels` (CONVENTIONS §1.4). |
 | P14 | Default cancellation policy until the partner sets one: free until the check-in time 1 day before check-in, then a 100% fee. |
 | P15 | A suspended partner can still **approve** a refund (the money goes back to the customer) but cannot **reject** one (`403 PARTNER_SUSPENDED`). |
+| P16 | On payment the hotel wallet's pending balance gets the **full** amount; the commission is taken at check-out (phase 3). A **platform wallet** (`wallet.owner_type = PLATFORM`, exactly one) holds StayReco's revenue: commission moves as a pair (hotel −, platform +). Hotel and customer wallets are created on their first movement. A dev-only endpoint simulates a matching transfer (off in production). |
 
 ## Schema changes (one migration, approved 2026-10-22)
 
@@ -71,6 +72,7 @@ Customers find a hotel, see real prices and availability, book, pay by bank tran
 | `price` | `rule_type` (`BASE`, `SEASON`, `EARLY_BIRD`, `LAST_MINUTE`), `adjustment_type` (`SET_PRICE`, `AMOUNT`, `PERCENT`), `adjustment_value` Decimal(14,2), `min_days_before`, `max_days_before`, `priority`; `price_per_night` becomes nullable (BASE only). Existing base rows become `BASE`. |
 | enums | `booking_status` + `EXPIRED`; `payment_status` + `REFUND_PENDING`; new `price_rule_type`, `price_adjustment_type` |
 | extension | `unaccent` |
+| `wallet` (third migration, approved 2026-10-23) | `owner_type` enum (`CUSTOMER`, `HOTEL`, `PLATFORM`) with CHECK `wallet_owner_shape`; one platform wallet with the fixed id `00000000-0000-0000-0000-000000000001` (CHECK `wallet_single_platform`), inserted by migration `20261023123347_platform_wallet`. |
 | `booking` (second migration, approved 2026-10-23) | `num_rooms` int 1–8 and `nightly_prices` jsonb (`[{ date, price }]` per room), both fixed at booking time: the `room_calendars` rows that would otherwise give them are deleted when the nights are released. Migration `20261023105156_booking_rooms_and_nightly_prices`; existing bookings get 1 room and `[]`. |
 
 Applied in migration `20261023085907_booking_pricing_rules`. Existing rows are filled before the new columns become required: prices without room, dates or weekday become `BASE`, other prices become `SEASON` rules that set the price; existing bookings take the booker's name and phone, a 100% fee with no free period, and the partner's current commission. Two CHECK constraints guard the data: `price_rule_shape` (a `BASE` row has a nightly price and no adjustment, any other rule has an adjustment) and `booking_terms_range` (both percentages between 0 and 100).
@@ -129,7 +131,7 @@ room_calendars:  (free) ──hold──► HELD ──paid──► BOOKED ─�
 
 ## Open questions
 
-- [ ] Hotel wallet on payment: credit the full amount and take the commission at check-out, or credit the amount net of commission (BR-22 says "the hotel's share")? Only affects phase 3.
+- [x] Hotel wallet on payment: the full amount, commission at check-out; revenue in a platform wallet (P16, decided 2026-10-23).
 
 ## Definition of Done
 
@@ -144,6 +146,7 @@ room_calendars:  (free) ──hold──► HELD ──paid──► BOOKED ─�
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-10-23 | BE | Payment confirmation (booking `CONFIRMED`, invoice `PAID`, nights `BOOKED`, hotel wallet credited, idempotent) and the dev payment simulator built; platform wallet added (P16) |
 | 2026-10-23 | BE | Bookings with the 15-minute hold, the booking page and the expiry job built; `booking.num_rooms` and `booking.nightly_prices` added (approved by the user) |
 | 2026-10-23 | BE | Search and public hotel / room type pages built (accent-insensitive destination, offers per room type) |
 | 2026-10-23 | BE | Availability calendar and cancellation policy built; `onSale` in the availability update means the rooms left to sell, as in the list (decided with the user) |
