@@ -1,7 +1,7 @@
 # API: Customer (`CUSTOMER`)
 
 > FE screens: home page, `search`, `hotels/[id]`, `hotels/[id]/rooms/[roomId]`, `booking/*`, `account/bookings/*`.
-> **Status: Draft** (phase 2, not built yet). Business rules behind these endpoints (prices, holds, payment, cancellation, refunds): [money-rules.md](../money-rules.md) and [phases/phase-2-search-booking.md](../phases/phase-2-search-booking.md).
+> **Status: Agreed** (phase 2, being built). Business rules behind these endpoints (prices, holds, payment, cancellation, refunds): [money-rules.md](../money-rules.md) and [phases/phase-2-search-booking.md](../phases/phase-2-search-booking.md).
 
 ## Available now
 
@@ -90,7 +90,7 @@ The booking becomes `CONFIRMED` only when SePay reports a transfer with this con
 1. `GET /bookings/:id/cancellation-quote` shows the free-cancellation deadline, the fee and the refund before the customer confirms (MSG11).
 2. `POST /bookings/:id/cancel { reason }` (reason required, max 500):
    - refund 0 (past the deadline with a 100% fee) → the booking is `CANCELLED` at once and the rooms are released;
-   - refund > 0 → a refund request: the invoice becomes `REFUND_PENDING`, the booking **stays** `CONFIRMED` and keeps its rooms until the hotel decides ([partner.md](./partner.md#refund-requests-draft-phase-2)). Approved → `CANCELLED`, refund credited to the customer's wallet. Rejected → the booking stays, with the reason. Still undecided at check-in time → approved automatically.
+   - refund > 0 → a refund request: the invoice becomes `REFUND_PENDING`, the booking **stays** `CONFIRMED` and keeps its rooms until the hotel decides ([partner.md](./partner.md#refund-requests-phase-2)). Approved → `CANCELLED`, refund credited to the customer's wallet. Rejected → the booking stays, with the reason. A request made before the check-in time and still undecided at that time is approved automatically; one made after the check-in time waits for the hotel.
 3. Only a `CONFIRMED` booking without a pending refund can be cancelled. A `CHECKED_IN` booking returns `409 CANCELLATION_NOT_ALLOWED` (BR-09); any other status, or a refund already pending, returns `409 BOOKING_STATUS_CONFLICT`.
 
 Changing dates, room type or guests is not offered: cancel and book again (BR-09). Changing the guest name, phone, arrival time or special requests comes in phase 3 (UC25).

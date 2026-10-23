@@ -87,3 +87,61 @@ export const StaffPermission = {
   MARKETING: 'MARKETING',
 } as const;
 export type StaffPermission = (typeof StaffPermission)[keyof typeof StaffPermission];
+
+/** Booking lifecycle (docs/money-rules.md §5.2). */
+export const BookingStatus = {
+  /** Rooms held for 15 minutes while waiting for the transfer. */
+  PENDING: 'PENDING',
+  CONFIRMED: 'CONFIRMED',
+  CHECKED_IN: 'CHECKED_IN',
+  COMPLETED: 'COMPLETED',
+  CANCELLED: 'CANCELLED',
+  NO_SHOW: 'NO_SHOW',
+  /** The hold ran out before a matching transfer arrived; the rooms were released. */
+  EXPIRED: 'EXPIRED',
+} as const;
+export type BookingStatus = (typeof BookingStatus)[keyof typeof BookingStatus];
+
+/** Payment state of a booking, stored on its invoice (no separate payment table). */
+export const PaymentStatus = {
+  UNPAID: 'UNPAID',
+  PAID: 'PAID',
+  /** The customer cancelled with money to refund; waiting for the partner's decision. */
+  REFUND_PENDING: 'REFUND_PENDING',
+  PARTIALLY_REFUNDED: 'PARTIALLY_REFUNDED',
+  REFUNDED: 'REFUNDED',
+  /** The hold expired unpaid. */
+  FAILED: 'FAILED',
+} as const;
+export type PaymentStatus = (typeof PaymentStatus)[keyof typeof PaymentStatus];
+
+/** Kinds of pricing rule. BASE is the room type's base price, managed through the room type itself. */
+export const PriceRuleType = {
+  BASE: 'BASE',
+  SEASON: 'SEASON',
+  EARLY_BIRD: 'EARLY_BIRD',
+  LAST_MINUTE: 'LAST_MINUTE',
+} as const;
+export type PriceRuleType = (typeof PriceRuleType)[keyof typeof PriceRuleType];
+
+/** How a pricing rule changes the base price of a night. */
+export const PriceAdjustmentType = {
+  /** `adjustmentValue` is the new nightly price. */
+  SET_PRICE: 'SET_PRICE',
+  /** `adjustmentValue` is added (negative: subtracted), in VND. */
+  AMOUNT: 'AMOUNT',
+  /** `adjustmentValue` percent of the base price is added (negative: subtracted). */
+  PERCENT: 'PERCENT',
+} as const;
+export type PriceAdjustmentType = (typeof PriceAdjustmentType)[keyof typeof PriceAdjustmentType];
+
+export const DayOfWeek = {
+  MON: 'MON',
+  TUE: 'TUE',
+  WED: 'WED',
+  THU: 'THU',
+  FRI: 'FRI',
+  SAT: 'SAT',
+  SUN: 'SUN',
+} as const;
+export type DayOfWeek = (typeof DayOfWeek)[keyof typeof DayOfWeek];

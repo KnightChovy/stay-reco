@@ -1,16 +1,15 @@
 import { z } from 'zod';
 import { DocumentType, RoomStatus, StaffPermission, VerificationStatus } from '../enums';
 import { emailSchema } from './auth';
-import { hasAtMost2Decimals, listQuerySchema, moneySchema, reasonSchema } from './common';
+import {
+  hasAtMost2Decimals,
+  listQuerySchema,
+  moneySchema,
+  phoneSchema,
+  reasonSchema,
+  timeSchema,
+} from './common';
 
-/** At most 20 characters in total, the size of the phone columns. */
-const phoneSchema = z
-  .string()
-  .trim()
-  .max(20)
-  .regex(/^\+?[\d\s-]{8,20}$/, 'phone must be a valid phone number');
-/** "HH:mm", e.g. "14:00". */
-const timeSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'time must be HH:mm');
 const uniqueIds = (max: number) =>
   z
     .array(z.uuid())

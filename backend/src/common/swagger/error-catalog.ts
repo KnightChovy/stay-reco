@@ -171,4 +171,38 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorInfo> = {
     status: 409,
     description: 'Already 30 images',
   },
+
+  PRICING_RULE_NOT_FOUND: {
+    status: 404,
+    description: "Pricing rule doesn't exist or belongs to another hotel",
+  },
+  AVAILABILITY_BELOW_BOOKED: {
+    status: 409,
+    description: 'Rooms on sale set below the rooms already booked or held',
+  },
+  ROOM_SOLD_OUT: {
+    status: 409,
+    description: 'Not enough rooms of the type left for every night (MSG12)',
+  },
+  BOOKING_PRICE_CHANGED: {
+    status: 409,
+    description:
+      'The total differs from expectedTotal; details holds the new total (MSG13)',
+  },
+  BOOKING_NOT_FOUND: {
+    status: 404,
+    description: "Booking doesn't exist or the caller cannot see it",
+  },
+  BOOKING_STATUS_CONFLICT: {
+    status: 409,
+    description: "The booking's status does not allow the action",
+  },
+  CANCELLATION_NOT_ALLOWED: {
+    status: 409,
+    description: 'The booking is already checked in (BR-09)',
+  },
+  REFUND_STATUS_CONFLICT: {
+    status: 409,
+    description: 'The refund is not pending',
+  },
 };

@@ -23,14 +23,14 @@ Where BE, FE web and mobile agree on **which phase we are in** and **what the AP
 
 ## Where we are
 
-> **Phase 1**: BE done, FE web and mobile integrating. **Phase 2** (search, booking, SePay): API in `Draft`, waiting for review.
+> **Phase 1**: BE done, FE web and mobile integrating. **Phase 2** (search, booking, SePay): API `Agreed`, backend being built.
 > Update this line and the table below in the same PR when a status changes.
 
 | Phase | Content | Status | API |
 |---|---|---|---|
 | [0](./phases/phase-0-foundation.md) | Foundation: auth, envelope, shared package | 🟡 BE done, FE integrating | [auth](./api/auth.md) |
 | [1](./phases/phase-1-hotel-onboarding.md) | Partners list their hotels, managers verify them | 🟡 BE done, FE integrating | [partner](./api/partner.md), [staff](./api/staff.md), [manager](./api/manager.md) |
-| [2](./phases/phase-2-search-booking.md) | Search, booking, payment | 🟡 API Draft | [customer](./api/customer.md), [partner](./api/partner.md#pricing-rules-draft-phase-2), [staff](./api/staff.md#coming-in-phase-2-draft) |
+| [2](./phases/phase-2-search-booking.md) | Search, booking, payment | 🟡 API Agreed, BE in progress | [customer](./api/customer.md), [partner](./api/partner.md#pricing-rules-phase-2), [staff](./api/staff.md#coming-in-phase-2) |
 | [3](./phases/phase-3-operations.md) | Operations: check-in/out, refunds, inbox | ⬜ Not started | |
 | [4](./phases/phase-4-loyalty-promotions.md) | Loyalty, promotions, reviews, wallet | ⬜ Not started | |
 | [5](./phases/phase-5-ai-marketing.md) | AI recommendations, assistant, marketing | ⬜ Not started | |
@@ -41,7 +41,7 @@ API status of a phase: `Draft` → `Agreed` → `BE Done` → `Integrated` (show
 
 ## How a phase runs
 
-1. **Open the phase**: fill in `phases/phase-N-<name>.md` from [`phases/_template.md`](./phases/_template.md); write the proposed endpoints straight into the `api/<role>.md` pages, marked *(Draft)* (`Draft`).
+1. **Open the phase**: fill in `phases/phase-N-<name>.md` from [`phases/_template.md`](./phases/_template.md); write the proposed endpoints straight into the `api/<role>.md` pages, marked (`Draft`).
 2. **Agree**: a PR with only docs + schemas in `packages/shared`. BE and FE review it together; once merged it becomes `Agreed`.
 3. **Work in parallel**: BE builds the endpoints from the schemas; FE builds forms with the same schemas and mocks responses from the API pages.
 4. **BE Done**: the endpoints are on `develop` and Swagger matches the API pages. FE switches to the real API.
