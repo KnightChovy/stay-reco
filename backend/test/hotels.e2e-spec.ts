@@ -95,6 +95,7 @@ describe('Hotels (e2e)', () => {
         images: [],
         policies: {},
         roomConfig: null,
+        cancellationPolicy: { freeCancellationDays: 1, feePercent: 100 },
       });
 
       const mine = await t
@@ -344,6 +345,60 @@ describe('Hotels (e2e)', () => {
         .set(auth(token))
         .send({ policies: { 'Bad Key': 'x' } })
         .expect(400);
+    });
+
+    it('sets the cancellation policy, kept apart from the policy texts', async () => {
+      const { token, hotelId } = await partnerWithHotel();
+      const url = `/api/v1/hotels/${hotelId}/cancellation-policy`;
+
+      const res = await t
+        .api()
+        .patch(url)
+        .set(auth(token))
+        .send({ freeCancellationDays: 3, feePercent: 30 })
+        .expect(200);
+      expect(res.body.data.cancellationPolicy).toEqual({
+        freeCancellationDays: 3,
+        feePercent: 30,
+      });
+      expect(res.body.data.policies).toEqual({});
+
+      // Non-refundable: no free period, 100% fee. Replacing the policy texts leaves it as it is.
+      await t
+        .api()
+        .patch(url)
+        .set(auth(token))
+        .send({ freeCancellationDays: null, feePercent: 100 })
+        .expect(200);
+      const after = await t
+        .api()
+        .put(`/api/v1/hotels/${hotelId}/policies`)
+        .set(auth(token))
+        .send({ policies: { cancellation: 'Non-refundable' } })
+        .expect(200);
+      expect(after.body.data.cancellationPolicy).toEqual({
+        freeCancellationDays: null,
+        feePercent: 100,
+      });
+
+      const bad = await t
+        .api()
+        .patch(url)
+        .set(auth(token))
+        .send({ freeCancellationDays: 31, feePercent: 100.5 })
+        .expect(400);
+      expect(fields(bad.body.details)).toEqual([
+        'freeCancellationDays',
+        'feePercent',
+      ]);
+
+      const staff = await t.signInStaff(hotelId, 'staff@hotel.test');
+      await t
+        .api()
+        .patch(url)
+        .set(auth(staff.token))
+        .send({ freeCancellationDays: 3, feePercent: 30 })
+        .expect(403);
     });
 
     it('keeps one room config and never below the existing rooms', async () => {

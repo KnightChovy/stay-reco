@@ -143,6 +143,7 @@ room_calendars:  (free) ──hold──► HELD ──paid──► BOOKED ─�
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-10-23 | BE | Availability calendar and cancellation policy built; `onSale` in the availability update means the rooms left to sell, as in the list (decided with the user) |
 | 2026-10-23 | BE | Pricing rules and price preview built; schema migration applied (backfill and CHECK constraints noted under "Schema changes") |
 | 2026-10-23 | BE | Limits table completed: one guest per room at least, search filters, rooms on sale per day, rule name |
 | 2026-10-23 | BE | API `Agreed`; shared schemas for pricing rules, availability, cancellation policy, search, listings and bookings |

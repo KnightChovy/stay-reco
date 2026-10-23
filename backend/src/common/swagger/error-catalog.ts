@@ -178,7 +178,8 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorInfo> = {
   },
   AVAILABILITY_BELOW_BOOKED: {
     status: 409,
-    description: 'Rooms on sale set below the rooms already booked or held',
+    description:
+      'More rooms asked on sale than are left after bookings and holds on some day; `details` lists those days',
   },
   ROOM_SOLD_OUT: {
     status: 409,

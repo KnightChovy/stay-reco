@@ -1,6 +1,11 @@
 import { z } from 'zod';
 import { BookingStatus, DayOfWeek, PaymentStatus, PriceAdjustmentType, PriceRuleType } from '../enums';
-import { amenityResponseSchema, hotelImageResponseSchema, roomTypeImageResponseSchema } from './hotel';
+import {
+  amenityResponseSchema,
+  cancellationPolicyResponseSchema,
+  hotelImageResponseSchema,
+  roomTypeImageResponseSchema,
+} from './hotel';
 import { isoDateTime, responseSchemas } from './registry';
 
 /**
@@ -61,14 +66,6 @@ export const availabilityDayResponseSchema = z
 export type AvailabilityDay = z.infer<typeof availabilityDayResponseSchema>;
 
 // ── Search and listings (public) ────────────────────────────
-
-export const cancellationPolicyResponseSchema = z
-  .object({
-    freeCancellationDays: z.number().int().nullable().describe('null: no free-cancellation period.'),
-    feePercent: z.number(),
-  })
-  .register(responseSchemas, { id: 'CancellationPolicy' });
-export type CancellationPolicy = z.infer<typeof cancellationPolicyResponseSchema>;
 
 export const hotelSearchResultResponseSchema = z
   .object({

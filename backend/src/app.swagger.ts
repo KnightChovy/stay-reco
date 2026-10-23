@@ -20,7 +20,7 @@ const TAGS: [name: string, description: string][] = [
   ],
   [
     'pricing',
-    'Pricing rules of a hotel and the nightly price preview. Guide: docs/api/partner.md#pricing-rules-phase-2, rules: docs/money-rules.md',
+    'Pricing rules, the nightly price preview and the rooms on sale per day. Guide: docs/api/partner.md#pricing-rules-phase-2, rules: docs/money-rules.md',
   ],
   [
     'staff',

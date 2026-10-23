@@ -193,7 +193,9 @@ UC63, SRS 3.11.7: rooms on sale per room type and day.
   "onSale": 6 }            // rooms to keep on sale each day (0–500); 0 closes the dates
 ```
 
-- Setting `onSale` closes or reopens rooms so that `onSale` rooms stay sellable each day. It cannot go below the rooms already booked or held (`409 AVAILABILITY_BELOW_BOOKED`) nor above the free rooms. Bookings, cancellations and holds update the calendar on their own.
+- `onSale` in the body means the same as `onSale` in the list: the rooms left to sell after bookings and holds. The backend closes or reopens free rooms to reach it on every day of the range; booked and held nights are never touched. Example: 10 rooms, 3 booked, 1 held → `onSale: 4` closes 2 rooms, `0` closes the 6 free ones.
+- If some day has fewer rooms left than `onSale`, nothing changes: `409 AVAILABILITY_BELOW_BOOKED`, with one `details` entry per such day (`{ "field": "onSale", "message": "2026-11-21: at most 3 rooms can be on sale" }`).
+- A `roomTypeId` of another hotel answers `ROOM_TYPE_NOT_FOUND`. Bookings, cancellations and holds update the calendar on their own; a hold still counts as `held` until the expiry job releases it, at most a minute after it expires.
 
 ## Cancellation policy (phase 2)
 

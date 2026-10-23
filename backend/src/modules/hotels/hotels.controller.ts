@@ -24,6 +24,7 @@ import { HotelAccessRequired } from '../../common/hotel-access/hotel-access.guar
 import { ApiData, ApiErrors } from '../../common/swagger/api-docs.decorators';
 import { UserRole } from '../../generated/prisma/client';
 import {
+  CancellationPolicyDto,
   CreateHotelDto,
   HotelAmenitiesDto,
   HotelPoliciesDto,
@@ -101,6 +102,21 @@ export class HotelsController {
     @Body() dto: HotelPoliciesDto,
   ) {
     return this.hotels.setPolicies(hotelId, dto.policies);
+  }
+
+  @ApiOperation({
+    summary: 'Set the hotel cancellation policy',
+    description:
+      'Guests cancel for free until the hotel check-in time (14:00 when not set), `freeCancellationDays` days before the check-in date; after that `feePercent` of the amount paid is kept. `freeCancellationDays: null` means no free period (`null` + 100 = non-refundable). Until it is set, `cancellationPolicy` shows the default (1 day, 100%). Existing bookings keep the policy fixed on them.',
+  })
+  @HotelAccessRequired('owner')
+  @ApiData(hotelResponseSchema)
+  @Patch('hotels/:hotelId/cancellation-policy')
+  setCancellationPolicy(
+    @Param('hotelId') hotelId: string,
+    @Body() dto: CancellationPolicyDto,
+  ) {
+    return this.hotels.setCancellationPolicy(hotelId, dto);
   }
 
   @ApiOperation({

@@ -61,6 +61,14 @@ export const hotelSummaryResponseSchema = z
   .register(responseSchemas, { id: 'HotelSummary', description: 'One item of `GET /me/hotels`.' });
 export type HotelSummary = z.infer<typeof hotelSummaryResponseSchema>;
 
+export const cancellationPolicyResponseSchema = z
+  .object({
+    freeCancellationDays: z.number().int().nullable().describe('null: no free-cancellation period.'),
+    feePercent: z.number(),
+  })
+  .register(responseSchemas, { id: 'CancellationPolicy' });
+export type CancellationPolicy = z.infer<typeof cancellationPolicyResponseSchema>;
+
 const hhmm = z.string().describe('"HH:mm"');
 
 export const hotelResponseSchema = z
@@ -89,6 +97,9 @@ export const hotelResponseSchema = z
       .object({ totalRooms: z.number().int(), basePrice: z.number() })
       .nullable()
       .describe('Declared physical rooms and default base price; null until the partner sets it.'),
+    cancellationPolicy: cancellationPolicyResponseSchema.describe(
+      'Fixed on each booking when it is made (BR-07); the default applies until the partner sets one.',
+    ),
     createdAt: isoDateTime(),
   })
   .register(responseSchemas, { id: 'Hotel' });
