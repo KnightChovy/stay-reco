@@ -9,7 +9,7 @@ Sources: the SRS business rules (Report 3, section 5.1, BR-01 to BR-29), the pre
 | Topic | Rule | Source |
 |---|---|---|
 | Displayed price | Final price, VAT and service fee included, paid in full when booking, never changed afterwards | BR-05, BR-09 |
-| Rounding | VND with at most 2 decimals, rounded half up once; every amount is computed by the backend | BR-29 |
+| Rounding | Nightly prices, and so booking totals, in whole dong (rounded half up), because bank transfers carry no decimals; other amounts VND with at most 2 decimals, rounded half up once; every amount is computed by the backend | BR-29 |
 | Availability | Counted per night: from the check-in date up to the night before check-out | BR-02 |
 | Hold | 15 minutes to pay; then the rooms are released and the booking expires | BR-03 |
 | Confirmation | Only when SePay reports a transfer matching the booking; no screen marks a booking as paid by hand | BR-04 |
@@ -45,7 +45,7 @@ A rule's adjustment is one of: **set a new price** (a fixed amount per night), *
 1. Take the room type's base price.
 2. Find the active rules that match **that night** (date range, weekday) and the **days booked ahead** = days from today to the check-in date, counted in Asia/Ho_Chi_Minh.
 3. Apply **one rule only**: the one with the highest priority; on a tie, the newest. Rules never stack (SRS 3.12.1).
-4. Round half up to 2 decimals (BR-29). A night is never free: a rule whose result would be 0 or less is refused when it is saved, and if the base price is lowered later so that a saved rule would give 0 or less, that rule is skipped for the night and the next matching rule (or the base price) applies.
+4. Round half up to **whole dong** (BR-29, applied to whole dong because a bank transfer has no decimals and SePay must match the amount exactly). A base price with decimals is rounded the same way. A night is never free: a rule whose result would be 0 or less is refused when it is saved, and if the base price is lowered later so that a saved rule would give 0 or less, that rule is skipped for the night and the next matching rule (or the base price) applies.
 
 Example. Base price 2,000,000 ₫. Rule A: Saturdays +15%, priority 1. Rule B: booked ≥ 30 days ahead −10%, priority 2. A customer books 40 days ahead for Friday and Saturday nights:
 
@@ -167,6 +167,7 @@ Per BR-20, only when: the booking was already refunded or the request is a dupli
 - New statuses: booking **expired** (`EXPIRED`), invoice **refund pending** (`REFUND_PENDING`).
 - UC25 / screen 3.6.3 (changing booking details) moves to phase 3.
 - BR-17: the password reset link expires after **15 minutes** (the SRS says 30).
+- BR-29: nightly prices and booking totals are rounded to whole dong (the SRS says 2 decimals), so the transfer amount is exact.
 
 ## 9. Not built yet, or still open
 
@@ -186,3 +187,4 @@ Per BR-20, only when: the booking was already refunded or the request is a dupli
 | 2026-10-23 | Refunds: automatic approval only for requests made before the check-in time; suspended partners can approve but not reject. Default cancellation policy: free until 1 day before, then 100% |
 | 2026-10-23 | Prices: a saved rule that would make a night 0 or less after a base price change is skipped, never applied |
 | 2026-10-23 | Cancellation: a booking made after its free-cancellation deadline has passed gets no free period |
+| 2026-10-23 | Rounding: nightly prices, and so booking totals, are rounded half up to whole dong so the transfer amount is exact |

@@ -46,7 +46,14 @@ export function ruleMatches(rule: Price, night: string, daysBefore: number) {
   return true;
 }
 
-/** The rule's price for one night, rounded half up to 2 decimals (BR-29). */
+/**
+ * A nightly price rounded half up to whole dong: bank transfers carry no decimals and SePay must match the amount
+ * exactly (money-rules §2.3), so every price that reaches a booking is a whole number.
+ */
+export const toWholeDong = (price: Prisma.Decimal) =>
+  price.toDecimalPlaces(0, Prisma.Decimal.ROUND_HALF_UP);
+
+/** The rule's price for one night, in whole dong. */
 export function applyRule(basePrice: Prisma.Decimal, rule: Price) {
   const value = rule.adjustmentValue!;
   const price =
@@ -55,7 +62,7 @@ export function applyRule(basePrice: Prisma.Decimal, rule: Price) {
       : rule.adjustmentType === 'AMOUNT'
         ? basePrice.plus(value)
         : basePrice.times(value.plus(100)).dividedBy(100);
-  return price.toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
+  return toWholeDong(price);
 }
 
 /**
@@ -78,7 +85,7 @@ export function priceNight(
       rule: { priceId: rule.priceId, name: rule.name },
     };
   }
-  return { date: night, price: basePrice, rule: null };
+  return { date: night, price: toWholeDong(basePrice), rule: null };
 }
 
 /** Prices stays from the base price and the pricing rules (money-rules §2). Used by the preview, search and booking. */

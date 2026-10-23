@@ -94,20 +94,20 @@ describe('applyRule', () => {
     ).toEqual(d(2_300_000));
   });
 
-  it('rounds half up to 2 decimals', () => {
-    // 1,000.05 × 0.85 = 850.0425 → 850.04; 0.15 × 1.5 = 0.225 → 0.23
+  it('rounds half up to whole dong', () => {
+    // 1,000.05 × 0.85 = 850.0425 → 850; 1,001 × 1.5 = 1,501.5 → 1,502
     expect(
       applyRule(
         d('1000.05'),
         rule({ adjustmentType: 'PERCENT', adjustmentValue: d(-15) }),
       ),
-    ).toEqual(d('850.04'));
+    ).toEqual(d(850));
     expect(
       applyRule(
-        d('0.15'),
+        d(1001),
         rule({ adjustmentType: 'PERCENT', adjustmentValue: d(50) }),
       ),
-    ).toEqual(d('0.23'));
+    ).toEqual(d(1502));
   });
 });
 
@@ -142,6 +142,10 @@ describe('priceNight', () => {
     expect(priceNight(base, rules, '2027-02-06', 10).price).toEqual(
       d(2_300_000),
     );
+  });
+
+  it('rounds a base price with decimals when it applies', () => {
+    expect(priceNight(d('1999.5'), [], '2027-02-05', 0).price).toEqual(d(2000));
   });
 
   it('falls back to the base price when no rule matches', () => {

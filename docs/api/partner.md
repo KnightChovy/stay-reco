@@ -158,7 +158,7 @@ A room type's **base price** stays where it is (`basePrice` on the room type, D3
 ```
 
 - Per night only **one** rule applies: the active rule with the highest priority that matches the night (dates, weekday) and how early the booking is made; ties go to the newest rule. No stacking. Days before check-in are counted in Asia/Ho_Chi_Minh.
-- `SEASON` needs `validFrom` and `validTo` (at most 366 days apart); `EARLY_BIRD` needs `minDaysBefore`; `LAST_MINUTE` needs `maxDaysBefore`. A rule whose result would be ≤ 0 at the current base price is refused (`VALIDATION_ERROR` on `adjustmentValue`); if the base price is lowered later, such a rule is skipped for the night instead of applied. Prices round half up to 2 decimals (BR-29).
+- `SEASON` needs `validFrom` and `validTo` (at most 366 days apart); `EARLY_BIRD` needs `minDaysBefore`; `LAST_MINUTE` needs `maxDaysBefore`. A rule whose result would be ≤ 0 at the current base price is refused (`VALIDATION_ERROR` on `adjustmentValue`); if the base price is lowered later, such a rule is skipped for the night instead of applied. Nightly prices round half up to whole dong (bank transfers have no decimals), base prices included.
 - Changes apply to new bookings only; booked prices never change (BR-09).
 - `PATCH` validates the rule as a whole after the change, so switching `ruleType` reports the fields the new type needs. A rule of another hotel, or the base price row, answers `PRICING_RULE_NOT_FOUND`; a `roomTypeId` of another hotel answers `ROOM_TYPE_NOT_FOUND`.
 - The preview treats `date` as the check-in date, so the days before check-in are `date − bookedOn`.
