@@ -45,7 +45,7 @@ A rule's adjustment is one of: **set a new price** (a fixed amount per night), *
 1. Take the room type's base price.
 2. Find the active rules that match **that night** (date range, weekday) and the **days booked ahead** = days from today to the check-in date, counted in Asia/Ho_Chi_Minh.
 3. Apply **one rule only**: the one with the highest priority; on a tie, the newest. Rules never stack (SRS 3.12.1).
-4. Round half up to 2 decimals (BR-29). A nightly price is never negative.
+4. Round half up to 2 decimals (BR-29). A night is never free: a rule whose result would be 0 or less is refused when it is saved, and if the base price is lowered later so that a saved rule would give 0 or less, that rule is skipped for the night and the next matching rule (or the base price) applies.
 
 Example. Base price 2,000,000 ₫. Rule A: Saturdays +15%, priority 1. Rule B: booked ≥ 30 days ahead −10%, priority 2. A customer books 40 days ahead for Friday and Saturday nights:
 
@@ -183,4 +183,5 @@ Per BR-20, only when: the booking was already refunded or the request is a dupli
 | 2026-10-22 | First version: prices and pricing rules, holds, SePay, money flow on the invoice + wallet model, commission, cancellation policy, refund process from slide 08 |
 | 2026-10-23 | Added to the repo as the reference page |
 | 2026-10-23 | Availability: rooms locked for maintenance do not count; `OCCUPIED` / `CLEANING` (today's state) do not reduce future dates |
+| 2026-10-23 | Prices: a saved rule that would make a night 0 or less after a base price change is skipped, never applied |
 | 2026-10-23 | Refunds: automatic approval only for requests made before the check-in time; suspended partners can approve but not reject. Default cancellation policy: free until 1 day before, then 100% |
