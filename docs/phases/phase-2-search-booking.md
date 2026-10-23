@@ -138,7 +138,7 @@ room_calendars:  (free) ──hold──► HELD ──paid──► BOOKED ─�
 - [x] No overbooking when 2 people book the last room at the same time (e2e test)
 - [x] Price engine unit tests: overlapping rules, priority, weekday, early-bird / last-minute boundaries, rounding
 - [ ] SePay webhook tests: match, duplicate, wrong amount, unknown code, late after expiry, wrong API key
-- [ ] Refund flow tests: zero refund, approve, reject, auto-approval only for requests made before check-in time, wallet rows idempotent
+- [x] Refund flow tests: zero refund, approve, reject, auto-approval only for requests made before check-in time, wallet rows idempotent
 - [ ] Booking works end to end on web and mobile with a real transfer
 - [ ] The phase's [api/](../api/README.md) pages match the code, API status `Integrated`
 
@@ -146,6 +146,7 @@ room_calendars:  (free) ──hold──► HELD ──paid──► BOOKED ─�
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-10-24 | BE | Hotel side built: bookings list (refund queue), forward with a note, approve (hotel pending → customer available), reject with `refundRejection`, automatic approval at the check-in time |
 | 2026-10-24 | BE | Customer cancellation built: quote and cancel; zero refund cancels at once, otherwise invoice `REFUND_PENDING`; reason, fee and refund fixed in `audit_log` |
 | 2026-10-24 | BE | My trips and the signed e-voucher built (`VOUCHER_SIGNING_SECRET`, no new column); no-shows listed under `completed` |
 | 2026-10-23 | BE | Payment confirmation (booking `CONFIRMED`, invoice `PAID`, nights `BOOKED`, hotel wallet credited, idempotent) and the dev payment simulator built; platform wallet added (P16) |

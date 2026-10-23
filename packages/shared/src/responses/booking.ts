@@ -199,6 +199,10 @@ export const bookingResponseSchema = bookingSummaryResponseSchema
       .object({ status: z.enum(PaymentStatus), amount: z.number() })
       .nullable()
       .describe('Set once the customer has cancelled with money to refund.'),
+    refundRejection: z
+      .object({ reason: z.string(), at: isoDateTime() })
+      .nullable()
+      .describe('Set when the hotel rejected the latest refund request; the booking stays CONFIRMED.'),
     cancelReason: z.string().nullable(),
     cancelledAt: isoDateTime().nullable(),
     timeline: z.array(z.object({ at: isoDateTime(), event: z.string() })),

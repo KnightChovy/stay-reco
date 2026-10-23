@@ -16,7 +16,8 @@ import { isUuid } from '../../common/hotel-access/hotel-access.service';
 import type { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { BookingsService } from './bookings.service';
-import { recordCancelRequest } from './cancel-request';
+import { AuditAction } from '../audit/audit.service';
+import { recordBookingEvent } from './booking-history';
 import { cancellationAmounts } from './cancellation';
 
 const bookingNotFound = () =>
@@ -108,12 +109,13 @@ export class BookingCancellationService {
         // Nothing to refund: the hotel keeps the money as the fee, and the nights go back on sale.
         await tx.roomCalendars.deleteMany({ where: { bookingId } });
       }
-      await recordCancelRequest(tx, {
+      await recordBookingEvent(tx, {
+        action: AuditAction.BOOKING_CANCEL_REQUESTED,
         bookingId,
-        customerId: user.accountId,
+        actor: { role: 'CUSTOMER', accountId: user.accountId },
         at: now,
         ip: meta.ip,
-        request: {
+        value: {
           reason: input.reason,
           paid: toNumber(paid),
           fee: toNumber(fee),

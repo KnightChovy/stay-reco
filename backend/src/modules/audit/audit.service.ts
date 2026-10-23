@@ -30,6 +30,12 @@ export enum AuditAction {
   VERIFICATION_REVERIFICATION_REQUESTED = 'VERIFICATION_REVERIFICATION_REQUESTED',
   /** A customer cancelled a booking; `new_value` holds the reason, fee and refund (decision P11). */
   BOOKING_CANCEL_REQUESTED = 'BOOKING_CANCEL_REQUESTED',
+  /** Hotel staff with REFUND checked a refund request and passed it to the partner with a note. */
+  REFUND_FORWARDED = 'REFUND_FORWARDED',
+  REFUND_APPROVED = 'REFUND_APPROVED',
+  REFUND_REJECTED = 'REFUND_REJECTED',
+  /** Approved by the system at the check-in time, for a request made before it (decision P11). */
+  REFUND_AUTO_APPROVED = 'REFUND_AUTO_APPROVED',
 }
 
 /** audit_log has one actor column per role; the account id is the role row's id. */
