@@ -205,3 +205,24 @@ export const bookingResponseSchema = bookingSummaryResponseSchema
   })
   .register(responseSchemas, { id: 'Booking' });
 export type Booking = z.infer<typeof bookingResponseSchema>;
+
+export const bookingVoucherResponseSchema = z
+  .object({
+    code: z.string(),
+    hotelName: z.string(),
+    roomTypeName: z.string(),
+    checkIn: calendarDate(),
+    checkOut: calendarDate(),
+    rooms: z.number().int(),
+    guests: z.number().int(),
+    guestName: z.string(),
+    amountPaid: z.number(),
+    qrToken: z
+      .string()
+      .describe('Render as a QR code: the booking code plus a signature the hotel checks at check-in.'),
+  })
+  .register(responseSchemas, {
+    id: 'BookingVoucher',
+    description: 'E-voucher of a confirmed booking (UC24), shown at check-in.',
+  });
+export type BookingVoucher = z.infer<typeof bookingVoucherResponseSchema>;

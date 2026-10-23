@@ -146,6 +146,7 @@ room_calendars:  (free) ──hold──► HELD ──paid──► BOOKED ─�
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-10-24 | BE | My trips and the signed e-voucher built (`VOUCHER_SIGNING_SECRET`, no new column); no-shows listed under `completed` |
 | 2026-10-23 | BE | Payment confirmation (booking `CONFIRMED`, invoice `PAID`, nights `BOOKED`, hotel wallet credited, idempotent) and the dev payment simulator built; platform wallet added (P16) |
 | 2026-10-23 | BE | Bookings with the 15-minute hold, the booking page and the expiry job built; `booking.num_rooms` and `booking.nightly_prices` added (approved by the user) |
 | 2026-10-23 | BE | Search and public hotel / room type pages built (accent-insensitive destination, offers per room type) |
