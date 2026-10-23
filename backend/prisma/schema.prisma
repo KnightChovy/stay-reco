@@ -10,7 +10,7 @@ generator client {
 
 datasource db {
   provider   = "postgresql"
-  extensions = [pgcrypto, vector]
+  extensions = [pgcrypto, vector, unaccent]
 }
 
 enum UserRole {
@@ -132,6 +132,8 @@ enum BookingStatus {
   COMPLETED
   CANCELLED
   NO_SHOW
+  /// The 15-minute hold ran out before a matching payment; the rooms were released.
+  EXPIRED
 
   @@map("booking_status")
 }
@@ -152,6 +154,8 @@ enum PaymentStatus {
   PARTIALLY_REFUNDED
   REFUNDED
   FAILED
+  /// The customer cancelled with money to refund; waiting for the partner to approve or reject.
+  REFUND_PENDING
 
   @@map("payment_status")
 }
@@ -173,6 +177,24 @@ enum DayOfWeek {
   SUN
 
   @@map("day_of_week")
+}
+
+/// BASE is the room type's base price; the others adjust it for some nights or booking dates (docs/money-rules.md §2).
+enum PriceRuleType {
+  BASE
+  SEASON
+  EARLY_BIRD
+  LAST_MINUTE
+
+  @@map("price_rule_type")
+}
+
+enum PriceAdjustmentType {
+  SET_PRICE
+  AMOUNT
+  PERCENT
+
+  @@map("price_adjustment_type")
 }
 
 enum LoyaltyTier {
@@ -403,6 +425,15 @@ model Booking {
   currency           String              @default("VND") @db.VarChar(10)
   status             BookingStatus       @default(PENDING)
   specialRequests    String?             @map("special_requests")
+  guestName          String              @map("guest_name") @db.VarChar(100)
+  contactPhone       String              @map("contact_phone") @db.VarChar(20)
+  /// Start of the one-hour arrival window chosen by the customer.
+  arrivalTime        DateTime?           @map("arrival_time") @db.Time(0)
+  /// Fixed at booking time (BR-07); null means no free-cancellation period.
+  freeCancelUntil    DateTime?           @map("free_cancel_until") @db.Timestamptz(6)
+  cancelFeePercent   Decimal             @map("cancel_fee_percent") @db.Decimal(5, 2)
+  /// Partner commission rate at booking time (BR-13).
+  commissionRate     Decimal             @map("commission_rate") @db.Decimal(5, 2)
   cancelledAt        DateTime?           @map("cancelled_at") @db.Timestamptz(6)
   createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -854,19 +885,29 @@ model PolicyViolation {
 }
 
 model Price {
-  priceId       String     @id @default(dbgenerated("gen_random_uuid()")) @map("price_id") @db.Uuid
-  roomTypeId    String     @map("room_type_id") @db.Uuid
-  roomId        String?    @map("room_id") @db.Uuid
-  name          String     @db.VarChar(100)
-  pricePerNight Decimal    @map("price_per_night") @db.Decimal(14, 2)
-  currency      String     @default("VND") @db.VarChar(10)
-  validFrom     DateTime?  @map("valid_from") @db.Date
-  validTo       DateTime?  @map("valid_to") @db.Date
-  dayOfWeek     DayOfWeek? @map("day_of_week")
-  isActive      Boolean    @default(true) @map("is_active")
-  createdAt     DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
-  roomType      RoomType   @relation(fields: [roomTypeId], references: [roomTypeId])
-  room          Room?      @relation(fields: [roomId], references: [roomId])
+  priceId         String               @id @default(dbgenerated("gen_random_uuid()")) @map("price_id") @db.Uuid
+  roomTypeId      String               @map("room_type_id") @db.Uuid
+  roomId          String?              @map("room_id") @db.Uuid
+  name            String               @db.VarChar(100)
+  /// Only for BASE rows; the other rules use adjustmentType / adjustmentValue.
+  pricePerNight   Decimal?             @map("price_per_night") @db.Decimal(14, 2)
+  currency        String               @default("VND") @db.VarChar(10)
+  validFrom       DateTime?            @map("valid_from") @db.Date
+  validTo         DateTime?            @map("valid_to") @db.Date
+  dayOfWeek       DayOfWeek?           @map("day_of_week")
+  ruleType        PriceRuleType        @map("rule_type")
+  adjustmentType  PriceAdjustmentType? @map("adjustment_type")
+  adjustmentValue Decimal?             @map("adjustment_value") @db.Decimal(14, 2)
+  /// EARLY_BIRD: booked at least this many days before check-in.
+  minDaysBefore   Int?                 @map("min_days_before")
+  /// LAST_MINUTE: booked at most this many days before check-in.
+  maxDaysBefore   Int?                 @map("max_days_before")
+  /// Higher wins when several rules match a night; ties go to the newest.
+  priority        Int                  @default(0)
+  isActive        Boolean              @default(true) @map("is_active")
+  createdAt       DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  roomType        RoomType             @relation(fields: [roomTypeId], references: [roomTypeId])
+  room            Room?                @relation(fields: [roomId], references: [roomId])
 
   @@map("price")
 }

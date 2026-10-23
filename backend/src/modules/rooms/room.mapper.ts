@@ -11,15 +11,21 @@ import { toAmenity } from '../catalog/catalog.service';
 export const BASE_PRICE_NAME = 'Giá gốc';
 
 /**
- * The base price of a room type is the `price` row with no room, no dates and no weekday (contract D3). Seasonal and
- * weekday rules added later are other rows of the same room type.
+ * The base price of a room type is its `BASE` price row (decision D3). Pricing rules are other rows of the same room
+ * type; early-bird and last-minute rules also have no dates, so the rule type is what tells them apart.
  */
 export const basePriceWhere = {
   roomId: null,
-  validFrom: null,
-  validTo: null,
-  dayOfWeek: null,
+  ruleType: 'BASE',
 } satisfies Prisma.PriceWhereInput;
+
+/** Fields of a new base price row. */
+export const basePriceRow = (pricePerNight: number) =>
+  ({
+    name: BASE_PRICE_NAME,
+    ruleType: 'BASE',
+    pricePerNight,
+  }) satisfies Partial<Prisma.PriceCreateWithoutRoomTypeInput>;
 
 export const roomTypeInclude = {
   roomTypeBeds: {

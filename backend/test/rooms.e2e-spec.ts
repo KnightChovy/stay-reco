@@ -123,12 +123,13 @@ describe('Room types and rooms (e2e)', () => {
         roomCount: 0,
       });
 
-      // The base price is a `price` row with no room, dates or weekday (contract D3).
+      // The base price is the `BASE` price row, with no room, dates or weekday (decision D3).
       const prices = await t.prisma.price.findMany({
         where: { roomTypeId: res.body.data.id },
       });
       expect(prices).toEqual([
         expect.objectContaining({
+          ruleType: 'BASE',
           roomId: null,
           validFrom: null,
           validTo: null,
