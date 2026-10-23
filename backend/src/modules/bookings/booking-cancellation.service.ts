@@ -15,6 +15,7 @@ import { toNumber } from '../../common/http/decimal';
 import { isUuid } from '../../common/hotel-access/hotel-access.service';
 import type { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { BookingMailer } from './booking-mailer';
 import { BookingsService } from './bookings.service';
 import { AuditAction } from '../audit/audit.service';
 import { recordBookingEvent } from './booking-history';
@@ -54,6 +55,7 @@ export class BookingCancellationService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly bookings: BookingsService,
+    private readonly mailer: BookingMailer,
   ) {}
 
   /** What cancelling now would cost (MSG11). */
@@ -123,6 +125,9 @@ export class BookingCancellationService {
         },
       });
     });
+    await (refund.gt(0)
+      ? this.mailer.refundRequested(bookingId)
+      : this.mailer.cancelledAtOnce(bookingId));
     return this.bookings.findOne(user, bookingId);
   }
 

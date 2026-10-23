@@ -4,6 +4,7 @@ import { PricingModule } from '../pricing/pricing.module';
 import { WalletsModule } from '../wallets/wallets.module';
 import { BookingsController } from './bookings.controller';
 import { BookingCancellationService } from './booking-cancellation.service';
+import { BookingMailer } from './booking-mailer';
 import { BookingsService } from './bookings.service';
 import { HoldExpiryService } from './hold-expiry.service';
 import { HotelBookingsController } from './hotel-bookings.controller';
@@ -17,11 +18,17 @@ import { SepayPayment } from './sepay-payment';
   providers: [
     BookingsService,
     BookingCancellationService,
+    BookingMailer,
     HotelBookingsService,
     RefundDecisionsService,
     HoldExpiryService,
     SepayPayment,
   ],
-  exports: [BookingsService, HoldExpiryService, RefundDecisionsService],
+  exports: [
+    BookingsService,
+    BookingMailer,
+    HoldExpiryService,
+    RefundDecisionsService,
+  ],
 })
 export class BookingsModule {}

@@ -56,7 +56,7 @@ Customers find a hotel, see real prices and availability, book, pay by bank tran
 | P7 | SePay: a transfer confirms a booking only with the booking code in its content **and** the exact amount. Duplicate webhooks are ignored through the `wallet_transaction` idempotency key `sepay:<SePay transaction id>`. Unmatched or late transfers go to `audit_log` for manual handling. `invoice.vnpay_txn_ref` holds the SePay transaction id (column reused, not renamed). |
 | P8 | Money model (lecturer feedback): no payment or refund-request tables. Payment state = `invoice.payment_status`; every money movement = one `wallet_transaction`; the hotel's share goes to the hotel wallet's pending balance (BR-22). |
 | P9 | Search ignores Vietnamese accents (`unaccent` extension). |
-| P10 | Emails: booking confirmed, booking cancelled, refund approved or rejected. |
+| P10 | Emails, in Vietnamese, sent after the change is committed (extended 2026-10-24). Customer: booking confirmed, cancelled with nothing to refund, refund request received, refund approved (credited to the StayReco wallet), refund rejected with the reason. Hotel: new refund request (owner and active staff with `REFUND`), request forwarded by staff (owner), refund approved automatically (owner). No email when a hold expires. |
 | P11 | Cancellation follows slide "08. Cancellation And Refund", not the SRS staff-approves version: refund 0 → cancelled at once; refund > 0 → invoice `REFUND_PENDING`, booking keeps its rooms; staff with `REFUND` forward it with a note; **the partner approves** (booking `CANCELLED`, rooms released, hotel wallet −refund, customer wallet +refund) **or rejects** (invoice back to `PAID`, booking stays); a request made before the check-in time and still undecided at that time → approved automatically; a request made after it waits for the partner. Refund idempotency key: `refund:<bookingId>` (one suffix per wallet row). |
 | P12 | Hold expired after 15 minutes: booking `EXPIRED`, invoice `FAILED`, rooms released. |
 | P13 | Public hotel and room type pages are `GET /hotels/:hotelId/listing` and `GET /room-types/:id/listing`, because `GET /hotels/:hotelId` and `GET /room-types/:id` already serve partners and staff (phase 1) and published URLs are not changed. Search is `GET /hotels` (CONVENTIONS §1.4). |
@@ -146,6 +146,7 @@ room_calendars:  (free) ──hold──► HELD ──paid──► BOOKED ─�
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-10-24 | BE | Booking emails built (P10 extended: refund request received, new request to the hotel, forwarded, automatic approval; Vietnamese) |
 | 2026-10-24 | BE | Hotel side built: bookings list (refund queue), forward with a note, approve (hotel pending → customer available), reject with `refundRejection`, automatic approval at the check-in time |
 | 2026-10-24 | BE | Customer cancellation built: quote and cancel; zero refund cancels at once, otherwise invoice `REFUND_PENDING`; reason, fee and refund fixed in `audit_log` |
 | 2026-10-24 | BE | My trips and the signed e-voucher built (`VOUCHER_SIGNING_SECRET`, no new column); no-shows listed under `completed` |
