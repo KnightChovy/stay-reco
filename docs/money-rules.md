@@ -165,8 +165,8 @@ Example. Booking of 5,000,000 ₫, free cancellation until 14:00 on 15/11, fee 3
    2. Refund > 0 ₫ → a refund request (the invoice becomes **refund pending**). The booking **stays** and its rooms **stay held** until a decision.
 3. **Staff** with the Refund permission are notified, check the request against the policy, add a note and forward it to the partner.
 4. The **partner** (hotel owner) decides:
-   1. **Approve** → the booking is cancelled, the rooms return to inventory, the refund (after the fee) is debited from the hotel wallet and credited to the **customer wallet**; the customer is notified.
-   2. **Reject** with a reason → the booking stays as it was; the customer is told the reason.
+   1. **Approve** → the booking is cancelled, the rooms return to inventory, the refund (after the fee) is debited from the hotel wallet's **pending** balance and credited to the **customer wallet's available** balance, as two refund transactions; the customer is notified.
+   2. **Reject** with a reason → the booking stays as it was; the customer sees the reason on the booking and by email. The customer may cancel again later, which creates a new request (the partner can reject it as a duplicate, section 7.3).
 5. A request made **before the check-in time** and still undecided at that time → the system **approves automatically**, so the customer is never stuck. A request made after the check-in time waits for the partner.
 
 A suspended partner can still approve a refund (the money goes back to the customer) but cannot reject one.
@@ -202,4 +202,5 @@ Per BR-20, only when: the booking was already refunded or the request is a dupli
 | 2026-10-23 | Cancellation: a booking made after its free-cancellation deadline has passed gets no free period |
 | 2026-10-23 | Rounding: nightly prices, and so booking totals, are rounded half up to whole dong so the transfer amount is exact |
 | 2026-10-24 | Refunds: the fee and refund are fixed when the customer cancels; the approval pays that amount |
+| 2026-10-24 | Refunds: approval debits the hotel's pending balance and credits the customer's available balance; a rejected customer may cancel again (a new request) and sees the reason on the booking |
 | 2026-10-23 | Wallets: the full amount goes to the hotel on payment (commission at check-out); a platform wallet holds StayReco's revenue; a transfer counts while the booking is still `PENDING` |

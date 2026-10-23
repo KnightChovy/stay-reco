@@ -229,9 +229,9 @@ Slide "08. Cancellation And Refund": when a customer cancels a paid booking with
 | POST | `/bookings/:id/approve-refund` | owner | | `Booking` |
 | POST | `/bookings/:id/reject-refund` | owner | `{ reason }` | `Booking` |
 
-- **Staff** check the request against the fixed policy and forward it with a note (written to the audit log; the partner is notified). Forwarding is optional: the owner can decide at any time.
-- **Approve**: the booking becomes `CANCELLED`, its nights are released, the refund (amount paid − cancellation fee) moves from the hotel wallet to the customer's wallet, the invoice becomes `REFUNDED` or `PARTIALLY_REFUNDED`, and the customer is emailed.
-- **Reject**: only for the reasons in BR-20 (already refunded or duplicate, booking status no longer allows it, suspected fraud with evidence); `reason` required. The invoice goes back to `PAID`, the booking stays `CONFIRMED`, and the customer is emailed the reason.
+- **Staff** with `REFUND` check the request against the fixed policy and forward it with a note (written to the booking history, shown as `REFUND_FORWARDED` in the timeline). Forwarding is optional: the owner can decide at any time; the owner and staff without `REFUND` get `403 FORBIDDEN` on this route.
+- **Approve**: the booking becomes `CANCELLED`, its nights are released, the refund fixed when the customer cancelled (amount paid − cancellation fee) moves from the hotel wallet's pending balance to the customer wallet's available balance (two `REFUND` wallet transactions, keys `refund:<bookingId>:hotel` and `refund:<bookingId>:customer`), the invoice becomes `REFUNDED` or `PARTIALLY_REFUNDED`, and the customer is emailed.
+- **Reject**: only for the reasons in BR-20 (already refunded or duplicate, booking status no longer allows it, suspected fraud with evidence); `reason` required. The invoice goes back to `PAID`, the booking stays `CONFIRMED`, `Booking.refundRejection` shows `{ reason, at }`, and the customer is emailed the reason. The customer may cancel again, which creates a new request.
 - A request made **before** the hotel's check-in time on the check-in date and still undecided at that time is approved automatically; a request made after it waits for the partner.
 - Deciding a booking that is not `REFUND_PENDING` returns `409 REFUND_STATUS_CONFLICT`. A suspended partner can still approve (money goes back to the customer) but not reject.
 

@@ -1,7 +1,6 @@
 import {
   BadRequestException,
   ConflictException,
-  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -49,7 +48,8 @@ import {
   toBooking,
   toBookingSummary,
 } from './booking.mapper';
-import { latestCancelRequest } from './cancel-request';
+import { assertCanSeeBookings } from './booking-access';
+import { loadBookingHistory } from './booking-history';
 import { HoldExpiryService } from './hold-expiry.service';
 import { SepayPayment } from './sepay-payment';
 import { signVoucher } from './voucher-token';
@@ -251,15 +251,7 @@ export class BookingsService {
         'member',
         bookingNotFound,
       );
-      const allowed =
-        access.role === 'OWNER' ||
-        access.permissions.some((p) => p === 'BOOKING' || p === 'REFUND');
-      if (!allowed) {
-        throw new ForbiddenException({
-          code: ErrorCode.FORBIDDEN,
-          message: 'Missing staff permission BOOKING or REFUND',
-        });
-      }
+      assertCanSeeBookings(access);
     }
     return this.load(bookingId);
   }
@@ -333,14 +325,14 @@ export class BookingsService {
   }
 
   private async load(bookingId: string): Promise<Booking> {
-    const [booking, cancelRequest] = await Promise.all([
+    const [booking, history] = await Promise.all([
       this.prisma.booking.findUniqueOrThrow({
         where: { bookingId },
         include: bookingInclude,
       }),
-      latestCancelRequest(this.prisma, bookingId),
+      loadBookingHistory(this.prisma, bookingId),
     ]);
-    return toBooking(booking, this.sepay.details, cancelRequest);
+    return toBooking(booking, this.sepay.details, history);
   }
 
   private async unusedCode(tx: Prisma.TransactionClient, now: Date) {

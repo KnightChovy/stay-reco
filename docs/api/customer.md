@@ -151,8 +151,10 @@ Changing dates, room type or guests is not offered: cancel and book again (BR-09
   "paidAt": "…",
   "payment": null,                        // set while PENDING, see above
   "refund": null,                         // { "status": "REFUND_PENDING" | "REFUNDED" | …, "amount": 1800000 }
+  "refundRejection": null,                // { "reason": "…", "at": "…" } when the hotel rejected the latest request
   "cancelReason": null, "cancelledAt": null,
   "timeline": [ { "at": "…", "event": "CREATED" }, { "at": "…", "event": "PAID" } ] }
+// timeline events: CREATED, PAID, EXPIRED, CANCEL_REQUESTED, REFUND_FORWARDED, REFUND_APPROVED, REFUND_REJECTED, CANCELLED
 
 // CancellationQuote
 { "freeUntil": "…", "feePercent": 50, "paid": 3600000, "fee": 1800000, "refund": 1800000,
