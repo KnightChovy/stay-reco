@@ -124,3 +124,15 @@ export const createBookingSchema = z
   })
   .superRefine(checkStay);
 export type CreateBookingInput = z.infer<typeof createBookingSchema>;
+
+/**
+ * My trips tabs: `upcoming` = PENDING and CONFIRMED (not checked in yet), `staying` = CHECKED_IN, `completed` =
+ * COMPLETED and NO_SHOW (past stays), `cancelled` = CANCELLED and EXPIRED.
+ */
+export const MY_BOOKING_TABS = ['upcoming', 'staying', 'completed', 'cancelled'] as const;
+
+/** `GET /me/bookings`: `search` matches the booking code; newest first. */
+export const myBookingsQuerySchema = listQuerySchema.omit({ sort: true }).extend({
+  tab: z.enum(MY_BOOKING_TABS).default('upcoming'),
+});
+export type MyBookingsQuery = z.infer<typeof myBookingsQuerySchema>;

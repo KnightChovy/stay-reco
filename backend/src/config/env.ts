@@ -24,6 +24,8 @@ const envSchema = z
       ),
     WEB_APP_URL: z.url(),
     JWT_ACCESS_SECRET: z.string().min(32),
+    /** Signs the e-voucher QR tokens (`GET /bookings/:id/voucher`). Changing it invalidates the vouchers already shown. */
+    VOUCHER_SIGNING_SECRET: z.string().min(32),
     JWT_ACCESS_TTL_SECONDS: z.coerce.number().int().positive().default(900),
     REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(30),
     /** Email verification code mailed after registration. */

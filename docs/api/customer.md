@@ -8,7 +8,7 @@
 - Sign-up, email verification (OTP), sign-in, forgot / change password, sessions: [auth.md](./auth.md).
 - Public catalog `GET /amenities`, `GET /bed-types`: [partner.md](./partner.md#catalog-public-no-token) (for the search filters).
 - Search `GET /hotels` and the hotel / room type pages `GET /hotels/:hotelId/listing`, `GET /room-types/:id/listing` (below).
-- Booking with the 15-minute hold `POST /bookings` and the booking page `GET /bookings/:id` (below). My trips, cancellation and the voucher come next; until then `refund` and `cancelReason` are always `null`.
+- Booking with the 15-minute hold `POST /bookings` and the booking page `GET /bookings/:id` (below). My trips `GET /me/bookings` and the voucher `GET /bookings/:id/voucher` (below). Cancellation comes next; until then `refund` and `cancelReason` are always `null`.
 
 ## Main flow: from search to voucher
 
@@ -92,7 +92,9 @@ Stay parameters used by several endpoints (`stayQuerySchema`):
 
 The booking becomes `CONFIRMED` only when SePay reports a transfer with this content and **exactly** this amount (BR-04); there is no "I have paid" button. The confirmation email and the voucher follow. A transfer that matches no booking, or arrives after the hold expired, is logged for manual handling and refunded (see the rules document).
 
-**My trips** (`GET /me/bookings`). `tab` is one of `upcoming` (default: `PENDING` and `CONFIRMED` not checked in yet), `staying` (`CHECKED_IN`), `completed`, `cancelled` (`CANCELLED` and `EXPIRED`). `search` matches the booking code. Newest first.
+**My trips** (`GET /me/bookings`). `tab` is one of `upcoming` (default: `PENDING` and `CONFIRMED` not checked in yet), `staying` (`CHECKED_IN`), `completed` (`COMPLETED` and `NO_SHOW`), `cancelled` (`CANCELLED` and `EXPIRED`). `search` matches the booking code, ignoring case. Newest first.
+
+**Voucher** (`GET /bookings/:id/voucher`, UC24). For the customer who booked, once the booking is `CONFIRMED` (also while `CHECKED_IN` or `COMPLETED`); any other status answers `409 BOOKING_STATUS_CONFLICT`. Render `qrToken` as a QR code: it is the booking code followed by a signature (`SR-261022-0842.<signature>`) that the hotel checks at check-in, so an edited code is refused.
 
 **Cancel** (UC28, slide "08. Cancellation And Refund"):
 
