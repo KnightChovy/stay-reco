@@ -32,6 +32,7 @@ import { fromTime } from '../hotels/hotel.mapper';
 import { DEFAULT_CHECK_IN_TIME } from '../stays/offer';
 import { WalletLedger } from '../wallets/wallet-ledger';
 import { loadBookingHistory, recordBookingEvent } from './booking-history';
+import { BookingMailer } from './booking-mailer';
 import { BookingsService } from './bookings.service';
 
 const EVERY_MINUTE = 60_000;
@@ -69,6 +70,7 @@ export class RefundDecisionsService
     private readonly access: HotelAccessService,
     private readonly ledger: WalletLedger,
     private readonly bookings: BookingsService,
+    private readonly mailer: BookingMailer,
     private readonly config: ConfigService<Env, true>,
   ) {}
 
@@ -110,6 +112,7 @@ export class RefundDecisionsService
         value: { note: input.note },
       });
     });
+    await this.mailer.refundForwarded(bookingId, input.note);
     return this.bookings.findOne(user, bookingId);
   }
 
@@ -122,6 +125,7 @@ export class RefundDecisionsService
         accountId: user.accountId,
       }),
     );
+    await this.mailer.refundApproved(bookingId);
     return this.bookings.findOne(user, bookingId);
   }
 
@@ -150,6 +154,7 @@ export class RefundDecisionsService
         value: { reason: input.reason },
       });
     });
+    await this.mailer.refundRejected(bookingId, input.reason);
     return this.bookings.findOne(user, bookingId);
   }
 
@@ -187,6 +192,7 @@ export class RefundDecisionsService
           this.approveIn(tx, booking.bookingId, null, now),
         );
         approved++;
+        await this.mailer.refundApproved(booking.bookingId, true);
       } catch (err) {
         // Decided by the partner in the meantime: nothing left to do.
         if (!(err instanceof ConflictException)) throw err;

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { BookingStatus } from '@stayreco/shared';
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { BookingMailer } from '../bookings/booking-mailer';
 import { WalletLedger } from '../wallets/wallet-ledger';
 
 /** One incoming transfer, as SePay (or the dev simulator) reports it. */
@@ -34,6 +35,7 @@ export class PaymentConfirmationService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly ledger: WalletLedger,
+    private readonly mailer: BookingMailer,
   ) {}
 
   async confirm(notice: PaymentNotice): Promise<PaymentResult> {
@@ -57,52 +59,59 @@ export class PaymentConfirmationService {
     }
 
     try {
-      return await this.prisma.$transaction(async (tx) => {
-        // Conditional on PENDING: the expiry job flips the same row, so exactly one of them wins.
-        const { count } = await tx.booking.updateMany({
-          where: { bookingId, status: 'PENDING' },
-          data: { status: 'CONFIRMED' },
-        });
-        if (!count) {
-          // The same transaction delivered twice at once: the other call confirmed the booking while this one waited.
-          if (await this.processed(idempotencyKey, tx)) {
-            return { status: 'DUPLICATE' };
-          }
-          const { status } = await tx.booking.findUniqueOrThrow({
-            where: { bookingId },
-            select: { status: true },
+      const result = await this.prisma.$transaction(
+        async (tx): Promise<PaymentResult> => {
+          // Conditional on PENDING: the expiry job flips the same row, so exactly one of them wins.
+          const { count } = await tx.booking.updateMany({
+            where: { bookingId, status: 'PENDING' },
+            data: { status: 'CONFIRMED' },
           });
-          return { status: 'NOT_PENDING', bookingId, bookingStatus: status };
-        }
+          if (!count) {
+            // The same transaction delivered twice at once: the other call confirmed the booking while this one waited.
+            if (await this.processed(idempotencyKey, tx)) {
+              return { status: 'DUPLICATE' };
+            }
+            const { status } = await tx.booking.findUniqueOrThrow({
+              where: { bookingId },
+              select: { status: true },
+            });
+            return { status: 'NOT_PENDING', bookingId, bookingStatus: status };
+          }
 
-        await tx.invoice.update({
-          where: { bookingId },
-          data: {
-            paymentStatus: 'PAID',
-            paidAt: notice.paidAt,
-            // Column named for VNPay, reused for the SePay transaction id (P7).
-            vnpayTxnRef: notice.transactionId,
-          },
-        });
-        await tx.roomCalendars.updateMany({
-          where: { bookingId, status: 'HELD' },
-          data: { status: 'BOOKED', holdExpiresAt: null },
-        });
-        const wallet = await this.ledger.hotelWallet(
-          tx,
-          invoice.booking.roomType.hotelId,
-        );
-        await this.ledger.post(tx, {
-          walletId: wallet.walletId,
-          type: 'BOOKING_PAYMENT',
-          amount,
-          balance: 'pending',
-          idempotencyKey,
-          bookingId,
-          description: `Payment of ${invoice.invoiceNumber}`,
-        });
-        return { status: 'CONFIRMED', bookingId };
-      });
+          await tx.invoice.update({
+            where: { bookingId },
+            data: {
+              paymentStatus: 'PAID',
+              paidAt: notice.paidAt,
+              // Column named for VNPay, reused for the SePay transaction id (P7).
+              vnpayTxnRef: notice.transactionId,
+            },
+          });
+          await tx.roomCalendars.updateMany({
+            where: { bookingId, status: 'HELD' },
+            data: { status: 'BOOKED', holdExpiresAt: null },
+          });
+          const wallet = await this.ledger.hotelWallet(
+            tx,
+            invoice.booking.roomType.hotelId,
+          );
+          await this.ledger.post(tx, {
+            walletId: wallet.walletId,
+            type: 'BOOKING_PAYMENT',
+            amount,
+            balance: 'pending',
+            idempotencyKey,
+            bookingId,
+            description: `Payment of ${invoice.invoiceNumber}`,
+          });
+          return { status: 'CONFIRMED', bookingId };
+        },
+      );
+      // After the commit: the confirmation email (P10).
+      if (result.status === 'CONFIRMED') {
+        await this.mailer.bookingConfirmed(bookingId);
+      }
+      return result;
     } catch (err) {
       // The same transaction processed twice at once: the second insert hits the unique key and is rolled back.
       // A clash on another key (two first payments creating one hotel wallet) is rethrown; SePay retries it.
