@@ -143,6 +143,40 @@ export class AvailabilityService {
     return available;
   }
 
+  /**
+   * Rooms to hold for a stay, per night (decision P1): null when some night has fewer than `rooms` on sale. Rooms
+   * free on the whole stay come first, so the guest keeps the same room when possible; staff can still move them at
+   * check-in (BR-10). Run inside the transaction that holds the room type lock.
+   */
+  async pickRooms(
+    db: Db,
+    roomTypeId: string,
+    checkIn: string,
+    checkOut: string,
+    rooms: number,
+  ): Promise<Map<string, string[]> | null> {
+    const states = await this.days(
+      db,
+      [roomTypeId],
+      checkIn,
+      addDays(checkOut, -1),
+    );
+    if (states.some((s) => s.day.onSale < rooms)) return null;
+
+    const wholeStay = states
+      .map((s) => new Set(s.openRooms))
+      .reduce((a, b) => new Set([...a].filter((id) => b.has(id))));
+    return new Map(
+      states.map((s) => [
+        s.day.date,
+        [
+          ...s.openRooms.filter((id) => wholeStay.has(id)),
+          ...s.openRooms.filter((id) => !wholeStay.has(id)),
+        ].slice(0, rooms),
+      ]),
+    );
+  }
+
   private async days(
     db: Db,
     roomTypeIds: string[],

@@ -14,7 +14,6 @@ import { ErrorCode } from '../../common/errors/error-code';
 import { Paginated } from '../../common/http/api-response';
 import { toNumber } from '../../common/http/decimal';
 import { isUuid } from '../../common/hotel-access/hotel-access.service';
-import type { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AvailabilityService } from '../availability/availability.service';
 import {
@@ -27,23 +26,12 @@ import {
 import { PriceEngine } from '../pricing/price-engine';
 import { roomTypeNotFound } from '../rooms/room-types.service';
 import {
-  basePriceWhere,
   roomTypeInclude,
   type RoomTypeWithDetails,
   toRoomType,
 } from '../rooms/room.mapper';
+import { bookableHotel, sellableRoomType } from './bookable';
 import { assertBookableDates, isBookable, type Stay, toOffer } from './offer';
-
-/** Only these hotels are shown to customers (BR-01): verified, and the partner not suspended. */
-const bookableHotel = {
-  status: 'ACTIVE',
-  hotelPartner: { status: { not: 'SUSPENDED' } },
-} satisfies Prisma.HotelWhereInput;
-
-/** A room type without a base price cannot be priced, so it is not sold. */
-const sellableRoomType = {
-  prices: { some: basePriceWhere },
-} satisfies Prisma.RoomTypeWhereInput;
 
 const hotelNotFound = () =>
   new NotFoundException({

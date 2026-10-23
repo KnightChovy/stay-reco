@@ -421,6 +421,10 @@ model Booking {
   checkInDate        DateTime            @map("check_in_date") @db.Date
   checkOutDate       DateTime            @map("check_out_date") @db.Date
   numGuests          Int?                @map("num_guests")
+  /// Rooms of the one room type held or booked; kept after the nights are released.
+  numRooms           Int                 @map("num_rooms")
+  /// [{ date, price }] per room, fixed at booking time (BR-09); kept after the nights are released.
+  nightlyPrices      Json                @map("nightly_prices")
   totalAmount        Decimal             @map("total_amount") @db.Decimal(14, 2)
   currency           String              @default("VND") @db.VarChar(10)
   status             BookingStatus       @default(PENDING)

@@ -11,6 +11,7 @@ import { Env, validateEnv } from './config/env';
 import { AuditModule } from './modules/audit/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { AvailabilityModule } from './modules/availability/availability.module';
+import { BookingsModule } from './modules/bookings/bookings.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
 import { HotelsModule } from './modules/hotels/hotels.module';
 import { PricingModule } from './modules/pricing/pricing.module';
@@ -54,6 +55,7 @@ import { PrismaModule } from './prisma/prisma.module';
     PricingModule,
     AvailabilityModule,
     StaysModule,
+    BookingsModule,
     StaffModule,
     VerificationModule,
   ],

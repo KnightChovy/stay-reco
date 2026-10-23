@@ -8,6 +8,7 @@
 - Sign-up, email verification (OTP), sign-in, forgot / change password, sessions: [auth.md](./auth.md).
 - Public catalog `GET /amenities`, `GET /bed-types`: [partner.md](./partner.md#catalog-public-no-token) (for the search filters).
 - Search `GET /hotels` and the hotel / room type pages `GET /hotels/:hotelId/listing`, `GET /room-types/:id/listing` (below).
+- Booking with the 15-minute hold `POST /bookings` and the booking page `GET /bookings/:id` (below). My trips, cancellation and the voucher come next; until then `refund` and `cancelReason` are always `null`.
 
 ## Main flow: from search to voucher
 
@@ -68,7 +69,8 @@ Stay parameters used by several endpoints (`stayQuerySchema`):
 }
 ```
 
-- The backend checks availability again and prices the stay again (UC19). Not enough rooms → `409 ROOM_SOLD_OUT` (MSG12). A total different from `expectedTotal` → `409 BOOKING_PRICE_CHANGED` with the new total in `details` (MSG13); show it and send the request again with the new `expectedTotal` once the customer agrees.
+- The backend checks availability again and prices the stay again (UC19). Not enough rooms → `409 ROOM_SOLD_OUT` (MSG12). A total different from `expectedTotal` → `409 BOOKING_PRICE_CHANGED` with the new total in `details` (MSG13): `[{ "field": "expectedTotal", "message": "4000000" }]`, the `message` being the new total as a number string; show it and send the request again with the new `expectedTotal` once the customer agrees.
+- `guests` above `rooms` × the room type's `maxOccupancy` → `400 VALIDATION_ERROR` on `guests`. A room type that is not on sale (hotel not bookable, no base price) → `404 ROOM_TYPE_NOT_FOUND`. Only `CUSTOMER` accounts book (`403 FORBIDDEN` otherwise).
 - On success the rooms are held for **15 minutes** (BR-03), the booking is `PENDING`, its invoice is `UNPAID`, and the booking code (`SR-YYMMDD-XXXX`) is the transfer content. The price, the cancellation terms and the commission rate are fixed on the booking from now on (BR-07, BR-09).
 - Two customers booking the last room at the same time: one gets the hold, the other `ROOM_SOLD_OUT`.
 - A hold not paid in time: the booking becomes `EXPIRED`, its invoice `FAILED`, and the rooms are released (a job runs every minute).
