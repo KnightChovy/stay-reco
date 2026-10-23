@@ -230,6 +230,12 @@ describe('My trips and vouchers (e2e)', () => {
         ),
       ).toBe(booking.code);
 
+      // Still shown while the guest is checked in, not once the stay is over.
+      await setStatus(booking.id, 'CHECKED_IN');
+      await t.api().get(url).set(auth(me.token)).expect(200);
+      await setStatus(booking.id, 'COMPLETED');
+      await t.api().get(url).set(auth(me.token)).expect(409);
+
       const other = await t.signIn('CUSTOMER', 'other@mail.test');
       const hidden = await t.api().get(url).set(auth(other.token)).expect(404);
       expect(hidden.body.code).toBe('BOOKING_NOT_FOUND');

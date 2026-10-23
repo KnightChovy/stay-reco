@@ -223,6 +223,21 @@ export const bookingVoucherResponseSchema = z
   })
   .register(responseSchemas, {
     id: 'BookingVoucher',
-    description: 'E-voucher of a confirmed booking (UC24), shown at check-in.',
+    description: 'E-voucher of a confirmed booking (UC23), shown at check-in.',
   });
 export type BookingVoucher = z.infer<typeof bookingVoucherResponseSchema>;
+
+export const cancellationQuoteResponseSchema = z
+  .object({
+    freeUntil: isoDateTime().nullable().describe('End of free cancellation fixed on the booking; null: none.'),
+    feePercent: z.number(),
+    paid: z.number(),
+    fee: z.number().describe('0 before `freeUntil`, otherwise `feePercent` of `paid`.'),
+    refund: z.number().describe('paid − fee (BR-08).'),
+    needsApproval: z.boolean().describe('false when refund = 0: the booking is cancelled at once.'),
+  })
+  .register(responseSchemas, {
+    id: 'CancellationQuote',
+    description: 'What cancelling now would cost (MSG11), shown before the customer confirms.',
+  });
+export type CancellationQuote = z.infer<typeof cancellationQuoteResponseSchema>;

@@ -49,6 +49,7 @@ import {
   toBooking,
   toBookingSummary,
 } from './booking.mapper';
+import { latestCancelRequest } from './cancel-request';
 import { HoldExpiryService } from './hold-expiry.service';
 import { SepayPayment } from './sepay-payment';
 import { signVoucher } from './voucher-token';
@@ -74,12 +75,8 @@ const TAB_STATUSES: Record<MyBookingsQuery['tab'], BookingStatus[]> = {
   cancelled: ['CANCELLED', 'EXPIRED'],
 };
 
-/** A voucher exists once the booking is paid, until the stay is over. */
-const VOUCHER_STATUSES: BookingStatus[] = [
-  'CONFIRMED',
-  'CHECKED_IN',
-  'COMPLETED',
-];
+/** A voucher is shown from payment until the guest has checked in (customer.md, "Voucher"). */
+const VOUCHER_STATUSES: BookingStatus[] = ['CONFIRMED', 'CHECKED_IN'];
 
 /** Codes are random, so a clash is rare; a few tries are plenty. */
 const CODE_ATTEMPTS = 5;
@@ -297,7 +294,7 @@ export class BookingsService {
     return Paginated.of(rows.map(toBookingSummary), { ...query, total });
   }
 
-  /** For the customer who booked, once the booking is paid (UC24). */
+  /** For the customer who booked, while the booking is CONFIRMED or CHECKED_IN (UC23). */
   async voucher(user: AuthUser, bookingId: string): Promise<BookingVoucher> {
     const booking = isUuid(bookingId)
       ? await this.prisma.booking.findFirst({
@@ -336,11 +333,14 @@ export class BookingsService {
   }
 
   private async load(bookingId: string): Promise<Booking> {
-    const booking = await this.prisma.booking.findUniqueOrThrow({
-      where: { bookingId },
-      include: bookingInclude,
-    });
-    return toBooking(booking, this.sepay.details);
+    const [booking, cancelRequest] = await Promise.all([
+      this.prisma.booking.findUniqueOrThrow({
+        where: { bookingId },
+        include: bookingInclude,
+      }),
+      latestCancelRequest(this.prisma, bookingId),
+    ]);
+    return toBooking(booking, this.sepay.details, cancelRequest);
   }
 
   private async unusedCode(tx: Prisma.TransactionClient, now: Date) {
