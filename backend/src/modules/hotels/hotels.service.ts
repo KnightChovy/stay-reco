@@ -4,6 +4,7 @@ import {
   Injectable,
 } from '@nestjs/common';
 import type {
+  CancellationPolicyInput,
   CreateHotelInput,
   Hotel,
   HotelSummary,
@@ -16,9 +17,11 @@ import { ErrorCode } from '../../common/errors/error-code';
 import { HotelAccessService } from '../../common/hotel-access/hotel-access.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
+  CANCELLATION_KEYS,
   hotelInclude,
   hotelSummarySelect,
   POLICY_PREFIX,
+  toCancellationRows,
   toHotel,
   toHotelData,
   toHotelSummary,
@@ -122,6 +125,26 @@ export class HotelsService {
           propertyKey: POLICY_PREFIX + key,
           propertyValue: value,
         })),
+      }),
+    ]);
+    return this.findOne(hotelId);
+  }
+
+  /** Applies to bookings made from now on; existing bookings keep the policy fixed on them (BR-07). */
+  async setCancellationPolicy(
+    hotelId: string,
+    policy: CancellationPolicyInput,
+  ): Promise<Hotel> {
+    await this.prisma.$transaction([
+      this.prisma.hotelProperties.deleteMany({
+        where: {
+          hotelId,
+          verificationRequestId: null,
+          propertyKey: { in: Object.values(CANCELLATION_KEYS) },
+        },
+      }),
+      this.prisma.hotelProperties.createMany({
+        data: toCancellationRows(policy).map((row) => ({ ...row, hotelId })),
       }),
     ]);
     return this.findOne(hotelId);

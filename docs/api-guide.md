@@ -209,7 +209,7 @@ There is no `status` field in the body; the HTTP status is already available as 
 | `CANCELLATION_NOT_ALLOWED` | 409 | Cancelling after check-in (BR-09) | "This booking can no longer be cancelled" |
 | `REFUND_STATUS_CONFLICT` | 409 | Deciding a refund that is not pending | Reload the booking |
 | `PRICING_RULE_NOT_FOUND` | 404 | Pricing rule doesn't exist or belongs to another hotel | Reload the rules |
-| `AVAILABILITY_BELOW_BOOKED` | 409 | Rooms on sale set below the rooms already booked or held | Show the booked count |
+| `AVAILABILITY_BELOW_BOOKED` | 409 | More rooms asked on sale than are left after bookings and holds on some day | Show the days in `details` with the rooms left |
 
 Important: **refresh only when `status === 401` and `code === 'UNAUTHENTICATED'`.** Refreshing on the other 401 errors (`AUTH_INVALID_CREDENTIALS`, `AUTH_WRONG_PASSWORD`, `AUTH_REFRESH_TOKEN_INVALID`) causes infinite loops or unexpected sign-outs.
 

@@ -82,7 +82,7 @@ export const ErrorCode = {
   // Pricing and availability
   /** Pricing rule does not exist or belongs to a hotel the caller cannot manage. */
   PRICING_RULE_NOT_FOUND: 'PRICING_RULE_NOT_FOUND',
-  /** Rooms on sale set below the rooms already booked or held for a day. */
+  /** More rooms asked on sale than are left after bookings and holds on some day; `details` lists those days. */
   AVAILABILITY_BELOW_BOOKED: 'AVAILABILITY_BELOW_BOOKED',
 
   // Bookings
