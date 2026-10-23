@@ -1,18 +1,33 @@
 "use client";
 
-import { Check, X } from "lucide-react";
+import { Check, TriangleAlert, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+
+export type PartnerNoticeTone = "success" | "error";
 
 export function PartnerNotice({
   message,
+  tone = "success",
   onClose,
 }: {
   message: string;
+  tone?: PartnerNoticeTone;
   onClose: () => void;
 }) {
   return (
-    <output className="fixed bottom-5 right-5 z-50 flex max-w-sm items-center gap-3 rounded-xl border border-success/20 bg-card p-4 text-sm shadow-dialog">
-      <Check size={18} className="text-success" />
+    <output
+      role={tone === "error" ? "alert" : "status"}
+      className={cn(
+        "fixed bottom-5 right-5 z-50 flex max-w-sm items-center gap-3 rounded-xl border bg-card p-4 text-sm shadow-dialog",
+        tone === "error" ? "border-danger/25" : "border-success/20",
+      )}
+    >
+      {tone === "error" ? (
+        <TriangleAlert size={18} className="shrink-0 text-danger" />
+      ) : (
+        <Check size={18} className="shrink-0 text-success" />
+      )}
       <span className="flex-1">{message}</span>
       <Button
         variant="ghost"

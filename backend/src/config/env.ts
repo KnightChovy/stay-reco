@@ -55,6 +55,14 @@ const envSchema = z
         (v) => Buffer.from(v, 'base64').length === 32,
         'must be 32 bytes encoded in base64',
       ),
+    /**
+     * Platform bank account linked to SePay, shown on the payment page with a VietQR image (qr.sepay.vn).
+     * `SEPAY_BANK_CODE` is the bank short name SePay uses (e.g. MBBank, Vietcombank). Demo values until deploy.
+     */
+    SEPAY_BANK_CODE: z.string().min(1).default('MBBank'),
+    SEPAY_BANK_NAME: z.string().min(1).default('MB Bank'),
+    SEPAY_ACCOUNT_NUMBER: z.string().min(1).default('0000000000'),
+    SEPAY_ACCOUNT_NAME: z.string().min(1).default('STAYRECO DEMO'),
   })
   .superRefine((env, ctx) => {
     if (env.CLOUDINARY_CLOUD_NAME) {

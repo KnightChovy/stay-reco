@@ -166,7 +166,7 @@ export class VerificationService {
       orderBy: { createdAt: 'desc' },
     });
     return requests.map((r) =>
-      toVerificationRequest(r, this.cipher, { fullAccountNumber: false }),
+      toVerificationRequest(r, this.cipher, { full: false }),
     );
   }
 
@@ -311,7 +311,7 @@ export class VerificationService {
     });
     await this.notify(result, decision, reason);
     return toVerificationRequest(result, this.cipher, {
-      fullAccountNumber: true,
+      full: true,
     });
   }
 
@@ -372,7 +372,7 @@ export class VerificationService {
     );
     await this.notify(result, 'REVERIFICATION', reason);
     return toVerificationRequest(result, this.cipher, {
-      fullAccountNumber: true,
+      full: true,
     });
   }
 
@@ -436,12 +436,12 @@ export class VerificationService {
     await this.access.assertResource(user, hotelId, 'owner-view', notFound);
   }
 
-  private async view(requestId: string, fullAccountNumber: boolean) {
+  private async view(requestId: string, full: boolean) {
     return toVerificationRequest(
       await this.loadRequest(requestId),
       this.cipher,
       {
-        fullAccountNumber,
+        full,
       },
     );
   }

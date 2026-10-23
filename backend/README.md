@@ -8,6 +8,7 @@ NestJS 11 + PostgreSQL + Prisma.
 npm install
 cp .env.example .env        # then set JWT_ACCESS_SECRET
 npm run db:up               # Postgres in Docker (creates stayreco + stayreco_test)
+                            # port/credentials come from DB_PORT, DB_USER, DB_PASSWORD, DB_NAME in .env
 npm run db:migrate
 npm run db:seed             # creates the admin from SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD
 npm run dev                 # (= start:dev) http://localhost:3000/api/v1, Swagger: /api/docs

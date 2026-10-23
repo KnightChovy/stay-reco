@@ -2,40 +2,51 @@
 
 import {
   createContext,
+  useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
 } from "react";
-import { OperationDialog } from "@/components/common/modal/OperationDialog";
-import { PartnerNotice } from "./PartnerNotice";
+import { PartnerNotice, type PartnerNoticeTone } from "./PartnerNotice";
 
 type PartnerActionContextValue = {
-  notify: (message: string) => void;
+  /** Toast-like notice for the outcome of an API call. */
+  showNotice: (message: string, tone?: PartnerNoticeTone) => void;
 };
+
+type Notice = { message: string; tone: PartnerNoticeTone; id: number };
 
 const PartnerActionContext = createContext<PartnerActionContextValue | null>(
   null,
 );
 
 export function PartnerActionProvider({ children }: { children: ReactNode }) {
-  const [action, setAction] = useState("");
-  const [notice, setNotice] = useState("");
-  const value = useMemo(() => ({ notify: setAction }), []);
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const showNotice = useCallback(
+    (message: string, tone: PartnerNoticeTone = "success") =>
+      setNotice({ message, tone, id: Date.now() }),
+    [],
+  );
+  const value = useMemo(() => ({ showNotice }), [showNotice]);
+
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(null), notice.tone === "error" ? 8000 : 4000);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
 
   return (
     <PartnerActionContext.Provider value={value}>
       {children}
-      <OperationDialog
-        action={action}
-        onClose={() => setAction("")}
-        onComplete={() => {
-          setNotice(`${action} đã được ghi nhận.`);
-          setAction("");
-        }}
-      />
       {notice && (
-        <PartnerNotice message={notice} onClose={() => setNotice("")} />
+        <PartnerNotice
+          key={notice.id}
+          message={notice.message}
+          tone={notice.tone}
+          onClose={() => setNotice(null)}
+        />
       )}
     </PartnerActionContext.Provider>
   );

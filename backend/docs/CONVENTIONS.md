@@ -1,7 +1,7 @@
 # StayReco Backend Conventions
 
 > The whole team follows this document. Items still marked `TODO(meeting)` are not decided yet.
-> Applies to `backend/` (NestJS 11 + Prisma + PostgreSQL). The API guide for web and mobile clients is [API_GUIDE.md](./API_GUIDE.md).
+> Applies to `backend/` (NestJS 11 + Prisma + PostgreSQL). The API guide for web and mobile clients is [docs/api-guide.md](../../docs/api-guide.md).
 
 ## 1. API URL naming
 
@@ -42,7 +42,7 @@ Why A: StayReco has 6 roles that share many resources (bookings, hotels, refunds
 5. Nest at most **one level**, only when the child resource only makes sense inside its parent: `/hotels/:hotelId/room-types`.
    Once you have the child's id, access it flat: `GET /room-types/:id`, not `/hotels/:hotelId/room-types/:id`.
 6. Path parameters are `:id` (UUID), or `:<resource>Id` when there are several ids: `:hotelId`.
-7. Query strings use camelCase: `?checkIn=2026-10-20&guests=2&page=1&pageSize=10&sort=price-asc`. List parameters (pagination, sorting, search, filters) follow [API_GUIDE.md §5](./API_GUIDE.md#5-lists-pagination-filtering-sorting).
+7. Query strings use camelCase: `?checkIn=2026-10-20&guests=2&page=1&pageSize=10&sort=price-asc`. List parameters (pagination, sorting, search, filters) follow [api-guide.md §5](../../docs/api-guide.md#5-lists-pagination-filtering-sorting).
 8. JSON bodies and responses use **camelCase**. Database columns use snake_case, mapped with `@map` in Prisma as in the current schema.
 
 ### 1.3 Three data scopes
@@ -94,8 +94,13 @@ src/
 - Responses contain only the fields needed, chosen with `select` or an explicit mapping function (see `toAccountResponse`). Never return a raw Prisma object; it may leak `passwordHash` or internal columns.
 - Every endpoint requires authentication by default. Public endpoints must be marked `@Public()`. Restrict roles with `@Roles(...)`.
 - **Responses**: controllers return **plain data**. `ResponseInterceptor` wraps it as `{ success, message, data }`; do not wrap it yourself. Paginated lists return `Paginated.of(items, { page, pageSize, total })` (`common/http/api-response.ts`). Endpoints that return nothing use `@HttpCode(204)`.
-- **Errors**: throw the built-in NestJS exceptions with a stable code, e.g. `throw new ConflictException({ code: ErrorCode.AUTH_EMAIL_TAKEN, message: 'Email is already registered' })`. New codes must be added to `common/errors/error-code.ts` **and** to table 4.3 in [API_GUIDE.md](./API_GUIDE.md). Name them `<FEATURE>_<DESCRIPTION>` and never rename a published code. `HttpExceptionFilter` handles formatting; unexpected errors become 500 `INTERNAL_ERROR` and are logged.
-- **Swagger**: the CLI plugin (`nest-cli.json`) generates docs from TypeScript types, `class-validator` decorators and `/** */` comments in DTOs, so do **not** add `@ApiProperty` to every field. Tag each controller with `@ApiTags('<feature>')`. Only add `@ApiProperty` where the plugin cannot infer the schema, e.g. composite decorators such as `IsStrongPassword`.
+- **Errors**: throw the built-in NestJS exceptions with a stable code, e.g. `throw new ConflictException({ code: ErrorCode.AUTH_EMAIL_TAKEN, message: 'Email is already registered' })`. New codes must be added to `packages/shared/src/errors.ts` (re-exported by `common/errors/error-code.ts`) **and** to table 4.3 in [docs/api-guide.md](../../docs/api-guide.md#43-error-codes). Name them `<FEATURE>_<DESCRIPTION>` and never rename a published code. `HttpExceptionFilter` handles formatting; unexpected errors become 500 `INTERNAL_ERROR` and are logged.
+- **Swagger**: request bodies and queries come from the shared zod schemas (`zodDto`), so never add `@ApiProperty`. Tag each controller with `@ApiTags('<feature>')`. For every route (decorators in `common/swagger/api-docs.decorators.ts`):
+  - `@ApiOperation({ summary, description? })`: a one-line summary, plus the rules the FE must know. Write it in the decorator, not as a `/** */` comment: only `nest build` reads comments (through the CLI plugin), so ts-jest and the Swagger e2e test would not see them;
+  - the success body: `@ApiData(xxxResponseSchema, status)` (201 for a plain `@Post`), `@ApiData(z.array(...))` for arrays, `@ApiPage(...)` for paginated lists; nothing for 204. Response schemas live in `packages/shared/src/responses` and are registered in `responseSchemas`;
+  - `@ApiErrors(...)` with the codes the service can throw. Not needed for the derived ones: 401 on signed-in routes, 400 `VALIDATION_ERROR` when there is a body or query, access errors from `@Roles` / `@HotelAccessRequired`, upload errors from `@UploadFile`. Routes addressed by another resource (`/rooms/:id`) add `@ApiHotelAccess(level, notFoundCode)`; routes that issue tokens add `@ApiClientType()`;
+  - a new error code also needs its status and meaning in `common/swagger/error-catalog.ts` (the record type makes it a compile error otherwise).
+  - `test/swagger.e2e-spec.ts` fails when a route has no summary, no access note, or not exactly one documented success response.
 - Important operations (create, update, approve, money, security) must call `AuditService.log(...)`. Add new actions to the `AuditAction` enum.
 
 ## 3. Database and migrations
@@ -161,4 +166,4 @@ const charged = final.toDecimalPlaces(0, Decimal.ROUND_HALF_UP);                
 - [ ] `npm run test:e2e` passes, with tests added for new endpoints
 - [ ] Schema changes include a migration, and the seed still runs
 - [ ] New endpoints follow the URL rules in section 1, have `@Roles` or `@Public`, and check the tenant where needed
-- [ ] [API_GUIDE.md](./API_GUIDE.md) or Swagger is updated if the API contract changed
+- [ ] [docs/api/](../../docs/api/README.md) and Swagger are updated if the API changed

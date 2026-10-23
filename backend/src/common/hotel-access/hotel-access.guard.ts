@@ -10,6 +10,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import type { StaffPermission } from '../../generated/prisma/client';
 import type { AuthenticatedRequest } from '../decorators/current-user.decorator';
+import { ApiHotelAccess } from '../swagger/api-docs.decorators';
 import {
   type HotelAccess,
   type HotelAccessLevel,
@@ -43,6 +44,7 @@ export function HotelAccessRequired(
   return applyDecorators(
     SetMetadata(HOTEL_ACCESS_KEY, metadata),
     UseGuards(HotelAccessGuard),
+    ApiHotelAccess(level),
   );
 }
 

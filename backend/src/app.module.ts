@@ -10,10 +10,14 @@ import { RolesGuard } from './common/guards/roles.guard';
 import { Env, validateEnv } from './config/env';
 import { AuditModule } from './modules/audit/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { AvailabilityModule } from './modules/availability/availability.module';
+import { BookingsModule } from './modules/bookings/bookings.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
 import { HotelsModule } from './modules/hotels/hotels.module';
+import { PricingModule } from './modules/pricing/pricing.module';
 import { RoomsModule } from './modules/rooms/rooms.module';
 import { StaffModule } from './modules/staff/staff.module';
+import { StaysModule } from './modules/stays/stays.module';
 import { MailModule } from './modules/mail/mail.module';
 import { StorageModule } from './modules/storage/storage.module';
 import { VerificationModule } from './modules/verification/verification.module';
@@ -48,6 +52,10 @@ import { PrismaModule } from './prisma/prisma.module';
     CatalogModule,
     HotelsModule,
     RoomsModule,
+    PricingModule,
+    AvailabilityModule,
+    StaysModule,
+    BookingsModule,
     StaffModule,
     VerificationModule,
   ],

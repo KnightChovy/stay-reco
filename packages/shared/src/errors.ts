@@ -13,6 +13,8 @@ export const ErrorCode = {
   CONFLICT: 'CONFLICT',
   TOO_MANY_REQUESTS: 'TOO_MANY_REQUESTS',
   INTERNAL_ERROR: 'INTERNAL_ERROR',
+  /** A dependency the backend needs (the database) is down or not answering; try again later. */
+  SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
 
   // Auth
   AUTH_INVALID_CREDENTIALS: 'AUTH_INVALID_CREDENTIALS',
@@ -76,5 +78,25 @@ export const ErrorCode = {
   IMAGE_NOT_FOUND: 'IMAGE_NOT_FOUND',
   /** The hotel or room type already has the maximum number of images. */
   IMAGE_LIMIT_REACHED: 'IMAGE_LIMIT_REACHED',
+
+  // Pricing and availability
+  /** Pricing rule does not exist or belongs to a hotel the caller cannot manage. */
+  PRICING_RULE_NOT_FOUND: 'PRICING_RULE_NOT_FOUND',
+  /** More rooms asked on sale than are left after bookings and holds on some day; `details` lists those days. */
+  AVAILABILITY_BELOW_BOOKED: 'AVAILABILITY_BELOW_BOOKED',
+
+  // Bookings
+  /** Not enough rooms of the type left for every night of the stay (MSG12). */
+  ROOM_SOLD_OUT: 'ROOM_SOLD_OUT',
+  /** The total differs from `expectedTotal`; `details` holds the new total (MSG13). */
+  BOOKING_PRICE_CHANGED: 'BOOKING_PRICE_CHANGED',
+  /** Booking does not exist or the caller cannot see it. */
+  BOOKING_NOT_FOUND: 'BOOKING_NOT_FOUND',
+  /** The booking's status does not allow the action. */
+  BOOKING_STATUS_CONFLICT: 'BOOKING_STATUS_CONFLICT',
+  /** Cancelling after check-in (BR-09). */
+  CANCELLATION_NOT_ALLOWED: 'CANCELLATION_NOT_ALLOWED',
+  /** Deciding a refund that is not pending. */
+  REFUND_STATUS_CONFLICT: 'REFUND_STATUS_CONFLICT',
 } as const;
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];

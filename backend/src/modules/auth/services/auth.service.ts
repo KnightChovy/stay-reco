@@ -11,6 +11,7 @@ import type { Account } from '@stayreco/shared';
 import { AuthUser } from '../../../common/decorators/current-user.decorator';
 import { RequestMeta } from '../../../common/decorators/request-meta.decorator';
 import { ErrorCode } from '../../../common/errors/error-code';
+import { HotelAccessService } from '../../../common/hotel-access/hotel-access.service';
 import { Serialized } from '../../../common/http/api-response';
 import { Env } from '../../../config/env';
 import {
@@ -107,6 +108,7 @@ export class AuthService {
     private readonly mail: MailService,
     private readonly audit: AuditService,
     private readonly config: ConfigService<Env, true>,
+    private readonly hotelAccess: HotelAccessService,
   ) {}
 
   // ── Registration ─────────────────────────────────────────
@@ -473,6 +475,8 @@ export class AuthService {
         message: 'Hotel not found',
       });
     }
+    // Like every other partner write: a suspended partner keeps read access only.
+    await this.hotelAccess.assertPartnerNotSuspended(user.accountId);
 
     const existing = await this.prisma.userAccount.findUnique({
       where: { email: dto.email },

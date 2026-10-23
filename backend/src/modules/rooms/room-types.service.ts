@@ -20,7 +20,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import {
-  BASE_PRICE_NAME,
+  basePriceRow,
   basePriceWhere,
   roomTypeInclude,
   toRoomType,
@@ -73,7 +73,7 @@ export class RoomTypesService {
           create: input.amenityIds.map((amenityId) => ({ amenityId })),
         },
         prices: {
-          create: { name: BASE_PRICE_NAME, pricePerNight: input.basePrice },
+          create: basePriceRow(input.basePrice),
         },
       },
       include: roomTypeInclude,
@@ -121,11 +121,7 @@ export class RoomTypesService {
         // Room types created outside the API may lack the row; setting the price creates it.
         if (!count) {
           await tx.price.create({
-            data: {
-              roomTypeId,
-              name: BASE_PRICE_NAME,
-              pricePerNight: basePrice,
-            },
+            data: { roomTypeId, ...basePriceRow(basePrice) },
           });
         }
       }

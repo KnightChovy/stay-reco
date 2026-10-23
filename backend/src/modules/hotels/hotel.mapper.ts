@@ -1,8 +1,11 @@
-import type {
-  Hotel,
-  HotelImage,
-  HotelSummary,
-  UpdateHotelInput,
+import {
+  type CancellationPolicy,
+  type CancellationPolicyInput,
+  DEFAULT_CANCELLATION_POLICY,
+  type Hotel,
+  type HotelImage,
+  type HotelSummary,
+  type UpdateHotelInput,
 } from '@stayreco/shared';
 import type {
   Prisma,
@@ -17,6 +20,51 @@ import { toAmenity } from '../catalog/catalog.service';
  */
 export const POLICY_PREFIX = 'policy.';
 
+/**
+ * The cancellation policy (decision P4) is two more `hotel_properties` rows: the free-cancellation days ('' for no
+ * free period) and the fee percent. Without them the default policy applies (P14).
+ */
+export const CANCELLATION_KEYS = {
+  freeDays: 'cancellation_free_days',
+  feePercent: 'cancellation_fee_percent',
+} as const;
+
+type PropertyRow = { propertyKey: string; propertyValue: string };
+
+export function cancellationPolicyOf(rows: PropertyRow[]): CancellationPolicy {
+  const value = (key: string) =>
+    rows.find((r) => r.propertyKey === key)?.propertyValue;
+  const freeDays = value(CANCELLATION_KEYS.freeDays);
+  const feePercent = value(CANCELLATION_KEYS.feePercent);
+  if (freeDays === undefined || feePercent === undefined) {
+    return DEFAULT_CANCELLATION_POLICY;
+  }
+  return {
+    freeCancellationDays: freeDays === '' ? null : Number(freeDays),
+    feePercent: Number(feePercent),
+  };
+}
+
+/** Select for the rows `cancellationPolicyOf` reads. */
+export const cancellationRowsSelect = {
+  where: {
+    verificationRequestId: null,
+    propertyKey: { in: Object.values(CANCELLATION_KEYS) },
+  },
+  select: { propertyKey: true, propertyValue: true },
+} satisfies Prisma.Hotel$hotelPropertiesArgs;
+
+export const toCancellationRows = (policy: CancellationPolicyInput) => [
+  {
+    propertyKey: CANCELLATION_KEYS.freeDays,
+    propertyValue: policy.freeCancellationDays?.toString() ?? '',
+  },
+  {
+    propertyKey: CANCELLATION_KEYS.feePercent,
+    propertyValue: policy.feePercent.toString(),
+  },
+];
+
 export const hotelInclude = {
   hotelAmenities: {
     include: { amenity: true },
@@ -26,7 +74,10 @@ export const hotelInclude = {
   hotelProperties: {
     where: {
       verificationRequestId: null,
-      propertyKey: { startsWith: POLICY_PREFIX },
+      OR: [
+        { propertyKey: { startsWith: POLICY_PREFIX } },
+        { propertyKey: { in: Object.values(CANCELLATION_KEYS) } },
+      ],
     },
     orderBy: { propertyKey: 'asc' },
   },
@@ -55,7 +106,7 @@ type HotelSummaryRow = Prisma.HotelGetPayload<{
 }>;
 
 /** `TIME` columns come back as a Date on 1970-01-01 UTC. */
-const fromTime = (value: Date | null) =>
+export const fromTime = (value: Date | null) =>
   value ? value.toISOString().slice(11, 16) : null;
 
 const toTime = (value: string | null | undefined) =>
@@ -81,6 +132,9 @@ export const toHotelImage = (i: HotelImageRow): HotelImage => ({
 
 export function toHotel(h: HotelWithDetails): Hotel {
   const config = h.hotelRoomConfig;
+  const policyRows = h.hotelProperties.filter((p) =>
+    p.propertyKey.startsWith(POLICY_PREFIX),
+  );
   return {
     id: h.hotelId,
     name: h.name,
@@ -100,7 +154,7 @@ export function toHotel(h: HotelWithDetails): Hotel {
     amenities: h.hotelAmenities.map((ha) => toAmenity(ha.amenity)),
     images: h.hotelImages.map(toHotelImage),
     policies: Object.fromEntries(
-      h.hotelProperties.map((p) => [
+      policyRows.map((p) => [
         p.propertyKey.slice(POLICY_PREFIX.length),
         p.propertyValue,
       ]),
@@ -108,6 +162,7 @@ export function toHotel(h: HotelWithDetails): Hotel {
     roomConfig: config
       ? { totalRooms: config.totalRooms, basePrice: toNumber(config.basePrice) }
       : null,
+    cancellationPolicy: cancellationPolicyOf(h.hotelProperties),
     createdAt: h.createdAt.toISOString(),
   };
 }

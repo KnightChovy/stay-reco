@@ -21,6 +21,9 @@ import Sidebar, {
   type SidebarItem,
 } from "@/components/common/sidebar/Sidebar";
 import { SidebarInset } from "@/components/ui/sidebar";
+import { useAuthStore } from "@/lib/auth-store";
+import { usePartnerHotel } from "../components";
+import { hotelStatusLabels } from "../lib/labels";
 
 const navigation: Omit<SidebarItem, "isActive">[] = [
   {
@@ -33,7 +36,6 @@ const navigation: Omit<SidebarItem, "isActive">[] = [
     href: "/partner/bookings",
     label: "Đặt phòng",
     icon: BookOpenCheck,
-    badge: 5,
     section: "KINH DOANH",
   },
   {
@@ -94,34 +96,41 @@ const navigation: Omit<SidebarItem, "isActive">[] = [
     href: "/partner/verification",
     label: "Hồ sơ & xác minh",
     icon: ShieldCheck,
-    badge: 1,
     section: "TỔ CHỨC & HỒ SƠ",
   },
 ];
 
 export function PartnerShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const user = useAuthStore((state) => state.user);
+  const { hotel } = usePartnerHotel();
   const items = navigation.map((item) => ({
     ...item,
     isActive: pathname === item.href,
   }));
+  const hotelMeta = hotel
+    ? [hotel.starRating ? `${hotel.starRating}-Star` : null, hotel.city].filter(Boolean).join(" · ")
+    : undefined;
 
   return (
     <SidebarProvider>
       <Sidebar
         items={items}
         roleLabel="Partner Portal"
-        contextName="An Nhiên Riverside Hotel"
+        contextName={hotel?.name ?? "Chưa có khách sạn"}
       />
       <SidebarInset className="min-w-0 bg-background">
         <Navbar
-          context={{
-            name: "An Nhiên Riverside Hotel",
-            meta: "4-Star · Đà Nẵng",
-            status: "Đã xác minh",
-          }}
-          user={{ name: "Nguyễn Minh Anh", role: "Chủ cơ sở" }}
-          notificationCount={3}
+          context={
+            hotel
+              ? {
+                  name: hotel.name,
+                  meta: hotelMeta,
+                  status: hotelStatusLabels[hotel.status].label,
+                }
+              : undefined
+          }
+          user={{ name: user?.name ?? "Đối tác", role: "Chủ cơ sở", avatarUrl: user?.avatarUrl }}
           searchPlaceholder="Tìm booking, khách lưu trú hoặc phòng..."
           showSidebarTrigger
           profileHref="/partner/profile"

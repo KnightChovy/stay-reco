@@ -2,7 +2,7 @@
 
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import type { Account } from '@stayreco/shared';
+import type { Account, PartnerStatus } from '@stayreco/shared';
 import * as authService from '@/services/auth.service';
 import type { AxiosError } from 'axios';
 
@@ -16,6 +16,8 @@ export type AuthUser = {
   avatarUrl?: string;
   role: UserRole;
   emailVerified?: boolean;
+  /** Hotel partners only; SUSPENDED partners can read but not create or change anything. */
+  partnerStatus?: PartnerStatus;
 };
 
 type AuthResult =
@@ -81,6 +83,8 @@ export function accountToAuthUser(account: Account): AuthUser {
     avatarUrl: account.avatarUrl ?? undefined,
     role: mapBackendRoleToFrontend(account.role),
     emailVerified: account.emailVerified,
+    partnerStatus:
+      account.profile && 'status' in account.profile ? account.profile.status : undefined,
   };
 }
 
