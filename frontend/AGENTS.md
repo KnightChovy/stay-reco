@@ -20,6 +20,7 @@ This document applies to the entire `frontend` directory and is intended for dev
 - Authentication is currently mocked with Zustand and localStorage. An API client and React Query provider exist, but there are no business API calls in `src` yet.
 - Roles are `customer`, `partner`, `staff`, `manager`, and `admin`. Actor route trees now exist for all five roles. The `partner` and `manager` portals are under active migration, with their routes wired to `src/features/partner` and `src/features/manager` respectively.
 - Partner hotel onboarding is connected to the backend (`docs/api/partner.md`): `/partner/dashboard`, `/partner/hotel`, `/partner/rooms`, `/partner/staff`, and `/partner/verification`. The partner portal uses no mock data: routes whose API does not exist yet (bookings, revenue, availability, pricing, promotions, loyalty, AI brand) render `PartnerUnavailable` naming the phase in `docs/phases` that will deliver them.
+- The staff shell and the booking detail screen are connected to the backend: `StaffHotelProvider` loads `GET /me/hotels` and `GET /hotels/:id` for the assigned hotel, and `/staff/bookings/[id]` loads `GET /bookings/:id` (staff need `BOOKING` or `REFUND`). The staff booking list, check-in/out, refunds, inbox, alerts and marketing screens still use sample data because their APIs are not published yet; `GET /hotels/:hotelId/bookings` is the missing endpoint that unblocks the list.
 
 ## 2. Stack and development commands
 
@@ -56,6 +57,7 @@ npm run start             # Run after a successful build
 | `src/lib/manager-data.ts`         | Manager portal types and centralized mock datasets                                     |
 | `src/lib/api-error.ts`            | Error `code` → Vietnamese message, `details` → field errors, `validateWith` (shared zod) |
 | `src/services/partner.service.ts` | Hotel partner endpoints (hotels, room types, rooms, staff, verification)               |
+| `src/services/staff.service.ts`   | Staff-readable endpoints (my hotel, hotel detail, room types, rooms, availability, booking detail) |
 | `src/lib/utils.ts`                | Re-exports `cn` from the `cn` package                                                  |
 | `src/services/ApiService.ts`      | Axios instance `apiService`                                                            |
 | `src/provider/query-provider.tsx` | `Providers` wrapping `QueryClientProvider`                                             |
