@@ -16,6 +16,10 @@ const WEEKDAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'] as const;
 export const weekdayOf = (date: string) =>
   WEEKDAYS[fromCalendarDate(date).getUTCDay()];
 
+/** The instant of a Vietnam wall-clock time, e.g. the hotel check-in time on a date. */
+export const vietnamDateTime = (date: string, time: string) =>
+  new Date(`${date}T${time}:00+07:00`);
+
 /** Vietnam has no daylight saving time: always UTC+7. */
 const VIETNAM_OFFSET_MS = 7 * 3_600_000;
 

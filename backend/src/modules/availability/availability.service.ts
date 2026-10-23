@@ -123,6 +123,24 @@ export class AvailabilityService {
     });
   }
 
+  /** Rooms of each type free on every night `checkIn` … `checkOut − 1` (BR-02). */
+  async availableRooms(
+    roomTypeIds: string[],
+    checkIn: string,
+    checkOut: string,
+    db: Db = this.prisma,
+  ): Promise<Map<string, number>> {
+    const states = roomTypeIds.length
+      ? await this.days(db, roomTypeIds, checkIn, addDays(checkOut, -1))
+      : [];
+    const available = new Map<string, number>();
+    for (const { day } of states) {
+      const current = available.get(day.roomTypeId) ?? day.onSale;
+      available.set(day.roomTypeId, Math.min(current, day.onSale));
+    }
+    return available;
+  }
+
   private async days(
     db: Db,
     roomTypeIds: string[],

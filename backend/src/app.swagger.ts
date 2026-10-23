@@ -23,6 +23,10 @@ const TAGS: [name: string, description: string][] = [
     'Pricing rules, the nightly price preview and the rooms on sale per day. Guide: docs/api/partner.md#pricing-rules-phase-2, rules: docs/money-rules.md',
   ],
   [
+    'search',
+    'Public hotel search and hotel / room type pages with prices for a stay. Guide: docs/api/customer.md',
+  ],
+  [
     'staff',
     'Staff of a hotel, managed by its owner. Guide: docs/api/partner.md#staff',
   ],

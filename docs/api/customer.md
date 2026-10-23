@@ -7,6 +7,7 @@
 
 - Sign-up, email verification (OTP), sign-in, forgot / change password, sessions: [auth.md](./auth.md).
 - Public catalog `GET /amenities`, `GET /bed-types`: [partner.md](./partner.md#catalog-public-no-token) (for the search filters).
+- Search `GET /hotels` and the hotel / room type pages `GET /hotels/:hotelId/listing`, `GET /room-types/:id/listing` (below).
 
 ## Main flow: from search to voucher
 
@@ -37,6 +38,10 @@ Stay parameters used by several endpoints (`stayQuerySchema`):
 - **Search** lists only hotels with at least one room type that fits the guests and has enough rooms free on **every night** (BR-02). `destination` (at most 100 characters) matches the city, hotel name or address, ignoring case and Vietnamese accents ("da nang" finds "Đà Nẵng"). `priceMin` / `priceMax` filter on the total of the stay; `amenityIds` takes at most 20 ids. `freeCancellation=true` keeps hotels whose policy has a free-cancellation period. `sort` is one of `HOTEL_SORTS`: `recommended` (default: star rating, then price), `price-asc`, `price-desc`, `star-desc`. Guest ratings arrive with reviews (phase 4); until then `rating` is `null`.
 - **Listing without dates** returns the hotel and its room types without prices (`offer: null`). With dates, each room type carries an `offer`: rooms still available, the price of each night and the total for the requested rooms, and the cancellation terms the booking would get. A room type that is full or too small for the guests comes back with `offer.available: 0` or `fitsGuests: false` (show "sold out"), not left out.
 - Prices are final prices (VAT and service fee included, BR-05), computed by the backend from the partner's pricing rules.
+- `checkIn` in the past or more than 365 days ahead (Vietnam time) answers `400 VALIDATION_ERROR` on `checkIn`.
+- `amenityIds` keeps hotels that have **all** the given hotel amenities. `freeCancellation=false` (or omitted) does not filter. Until reviews exist, `recommended` orders like `star-desc` (stars, then the cheapest).
+- `freeCancellationUntil` is `null` when the policy has no free period **or** the deadline has already passed for this stay (e.g. check-in tomorrow with 3 free days): the booking would get no free cancellation. `freeCancellation` in search results follows the same rule for the cheapest offer.
+- Room types without a base price are not sold and do not appear.
 
 ## Bookings
 
