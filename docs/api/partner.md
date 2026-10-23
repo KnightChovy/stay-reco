@@ -131,7 +131,7 @@ Invite staff with `POST /auth/invitations/staff` ([auth.md](./auth.md)). The inv
 }
 ```
 
-## Pricing rules (Draft, phase 2)
+## Pricing rules (phase 2)
 
 A room type's **base price** stays where it is (`basePrice` on the room type, D3). Pricing rules adjust it for some nights or some booking dates (UC64, SRS 3.12.1). Full rules and examples: [money-rules.md §2](../money-rules.md#2-room-prices).
 
@@ -169,7 +169,7 @@ A room type's **base price** stays where it is (`basePrice` on the room type, D3
   "price": 2300000 }
 ```
 
-## Availability calendar (Draft, phase 2)
+## Availability calendar (phase 2)
 
 UC63, SRS 3.11.7: rooms on sale per room type and day.
 
@@ -188,22 +188,22 @@ UC63, SRS 3.11.7: rooms on sale per room type and day.
 
 // updateAvailabilitySchema
 { "roomTypeId": "uuid", "from": "2026-11-20", "to": "2026-11-25",   // at most 62 days
-  "onSale": 6 }            // rooms to keep on sale each day; 0 closes the dates
+  "onSale": 6 }            // rooms to keep on sale each day (0–500); 0 closes the dates
 ```
 
 - Setting `onSale` closes or reopens rooms so that `onSale` rooms stay sellable each day. It cannot go below the rooms already booked or held (`409 AVAILABILITY_BELOW_BOOKED`) nor above the free rooms. Bookings, cancellations and holds update the calendar on their own.
 
-## Cancellation policy (Draft, phase 2)
+## Cancellation policy (phase 2)
 
 | Method | Path | Access | Body | Response |
 |---|---|---|---|---|
 | PATCH | `/hotels/:hotelId/cancellation-policy` | owner | `{ freeCancellationDays, feePercent }` (`cancellationPolicySchema`) | `Hotel` |
 
 - `freeCancellationDays`: 0–30, or `null` for no free-cancellation period. Guests cancel for free until the hotel's check-in time (14:00 when not set), N days before the check-in date. `feePercent`: 0–100, charged on the amount paid after the deadline. "Non-refundable" = `null` + 100.
-- `Hotel` gains `cancellationPolicy: { freeCancellationDays, feePercent }`. Until the partner sets it, a default applies (proposed: free cancellation until 1 day before, then 100%; to be agreed). The free-text `policies.cancellation` stays for display.
+- `Hotel` gains `cancellationPolicy: { freeCancellationDays, feePercent }`. Until the partner sets it, the default applies: `{ freeCancellationDays: 1, feePercent: 100 }` (free until the check-in time the day before, then non-refundable). The free-text `policies.cancellation` stays for display.
 - The policy is fixed on each booking when it is made (BR-07): changing it never affects existing bookings.
 
-## Bookings of a hotel (Draft, phase 2)
+## Bookings of a hotel (phase 2)
 
 UC57: the partner sees the bookings of the selected hotel, read-only.
 
@@ -214,7 +214,7 @@ UC57: the partner sees the bookings of the selected hotel, read-only.
 
 - `search` matches the booking code or the guest name. `sort`: `check-in-asc` (default), `check-in-desc`, `created-desc`.
 
-## Refund requests (Draft, phase 2)
+## Refund requests (phase 2)
 
 Slide "08. Cancellation And Refund": when a customer cancels a paid booking with money to refund, the invoice becomes `REFUND_PENDING` and the booking keeps its rooms until the hotel decides.
 
@@ -228,7 +228,7 @@ Slide "08. Cancellation And Refund": when a customer cancels a paid booking with
 - **Staff** check the request against the fixed policy and forward it with a note (written to the audit log; the partner is notified). Forwarding is optional: the owner can decide at any time.
 - **Approve**: the booking becomes `CANCELLED`, its nights are released, the refund (amount paid − cancellation fee) moves from the hotel wallet to the customer's wallet, the invoice becomes `REFUNDED` or `PARTIALLY_REFUNDED`, and the customer is emailed.
 - **Reject**: only for the reasons in BR-20 (already refunded or duplicate, booking status no longer allows it, suspected fraud with evidence); `reason` required. The invoice goes back to `PAID`, the booking stays `CONFIRMED`, and the customer is emailed the reason.
-- A request still undecided at the hotel's check-in time on the check-in date is approved automatically.
+- A request made **before** the hotel's check-in time on the check-in date and still undecided at that time is approved automatically; a request made after it waits for the partner.
 - Deciding a booking that is not `REFUND_PENDING` returns `409 REFUND_STATUS_CONFLICT`. A suspended partner can still approve (money goes back to the customer) but not reject.
 
 ## Types
@@ -288,7 +288,7 @@ TypeScript types are in `@stayreco/shared` (`responses/hotel.ts`). Money is a nu
 | Staff | `STAFF_NOT_FOUND`, `STAFF_STATUS_CONFLICT` |
 | Verification | `VERIFICATION_PENDING`, `VERIFICATION_DOCUMENTS_MISSING`, `VERIFICATION_NOT_FOUND`, `HOTEL_STATUS_CONFLICT` |
 | Files | `UPLOAD_INVALID_FILE`, `UPLOAD_UNAVAILABLE`, `IMAGE_NOT_FOUND`, `IMAGE_LIMIT_REACHED` |
-| Pricing, availability (Draft) | `PRICING_RULE_NOT_FOUND`, `AVAILABILITY_BELOW_BOOKED` |
-| Bookings, refunds (Draft) | `BOOKING_NOT_FOUND`, `REFUND_STATUS_CONFLICT` |
+| Pricing, availability | `PRICING_RULE_NOT_FOUND`, `AVAILABILITY_BELOW_BOOKED` |
+| Bookings, refunds | `BOOKING_NOT_FOUND`, `REFUND_STATUS_CONFLICT` |
 
 Meanings and handling: [api-guide.md §4.3](../api-guide.md#43-error-codes).

@@ -116,6 +116,7 @@ Each hotel has one cancellation policy, displayed the way Booking.com and Travel
 
 - **Free-cancellation days** N (0–30): guests cancel for free until **the hotel's check-in time, N days before the check-in date**. N = 0 means free until the check-in time on the check-in date itself. Empty means no free-cancellation period.
 - **Cancellation fee** (0–100%) on the amount paid, charged when cancelling after the deadline. "Non-refundable" = no free period and a 100% fee.
+- **Default** until the partner sets a policy: free cancellation until the check-in time 1 day before check-in, then a 100% fee.
 - The free-text policy stays for display.
 
 ### 6.2 Fixed on the booking
@@ -152,7 +153,9 @@ Example. Booking of 5,000,000 ₫, free cancellation until 14:00 on 15/11, fee 3
 4. The **partner** (hotel owner) decides:
    1. **Approve** → the booking is cancelled, the rooms return to inventory, the refund (after the fee) is debited from the hotel wallet and credited to the **customer wallet**; the customer is notified.
    2. **Reject** with a reason → the booking stays as it was; the customer is told the reason.
-5. Still undecided at the **check-in time** → the system **approves automatically**, so the customer is never stuck.
+5. A request made **before the check-in time** and still undecided at that time → the system **approves automatically**, so the customer is never stuck. A request made after the check-in time waits for the partner.
+
+A suspended partner can still approve a refund (the money goes back to the customer) but cannot reject one.
 
 ### 7.3 Allowed reasons to reject
 
@@ -160,7 +163,7 @@ Per BR-20, only when: the booking was already refunded or the request is a dupli
 
 ## 8. Differences from the SRS (to update the report)
 
-- UC28, UC29, UC34, UC35, screens 3.6.4, 3.8.2, 3.8.3, BR-20: the partner approves (staff check and forward); the booking is only cancelled after approval; refunds go to the customer wallet instead of a bank transfer; a zero refund cancels at once; automatic approval at check-in time.
+- UC28, UC29, UC34, UC35, screens 3.6.4, 3.8.2, 3.8.3, BR-20: the partner approves (staff check and forward); the booking is only cancelled after approval; refunds go to the customer wallet instead of a bank transfer; a zero refund cancels at once; automatic approval at check-in time for requests made before it.
 - New statuses: booking **expired** (`EXPIRED`), invoice **refund pending** (`REFUND_PENDING`).
 - UC25 / screen 3.6.3 (changing booking details) moves to phase 3.
 - BR-17: the password reset link expires after **15 minutes** (the SRS says 30).
@@ -180,3 +183,4 @@ Per BR-20, only when: the booking was already refunded or the request is a dupli
 | 2026-10-22 | First version: prices and pricing rules, holds, SePay, money flow on the invoice + wallet model, commission, cancellation policy, refund process from slide 08 |
 | 2026-10-23 | Added to the repo as the reference page |
 | 2026-10-23 | Availability: rooms locked for maintenance do not count; `OCCUPIED` / `CLEANING` (today's state) do not reduce future dates |
+| 2026-10-23 | Refunds: automatic approval only for requests made before the check-in time; suspended partners can approve but not reject. Default cancellation policy: free until 1 day before, then 100% |

@@ -202,14 +202,14 @@ There is no `status` field in the body; the HTTP status is already available as 
 | `UPLOAD_UNAVAILABLE` | 503 | File storage not configured or unreachable | "Upload is temporarily unavailable" |
 | `IMAGE_NOT_FOUND` | 404 | Image doesn't exist or belongs to a hotel the caller doesn't manage | Reload the image list |
 | `IMAGE_LIMIT_REACHED` | 409 | The hotel already has 30 images | "Delete an image before adding more" |
-| `ROOM_SOLD_OUT` | 409 | *(Draft)* Not enough rooms of the type left for every night of the stay | MSG12, go back to the hotel page |
-| `BOOKING_PRICE_CHANGED` | 409 | *(Draft)* The total differs from `expectedTotal`; `details` holds the new total | MSG13, ask the customer to confirm the new total |
-| `BOOKING_NOT_FOUND` | 404 | *(Draft)* Booking doesn't exist or the caller cannot see it | Reload the list |
-| `BOOKING_STATUS_CONFLICT` | 409 | *(Draft)* The booking's status does not allow the action (cancel twice, voucher of a cancelled booking…) | Reload the booking |
-| `CANCELLATION_NOT_ALLOWED` | 409 | *(Draft)* Cancelling after check-in (BR-09) | "This booking can no longer be cancelled" |
-| `REFUND_STATUS_CONFLICT` | 409 | *(Draft)* Deciding a refund that is not pending | Reload the booking |
-| `PRICING_RULE_NOT_FOUND` | 404 | *(Draft)* Pricing rule doesn't exist or belongs to another hotel | Reload the rules |
-| `AVAILABILITY_BELOW_BOOKED` | 409 | *(Draft)* Rooms on sale set below the rooms already booked or held | Show the booked count |
+| `ROOM_SOLD_OUT` | 409 | Not enough rooms of the type left for every night of the stay | MSG12, go back to the hotel page |
+| `BOOKING_PRICE_CHANGED` | 409 | The total differs from `expectedTotal`; `details` holds the new total | MSG13, ask the customer to confirm the new total |
+| `BOOKING_NOT_FOUND` | 404 | Booking doesn't exist or the caller cannot see it | Reload the list |
+| `BOOKING_STATUS_CONFLICT` | 409 | The booking's status does not allow the action (cancel twice, voucher of a cancelled booking…) | Reload the booking |
+| `CANCELLATION_NOT_ALLOWED` | 409 | Cancelling after check-in (BR-09) | "This booking can no longer be cancelled" |
+| `REFUND_STATUS_CONFLICT` | 409 | Deciding a refund that is not pending | Reload the booking |
+| `PRICING_RULE_NOT_FOUND` | 404 | Pricing rule doesn't exist or belongs to another hotel | Reload the rules |
+| `AVAILABILITY_BELOW_BOOKED` | 409 | Rooms on sale set below the rooms already booked or held | Show the booked count |
 
 Important: **refresh only when `status === 401` and `code === 'UNAUTHENTICATED'`.** Refreshing on the other 401 errors (`AUTH_INVALID_CREDENTIALS`, `AUTH_WRONG_PASSWORD`, `AUTH_REFRESH_TOKEN_INVALID`) causes infinite loops or unexpected sign-outs.
 

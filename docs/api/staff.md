@@ -16,7 +16,7 @@ These endpoints are described in full in [partner.md](./partner.md); staff can c
 
 Staff **cannot** edit the hotel, rooms, room types or staff, and cannot read verification requests: those return `403 FORBIDDEN`. Resources of another hotel return the 404 of that resource (`HOTEL_NOT_FOUND`, `ROOM_TYPE_NOT_FOUND`…).
 
-## Coming in phase 2 (Draft)
+## Coming in phase 2
 
 Described in [partner.md](./partner.md); staff access depends on their permission groups.
 

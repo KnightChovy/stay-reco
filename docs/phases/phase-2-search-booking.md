@@ -3,11 +3,11 @@
 | | |
 |---|---|
 | Phase status | 🟡 In progress |
-| API status | `Draft` |
-| Agreed on | |
+| API status | `Agreed` |
+| Agreed on | 2026-10-23 |
 | BE owners | Khiêm, Phúc |
 | FE owners | |
-| API | [api/customer.md](../api/customer.md), [api/partner.md](../api/partner.md#pricing-rules-draft-phase-2) (pricing, availability, cancellation policy, bookings, refunds), [api/staff.md](../api/staff.md#coming-in-phase-2-draft) |
+| API | [api/customer.md](../api/customer.md), [api/partner.md](../api/partner.md#pricing-rules-phase-2) (pricing, availability, cancellation policy, bookings, refunds), [api/staff.md](../api/staff.md#coming-in-phase-2) |
 
 > Rules for every API: [api-guide.md](../api-guide.md). Money rules in full (prices, holds, SePay, wallets, cancellation, refunds): [money-rules.md](../money-rules.md), kept in sync with this file.
 
@@ -57,9 +57,11 @@ Customers find a hotel, see real prices and availability, book, pay by bank tran
 | P8 | Money model (lecturer feedback): no payment or refund-request tables. Payment state = `invoice.payment_status`; every money movement = one `wallet_transaction`; the hotel's share goes to the hotel wallet's pending balance (BR-22). |
 | P9 | Search ignores Vietnamese accents (`unaccent` extension). |
 | P10 | Emails: booking confirmed, booking cancelled, refund approved or rejected. |
-| P11 | Cancellation follows slide "08. Cancellation And Refund", not the SRS staff-approves version: refund 0 → cancelled at once; refund > 0 → invoice `REFUND_PENDING`, booking keeps its rooms; staff with `REFUND` forward it with a note; **the partner approves** (booking `CANCELLED`, rooms released, hotel wallet −refund, customer wallet +refund) **or rejects** (invoice back to `PAID`, booking stays); undecided at check-in time → approved automatically. Refund idempotency key: `refund:<bookingId>` (one suffix per wallet row). |
+| P11 | Cancellation follows slide "08. Cancellation And Refund", not the SRS staff-approves version: refund 0 → cancelled at once; refund > 0 → invoice `REFUND_PENDING`, booking keeps its rooms; staff with `REFUND` forward it with a note; **the partner approves** (booking `CANCELLED`, rooms released, hotel wallet −refund, customer wallet +refund) **or rejects** (invoice back to `PAID`, booking stays); a request made before the check-in time and still undecided at that time → approved automatically; a request made after it waits for the partner. Refund idempotency key: `refund:<bookingId>` (one suffix per wallet row). |
 | P12 | Hold expired after 15 minutes: booking `EXPIRED`, invoice `FAILED`, rooms released. |
 | P13 | Public hotel and room type pages are `GET /hotels/:hotelId/listing` and `GET /room-types/:id/listing`, because `GET /hotels/:hotelId` and `GET /room-types/:id` already serve partners and staff (phase 1) and published URLs are not changed. Search is `GET /hotels` (CONVENTIONS §1.4). |
+| P14 | Default cancellation policy until the partner sets one: free until the check-in time 1 day before check-in, then a 100% fee. |
+| P15 | A suspended partner can still **approve** a refund (the money goes back to the customer) but cannot **reject** one (`403 PARTNER_SUSPENDED`). |
 
 ## Schema changes (one migration, approved 2026-10-22)
 
@@ -98,10 +100,11 @@ room_calendars:  (free) ──hold──► HELD ──paid──► BOOKED ─�
 |---|---|
 | Stay | 1–30 nights; check-in from today (Asia/Ho_Chi_Minh) to 365 days ahead |
 | Rooms per booking | 1–8, one room type |
-| Guests | 1–30, at most rooms × `maxOccupancy` |
+| Guests | 1–30, at least one per room, at most rooms × `maxOccupancy` |
+| Search | destination ≤ 100 characters; at most 20 amenity filters |
 | Hold | 15 minutes; expiry job every minute |
-| Pricing rule | priority 0–100; `PERCENT` −90 to +300; `SEASON` range ≤ 366 days; early-bird 1–365 days; last-minute 0–30 days |
-| Availability view / update | ≤ 62 days per request |
+| Pricing rule | name ≤ 100 characters; priority 0–100; `PERCENT` −90 to +300; `SEASON` range ≤ 366 days; early-bird 1–365 days; last-minute 0–30 days |
+| Availability view / update | ≤ 62 days per request; at most 500 rooms on sale per day |
 | Cancellation policy | free days 0–30 or none; fee 0–100% |
 | Text | guest name ≤ 100, special requests ≤ 500, cancel / reject reason ≤ 500, forward note ≤ 500 |
 
@@ -123,17 +126,14 @@ room_calendars:  (free) ──hold──► HELD ──paid──► BOOKED ─�
 
 ## Open questions
 
-- [ ] Default cancellation policy for hotels that have not set one (proposed: free until 1 day before, then 100%).
-- [ ] May a suspended partner still approve refunds (proposed: yes, money goes back to the customer) and reject them (proposed: no)?
 - [ ] Hotel wallet on payment: credit the full amount and take the commission at check-out, or credit the amount net of commission (BR-22 says "the hotel's share")? Only affects phase 3.
-- [ ] FE review of the `listing` URLs (P13).
 
 ## Definition of Done
 
 - [ ] No overbooking when 2 people book the last room at the same time (e2e test)
 - [ ] Price engine unit tests: overlapping rules, priority, weekday, early-bird / last-minute boundaries, rounding
 - [ ] SePay webhook tests: match, duplicate, wrong amount, unknown code, late after expiry, wrong API key
-- [ ] Refund flow tests: zero refund, approve, reject, auto-approve at check-in, wallet rows idempotent
+- [ ] Refund flow tests: zero refund, approve, reject, auto-approval only for requests made before check-in time, wallet rows idempotent
 - [ ] Booking works end to end on web and mobile with a real transfer
 - [ ] The phase's [api/](../api/README.md) pages match the code, API status `Integrated`
 
@@ -141,4 +141,7 @@ room_calendars:  (free) ──hold──► HELD ──paid──► BOOKED ─�
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-10-23 | BE | Limits table completed: one guest per room at least, search filters, rooms on sale per day, rule name |
+| 2026-10-23 | BE | API `Agreed`; shared schemas for pricing rules, availability, cancellation policy, search, listings and bookings |
+| 2026-10-23 | BE | Decided: auto-approval only for refund requests made before the check-in time (P11), default cancellation policy (P14), suspended partners approve but do not reject refunds (P15), `listing` URLs kept (P13) |
 | 2026-10-23 | BE | Draft API: search, listings, bookings, SePay payment, my trips, cancellation and refunds, pricing rules, availability, cancellation policy; decisions P1–P13, schema changes, limits |

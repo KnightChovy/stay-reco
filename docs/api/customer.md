@@ -1,7 +1,7 @@
 # API: Customer (`CUSTOMER`)
 
 > FE screens: home page, `search`, `hotels/[id]`, `hotels/[id]/rooms/[roomId]`, `booking/*`, `account/bookings/*`.
-> **Status: Draft** (phase 2, not built yet). Business rules behind these endpoints (prices, holds, payment, cancellation, refunds): [money-rules.md](../money-rules.md) and [phases/phase-2-search-booking.md](../phases/phase-2-search-booking.md).
+> **Status: Agreed** (phase 2, being built). Business rules behind these endpoints (prices, holds, payment, cancellation, refunds): [money-rules.md](../money-rules.md) and [phases/phase-2-search-booking.md](../phases/phase-2-search-booking.md).
 
 ## Available now
 
@@ -22,7 +22,7 @@ Stay parameters used by several endpoints (`stayQuerySchema`):
 | Param | Rule |
 |---|---|
 | `checkIn`, `checkOut` | `YYYY-MM-DD`. `checkIn` from today (Asia/Ho_Chi_Minh) up to 365 days ahead; `checkOut` after `checkIn`; 1 to 30 nights |
-| `guests` | 1 to 30, and at most `rooms` × the room type's `maxOccupancy` |
+| `guests` | 1 to 30, at least one per room, and at most `rooms` × the room type's `maxOccupancy` |
 | `rooms` | 1 to 8, default 1. One booking holds several rooms of **one** room type |
 
 ## Search and hotel pages (public, no token)
@@ -34,7 +34,7 @@ Stay parameters used by several endpoints (`stayQuerySchema`):
 | GET | `/room-types/:id/listing` | stay params, all optional | `RoomTypeListing` |
 
 - **Only bookable hotels appear**: `ACTIVE` hotels of partners that are not suspended (BR-01). Any other hotel returns `404 HOTEL_NOT_FOUND`, even if it exists.
-- **Search** lists only hotels with at least one room type that fits the guests and has enough rooms free on **every night** (BR-02). `destination` matches the city, hotel name or address, ignoring case and Vietnamese accents ("da nang" finds "Đà Nẵng"). `priceMin` / `priceMax` filter on the total of the stay. `freeCancellation=true` keeps hotels whose policy has a free-cancellation period. `sort` is one of `HOTEL_SORTS`: `recommended` (default: star rating, then price), `price-asc`, `price-desc`, `star-desc`. Guest ratings arrive with reviews (phase 4); until then `rating` is `null`.
+- **Search** lists only hotels with at least one room type that fits the guests and has enough rooms free on **every night** (BR-02). `destination` (at most 100 characters) matches the city, hotel name or address, ignoring case and Vietnamese accents ("da nang" finds "Đà Nẵng"). `priceMin` / `priceMax` filter on the total of the stay; `amenityIds` takes at most 20 ids. `freeCancellation=true` keeps hotels whose policy has a free-cancellation period. `sort` is one of `HOTEL_SORTS`: `recommended` (default: star rating, then price), `price-asc`, `price-desc`, `star-desc`. Guest ratings arrive with reviews (phase 4); until then `rating` is `null`.
 - **Listing without dates** returns the hotel and its room types without prices (`offer: null`). With dates, each room type carries an `offer`: rooms still available, the price of each night and the total for the requested rooms, and the cancellation terms the booking would get. A room type that is full or too small for the guests comes back with `offer.available: 0` or `fitsGuests: false` (show "sold out"), not left out.
 - Prices are final prices (VAT and service fee included, BR-05), computed by the backend from the partner's pricing rules.
 
@@ -90,7 +90,7 @@ The booking becomes `CONFIRMED` only when SePay reports a transfer with this con
 1. `GET /bookings/:id/cancellation-quote` shows the free-cancellation deadline, the fee and the refund before the customer confirms (MSG11).
 2. `POST /bookings/:id/cancel { reason }` (reason required, max 500):
    - refund 0 (past the deadline with a 100% fee) → the booking is `CANCELLED` at once and the rooms are released;
-   - refund > 0 → a refund request: the invoice becomes `REFUND_PENDING`, the booking **stays** `CONFIRMED` and keeps its rooms until the hotel decides ([partner.md](./partner.md#refund-requests-draft-phase-2)). Approved → `CANCELLED`, refund credited to the customer's wallet. Rejected → the booking stays, with the reason. Still undecided at check-in time → approved automatically.
+   - refund > 0 → a refund request: the invoice becomes `REFUND_PENDING`, the booking **stays** `CONFIRMED` and keeps its rooms until the hotel decides ([partner.md](./partner.md#refund-requests-phase-2)). Approved → `CANCELLED`, refund credited to the customer's wallet. Rejected → the booking stays, with the reason. A request made before the check-in time and still undecided at that time is approved automatically; one made after the check-in time waits for the hotel.
 3. Only a `CONFIRMED` booking without a pending refund can be cancelled. A `CHECKED_IN` booking returns `409 CANCELLATION_NOT_ALLOWED` (BR-09); any other status, or a refund already pending, returns `409 BOOKING_STATUS_CONFLICT`.
 
 Changing dates, room type or guests is not offered: cancel and book again (BR-09). Changing the guest name, phone, arrival time or special requests comes in phase 3 (UC25).
