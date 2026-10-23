@@ -1,4 +1,8 @@
+"use client";
+
 import type { ReactNode } from "react";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { usePartnerHotel } from "./PartnerHotelProvider";
 
 export function PartnerTitle({
   title,
@@ -13,7 +17,7 @@ export function PartnerTitle({
     <section className="flex flex-col gap-5 border-b border-border/70 pb-6 lg:flex-row lg:items-end lg:justify-between">
       <div className="min-w-0">
         <div className="mb-2 flex items-center gap-2 text-[11px] font-medium text-muted-foreground">
-          <span>An Nhiên Riverside</span>
+          <PartnerHotelSwitcher />
           <span aria-hidden="true">/</span>
           <span className="text-primary">Partner Workspace</span>
         </div>
@@ -26,5 +30,30 @@ export function PartnerTitle({
       </div>
       {action && <div className="flex shrink-0 flex-wrap gap-2">{action}</div>}
     </section>
+  );
+}
+
+/** The hotel name, or a picker when the partner owns several hotels. */
+function PartnerHotelSwitcher() {
+  const { hotels, hotel, selectHotel } = usePartnerHotel();
+
+  if (hotels.length < 2) {
+    return <span>{hotel?.name ?? "StayReco"}</span>;
+  }
+
+  return (
+    <NativeSelect
+      size="sm"
+      aria-label="Chọn khách sạn đang quản lý"
+      value={hotel?.id}
+      onChange={(event) => selectHotel(event.target.value)}
+      className="max-w-56 text-xs"
+    >
+      {hotels.map((item) => (
+        <NativeSelectOption key={item.id} value={item.id}>
+          {item.name}
+        </NativeSelectOption>
+      ))}
+    </NativeSelect>
   );
 }
