@@ -100,10 +100,11 @@ room_calendars:  (free) ──hold──► HELD ──paid──► BOOKED ─�
 |---|---|
 | Stay | 1–30 nights; check-in from today (Asia/Ho_Chi_Minh) to 365 days ahead |
 | Rooms per booking | 1–8, one room type |
-| Guests | 1–30, at most rooms × `maxOccupancy` |
+| Guests | 1–30, at least one per room, at most rooms × `maxOccupancy` |
+| Search | destination ≤ 100 characters; at most 20 amenity filters |
 | Hold | 15 minutes; expiry job every minute |
-| Pricing rule | priority 0–100; `PERCENT` −90 to +300; `SEASON` range ≤ 366 days; early-bird 1–365 days; last-minute 0–30 days |
-| Availability view / update | ≤ 62 days per request |
+| Pricing rule | name ≤ 100 characters; priority 0–100; `PERCENT` −90 to +300; `SEASON` range ≤ 366 days; early-bird 1–365 days; last-minute 0–30 days |
+| Availability view / update | ≤ 62 days per request; at most 500 rooms on sale per day |
 | Cancellation policy | free days 0–30 or none; fee 0–100% |
 | Text | guest name ≤ 100, special requests ≤ 500, cancel / reject reason ≤ 500, forward note ≤ 500 |
 
@@ -140,6 +141,7 @@ room_calendars:  (free) ──hold──► HELD ──paid──► BOOKED ─�
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-10-23 | BE | Limits table completed: one guest per room at least, search filters, rooms on sale per day, rule name |
 | 2026-10-23 | BE | API `Agreed`; shared schemas for pricing rules, availability, cancellation policy, search, listings and bookings |
 | 2026-10-23 | BE | Decided: auto-approval only for refund requests made before the check-in time (P11), default cancellation policy (P14), suspended partners approve but do not reject refunds (P15), `listing` URLs kept (P13) |
 | 2026-10-23 | BE | Draft API: search, listings, bookings, SePay payment, my trips, cancellation and refunds, pricing rules, availability, cancellation policy; decisions P1–P13, schema changes, limits |

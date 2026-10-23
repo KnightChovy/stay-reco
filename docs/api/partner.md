@@ -188,7 +188,7 @@ UC63, SRS 3.11.7: rooms on sale per room type and day.
 
 // updateAvailabilitySchema
 { "roomTypeId": "uuid", "from": "2026-11-20", "to": "2026-11-25",   // at most 62 days
-  "onSale": 6 }            // rooms to keep on sale each day; 0 closes the dates
+  "onSale": 6 }            // rooms to keep on sale each day (0–500); 0 closes the dates
 ```
 
 - Setting `onSale` closes or reopens rooms so that `onSale` rooms stay sellable each day. It cannot go below the rooms already booked or held (`409 AVAILABILITY_BELOW_BOOKED`) nor above the free rooms. Bookings, cancellations and holds update the calendar on their own.

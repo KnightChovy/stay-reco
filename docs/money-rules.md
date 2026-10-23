@@ -182,5 +182,5 @@ Per BR-20, only when: the booking was already refunded or the request is a dupli
 |---|---|
 | 2026-10-22 | First version: prices and pricing rules, holds, SePay, money flow on the invoice + wallet model, commission, cancellation policy, refund process from slide 08 |
 | 2026-10-23 | Added to the repo as the reference page |
-| 2026-10-23 | Refunds: automatic approval only for requests made before the check-in time; suspended partners can approve but not reject. Default cancellation policy: free until 1 day before, then 100% |
 | 2026-10-23 | Availability: rooms locked for maintenance do not count; `OCCUPIED` / `CLEANING` (today's state) do not reduce future dates |
+| 2026-10-23 | Refunds: automatic approval only for requests made before the check-in time; suspended partners can approve but not reject. Default cancellation policy: free until 1 day before, then 100% |
