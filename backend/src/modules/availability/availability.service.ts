@@ -105,12 +105,14 @@ export class AvailabilityService {
           reopen.push(...closedRows.slice(0, -change));
         }
       }
-      // An `AVAILABLE` row would collide with the new `BLOCKED` one; it carries nothing, so it is replaced.
+      // An `AVAILABLE` row would collide with a new `BLOCKED` one. It carries nothing, so all of them in the range go
+      // in one statement (one condition per room and day could pass Postgres' bind parameter limit).
       if (close.length) {
         await tx.roomCalendars.deleteMany({
           where: {
             status: 'AVAILABLE',
-            OR: close.map(({ roomId, date }) => ({ roomId, date })),
+            roomId: { in: [...new Set(close.map((c) => c.roomId))] },
+            date: { gte: fromCalendarDate(from), lte: fromCalendarDate(to) },
           },
         });
         await tx.roomCalendars.createMany({ data: close });
