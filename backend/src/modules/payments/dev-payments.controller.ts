@@ -33,7 +33,7 @@ export class DevPaymentsController {
   @ApiOperation({
     summary: 'Pay a booking without a bank transfer (development only)',
     description:
-      'Not available in production (404). Runs the same confirmation as a matching SePay transfer of exactly the booking total: the booking becomes `CONFIRMED`, the invoice `PAID`, the held nights `BOOKED`, and the hotel wallet receives the amount. For the customer who booked; a booking that is no longer `PENDING` answers `BOOKING_STATUS_CONFLICT`.',
+      'Only when the backend runs with `PAYMENT_SIMULATOR=true` outside production; otherwise 404. Runs the same confirmation as a matching SePay transfer of exactly the booking total: the booking becomes `CONFIRMED`, the invoice `PAID`, the held nights `BOOKED`, and the hotel wallet receives the amount. For the customer who booked; a booking that is no longer `PENDING` answers `BOOKING_STATUS_CONFLICT`.',
   })
   @Roles(UserRole.CUSTOMER)
   @ApiData(bookingResponseSchema)
