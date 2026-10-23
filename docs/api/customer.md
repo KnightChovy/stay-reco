@@ -8,7 +8,7 @@
 - Sign-up, email verification (OTP), sign-in, forgot / change password, sessions: [auth.md](./auth.md).
 - Public catalog `GET /amenities`, `GET /bed-types`: [partner.md](./partner.md#catalog-public-no-token) (for the search filters).
 - Search `GET /hotels` and the hotel / room type pages `GET /hotels/:hotelId/listing`, `GET /room-types/:id/listing` (below).
-- Booking with the 15-minute hold `POST /bookings` and the booking page `GET /bookings/:id` (below). My trips `GET /me/bookings` and the voucher `GET /bookings/:id/voucher` (below). Cancellation comes next; until then `refund` and `cancelReason` are always `null`.
+- Booking with the 15-minute hold `POST /bookings` and the booking page `GET /bookings/:id` (below). My trips `GET /me/bookings` and the voucher `GET /bookings/:id/voucher` (below). Cancellation `GET /bookings/:id/cancellation-quote` and `POST /bookings/:id/cancel` (below); the hotel side of refunds comes next.
 
 ## Main flow: from search to voucher
 
@@ -94,19 +94,18 @@ The booking becomes `CONFIRMED` only when SePay reports a transfer with this con
 
 **My trips** (`GET /me/bookings`). `tab` is one of `upcoming` (default: `PENDING` and `CONFIRMED` not checked in yet), `staying` (`CHECKED_IN`), `completed` (`COMPLETED` and `NO_SHOW`), `cancelled` (`CANCELLED` and `EXPIRED`). `search` matches the booking code, ignoring case. Newest first.
 
-**Voucher** (`GET /bookings/:id/voucher`, UC24). For the customer who booked, once the booking is `CONFIRMED` (also while `CHECKED_IN` or `COMPLETED`); any other status answers `409 BOOKING_STATUS_CONFLICT`. Render `qrToken` as a QR code: it is the booking code followed by a signature (`SR-261022-0842.<signature>`) that the hotel checks at check-in, so an edited code is refused.
-
 **Cancel** (UC28, slide "08. Cancellation And Refund"):
 
 1. `GET /bookings/:id/cancellation-quote` shows the free-cancellation deadline, the fee and the refund before the customer confirms (MSG11).
 2. `POST /bookings/:id/cancel { reason }` (reason required, max 500):
    - refund 0 (past the deadline with a 100% fee) → the booking is `CANCELLED` at once and the rooms are released;
    - refund > 0 → a refund request: the invoice becomes `REFUND_PENDING`, the booking **stays** `CONFIRMED` and keeps its rooms until the hotel decides ([partner.md](./partner.md#refund-requests-phase-2)). Approved → `CANCELLED`, refund credited to the customer's wallet. Rejected → the booking stays, with the reason. A request made before the check-in time and still undecided at that time is approved automatically; one made after the check-in time waits for the hotel.
-3. Only a `CONFIRMED` booking without a pending refund can be cancelled. A `CHECKED_IN` booking returns `409 CANCELLATION_NOT_ALLOWED` (BR-09); any other status, or a refund already pending, returns `409 BOOKING_STATUS_CONFLICT`.
+3. The fee and refund shown by the quote are fixed when the customer confirms: the hotel approves exactly that amount, even if the deadline passes while it waits. After the cancel, `Booking.cancelReason` holds the reason, `Booking.refund` the request (`{ status, amount }`, `status` being the invoice status), and `timeline` gains `CANCEL_REQUESTED` (and `CANCELLED` once cancelled).
+4. Only a `CONFIRMED` booking without a pending refund can be cancelled. A `CHECKED_IN` booking returns `409 CANCELLATION_NOT_ALLOWED` (BR-09); any other status, or a refund already pending, returns `409 BOOKING_STATUS_CONFLICT`.
 
 Changing dates, room type or guests is not offered: cancel and book again (BR-09). Changing the guest name, phone, arrival time or special requests comes in phase 3 (UC25).
 
-**Voucher** (UC23): booking code, hotel, room type, dates, guests, amount paid, and `qrToken`, a token signed by the server (not the bare booking code) that the FE renders as a QR code. Only for `CONFIRMED` / `CHECKED_IN` bookings; a cancelled booking returns `409 BOOKING_STATUS_CONFLICT` (show "no longer valid").
+**Voucher** (`GET /bookings/:id/voucher`, UC23, for the customer who booked): booking code, hotel, room type, dates, guests, amount paid, and `qrToken`, a token signed by the server (not the bare booking code) that the FE renders as a QR code. It is the booking code followed by a signature (`SR-261022-0842.<signature>`) checked by the hotel at check-in, so an edited code is refused. Only for `CONFIRMED` / `CHECKED_IN` bookings; any other status, a cancelled booking included, returns `409 BOOKING_STATUS_CONFLICT` (show "no longer valid").
 
 ## Types
 

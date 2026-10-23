@@ -22,6 +22,7 @@ export const BOOKING_LIMITS = {
   holdMinutes: 15,
   guestNameMax: 100,
   specialRequestsMax: 500,
+  cancelReasonMax: 500,
 } as const;
 
 export const HOTEL_SORTS = ['recommended', 'price-asc', 'price-desc', 'star-desc'] as const;
@@ -136,3 +137,9 @@ export const myBookingsQuerySchema = listQuerySchema.omit({ sort: true }).extend
   tab: z.enum(MY_BOOKING_TABS).default('upcoming'),
 });
 export type MyBookingsQuery = z.infer<typeof myBookingsQuerySchema>;
+
+/** `POST /bookings/:id/cancel`: the reason is required (slide 08) and shown to the hotel. */
+export const cancelBookingSchema = z.strictObject({
+  reason: z.string().trim().min(1).max(BOOKING_LIMITS.cancelReasonMax),
+});
+export type CancelBookingInput = z.infer<typeof cancelBookingSchema>;

@@ -149,6 +149,8 @@ When the customer books, the booking stores the **free-cancellation deadline** (
 
 **Refund** = amount paid − cancellation fee − amount already refunded; never negative and never more than the amount paid (BR-08). Rounded half up to 2 decimals.
 
+The fee and the refund are **fixed when the customer cancels**: the hotel later approves exactly that amount, even if the free-cancellation deadline passes while the request waits. The reason, fee and refund are recorded with the request (`audit_log`, no extra table).
+
 Example. Booking of 5,000,000 ₫, free cancellation until 14:00 on 15/11, fee 30%.
 
 - Cancelled on 10/11: fee 0 → refund 5,000,000 ₫.
@@ -199,4 +201,5 @@ Per BR-20, only when: the booking was already refunded or the request is a dupli
 | 2026-10-23 | Prices: a saved rule that would make a night 0 or less after a base price change is skipped, never applied |
 | 2026-10-23 | Cancellation: a booking made after its free-cancellation deadline has passed gets no free period |
 | 2026-10-23 | Rounding: nightly prices, and so booking totals, are rounded half up to whole dong so the transfer amount is exact |
+| 2026-10-24 | Refunds: the fee and refund are fixed when the customer cancels; the approval pays that amount |
 | 2026-10-23 | Wallets: the full amount goes to the hotel on payment (commission at check-out); a platform wallet holds StayReco's revenue; a transfer counts while the booking is still `PENDING` |

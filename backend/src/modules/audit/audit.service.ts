@@ -28,6 +28,8 @@ export enum AuditAction {
   VERIFICATION_REJECTED = 'VERIFICATION_REJECTED',
   VERIFICATION_CHANGES_REQUESTED = 'VERIFICATION_CHANGES_REQUESTED',
   VERIFICATION_REVERIFICATION_REQUESTED = 'VERIFICATION_REVERIFICATION_REQUESTED',
+  /** A customer cancelled a booking; `new_value` holds the reason, fee and refund (decision P11). */
+  BOOKING_CANCEL_REQUESTED = 'BOOKING_CANCEL_REQUESTED',
 }
 
 /** audit_log has one actor column per role; the account id is the role row's id. */
