@@ -206,6 +206,15 @@ enum LoyaltyTier {
   @@map("loyalty_tier")
 }
 
+/// PLATFORM is StayReco's own wallet (commission, platform-side adjustments); there is exactly one.
+enum WalletOwnerType {
+  CUSTOMER
+  HOTEL
+  PLATFORM
+
+  @@map("wallet_owner_type")
+}
+
 enum WalletTxnType {
   BOOKING_PAYMENT
   COMMISSION
@@ -1245,6 +1254,8 @@ model Voucher {
 
 model Wallet {
   walletId           String              @id @default(dbgenerated("gen_random_uuid()")) @map("wallet_id") @db.Uuid
+  /// Matches the owner column that is set (CHECK wallet_owner_shape); the platform wallet has neither.
+  ownerType          WalletOwnerType     @map("owner_type")
   customerId         String?             @unique @map("customer_id") @db.Uuid
   hotelId            String?             @unique @map("hotel_id") @db.Uuid
   balanceAvailable   Decimal             @default(0) @map("balance_available") @db.Decimal(14, 2)

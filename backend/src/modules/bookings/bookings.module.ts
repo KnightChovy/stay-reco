@@ -10,6 +10,6 @@ import { SepayPayment } from './sepay-payment';
   imports: [PricingModule, AvailabilityModule],
   controllers: [BookingsController],
   providers: [BookingsService, HoldExpiryService, SepayPayment],
-  exports: [HoldExpiryService],
+  exports: [BookingsService, HoldExpiryService],
 })
 export class BookingsModule {}
