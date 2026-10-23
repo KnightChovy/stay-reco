@@ -45,6 +45,15 @@ export function cancellationPolicyOf(rows: PropertyRow[]): CancellationPolicy {
   };
 }
 
+/** Select for the rows `cancellationPolicyOf` reads. */
+export const cancellationRowsSelect = {
+  where: {
+    verificationRequestId: null,
+    propertyKey: { in: Object.values(CANCELLATION_KEYS) },
+  },
+  select: { propertyKey: true, propertyValue: true },
+} satisfies Prisma.Hotel$hotelPropertiesArgs;
+
 export const toCancellationRows = (policy: CancellationPolicyInput) => [
   {
     propertyKey: CANCELLATION_KEYS.freeDays,
@@ -97,7 +106,7 @@ type HotelSummaryRow = Prisma.HotelGetPayload<{
 }>;
 
 /** `TIME` columns come back as a Date on 1970-01-01 UTC. */
-const fromTime = (value: Date | null) =>
+export const fromTime = (value: Date | null) =>
   value ? value.toISOString().slice(11, 16) : null;
 
 const toTime = (value: string | null | undefined) =>

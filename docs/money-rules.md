@@ -121,7 +121,7 @@ Each hotel has one cancellation policy, displayed the way Booking.com and Travel
 
 ### 6.2 Fixed on the booking
 
-When the customer books, the booking stores the **free-cancellation deadline** (a precise date and time in Vietnam time, shown as "Free cancellation before 14:00 on 18/11"), the **fee percent** and the **commission rate**. Later changes to the policy do not affect existing bookings (BR-07).
+When the customer books, the booking stores the **free-cancellation deadline** (a precise date and time in Vietnam time, shown as "Free cancellation before 14:00 on 18/11"), the **fee percent** and the **commission rate**. Later changes to the policy do not affect existing bookings (BR-07). A booking made after the deadline has already passed (for example check-in tomorrow with 3 free days) gets no free-cancellation period.
 
 ### 6.3 When cancelling is allowed
 
@@ -183,5 +183,6 @@ Per BR-20, only when: the booking was already refunded or the request is a dupli
 | 2026-10-22 | First version: prices and pricing rules, holds, SePay, money flow on the invoice + wallet model, commission, cancellation policy, refund process from slide 08 |
 | 2026-10-23 | Added to the repo as the reference page |
 | 2026-10-23 | Availability: rooms locked for maintenance do not count; `OCCUPIED` / `CLEANING` (today's state) do not reduce future dates |
-| 2026-10-23 | Prices: a saved rule that would make a night 0 or less after a base price change is skipped, never applied |
 | 2026-10-23 | Refunds: automatic approval only for requests made before the check-in time; suspended partners can approve but not reject. Default cancellation policy: free until 1 day before, then 100% |
+| 2026-10-23 | Prices: a saved rule that would make a night 0 or less after a base price change is skipped, never applied |
+| 2026-10-23 | Cancellation: a booking made after its free-cancellation deadline has passed gets no free period |

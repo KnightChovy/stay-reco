@@ -16,6 +16,7 @@ import { HotelsModule } from './modules/hotels/hotels.module';
 import { PricingModule } from './modules/pricing/pricing.module';
 import { RoomsModule } from './modules/rooms/rooms.module';
 import { StaffModule } from './modules/staff/staff.module';
+import { StaysModule } from './modules/stays/stays.module';
 import { MailModule } from './modules/mail/mail.module';
 import { StorageModule } from './modules/storage/storage.module';
 import { VerificationModule } from './modules/verification/verification.module';
@@ -52,6 +53,7 @@ import { PrismaModule } from './prisma/prisma.module';
     RoomsModule,
     PricingModule,
     AvailabilityModule,
+    StaysModule,
     StaffModule,
     VerificationModule,
   ],
