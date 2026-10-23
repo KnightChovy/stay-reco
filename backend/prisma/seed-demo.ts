@@ -6,7 +6,7 @@ import {
   StaffPermission,
   UserRole,
 } from '../src/generated/prisma/client';
-import { BASE_PRICE_NAME } from '../src/modules/rooms/room.mapper';
+import { basePriceRow } from '../src/modules/rooms/room.mapper';
 import { toSnapshotRows } from '../src/modules/verification/verification.mapper';
 
 /**
@@ -599,7 +599,7 @@ export async function seedDemo(prisma: PrismaClient) {
                 })),
               },
               prices: {
-                create: { name: BASE_PRICE_NAME, pricePerNight: rt.basePrice },
+                create: basePriceRow(rt.basePrice),
               },
               roomTypeImages: {
                 create: [1, 2].map((n) => ({
