@@ -1,44 +1,50 @@
 'use client';
 
-import { useState } from 'react';
-import { Notice } from '@/features/admin/admin-primitives';
-import { Dashboard } from '@/features/admin/screens/dashboard-screen';
-import { UsersPage } from '@/features/admin/screens/users-screen';
-import { UserDetail } from '@/features/admin/screens/user-detail-screen';
-import { PaymentSettings } from '@/features/admin/screens/payment-settings-screen';
-import { TransactionsPage } from '@/features/admin/screens/transactions-screen';
-import { TransactionDetail } from '@/features/admin/screens/transaction-detail-screen';
-import { LogsPage } from '@/features/admin/screens/logs-screen';
-import { AiSettings } from '@/features/admin/screens/ai-settings-screen';
+import { AdminUnavailable, PageTitle } from '@/features/admin/admin-primitives';
+import { InvitePlatformManager } from '@/features/admin/invite-platform-manager';
 
-type Mode =
-  | 'dashboard'
-  | 'users'
-  | 'user-detail'
-  | 'payment-settings'
-  | 'transactions'
-  | 'transaction-detail'
-  | 'logs'
-  | 'ai-settings';
+type Mode = 'dashboard' | 'users' | 'payment-settings' | 'transactions' | 'logs' | 'ai-settings';
 
-export function AdminScreen({ mode, id }: { mode: Mode; id?: string }) {
-  const [notice, setNotice] = useState('');
-  const notify = (message: string) => setNotice(message);
-  const screens = {
-    dashboard: <Dashboard notify={notify} />,
-    users: <UsersPage notify={notify} />,
-    'user-detail': <UserDetail id={id} notify={notify} />,
-    'payment-settings': <PaymentSettings notify={notify} />,
-    transactions: <TransactionsPage notify={notify} />,
-    'transaction-detail': <TransactionDetail id={id} notify={notify} />,
-    logs: <LogsPage notify={notify} />,
-    'ai-settings': <AiSettings notify={notify} />,
-  };
+const screens: Record<Mode, { title: string; description: string; upcoming: string[] }> = {
+  dashboard: {
+    title: 'Tổng quan hệ thống',
+    description: 'Số liệu vận hành toàn nền tảng.',
+    upcoming: ['Doanh thu, số booking và tài khoản mới', 'Cảnh báo giao dịch cần đối soát'],
+  },
+  users: {
+    title: 'Người dùng & Phân quyền',
+    description: 'Mời quản lý nền tảng và quản lý tài khoản.',
+    upcoming: ['Danh sách tài khoản, lọc theo vai trò và trạng thái', 'Khóa / mở khóa tài khoản'],
+  },
+  'payment-settings': {
+    title: 'Cấu hình thanh toán',
+    description: 'Cổng thanh toán và quy tắc đối soát.',
+    upcoming: ['Thông tin cổng thanh toán', 'Phí và chu kỳ đối soát'],
+  },
+  transactions: {
+    title: 'Nhật ký giao dịch',
+    description: 'Mọi giao dịch thanh toán và hoàn tiền trên nền tảng.',
+    upcoming: ['Danh sách giao dịch theo trạng thái', 'Chi tiết và lịch sử đối soát'],
+  },
+  logs: {
+    title: 'Nhật ký & Bảo mật',
+    description: 'Nhật ký thao tác và sự kiện bảo mật.',
+    upcoming: ['Nhật ký thao tác theo tài khoản', 'Sự kiện đăng nhập bất thường'],
+  },
+  'ai-settings': {
+    title: 'Cấu hình AI toàn hệ thống',
+    description: 'Mô hình và giới hạn cho các tính năng AI.',
+    upcoming: ['Mô hình đang dùng', 'Hạn mức và bộ lọc nội dung'],
+  },
+};
 
+export function AdminScreen({ mode }: { mode: Mode }) {
+  const { title, description, upcoming } = screens[mode];
   return (
-    <>
-      {screens[mode]}
-      {notice && <Notice message={notice} onClose={() => setNotice('')} />}
-    </>
+    <div className="space-y-6">
+      <PageTitle eyebrow="Quản trị hệ thống" title={title} description={description} />
+      {mode === 'users' && <InvitePlatformManager />}
+      <AdminUnavailable upcoming={upcoming} />
+    </div>
   );
 }
