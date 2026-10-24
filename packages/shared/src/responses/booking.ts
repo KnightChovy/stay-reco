@@ -199,9 +199,49 @@ export const bookingResponseSchema = bookingSummaryResponseSchema
       .object({ status: z.enum(PaymentStatus), amount: z.number() })
       .nullable()
       .describe('Set once the customer has cancelled with money to refund.'),
+    refundRejection: z
+      .object({ reason: z.string(), at: isoDateTime() })
+      .nullable()
+      .describe('Set when the hotel rejected the latest refund request; the booking stays CONFIRMED.'),
     cancelReason: z.string().nullable(),
     cancelledAt: isoDateTime().nullable(),
     timeline: z.array(z.object({ at: isoDateTime(), event: z.string() })),
   })
   .register(responseSchemas, { id: 'Booking' });
 export type Booking = z.infer<typeof bookingResponseSchema>;
+
+export const bookingVoucherResponseSchema = z
+  .object({
+    code: z.string(),
+    hotelName: z.string(),
+    roomTypeName: z.string(),
+    checkIn: calendarDate(),
+    checkOut: calendarDate(),
+    rooms: z.number().int(),
+    guests: z.number().int(),
+    guestName: z.string(),
+    amountPaid: z.number(),
+    qrToken: z
+      .string()
+      .describe('Render as a QR code: the booking code plus a signature the hotel checks at check-in.'),
+  })
+  .register(responseSchemas, {
+    id: 'BookingVoucher',
+    description: 'E-voucher of a confirmed booking (UC23), shown at check-in.',
+  });
+export type BookingVoucher = z.infer<typeof bookingVoucherResponseSchema>;
+
+export const cancellationQuoteResponseSchema = z
+  .object({
+    freeUntil: isoDateTime().nullable().describe('End of free cancellation fixed on the booking; null: none.'),
+    feePercent: z.number(),
+    paid: z.number(),
+    fee: z.number().describe('0 before `freeUntil`, otherwise `feePercent` of `paid`.'),
+    refund: z.number().describe('paid − fee (BR-08).'),
+    needsApproval: z.boolean().describe('false when refund = 0: the booking is cancelled at once.'),
+  })
+  .register(responseSchemas, {
+    id: 'CancellationQuote',
+    description: 'What cancelling now would cost (MSG11), shown before the customer confirms.',
+  });
+export type CancellationQuote = z.infer<typeof cancellationQuoteResponseSchema>;

@@ -1,25 +1,34 @@
 import {
   BadRequestException,
   ConflictException,
-  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import {
   BOOKING_LIMITS,
   type Booking,
+  type BookingSummary,
+  type BookingVoucher,
   type CreateBookingInput,
+  type MyBookingsQuery,
 } from '@stayreco/shared';
 import type { AuthUser } from '../../common/decorators/current-user.decorator';
+import { escapeLike } from '../../common/db/like';
 import { lockRoomType } from '../../common/db/locks';
 import { ErrorCode } from '../../common/errors/error-code';
-import { fromCalendarDate } from '../../common/http/calendar-date';
+import { Paginated } from '../../common/http/api-response';
+import {
+  fromCalendarDate,
+  toCalendarDate,
+} from '../../common/http/calendar-date';
 import { toNumber } from '../../common/http/decimal';
 import {
   HotelAccessService,
   isUuid,
 } from '../../common/hotel-access/hotel-access.service';
-import type { Prisma } from '../../generated/prisma/client';
+import type { Env } from '../../config/env';
+import type { BookingStatus, Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AvailabilityService } from '../availability/availability.service';
 import {
@@ -34,11 +43,16 @@ import { assertBookableDates, freeCancellationUntil } from '../stays/offer';
 import { newBookingCode } from './booking-code';
 import {
   bookingInclude,
+  bookingSummaryInclude,
   type NightlyPrices,
   toBooking,
+  toBookingSummary,
 } from './booking.mapper';
+import { assertCanSeeBookings } from './booking-access';
+import { loadBookingHistory } from './booking-history';
 import { HoldExpiryService } from './hold-expiry.service';
 import { SepayPayment } from './sepay-payment';
+import { signVoucher } from './voucher-token';
 
 const bookingNotFound = () =>
   new NotFoundException({
@@ -52,6 +66,17 @@ const validation = (field: string, message: string) =>
     message: 'Validation failed',
     details: [{ field, message }],
   });
+
+/** My trips tabs (customer.md): no-shows are past stays, expired holds count as cancelled. */
+const TAB_STATUSES: Record<MyBookingsQuery['tab'], BookingStatus[]> = {
+  upcoming: ['PENDING', 'CONFIRMED'],
+  staying: ['CHECKED_IN'],
+  completed: ['COMPLETED', 'NO_SHOW'],
+  cancelled: ['CANCELLED', 'EXPIRED'],
+};
+
+/** A voucher is shown from payment until the guest has checked in (customer.md, "Voucher"). */
+const VOUCHER_STATUSES: BookingStatus[] = ['CONFIRMED', 'CHECKED_IN'];
 
 /** Codes are random, so a clash is rare; a few tries are plenty. */
 const CODE_ATTEMPTS = 5;
@@ -69,6 +94,7 @@ export class BookingsService {
     private readonly engine: PriceEngine,
     private readonly holds: HoldExpiryService,
     private readonly sepay: SepayPayment,
+    private readonly config: ConfigService<Env, true>,
   ) {}
 
   async create(user: AuthUser, input: CreateBookingInput): Promise<Booking> {
@@ -225,25 +251,88 @@ export class BookingsService {
         'member',
         bookingNotFound,
       );
-      const allowed =
-        access.role === 'OWNER' ||
-        access.permissions.some((p) => p === 'BOOKING' || p === 'REFUND');
-      if (!allowed) {
-        throw new ForbiddenException({
-          code: ErrorCode.FORBIDDEN,
-          message: 'Missing staff permission BOOKING or REFUND',
-        });
-      }
+      assertCanSeeBookings(access);
     }
     return this.load(bookingId);
   }
 
+  /** The signed-in customer's bookings for one tab of My trips, newest first. */
+  async listMine(
+    user: AuthUser,
+    query: MyBookingsQuery,
+  ): Promise<Paginated<BookingSummary>> {
+    const where = {
+      customerId: user.accountId,
+      status: { in: TAB_STATUSES[query.tab] },
+      invoice: query.search
+        ? {
+            invoiceNumber: {
+              contains: escapeLike(query.search),
+              mode: 'insensitive',
+            },
+          }
+        : undefined,
+    } satisfies Prisma.BookingWhereInput;
+    const [rows, total] = await Promise.all([
+      this.prisma.booking.findMany({
+        where,
+        include: bookingSummaryInclude,
+        orderBy: [{ createdAt: 'desc' }, { bookingId: 'desc' }],
+        skip: (query.page - 1) * query.pageSize,
+        take: query.pageSize,
+      }),
+      this.prisma.booking.count({ where }),
+    ]);
+    return Paginated.of(rows.map(toBookingSummary), { ...query, total });
+  }
+
+  /** For the customer who booked, while the booking is CONFIRMED or CHECKED_IN (UC23). */
+  async voucher(user: AuthUser, bookingId: string): Promise<BookingVoucher> {
+    const booking = isUuid(bookingId)
+      ? await this.prisma.booking.findFirst({
+          where: { bookingId, customerId: user.accountId },
+          include: {
+            invoice: true,
+            roomType: {
+              select: { name: true, hotel: { select: { name: true } } },
+            },
+          },
+        })
+      : null;
+    if (!booking) throw bookingNotFound();
+    if (!VOUCHER_STATUSES.includes(booking.status)) {
+      throw new ConflictException({
+        code: ErrorCode.BOOKING_STATUS_CONFLICT,
+        message: `A ${booking.status} booking has no voucher`,
+      });
+    }
+    const code = booking.invoice!.invoiceNumber;
+    return {
+      code,
+      hotelName: booking.roomType.hotel.name,
+      roomTypeName: booking.roomType.name,
+      checkIn: toCalendarDate(booking.checkInDate),
+      checkOut: toCalendarDate(booking.checkOutDate),
+      rooms: booking.numRooms,
+      guests: booking.numGuests ?? booking.numRooms,
+      guestName: booking.guestName,
+      amountPaid: toNumber(booking.invoice!.totalAmount),
+      qrToken: signVoucher(
+        code,
+        this.config.get('VOUCHER_SIGNING_SECRET', { infer: true }),
+      ),
+    };
+  }
+
   private async load(bookingId: string): Promise<Booking> {
-    const booking = await this.prisma.booking.findUniqueOrThrow({
-      where: { bookingId },
-      include: bookingInclude,
-    });
-    return toBooking(booking, this.sepay.details);
+    const [booking, history] = await Promise.all([
+      this.prisma.booking.findUniqueOrThrow({
+        where: { bookingId },
+        include: bookingInclude,
+      }),
+      loadBookingHistory(this.prisma, bookingId),
+    ]);
+    return toBooking(booking, this.sepay.details, history);
   }
 
   private async unusedCode(tx: Prisma.TransactionClient, now: Date) {
