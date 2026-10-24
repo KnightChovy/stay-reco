@@ -3,74 +3,33 @@
 import Link from 'next/link';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
-import HeroSearch from '@/components/common/search/HeroSearch';
 import HotelCard from '@/components/common/card/HotelCard';
 import DestinationCard from '@/components/common/card/DestinationCard';
 import ArticleCard from '@/components/common/card/ArticleCard';
+import { StaySearchBar } from '@/features/stays/components/StaySearchBar';
+import { useHotelSearch } from '@/features/stays/api/stays-queries';
+import { formatDate, formatMoney } from '@/features/stays/lib/format';
+import { defaultStay, nightsBetween } from '@/features/stays/lib/params';
+
+const FEATURED_STAYS = {
+  destination: 'Đà Nẵng',
+  ...defaultStay(7, 2),
+  guests: 2,
+  rooms: 1,
+  page: 1,
+  pageSize: 4,
+  sort: 'recommended' as const,
+};
 
 export default function HomePage() {
-  const curatedStays = [
-    {
-      id: 'an-villa-hoi-an',
-      name: 'An Villa Boutique Hoi An',
-      image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuApO_9REqPafB0MNVdOLCSbnJaZhE_C21GmUXWGkGh0zIsKYmZCFaltwMj-RFpu1iU4xoy487ScmYsHeudo8BOReAnlRNcqiFKv3SA6UlspXrhb6RsXpmZ3mhyuuErd4vHM_9mqV4I6qTXfpwwMVRE3KIlXgqi4k7PIlDaMUvXH-qUHsuMo5Z59hyUUmkKR_xrXEo5_elp50GgCq4-VgCbGLYpD2ER61tNvJi1KMq1nldsJIihqO5X4',
-      starBadge: 'Khách sạn 4 sao',
-      location: 'Phố cổ Hội An, Quảng Nam',
-      rating: 4.9,
-      reviewCount: 128,
-      tags: ['Gần sông Hoài', 'Không gian yên tĩnh'],
-      cancellationPolicy: 'Miễn phí hủy phòng',
-      paymentPolicy: 'Đã gồm thuế, phí',
-      price: '1.250.000 đ',
-      pricePeriod: '/ đêm',
-      detailsHref: '/hotels/an-nhien-riverside',
-    },
-    {
-      id: 'da-lat-pine-haven',
-      name: 'Da Lat Pine Haven Retreat',
-      image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuA3nz7ieuFWYUu0vUcpmVA8bY1nhSRfbdfUSpdq3j4oFZimH2MnrG_ymzeXqvRAIgRqOyn-Cq8qRRco9rF1NIqajNdP_r5V2EejpMdvls043sjonT5fcyi4oxaenj6f4hETejzsBUbUEPpoPQ_7w84LWfGg6aED1YRVrkVXfH0TteHSOjsweW-fPaM3X74oN-8-4oy1zQWUfklPzlUni-PgG89ZgLZ6lefUAngn2pIYRPMnz2VuKgIC',
-      starBadge: 'Khách sạn 4 sao',
-      location: 'Phường 3, Đà Lạt',
-      rating: 4.8,
-      reviewCount: 94,
-      tags: ['Tầm nhìn đồi thông', 'Bữa sáng tự làm'],
-      cancellationPolicy: 'Giữ phòng không cần cọc',
-      paymentPolicy: 'Đã gồm thuế, phí',
-      price: '980.000 đ',
-      pricePeriod: '/ đêm',
-      detailsHref: '/hotels/an-nhien-riverside',
-    },
-    {
-      id: 'mekong-heritage',
-      name: 'Mekong Heritage Eco Resort',
-      image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuByhsK6-AXvkU1uzKcnr7bVQEjGixnPYwbBnpf7XBpHb48CgVpJeiUp2usPNNrFc39DsjzCzN1H8BLbRG6pHoj5SgifZ_HKYKs6-b0PgL4iuqUUsodimcbdK2KE4mTG2C7Sxu2ifb4wq28XmQPF3tD2MdIeN2mSz2U2v0sGEW0FsFJreS_kHAY-c_WAXNVeQZAX2qMfDkCxtTOr6dL2A6z7Pmsgwph_mxQpUYzgnzZWrVzN8UHa5gGk',
-      starBadge: 'Khách sạn 3 sao',
-      location: 'Cần Thơ',
-      rating: 4.9,
-      reviewCount: 86,
-      tags: ['Trải nghiệm văn hóa', 'Vườn cây sinh thái'],
-      cancellationPolicy: 'Miễn phí hủy',
-      paymentPolicy: 'Đã gồm thuế, phí',
-      price: '850.000 đ',
-      pricePeriod: '/ đêm',
-      detailsHref: '/hotels/an-nhien-riverside',
-    },
-    {
-      id: 'coastal-coral-suites',
-      name: 'Coastal Coral Suites Phú Quốc',
-      image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCxuV-_sCk6qHy_-_J2rZ80j3Gg69eMkFzilGt3TclU_0EvBcVRCLbT0RcQd1BWAEYX4iuaN4d0_0ZLOgMb5j3sIcmp2WuqjoKJexyRckGbmLyqephAcEnhZFMCfV7tyFgH5_m41EehgVcuSEMloGxazBbrkL7E10A0VzaOytzNWpZohUKrJ6S5_uRnZN2ggWuJ1xDi6kLSgQtYEikMqMBSOaTKHeRu_fqlDjq87TIsvnj_5AfUrn_0',
-      starBadge: '5 sao boutique',
-      location: 'Bãi Ông Lang, Phú Quốc',
-      rating: 4.9,
-      reviewCount: 150,
-      tags: ['Cách biển 50m', 'Hoàng hôn tuyệt đẹp'],
-      cancellationPolicy: 'Bữa sáng miễn phí',
-      paymentPolicy: 'Đã gồm thuế, phí',
-      price: '2.150.000 đ',
-      pricePeriod: '/ đêm',
-      detailsHref: '/hotels/an-nhien-riverside',
-    },
-  ];
+  const { data: featuredData, isLoading: featuredLoading, error: featuredError, refetch: refetchFeatured } =
+    useHotelSearch(FEATURED_STAYS);
+  const featuredStays = featuredData?.hotels ?? [];
+  const featuredNights = nightsBetween(FEATURED_STAYS.checkIn, FEATURED_STAYS.checkOut);
+  const featuredHotel = featuredStays[0];
+  const featuredHref = (hotelId: string) =>
+    `/hotels/${hotelId}?checkIn=${FEATURED_STAYS.checkIn}&checkOut=${FEATURED_STAYS.checkOut}&guests=2&rooms=1`;
+
 
   const destinations = [
     {
@@ -158,7 +117,7 @@ export default function HomePage() {
                 </p>
 
                 {/* Search Panel Component */}
-                <HeroSearch />
+                <StaySearchBar />
 
                 {/* AI Assistant Notification Banner */}
                 <div className="bg-[#f2f6f9] border border-[#d9e5ee] rounded-xl p-3 sm:p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mt-3">
@@ -187,24 +146,34 @@ export default function HomePage() {
 
               {/* Right Column: Hero Featured Card */}
               <div className="lg:col-span-5 relative mt-4 lg:mt-0">
-                <Link href="/hotels/an-nhien-riverside" className="block relative rounded-3xl overflow-hidden shadow-xl aspect-[4/3] sm:aspect-[16/11] lg:aspect-[4/3.3] bg-gray-100 group">
-                  <img
-                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuBtAs2PgPDblUiAa9O7vQY69akbTWWLQ5uYgmG3J2H8SK7BT7xAI9mvWhiyFBr1H9V9UnMoWsHcxc334jkkjkf3aCeGzUSyI9PXuciYhMZgoRzc0wyw0vaGZywAex9S1N2hoK8KTmD1MUMqugUymlup7kAzQ1gyBkJUMrkayNVkzYBZKtYlohP2MGoe5gRtbVgiHNFH0hOmneaw3uHMH7ALejOuMIUod_2v4lZ1ZLaR9HhF1QNlfJfl"
-                    alt="Hội An Riverside Oasis"
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                  />
-                  <div className="absolute bottom-4 left-4 right-4 bg-white/95 backdrop-blur-md rounded-2xl p-4 shadow-lg flex items-center justify-between">
-                    <div>
-                      <span className="text-[10px] font-bold tracking-wider text-amber-700 uppercase block mb-0.5">Gợi ý tuần này</span>
-                      <h3 className="text-base font-bold text-gray-900">Hội An Riverside Oasis</h3>
-                      <p className="text-xs text-gray-500">Chỉ cách Chùa Cầu 400m</p>
+                {featuredHotel ? (
+                  <Link
+                    href={featuredHref(featuredHotel.id)}
+                    className="block relative rounded-3xl overflow-hidden shadow-xl aspect-[4/3] sm:aspect-[16/11] lg:aspect-[4/3.3] bg-gray-100 group"
+                  >
+                    <img
+                      src={featuredHotel.coverImageUrl ?? 'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1200&q=80'}
+                      alt={featuredHotel.name}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    />
+                    <div className="absolute bottom-4 left-4 right-4 bg-white/95 backdrop-blur-md rounded-2xl p-4 shadow-lg flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <span className="text-[10px] font-bold tracking-wider text-amber-700 uppercase block mb-0.5">Gợi ý tuần này</span>
+                        <h3 className="truncate text-base font-bold text-gray-900">{featuredHotel.name}</h3>
+                        <p className="truncate text-xs text-gray-500">{featuredHotel.city} · {formatDate(FEATURED_STAYS.checkIn)} → {formatDate(FEATURED_STAYS.checkOut)}</p>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <span className="text-[10px] text-gray-500 block">Từ</span>
+                        <span className="text-base font-bold text-[#1b4360]">
+                          {formatMoney(featuredHotel.fromTotal / Math.max(featuredNights, 1))}
+                        </span>
+                        <span className="block text-[10px] text-gray-400">/ đêm</span>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <span className="text-[10px] text-gray-500 block">Từ</span>
-                      <span className="text-base font-bold text-[#1b4360]">1.420.000 đ</span>
-                    </div>
-                  </div>
-                </Link>
+                  </Link>
+                ) : (
+                  <div className="aspect-[4/3] sm:aspect-[16/11] lg:aspect-[4/3.3] animate-pulse rounded-3xl bg-gray-200" />
+                )}
               </div>
             </div>
           </div>
@@ -230,12 +199,48 @@ export default function HomePage() {
               </Link>
             </div>
 
-            {/* 4-Column Card Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {curatedStays.map((stay) => (
-                <HotelCard key={stay.id} {...stay} layout="grid" />
-              ))}
-            </div>
+            {featuredError ? (
+              <div className="rounded-2xl border border-red-200 bg-red-50 p-8 text-center">
+                <p className="text-sm font-semibold text-red-700">Không tải được chỗ nghỉ nổi bật.</p>
+                <button
+                  onClick={() => void refetchFeatured()}
+                  className="mt-3 rounded-lg bg-red-600 px-4 py-2 text-xs font-semibold text-white hover:bg-red-700"
+                >
+                  Thử lại
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                {featuredLoading
+                  ? [0, 1, 2, 3].map((item) => (
+                      <div key={item} className="h-[360px] animate-pulse rounded-2xl border border-gray-200 bg-gray-100" />
+                    ))
+                  : featuredStays.map((stay) => (
+                      <HotelCard
+                        key={stay.id}
+                        id={stay.id}
+                        name={stay.name}
+                        image={stay.coverImageUrl ?? 'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=800&q=80'}
+                        starBadge={stay.starRating ? `${stay.starRating} sao` : 'Chỗ nghỉ'}
+                        location={`${stay.city}`}
+                        rating={stay.rating ?? 0}
+                        reviewCount={0}
+                        tags={[stay.freeCancellation ? 'Miễn phí huỷ' : 'Không hoàn huỷ']}
+                        cancellationPolicy={stay.freeCancellation ? 'Miễn phí huỷ phòng' : 'Không hoàn huỷ'}
+                        price={formatMoney(stay.fromTotal / Math.max(featuredNights, 1))}
+                        pricePeriod="/ đêm"
+                        detailsHref={featuredHref(stay.id)}
+                        layout="grid"
+                      />
+                    ))}
+              </div>
+            )}
+
+            {!featuredLoading && !featuredError && featuredStays.length === 0 && (
+              <p className="mt-6 text-center text-sm text-gray-500">
+                Chưa có chỗ nghỉ nào cho {FEATURED_STAYS.destination} trong khoảng ngày này.
+              </p>
+            )}
           </div>
         </section>
 

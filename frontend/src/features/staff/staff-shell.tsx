@@ -6,6 +6,9 @@ import { AlertTriangle, BadgePercent, CalendarDays, Inbox, KeyRound, LayoutDashb
 import Navbar from '@/components/common/navbar/Navbar';
 import Sidebar, { SidebarProvider, type SidebarItem } from '@/components/common/sidebar/Sidebar';
 import { SidebarInset } from '@/components/ui/sidebar';
+import { useAuthStore } from '@/lib/auth-store';
+import { useStaffHotel } from './components/StaffHotelProvider';
+import { hotelStatusLabels } from './lib/labels';
 
 const navigation: Omit<SidebarItem, 'isActive'>[] = [
   { href: '/staff/dashboard', label: 'Tổng quan ca làm', icon: LayoutDashboard, section: 'TÁC VỤ VẬN HÀNH' },
@@ -22,18 +25,38 @@ const navigation: Omit<SidebarItem, 'isActive'>[] = [
 
 export function StaffShell({ children }: Readonly<{ children: ReactNode }>) {
   const pathname = usePathname();
+  const user = useAuthStore((state) => state.user);
+  const { hotel } = useStaffHotel();
   const items = navigation.map((item) => ({
     ...item,
     isActive: pathname === item.href || pathname.startsWith(`${item.href}/`),
   }));
+  const hotelName = hotel?.summary.name ?? 'Chưa có khách sạn';
+  const hotelMeta = hotel
+    ? [hotel.summary.starRating ? `${hotel.summary.starRating}-Star` : null, hotel.summary.city]
+        .filter(Boolean)
+        .join(' · ')
+    : undefined;
 
   return (
     <SidebarProvider>
-      <Sidebar items={items} roleLabel="Staff Operations" contextName="An Nhiên Riverside Hotel" />
+      <Sidebar items={items} roleLabel="Staff Operations" contextName={hotelName} />
       <SidebarInset className="min-w-0 bg-background">
         <Navbar
-          context={{ name: 'An Nhiên Riverside Hotel', meta: 'Ca sáng · Đà Nẵng', status: 'Đang trực' }}
-          user={{ name: 'Nguyễn Hương Ly', role: 'Trưởng ca Lễ tân' }}
+          context={
+            hotel
+              ? {
+                  name: hotelName,
+                  meta: hotelMeta,
+                  status: hotelStatusLabels[hotel.summary.status].label,
+                }
+              : undefined
+          }
+          user={{
+            name: user?.name ?? 'Nhân viên',
+            role: 'Nhân viên khách sạn',
+            avatarUrl: user?.avatarUrl,
+          }}
           notificationCount={2}
           searchPlaceholder="Tìm đặt phòng, khách lưu trú hoặc phòng..."
           showSidebarTrigger
