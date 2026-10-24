@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { BookingStatus, PaymentStatus } from '../enums';
 import {
   dateSchema,
   daysBetween,
@@ -22,6 +23,9 @@ export const BOOKING_LIMITS = {
   holdMinutes: 15,
   guestNameMax: 100,
   specialRequestsMax: 500,
+  cancelReasonMax: 500,
+  /** Staff note when forwarding a refund request, and the partner's reason when rejecting one. */
+  refundNoteMax: 500,
 } as const;
 
 export const HOTEL_SORTS = ['recommended', 'price-asc', 'price-desc', 'star-desc'] as const;
@@ -124,3 +128,57 @@ export const createBookingSchema = z
   })
   .superRefine(checkStay);
 export type CreateBookingInput = z.infer<typeof createBookingSchema>;
+
+/**
+ * My trips tabs: `upcoming` = PENDING and CONFIRMED (not checked in yet), `staying` = CHECKED_IN, `completed` =
+ * COMPLETED and NO_SHOW (past stays), `cancelled` = CANCELLED and EXPIRED.
+ */
+export const MY_BOOKING_TABS = ['upcoming', 'staying', 'completed', 'cancelled'] as const;
+
+/** `GET /me/bookings`: `search` matches the booking code; newest first. */
+export const myBookingsQuerySchema = listQuerySchema.omit({ sort: true }).extend({
+  tab: z.enum(MY_BOOKING_TABS).default('upcoming'),
+});
+export type MyBookingsQuery = z.infer<typeof myBookingsQuerySchema>;
+
+/** `POST /bookings/:id/cancel`: the reason is required (slide 08) and shown to the hotel. */
+export const cancelBookingSchema = z.strictObject({
+  reason: z.string().trim().min(1).max(BOOKING_LIMITS.cancelReasonMax),
+});
+export type CancelBookingInput = z.infer<typeof cancelBookingSchema>;
+
+// ── Bookings of a hotel and refund decisions (partner, staff) ─
+
+export const HOTEL_BOOKING_SORTS = ['check-in-asc', 'check-in-desc', 'created-desc'] as const;
+
+/**
+ * `GET /hotels/:hotelId/bookings` (UC57). `status` and `paymentStatus` may be repeated; `search` matches the booking
+ * code or the guest name. The refund queue is `?paymentStatus=REFUND_PENDING`.
+ */
+export const hotelBookingsQuerySchema = listQuerySchema
+  .omit({ sort: true })
+  .extend({
+    status: repeatedQuery(z.enum(BookingStatus)).optional(),
+    paymentStatus: repeatedQuery(z.enum(PaymentStatus)).optional(),
+    checkInFrom: dateSchema.optional(),
+    checkInTo: dateSchema.optional(),
+    sort: z.enum(HOTEL_BOOKING_SORTS).default('check-in-asc'),
+  })
+  .superRefine((v, ctx) => {
+    if (v.checkInFrom && v.checkInTo && v.checkInTo < v.checkInFrom) {
+      ctx.addIssue({ code: 'custom', path: ['checkInTo'], message: 'checkInTo must not be before checkInFrom' });
+    }
+  });
+export type HotelBookingsQuery = z.infer<typeof hotelBookingsQuerySchema>;
+
+/** `POST /bookings/:id/forward-refund` (staff with REFUND): what the staff checked, for the partner. */
+export const forwardRefundSchema = z.strictObject({
+  note: z.string().trim().min(1).max(BOOKING_LIMITS.refundNoteMax),
+});
+export type ForwardRefundInput = z.infer<typeof forwardRefundSchema>;
+
+/** `POST /bookings/:id/reject-refund` (owner): one of the BR-20 reasons, sent to the customer. */
+export const rejectRefundSchema = z.strictObject({
+  reason: z.string().trim().min(1).max(BOOKING_LIMITS.refundNoteMax),
+});
+export type RejectRefundInput = z.infer<typeof rejectRefundSchema>;

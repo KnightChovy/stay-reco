@@ -8,7 +8,7 @@
 - Sign-up, email verification (OTP), sign-in, forgot / change password, sessions: [auth.md](./auth.md).
 - Public catalog `GET /amenities`, `GET /bed-types`: [partner.md](./partner.md#catalog-public-no-token) (for the search filters).
 - Search `GET /hotels` and the hotel / room type pages `GET /hotels/:hotelId/listing`, `GET /room-types/:id/listing` (below).
-- Booking with the 15-minute hold `POST /bookings` and the booking page `GET /bookings/:id` (below). My trips, cancellation and the voucher come next; until then `refund` and `cancelReason` are always `null`.
+- Booking with the 15-minute hold `POST /bookings` and the booking page `GET /bookings/:id` (below). My trips `GET /me/bookings` and the voucher `GET /bookings/:id/voucher` (below). Cancellation `GET /bookings/:id/cancellation-quote` and `POST /bookings/:id/cancel` (below); the hotel side of refunds comes next.
 
 ## Main flow: from search to voucher
 
@@ -75,6 +75,8 @@ Stay parameters used by several endpoints (`stayQuerySchema`):
 - Two customers booking the last room at the same time: one gets the hold, the other `ROOM_SOLD_OUT`.
 - A hold not paid in time: the booking becomes `EXPIRED`, its invoice `FAILED`, and the rooms are released (a job runs every minute).
 
+**Testing without a transfer (development only).** `POST /dev/bookings/:id/simulate-payment` (the customer who booked) runs the same confirmation as a matching SePay transfer of exactly the total and returns the `CONFIRMED` booking. It exists only when the backend runs with `PAYMENT_SIMULATOR=true` and `NODE_ENV` is not `production`, otherwise it answers `404`; it answers `409 BOOKING_STATUS_CONFLICT` when the booking is no longer `PENDING`.
+
 **Payment (SePay).** While the booking is `PENDING`, `Booking.payment` holds what the payment page shows:
 
 ```jsonc
@@ -90,7 +92,7 @@ Stay parameters used by several endpoints (`stayQuerySchema`):
 
 The booking becomes `CONFIRMED` only when SePay reports a transfer with this content and **exactly** this amount (BR-04); there is no "I have paid" button. The confirmation email and the voucher follow. A transfer that matches no booking, or arrives after the hold expired, is logged for manual handling and refunded (see the rules document).
 
-**My trips** (`GET /me/bookings`). `tab` is one of `upcoming` (default: `PENDING` and `CONFIRMED` not checked in yet), `staying` (`CHECKED_IN`), `completed`, `cancelled` (`CANCELLED` and `EXPIRED`). `search` matches the booking code. Newest first.
+**My trips** (`GET /me/bookings`). `tab` is one of `upcoming` (default: `PENDING` and `CONFIRMED` not checked in yet), `staying` (`CHECKED_IN`), `completed` (`COMPLETED` and `NO_SHOW`), `cancelled` (`CANCELLED` and `EXPIRED`). `search` matches the booking code, ignoring case. Newest first.
 
 **Cancel** (UC28, slide "08. Cancellation And Refund"):
 
@@ -98,11 +100,12 @@ The booking becomes `CONFIRMED` only when SePay reports a transfer with this con
 2. `POST /bookings/:id/cancel { reason }` (reason required, max 500):
    - refund 0 (past the deadline with a 100% fee) → the booking is `CANCELLED` at once and the rooms are released;
    - refund > 0 → a refund request: the invoice becomes `REFUND_PENDING`, the booking **stays** `CONFIRMED` and keeps its rooms until the hotel decides ([partner.md](./partner.md#refund-requests-phase-2)). Approved → `CANCELLED`, refund credited to the customer's wallet. Rejected → the booking stays, with the reason. A request made before the check-in time and still undecided at that time is approved automatically; one made after the check-in time waits for the hotel.
-3. Only a `CONFIRMED` booking without a pending refund can be cancelled. A `CHECKED_IN` booking returns `409 CANCELLATION_NOT_ALLOWED` (BR-09); any other status, or a refund already pending, returns `409 BOOKING_STATUS_CONFLICT`.
+3. The fee and refund shown by the quote are fixed when the customer confirms: the hotel approves exactly that amount, even if the deadline passes while it waits. After the cancel, `Booking.cancelReason` holds the reason, `Booking.refund` the request (`{ status, amount }`, `status` being the invoice status), and `timeline` gains `CANCEL_REQUESTED` (and `CANCELLED` once cancelled).
+4. Only a `CONFIRMED` booking without a pending refund can be cancelled. A `CHECKED_IN` booking returns `409 CANCELLATION_NOT_ALLOWED` (BR-09); any other status, or a refund already pending, returns `409 BOOKING_STATUS_CONFLICT`.
 
 Changing dates, room type or guests is not offered: cancel and book again (BR-09). Changing the guest name, phone, arrival time or special requests comes in phase 3 (UC25).
 
-**Voucher** (UC23): booking code, hotel, room type, dates, guests, amount paid, and `qrToken`, a token signed by the server (not the bare booking code) that the FE renders as a QR code. Only for `CONFIRMED` / `CHECKED_IN` bookings; a cancelled booking returns `409 BOOKING_STATUS_CONFLICT` (show "no longer valid").
+**Voucher** (`GET /bookings/:id/voucher`, UC23, for the customer who booked): booking code, hotel, room type, dates, guests, amount paid, and `qrToken`, a token signed by the server (not the bare booking code) that the FE renders as a QR code. It is the booking code followed by a signature (`SR-261022-0842.<signature>`) checked by the hotel at check-in, so an edited code is refused. Only for `CONFIRMED` / `CHECKED_IN` bookings; any other status, a cancelled booking included, returns `409 BOOKING_STATUS_CONFLICT` (show "no longer valid").
 
 ## Types
 
@@ -148,8 +151,10 @@ Changing dates, room type or guests is not offered: cancel and book again (BR-09
   "paidAt": "…",
   "payment": null,                        // set while PENDING, see above
   "refund": null,                         // { "status": "REFUND_PENDING" | "REFUNDED" | …, "amount": 1800000 }
+  "refundRejection": null,                // { "reason": "…", "at": "…" } when the hotel rejected the latest request
   "cancelReason": null, "cancelledAt": null,
   "timeline": [ { "at": "…", "event": "CREATED" }, { "at": "…", "event": "PAID" } ] }
+// timeline events: CREATED, PAID, EXPIRED, CANCEL_REQUESTED, REFUND_FORWARDED, REFUND_APPROVED, REFUND_REJECTED, CANCELLED
 
 // CancellationQuote
 { "freeUntil": "…", "feePercent": 50, "paid": 3600000, "fee": 1800000, "refund": 1800000,

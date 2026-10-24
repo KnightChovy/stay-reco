@@ -53,11 +53,11 @@ npm run start             # Run after a successful build
 | `src/components/common`           | Shared cards, search, breadcrumb, modal, sidebar/navbar, filter, table, and pagination |
 | `src/hooks`                       | Shared hooks: `use-mobile`, `use-debounce`                                             |
 | `src/lib/auth-store.ts`           | Mock auth used by current screens                                                      |
-| `src/lib/admin-data.ts`           | Admin types and sample data                                                            |
 | `src/lib/manager-data.ts`         | Manager portal types and centralized mock datasets                                     |
 | `src/lib/api-error.ts`            | Error `code` → Vietnamese message, `details` → field errors, `validateWith` (shared zod) |
 | `src/services/partner.service.ts` | Hotel partner endpoints (hotels, room types, rooms, staff, verification)               |
 | `src/services/staff.service.ts`   | Staff-readable endpoints (my hotel, hotel detail, room types, rooms, availability, booking detail) |
+| `src/services/admin.service.ts`   | Admin endpoints (platform manager invitation only until Phase 6)                       |
 | `src/lib/utils.ts`                | Re-exports `cn` from the `cn` package                                                  |
 | `src/services/ApiService.ts`      | Axios instance `apiService`                                                            |
 | `src/provider/query-provider.tsx` | `Providers` wrapping `QueryClientProvider`                                             |
@@ -82,7 +82,7 @@ npm run start             # Run after a successful build
 
 - Parenthesized route groups do not appear in URLs.
 - The root layout wraps `Providers` → `AuthRouteGuard`; it does not add Header/Footer to every page. Check the nearest layout before adding a shell to avoid duplicate rendering.
-- Admin uses thin pages → `AdminScreen` selected by `mode` → components in `features/admin/screens`.
+- Admin uses thin pages → `AdminScreen` selected by `mode`. The admin portal has no mock data: `/admin/users` has the platform manager invitation form (`POST /auth/invitations/platform-manager`); every admin route renders `AdminUnavailable` for the Phase 6 data the backend does not provide yet.
 - `next.config.ts` permanently redirects `/payment` to `/booking/payment` and `/booking-confirmation` to `/booking/confirmation`. New links should use the destination URLs.
 
 ### Partner and manager portals (work in progress)
@@ -147,7 +147,6 @@ Apply these conventions:
 - `AuthRouteGuard` waits for `hasHydrated`, sends unauthenticated users to `/login?next=...`, and sends users with the wrong role to `/403`. Each prefix requires its exact role; admin does not automatically gain access to `/account`.
 - Preserve hydration handling to avoid flashing authenticated UI or redirecting too early. When handling `next`, use the existing helper and ensure the destination stays within the app.
 - The client guard only controls UI. When connecting a backend, the API/server must authenticate and authorize requests; do not trust role or user ID from localStorage.
-- `UserRole` in `admin-data.ts` contains Vietnamese display labels and differs from the auth role union. Do not use display labels for permission checks.
 
 ## 7. Consistent UI, forms, and experience
 

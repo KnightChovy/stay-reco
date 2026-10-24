@@ -1,11 +1,13 @@
-import type { Booking, BookingPayment } from '@stayreco/shared';
+import type { Booking, BookingPayment, BookingSummary } from '@stayreco/shared';
 import { daysBetween } from '@stayreco/shared';
 import { toCalendarDate } from '../../common/http/calendar-date';
 import { toNumber } from '../../common/http/decimal';
 import type { Prisma } from '../../generated/prisma/client';
 import { fromTime } from '../hotels/hotel.mapper';
+import type { BookingHistory } from './booking-history';
 
-export const bookingInclude = {
+/** What a booking card needs (my trips, the hotel's booking list). */
+export const bookingSummaryInclude = {
   invoice: true,
   roomType: {
     select: {
@@ -25,6 +27,10 @@ export const bookingInclude = {
       },
     },
   },
+} satisfies Prisma.BookingInclude;
+
+export const bookingInclude = {
+  ...bookingSummaryInclude,
   roomCalendars: {
     where: { status: 'HELD' },
     select: { holdExpiresAt: true },
@@ -32,6 +38,10 @@ export const bookingInclude = {
     take: 1,
   },
 } satisfies Prisma.BookingInclude;
+
+export type BookingSummaryRow = Prisma.BookingGetPayload<{
+  include: typeof bookingSummaryInclude;
+}>;
 
 export type BookingWithDetails = Prisma.BookingGetPayload<{
   include: typeof bookingInclude;
@@ -47,23 +57,10 @@ export type PaymentDetails = (input: {
   expiresAt: Date;
 }) => BookingPayment;
 
-export function toBooking(
-  b: BookingWithDetails,
-  paymentDetails: PaymentDetails,
-): Booking {
+export function toBookingSummary(b: BookingSummaryRow): BookingSummary {
   const invoice = b.invoice!;
   const checkIn = toCalendarDate(b.checkInDate);
   const checkOut = toCalendarDate(b.checkOutDate);
-  const totalAmount = toNumber(b.totalAmount);
-  const holdExpiresAt =
-    b.status === 'PENDING' ? (b.roomCalendars[0]?.holdExpiresAt ?? null) : null;
-
-  const timeline = [{ at: b.createdAt, event: 'CREATED' }];
-  if (invoice.paidAt) timeline.push({ at: invoice.paidAt, event: 'PAID' });
-  if (b.status === 'EXPIRED')
-    timeline.push({ at: b.updatedAt, event: 'EXPIRED' });
-  if (b.cancelledAt) timeline.push({ at: b.cancelledAt, event: 'CANCELLED' });
-
   return {
     id: b.bookingId,
     code: invoice.invoiceNumber,
@@ -81,8 +78,40 @@ export function toBooking(
     nights: daysBetween(checkIn, checkOut),
     rooms: b.numRooms,
     guests: b.numGuests ?? b.numRooms,
-    totalAmount,
+    totalAmount: toNumber(b.totalAmount),
     createdAt: b.createdAt.toISOString(),
+  };
+}
+
+/** Invoice statuses that come from a cancellation with money to refund. */
+const REFUND_STATUSES = new Set([
+  'REFUND_PENDING',
+  'REFUNDED',
+  'PARTIALLY_REFUNDED',
+]);
+
+export function toBooking(
+  b: BookingWithDetails,
+  paymentDetails: PaymentDetails,
+  history: BookingHistory,
+): Booking {
+  const { cancelRequest, rejection } = history;
+  const invoice = b.invoice!;
+  const summary = toBookingSummary(b);
+  const totalAmount = summary.totalAmount;
+  const holdExpiresAt =
+    b.status === 'PENDING' ? (b.roomCalendars[0]?.holdExpiresAt ?? null) : null;
+
+  const timeline = [{ at: b.createdAt, event: 'CREATED' }];
+  if (invoice.paidAt) timeline.push({ at: invoice.paidAt, event: 'PAID' });
+  if (b.status === 'EXPIRED')
+    timeline.push({ at: b.updatedAt, event: 'EXPIRED' });
+  timeline.push(...history.events);
+  if (b.cancelledAt) timeline.push({ at: b.cancelledAt, event: 'CANCELLED' });
+  timeline.sort((x, y) => x.at.getTime() - y.at.getTime());
+
+  return {
+    ...summary,
     guestName: b.guestName,
     contactPhone: b.contactPhone,
     arrivalTime: fromTime(b.arrivalTime),
@@ -101,9 +130,15 @@ export function toBooking(
           expiresAt: holdExpiresAt,
         })
       : null,
-    // Cancellation and refunds come with the cancel flow; until then no booking has one.
-    refund: null,
-    cancelReason: null,
+    refund:
+      cancelRequest && REFUND_STATUSES.has(invoice.paymentStatus)
+        ? { status: invoice.paymentStatus, amount: cancelRequest.refund }
+        : null,
+    refundRejection:
+      rejection && invoice.paymentStatus === 'PAID'
+        ? { reason: rejection.reason, at: rejection.at.toISOString() }
+        : null,
+    cancelReason: cancelRequest?.reason ?? null,
     cancelledAt: b.cancelledAt?.toISOString() ?? null,
     timeline: timeline.map((t) => ({ at: t.at.toISOString(), event: t.event })),
   };

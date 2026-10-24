@@ -24,6 +24,8 @@ const envSchema = z
       ),
     WEB_APP_URL: z.url(),
     JWT_ACCESS_SECRET: z.string().min(32),
+    /** Signs the e-voucher QR tokens (`GET /bookings/:id/voucher`). Changing it invalidates the vouchers already shown. */
+    VOUCHER_SIGNING_SECRET: z.string().min(32),
     JWT_ACCESS_TTL_SECONDS: z.coerce.number().int().positive().default(900),
     REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(30),
     /** Email verification code mailed after registration. */
@@ -63,6 +65,11 @@ const envSchema = z
     SEPAY_BANK_NAME: z.string().min(1).default('MB Bank'),
     SEPAY_ACCOUNT_NUMBER: z.string().min(1).default('0000000000'),
     SEPAY_ACCOUNT_NAME: z.string().min(1).default('STAYRECO DEMO'),
+    /**
+     * Turns on `POST /dev/bookings/:id/simulate-payment`, which confirms a booking without a transfer. Off unless set
+     * to "true", and always off when NODE_ENV=production, so a server started without NODE_ENV never exposes it.
+     */
+    PAYMENT_SIMULATOR: booleanString,
   })
   .superRefine((env, ctx) => {
     if (env.CLOUDINARY_CLOUD_NAME) {

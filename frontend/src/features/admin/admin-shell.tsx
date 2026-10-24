@@ -2,10 +2,11 @@
 
 import type { ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
-import { Activity, CreditCard, LayoutDashboard, ReceiptText, ShieldCheck, Sparkles, UsersRound } from 'lucide-react';
+import { CreditCard, LayoutDashboard, ReceiptText, ShieldCheck, Sparkles, UsersRound } from 'lucide-react';
 import Sidebar, { SidebarProvider, type SidebarItem } from '@/components/common/sidebar/Sidebar';
 import Navbar from '@/components/common/navbar/Navbar';
 import { SidebarInset } from '@/components/ui/sidebar';
+import { useAuthStore } from '@/lib/auth-store';
 
 const navigation: Omit<SidebarItem, 'isActive'>[] = [
   { href: '/admin/dashboard', label: 'Tổng quan', icon: LayoutDashboard, section: 'QUẢN TRỊ HỆ THỐNG' },
@@ -18,6 +19,7 @@ const navigation: Omit<SidebarItem, 'isActive'>[] = [
 
 export function AdminShell({ children }: Readonly<{ children: ReactNode }>) {
   const pathname = usePathname();
+  const user = useAuthStore((state) => state.user);
   const items = navigation.map((item) => ({
     ...item,
     isActive: pathname === item.href || pathname.startsWith(`${item.href}/`),
@@ -25,25 +27,11 @@ export function AdminShell({ children }: Readonly<{ children: ReactNode }>) {
 
   return (
     <SidebarProvider>
-      <Sidebar
-        items={items}
-        roleLabel="System Administration"
-        contextName="StayReco Platform"
-        footerContent={
-          <div className="mb-3 rounded-xl bg-success-soft p-3 ring-1 ring-success/15">
-            <div className="flex items-center justify-between gap-2 text-xs font-semibold text-success">
-              <span className="flex items-center gap-1.5"><Activity className="size-3.5" /> Hệ thống ổn định</span>
-              <span>99.98%</span>
-            </div>
-            <p className="mt-1.5 text-[10px] leading-relaxed text-muted-foreground">API, dữ liệu và AI services đang hoạt động bình thường.</p>
-          </div>
-        }
-      />
+      <Sidebar items={items} roleLabel="System Administration" contextName="StayReco Platform" />
       <SidebarInset className="min-w-0 bg-background">
         <Navbar
-          context={{ name: 'Trung tâm quản trị StayReco', meta: 'Production · Việt Nam', status: 'Hệ thống ổn định' }}
-          user={{ name: 'Trần Đình Quân', role: 'Super Admin' }}
-          notificationCount={3}
+          context={{ name: 'Trung tâm quản trị StayReco' }}
+          user={{ name: user?.name ?? 'Quản trị viên', role: 'Admin', avatarUrl: user?.avatarUrl }}
           searchPlaceholder="Tìm người dùng, giao dịch hoặc cấu hình..."
           showSidebarTrigger
           profileHref="/admin/dashboard"
