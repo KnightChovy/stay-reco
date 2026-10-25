@@ -1,3 +1,4 @@
+import { BookingMailer } from '../src/modules/bookings/booking-mailer';
 import { RefundDecisionsService } from '../src/modules/bookings/refund-decisions.service';
 import { PaymentConfirmationService } from '../src/modules/payments/payment-confirmation.service';
 import { createTestApp } from './helpers';
@@ -96,16 +97,22 @@ describe('Booking emails (e2e)', () => {
       transactionId: `txn-${booking.code}`,
       paidAt: new Date(),
     });
+    await sent();
     return booking;
   };
 
-  const cancel = (token: string, id: string) =>
-    t
+  const cancel = async (token: string, id: string) => {
+    const res = await t
       .api()
       .post(`/api/v1/bookings/${id}/cancel`)
       .set(auth(token))
       .send({ reason: 'Đổi kế hoạch' })
       .expect(200);
+    await sent();
+    return res;
+  };
+  /** Emails go out in the background; wait for them before reading the outbox. */
+  const sent = () => t.app.get(BookingMailer).idle();
   const mails = () => t.outbox.map((m) => [m.to, m.subject]);
 
   beforeAll(async () => {
@@ -217,17 +224,20 @@ describe('Booking emails (e2e)', () => {
       .set(auth(staff.token))
       .send({ note: 'Đúng hạn hủy miễn phí' })
       .expect(200);
+    await sent();
     await t
       .api()
       .post(`/api/v1/bookings/${approved.id}/approve-refund`)
       .set(auth(h.token))
       .expect(200);
+    await sent();
     await t
       .api()
       .post(`/api/v1/bookings/${rejected.id}/reject-refund`)
       .set(auth(h.token))
       .send({ reason: 'Yêu cầu trùng' })
       .expect(200);
+    await sent();
 
     expect(mails()).toEqual([
       [
@@ -255,6 +265,7 @@ describe('Booking emails (e2e)', () => {
     await t.app
       .get(RefundDecisionsService)
       .approveDue(new Date(`${day(30)}T14:01:00+07:00`));
+    await sent();
     expect(mails()).toEqual([
       ['guest@mail.test', `Hoàn tiền đơn ${booking.code} đã được duyệt`],
       ['owner@hotel.test', `Đã tự động duyệt hoàn tiền đơn ${booking.code}`],

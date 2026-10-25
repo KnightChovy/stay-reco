@@ -112,7 +112,7 @@ export class RefundDecisionsService
         value: { note: input.note },
       });
     });
-    await this.mailer.refundForwarded(bookingId, input.note);
+    this.mailer.refundForwarded(bookingId, input.note);
     return this.bookings.findOne(user, bookingId);
   }
 
@@ -125,7 +125,7 @@ export class RefundDecisionsService
         accountId: user.accountId,
       }),
     );
-    await this.mailer.refundApproved(bookingId);
+    this.mailer.refundApproved(bookingId);
     return this.bookings.findOne(user, bookingId);
   }
 
@@ -154,7 +154,7 @@ export class RefundDecisionsService
         value: { reason: input.reason },
       });
     });
-    await this.mailer.refundRejected(bookingId, input.reason);
+    this.mailer.refundRejected(bookingId, input.reason);
     return this.bookings.findOne(user, bookingId);
   }
 
@@ -192,7 +192,7 @@ export class RefundDecisionsService
           this.approveIn(tx, booking.bookingId, null, now),
         );
         approved++;
-        await this.mailer.refundApproved(booking.bookingId, true);
+        this.mailer.refundApproved(booking.bookingId, true);
       } catch (err) {
         // Decided by the partner in the meantime: nothing left to do.
         if (!(err instanceof ConflictException)) throw err;

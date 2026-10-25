@@ -125,9 +125,8 @@ export class BookingCancellationService {
         },
       });
     });
-    await (refund.gt(0)
-      ? this.mailer.refundRequested(bookingId)
-      : this.mailer.cancelledAtOnce(bookingId));
+    if (refund.gt(0)) this.mailer.refundRequested(bookingId);
+    else this.mailer.cancelledAtOnce(bookingId);
     return this.bookings.findOne(user, bookingId);
   }
 
