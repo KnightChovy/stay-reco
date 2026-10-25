@@ -1,6 +1,4 @@
-import type { IconName } from '@/components/ui/icon';
-
-// shortcut: dữ liệu mock lấy từ thiết kế Stitch, thay bằng API khi backend có endpoint khách sạn/booking.
+// shortcut: ảnh trang trí và điểm đến lấy từ thiết kế Stitch; khách sạn/booking đã lấy từ API.
 const IMG = 'https://lh3.googleusercontent.com/aida-public/';
 
 export const images = {
@@ -29,96 +27,9 @@ export const images = {
   avatar: IMG + 'AB6AXuCd6vJViOTeG8uU9gI4v5256BYNh-Bmd_62tmazARuNY0LEw0fWcPn-7nsUu0NZLRu6C67xzuBtsIVd_IXi0bRZ6y9vomxluFQH0IWCj9f6bbvJ1ykMDhQAUqF6KM20ENA8g0MwggXmXH0WPOwT_hBuI-yE3oTfxeay0qTiM0Ub5tbFKVSGNmfuFxEkt87kerVcduhVJIteZT8vQsLHy4ZDfmhyap2LaFYqIp0j-q8lQ8rvIGqsmfjf',
 };
 
-export type Hotel = {
-  id: string;
-  name: string;
-  image: string;
-  tag: string;
-  tagIcon: IconName;
-  location: string;
-  rating: number;
-  reviews: number;
-  price: number;
-  chips: { label: string; icon?: IconName }[];
-  // dùng ở màn kết quả tìm kiếm
-  category: string;
-  searchImage: string;
-  searchLocation: string;
-  highlight: string;
-  highlightIcon: IconName;
-  roomType: string;
-  perk: string;
-  perkIcon: IconName;
-};
-
-export const hotels: Hotel[] = [
-  {
-    id: 'an-nhien-riverside',
-    name: 'An Nhiên Riverside Hotel',
-    category: 'Boutique 4 sao',
-    image: images.anNhien,
-    tag: 'Hội An Riverside',
-    tagIcon: 'verified',
-    location: 'Cẩm Nam, Hội An · Cách phố cổ 800m',
-    rating: 4.8,
-    reviews: 128,
-    price: 1250000,
-    chips: [{ label: 'Gần bờ sông' }, { label: 'Miễn phí hủy phòng' }],
-    searchImage: images.anNhienRoom,
-    searchLocation: 'Sơn Trà, Đà Nẵng',
-    highlight: 'Cách Cầu Rồng 650m',
-    highlightIcon: 'near_me',
-    roomType: 'Deluxe River View',
-    perk: 'Miễn phí bữa sáng bản địa',
-    perkIcon: 'check_circle',
-  },
-  {
-    id: 'pho-hoai-heritage',
-    name: 'Phố Hoài Heritage Villa',
-    category: 'Khách sạn 4 sao',
-    image: images.phoHoai,
-    tag: 'Biệt thự di sản',
-    tagIcon: 'hotel_class',
-    location: 'Minh An, Hội An · Trung tâm phố cổ',
-    rating: 4.9,
-    reviews: 96,
-    price: 1890000,
-    chips: [{ label: 'Bữa sáng sân vườn' }, { label: 'Miễn phí hủy phòng' }],
-    searchImage: images.seaside,
-    searchLocation: 'Bãi biển Mỹ Khê · Cách biển 80m',
-    highlight: 'Hồ bơi vô cực hướng biển',
-    highlightIcon: 'pool',
-    roomType: 'Ocean Premier',
-    perk: 'Miễn phí buffet sáng',
-    perkIcon: 'coffee',
-  },
-  {
-    id: 'moc-nhien-eco',
-    name: 'Mộc Nhiên Eco-Lodge',
-    category: 'Villa Di Sản',
-    image: images.mocNhien,
-    tag: 'Eco Retreat',
-    tagIcon: 'forest',
-    location: 'Tuyền Lâm, Đà Lạt · Rừng thông nguyên sinh',
-    rating: 4.7,
-    reviews: 114,
-    price: 1420000,
-    chips: [{ label: 'Bếp trà hữu cơ' }, { label: 'Miễn phí hủy phòng' }],
-    searchImage: images.senVilla,
-    searchLocation: 'Hải Châu, Đà Nẵng · Trung tâm thành phố',
-    highlight: 'Khu vườn tĩnh lặng',
-    highlightIcon: 'park',
-    roomType: 'Heritage Garden Suite',
-    perk: 'Trà chiều chào đón miễn phí',
-    perkIcon: 'check_circle',
-  },
-];
-
 export const destinations = [
   { name: 'Đà Nẵng', count: 84, image: images.daNang },
   { name: 'Hội An', count: 62, image: images.hoiAn },
   { name: 'Đà Lạt', count: 95, image: images.daLat },
   { name: 'Phú Quốc', count: 53, image: images.phuQuoc },
 ];
-
-export const formatVnd = (value: number) => `${value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.')} ₫`;

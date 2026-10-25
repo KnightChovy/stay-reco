@@ -9,7 +9,7 @@ import { Chip } from '@/components/ui/chip';
 import { Icon, type IconName } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
 import { colors, fonts, radius, shadow } from '@/constants/theme';
-import { hotels, images } from '@/lib/mock-data';
+import { images } from '@/lib/mock-data';
 
 const context: { label: string; icon: IconName }[] = [
   { label: 'Đà Nẵng', icon: 'location_on' },
@@ -165,7 +165,8 @@ export default function AssistantScreen() {
                 <Button
                   label="Xem phòng & Đặt ngay"
                   icon="arrow_forward"
-                  onPress={() => router.push(`/hotels/${hotels[0].id}`)}
+                  // shortcut: trợ lý AI chưa có API (phase 4), gợi ý mẫu mở tìm kiếm thay vì một khách sạn cụ thể.
+                  onPress={() => router.push({ pathname: '/search', params: { destination: 'Hội An' } })}
                 />
                 <Button
                   label="Hỏi thêm về khách sạn này"

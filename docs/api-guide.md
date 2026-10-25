@@ -208,6 +208,7 @@ There is no `status` field in the body; the HTTP status is already available as 
 | `BOOKING_STATUS_CONFLICT` | 409 | The booking's status does not allow the action (cancel twice, voucher of a cancelled booking…) | Reload the booking |
 | `CANCELLATION_NOT_ALLOWED` | 409 | Cancelling after check-in (BR-09) | "This booking can no longer be cancelled" |
 | `REFUND_STATUS_CONFLICT` | 409 | Deciding a refund that is not pending | Reload the booking |
+| `INVALID_API_KEY` | 401 | SePay webhook called with a missing or wrong API key | Not for clients: check `SEPAY_WEBHOOK_API_KEY` and the key in the SePay dashboard |
 | `PRICING_RULE_NOT_FOUND` | 404 | Pricing rule doesn't exist or belongs to another hotel | Reload the rules |
 | `AVAILABILITY_BELOW_BOOKED` | 409 | More rooms asked on sale than are left after bookings and holds on some day | Show the days in `details` with the rooms left |
 

@@ -8,7 +8,7 @@ export type DestinationCardProps = { name: string; count: number; image: string 
 
 export function DestinationCard({ name, count, image }: DestinationCardProps) {
   return (
-    <Pressable accessibilityRole="button" onPress={() => router.push('/search')} style={styles.card}>
+    <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/search', params: { destination: name } })} style={styles.card}>
       <Image source={image} style={StyleSheet.absoluteFill} contentFit="cover" />
       <View style={styles.overlay} />
       <View style={styles.text}>

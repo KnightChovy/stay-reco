@@ -98,5 +98,9 @@ export const ErrorCode = {
   CANCELLATION_NOT_ALLOWED: 'CANCELLATION_NOT_ALLOWED',
   /** Deciding a refund that is not pending. */
   REFUND_STATUS_CONFLICT: 'REFUND_STATUS_CONFLICT',
+
+  // Payments
+  /** A webhook call (SePay) with a missing or wrong API key; nothing is processed. Not a client error to refresh. */
+  INVALID_API_KEY: 'INVALID_API_KEY',
 } as const;
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];

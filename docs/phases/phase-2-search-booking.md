@@ -95,8 +95,11 @@ room_calendars:  (free) ──hold──► HELD ──paid──► BOOKED ─�
 ## SePay integration (backend only)
 
 - Payment details shown to the customer come from env: `SEPAY_BANK_CODE` (bank short name used by SePay), `SEPAY_BANK_NAME`, `SEPAY_ACCOUNT_NUMBER`, `SEPAY_ACCOUNT_NAME`, with demo defaults until deploy. The QR image is `https://qr.sepay.vn/img?acc=&bank=&amount=&des=` with the amount and the booking code filled in.
-- SePay calls `POST /payments/sepay/webhook` for every incoming transfer, authenticated with the API key configured in SePay (header checked by the backend; wrong key → 401, no processing). The handler matches the booking code in the transfer content and the amount, then confirms the booking in one transaction (invoice `PAID`, `BOOKING_PAYMENT` wallet row, `room_calendars` `HELD` → `BOOKED`) and answers success so SePay does not retry.
-- Payload field names, the authentication header and the expected answer follow SePay's webhook documentation; they are checked against it when the endpoint is built.
+- SePay calls `POST /api/v1/payments/sepay/webhook` (public, not rate limited) for every transaction of the platform account, with `Authorization: Apikey <key>`. The key is `SEPAY_WEBHOOK_API_KEY` on the server and the same value in the SePay dashboard (WebHooks, authentication "API Key"); it is required in production. A missing or wrong key answers `401 INVALID_API_KEY` before the body is read; nothing is processed.
+- Payload fields used: `id` (SePay transaction id, idempotency key `sepay:<id>` and `invoice.vnpay_txn_ref`), `transferType` (`out` is ignored), `transferAmount`, `content`, `code` (filled by SePay when a payment code pattern is configured there; optional), `accountNumber` (another account is not processed), `transactionDate` (Vietnam time, becomes `paid_at`).
+- The booking code is read from `code`, then `content`, with or without the dashes banks often drop (`SR2610250842`, `SR 261025 0842`). An exact amount on a `PENDING` booking confirms it in one transaction (invoice `PAID`, `BOOKING_PAYMENT` wallet row, `room_calendars` `HELD` → `BOOKED`) and sends the confirmation email.
+- No code, an unknown code, a different amount or another account → `audit_log` `SEPAY_TRANSFER_UNMATCHED`; a transfer for a booking that is no longer `PENDING` (expired, already paid) → `SEPAY_TRANSFER_LATE`, to refund by hand. One audit row per SePay transaction. Every call with a valid key is answered `{ success: true, data: { outcome } }`, so SePay does not resend it.
+- Field names and the header were written from SePay's webhook documentation (docs.sepay.vn, "Tích hợp WebHooks") from memory; check them against that page when creating the webhook, and adjust the schema in `sepay-webhook.ts` if they differ.
 - Local development needs a public URL for the webhook (ngrok).
 
 ## Limits (locked for this phase)
@@ -146,6 +149,7 @@ room_calendars:  (free) ──hold──► HELD ──paid──► BOOKED ─�
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-10-25 | BE | SePay webhook built: API key check, dash-tolerant booking code, unmatched and late transfers in `audit_log`; new error code `INVALID_API_KEY` |
 | 2026-10-24 | BE | Booking emails built (P10 extended: refund request received, new request to the hotel, forwarded, automatic approval; Vietnamese) |
 | 2026-10-24 | BE | Hotel side built: bookings list (refund queue), forward with a note, approve (hotel pending → customer available), reject with `refundRejection`, automatic approval at the check-in time |
 | 2026-10-24 | BE | Customer cancellation built: quote and cancel; zero refund cancels at once, otherwise invoice `REFUND_PENDING`; reason, fee and refund fixed in `audit_log` |

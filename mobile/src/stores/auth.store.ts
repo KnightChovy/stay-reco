@@ -8,6 +8,8 @@ type Result<T = object> = ({ success: true } & T) | { success: false; message: s
 
 type AuthState = {
   account: Account | null;
+  /** Đang khôi phục phiên đã ghi nhớ; các màn cần đăng nhập hiện loading thay vì mời đăng nhập. */
+  hydrating: boolean;
   /** Khôi phục phiên đã ghi nhớ khi mở app. */
   hydrate: () => Promise<void>;
   login: (email: string, password: string, remember: boolean) => Promise<Result>;
@@ -64,17 +66,21 @@ export const useAuthStore = create<AuthState>()((set) => {
 
   return {
     account: null,
+    hydrating: false,
 
     hydrate: async () => {
       const refreshToken = await loadRefreshToken();
       if (!refreshToken) return;
       session.refreshToken = refreshToken;
       session.remember = true;
+      set({ hydrating: true });
       try {
         await refreshSession();
         set({ account: (await authService.getMe()).data });
       } catch {
         // Token bị từ chối thì refreshSession đã xóa phiên; mất mạng thì giữ token để lần sau thử lại.
+      } finally {
+        set({ hydrating: false });
       }
     },
 

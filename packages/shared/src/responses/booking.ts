@@ -245,3 +245,17 @@ export const cancellationQuoteResponseSchema = z
     description: 'What cancelling now would cost (MSG11), shown before the customer confirms.',
   });
 export type CancellationQuote = z.infer<typeof cancellationQuoteResponseSchema>;
+
+// ── Payments ────────────────────────────────────────────────
+
+export const sepayWebhookResultResponseSchema = z
+  .object({
+    outcome: z
+      .enum(['CONFIRMED', 'DUPLICATE', 'IGNORED_OUTGOING', 'UNMATCHED', 'LATE'])
+      .describe('UNMATCHED and LATE transfers are kept in the audit log for manual handling.'),
+  })
+  .register(responseSchemas, {
+    id: 'SepayWebhookResult',
+    description: 'What the backend did with one SePay notification; SePay only reads `success`.',
+  });
+export type SepayWebhookResult = z.infer<typeof sepayWebhookResultResponseSchema>;

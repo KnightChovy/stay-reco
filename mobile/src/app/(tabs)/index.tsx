@@ -1,6 +1,9 @@
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
+import { useQuery } from '@tanstack/react-query';
+import { BOOKING_LIMITS } from '@stayreco/shared';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { DestinationCard } from '@/components/common/card/DestinationCard';
 import { HotelCard } from '@/components/common/card/HotelCard';
@@ -9,8 +12,10 @@ import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
 import { Icon, type IconName } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
-import { colors, radius, shadow } from '@/constants/theme';
-import { destinations, hotels, images } from '@/lib/mock-data';
+import { colors, fonts, radius, shadow } from '@/constants/theme';
+import { destinations, images } from '@/lib/mock-data';
+import { addDays, dateInput, defaultStay, formatDate, nightsBetween, type Stay } from '@/lib/stay';
+import { searchHotels } from '@/services/stays.service';
 
 const quickFilters: { label: string; icon: IconName }[] = [
   { label: 'Gần biển', icon: 'waves' },
@@ -26,9 +31,9 @@ const commitments: { title: string; desc: string; icon: IconName }[] = [
   { title: 'Hỗ trợ 24/7 đồng hành', desc: 'Người bản địa hỗ trợ check-in và giải quyết thắc mắc tức thì', icon: 'support_agent' },
 ];
 
-function SearchField({ icon, label, value, style }: { icon: IconName; label: string; value: string; style?: object }) {
+function Stepper({ icon, label, value, onMinus, onPlus }: { icon: IconName; label: string; value: string; onMinus: () => void; onPlus: () => void }) {
   return (
-    <Pressable onPress={() => router.push('/search')} style={[styles.field, style]}>
+    <View style={[styles.field, styles.flex, styles.stepper]}>
       <Icon name={icon} size={20} color={colors.primaryContainer} />
       <View style={styles.flex}>
         <Text variant="caption" weight="semibold" color={colors.outline}>
@@ -38,7 +43,13 @@ function SearchField({ icon, label, value, style }: { icon: IconName; label: str
           {value}
         </Text>
       </View>
-    </Pressable>
+      <Pressable accessibilityLabel={`Giảm ${label}`} hitSlop={6} onPress={onMinus}>
+        <Icon name="remove" size={20} color={colors.primary} />
+      </Pressable>
+      <Pressable accessibilityLabel={`Tăng ${label}`} hitSlop={6} onPress={onPlus}>
+        <Icon name="add" size={20} color={colors.primary} />
+      </Pressable>
+    </View>
   );
 }
 
@@ -52,7 +63,7 @@ function SectionTitle({ title, subtitle, action }: { title: string; subtitle: st
         </Text>
       </View>
       {action && (
-        <Pressable onPress={() => router.push('/search')} style={styles.row}>
+        <Pressable onPress={() => router.push({ pathname: '/search', params: featuredStay })} style={styles.row}>
           <Text variant="label" weight="semibold" color={colors.primaryContainer}>
             {action}
           </Text>
@@ -63,7 +74,28 @@ function SectionTitle({ title, subtitle, action }: { title: string; subtitle: st
   );
 }
 
+// Khách sạn nổi bật: tìm theo điểm đến mặc định cho 2 đêm tới, như trang chủ web.
+const featuredStay = defaultStay();
+
 export default function HomeScreen() {
+  const [stay, setStay] = useState<Stay>(defaultStay);
+  const nights = nightsBetween(stay.checkIn, stay.checkOut);
+  const featured = useQuery({
+    queryKey: ['stays', 'search', 'featured', featuredStay],
+    queryFn: () => searchHotels({ ...featuredStay, sort: 'recommended', page: 1, pageSize: 3 }),
+  });
+
+  // Nhận phòng từ hôm nay (backend kiểm tra giới hạn 365 ngày); đổi ngày nhận giữ nguyên số đêm.
+  const shiftCheckIn = (days: number) => {
+    const checkIn = addDays(stay.checkIn, days);
+    if (checkIn < dateInput(0)) return;
+    setStay({ ...stay, checkIn, checkOut: addDays(checkIn, nights) });
+  };
+  const setNights = (n: number) =>
+    n >= 1 && n <= BOOKING_LIMITS.maxNights && setStay({ ...stay, checkOut: addDays(stay.checkIn, n) });
+  const setGuests = (n: number) => n >= 1 && n <= BOOKING_LIMITS.maxGuests && setStay({ ...stay, guests: n });
+  const search = () => router.push({ pathname: '/search', params: stay });
+
   return (
     <View style={styles.screen}>
       <AppHeader />
@@ -88,17 +120,36 @@ export default function HomeScreen() {
         </View>
 
         <Animated.View entering={FadeInDown.delay(150).springify().damping(18)} style={styles.searchCard}>
-          <SearchField icon="near_me" label="Điểm đến" value="Đà Nẵng, Hội An, Phú Quốc..." />
-          <View style={styles.row}>
-            <SearchField icon="calendar_month" label="Ngày lưu trú" value="18 Th04 - 20 Th04" style={styles.flex} />
-            <SearchField icon="group" label="Số khách" value="2 khách, 1 phòng" style={styles.flex} />
+          <View style={styles.field}>
+            <Icon name="near_me" size={20} color={colors.primaryContainer} />
+            <TextInput
+              accessibilityLabel="Điểm đến"
+              placeholder="Đà Nẵng, Hội An, Phú Quốc..."
+              placeholderTextColor={colors.outline}
+              value={stay.destination}
+              onChangeText={(destination) => setStay({ ...stay, destination })}
+              returnKeyType="search"
+              onSubmitEditing={search}
+              style={styles.input}
+            />
           </View>
-          <Button label="Tìm kiếm chỗ nghỉ" leadingIcon="search" size="lg" onPress={() => router.push('/search')} />
+          <Stepper
+            icon="calendar_month"
+            label="Nhận phòng"
+            value={formatDate(stay.checkIn)}
+            onMinus={() => shiftCheckIn(-1)}
+            onPlus={() => shiftCheckIn(1)}
+          />
+          <View style={styles.row}>
+            <Stepper icon="dark_mode" label="Số đêm" value={`${nights} đêm`} onMinus={() => setNights(nights - 1)} onPlus={() => setNights(nights + 1)} />
+            <Stepper icon="group" label="Số khách" value={`${stay.guests} khách`} onMinus={() => setGuests(stay.guests - 1)} onPlus={() => setGuests(stay.guests + 1)} />
+          </View>
+          <Button label="Tìm kiếm chỗ nghỉ" leadingIcon="search" size="lg" disabled={!stay.destination.trim()} onPress={search} />
         </Animated.View>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
           {quickFilters.map((f, i) => (
-            <Chip key={f.label} label={f.label} icon={f.icon} tone={i === 0 ? 'selected' : 'outline'} onPress={() => router.push('/search')} />
+            <Chip key={f.label} label={f.label} icon={f.icon} tone={i === 0 ? 'selected' : 'outline'} onPress={search} />
           ))}
         </ScrollView>
 
@@ -142,8 +193,10 @@ export default function HomeScreen() {
         <View style={styles.section}>
           <SectionTitle title="Khám phá cho chuyến đi của bạn" subtitle="Bộ sưu tập nơi lưu trú có thẩm mỹ & dịch vụ tận tâm" />
           <View style={styles.list}>
-            {hotels.map((h, i) => (
-              <HotelCard key={h.id} hotel={h} index={i} />
+            {featured.isPending && <Text variant="small" color={colors.onSurfaceVariant}>Đang tải chỗ nghỉ...</Text>}
+            {featured.isError && <Text variant="small" color={colors.onSurfaceVariant}>Không tải được chỗ nghỉ. Kéo lại sau nhé.</Text>}
+            {featured.data?.hotels.map((h, i) => (
+              <HotelCard key={h.id} hotel={h} stay={featuredStay} index={i} />
             ))}
           </View>
         </View>
@@ -214,6 +267,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     backgroundColor: colors.surfaceContainerLow,
   },
+  // Hai ô Số đêm / Số khách chung một hàng: thu gọn khoảng cách để "2 khách" không bị cắt ở màn 390px.
+  stepper: { gap: 6, paddingHorizontal: 10 },
+  input: { flex: 1, padding: 0, fontFamily: fonts.medium, fontSize: 14, color: colors.onSurface },
   filters: { gap: 8, paddingHorizontal: 16, paddingTop: 20 },
   section: { marginHorizontal: 16, marginTop: 28 },
   sectionHead: { flexDirection: 'row', alignItems: 'flex-end', marginBottom: 14, gap: 8 },
