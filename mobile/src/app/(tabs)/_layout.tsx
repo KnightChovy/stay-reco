@@ -13,7 +13,6 @@ export default function TabsLayout() {
       <Tabs.Screen name="assistant" />
       <Tabs.Screen name="account" />
       <Tabs.Screen name="search" options={{ href: null }} />
-      <Tabs.Screen name="confirmation" options={{ href: null }} />
     </Tabs>
   );
 }

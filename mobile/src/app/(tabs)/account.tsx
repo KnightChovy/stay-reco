@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
@@ -8,6 +9,7 @@ import { Icon, type IconName } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
 import { colors, radius, shadow } from '@/constants/theme';
 import { images } from '@/lib/mock-data';
+import { useAuthStore } from '@/stores/auth.store';
 
 const stats: { value: string; label: string; icon: IconName; bg: string; fg: string }[] = [
   { value: '8', label: 'Kỳ nghỉ vui', icon: 'bed', bg: colors.primaryFixed, fg: colors.primaryContainer },
@@ -15,14 +17,6 @@ const stats: { value: string; label: string; icon: IconName; bg: string; fg: str
   { value: '24/7', label: 'Trợ lý riêng', icon: 'support_agent', bg: colors.tertiaryFixed, fg: colors.tertiaryContainer },
 ];
 
-const identity: { label: string; value: string; badge?: string; icon?: IconName }[] = [
-  { label: 'Họ và tên đầy đủ', value: 'Nguyễn Minh Anh', icon: 'check_circle' },
-  { label: 'Email liên hệ', value: 'minhanh.nguyen@email.vn', badge: 'Đã xác thực' },
-  { label: 'Số điện thoại (OTP)', value: '+84 0912 345 678', badge: 'Đã xác minh' },
-  { label: 'Ngày sinh & Giới tính', value: '18/08/1995 • Nữ' },
-  { label: 'Số CCCD / Hộ chiếu', value: '04819500xxxx', icon: 'lock' },
-  { label: 'Địa chỉ nhận hóa đơn', value: 'Quận Hải Châu, TP. Đà Nẵng' },
-];
 
 const tastes: { label: string; icon: IconName }[] = [
   { label: 'Gu yên tĩnh & cách âm', icon: 'volume_off' },
@@ -57,6 +51,46 @@ const menu: { title: string; desc: string; icon: IconName; bg: string; fg: strin
 
 export default function AccountScreen() {
   const editProfile = () => router.push('/account/profile');
+  const account = useAuthStore((s) => s.account);
+  const hydrating = useAuthStore((s) => s.hydrating);
+  const logout = useAuthStore((s) => s.logout);
+  const [signingOut, setSigningOut] = useState(false);
+  const signOut = async () => {
+    if (signingOut) return;
+    setSigningOut(true);
+    await logout();
+    setSigningOut(false);
+    router.replace('/login');
+  };
+  const identity: { label: string; value: string; badge?: string }[] = account
+    ? [
+        { label: 'Họ và tên đầy đủ', value: account.fullName },
+        { label: 'Email liên hệ', value: account.email, badge: account.emailVerified ? 'Đã xác thực' : undefined },
+        { label: 'Số điện thoại', value: account.phone ?? 'Chưa cập nhật' },
+      ]
+    : [];
+
+  if (!account) {
+    return (
+      <View style={styles.screen}>
+        <AppHeader subtitle="Hồ sơ cá nhân" />
+        <View style={[styles.card, styles.guest]}>
+          {hydrating ? (
+            <Text variant="small" color={colors.onSurfaceVariant} center>
+              Đang tải hồ sơ...
+            </Text>
+          ) : (
+            <>
+              <Text variant="small" color={colors.onSurfaceVariant} center>
+                Đăng nhập để xem hồ sơ và quản lý đặt phòng.
+              </Text>
+              <Button label="Đăng nhập" leadingIcon="login" onPress={() => router.push('/login')} />
+            </>
+          )}
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.screen}>
@@ -65,7 +99,7 @@ export default function AccountScreen() {
         <View style={styles.card}>
           <View style={styles.row}>
             <View>
-              <Image source={images.avatar} style={styles.avatar} contentFit="cover" />
+              <Image source={account.avatarUrl ?? images.avatar} style={styles.avatar} contentFit="cover" />
               <View style={styles.avatarBadge}>
                 <Icon name="verified" size={14} color={colors.white} />
               </View>
@@ -73,12 +107,12 @@ export default function AccountScreen() {
             <View style={[styles.flex, styles.gap4]}>
               <View style={styles.wrapRow}>
                 <Text variant="h3" weight="bold">
-                  Nguyễn Minh Anh
+                  {account.fullName}
                 </Text>
-                <Chip label="Đã xác thực" tone="tertiary" />
+                {account.emailVerified && <Chip label="Đã xác thực" tone="tertiary" />}
               </View>
               <Text variant="caption" color={colors.onSurfaceVariant}>
-                Mã hội viên: SR-99482
+                {account.email}
               </Text>
               <View style={styles.row}>
                 <Button label="Chỉnh sửa hồ sơ" leadingIcon="edit" variant="muted" size="sm" onPress={editProfile} />
@@ -169,7 +203,6 @@ export default function AccountScreen() {
                   {f.value}
                 </Text>
                 {f.badge && <Chip label={f.badge} tone="tertiary" />}
-                {f.icon && <Icon name={f.icon} size={16} color={colors.onSurfaceVariant} />}
               </View>
             </View>
           ))}
@@ -229,10 +262,16 @@ export default function AccountScreen() {
           </Text>
         </View>
 
-        <Pressable accessibilityRole="button" onPress={() => router.replace('/login')} style={styles.logout}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ disabled: signingOut }}
+          disabled={signingOut}
+          onPress={signOut}
+          style={[styles.logout, signingOut && { opacity: 0.5 }]}
+        >
           <Icon name="logout" size={18} color={colors.secondary} />
           <Text variant="label" weight="bold" color={colors.secondary}>
-            Đăng xuất tài khoản
+            {signingOut ? 'Đang đăng xuất...' : 'Đăng xuất tài khoản'}
           </Text>
         </Pressable>
       </ScrollView>
@@ -294,6 +333,7 @@ const styles = StyleSheet.create({
   menuDivider: { borderTopWidth: 1, borderTopColor: colors.surfaceContainerHigh },
   menuIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   privacy: { flexDirection: 'row', gap: 10, padding: 14, borderRadius: radius.md, backgroundColor: colors.surfaceContainer },
+  guest: { margin: 16, alignItems: 'center' },
   logout: {
     flexDirection: 'row',
     alignItems: 'center',
