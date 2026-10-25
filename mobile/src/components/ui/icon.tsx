@@ -136,6 +136,10 @@ const IOS: Partial<Record<IconName, SFSymbol>> = {
   check_box_outline_blank: 'square',
   radio_button_checked: 'largecircle.fill.circle',
   radio_button_unchecked: 'circle',
+  remove: 'minus',
+  dark_mode: 'moon',
+  refresh: 'arrow.clockwise',
+  sort: 'arrow.up.arrow.down',
 };
 
 type Props = {
