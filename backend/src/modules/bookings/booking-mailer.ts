@@ -67,11 +67,12 @@ const moment = (at: Date) => {
 /**
  * Booking emails in Vietnamese (decision P10, extended 2026-10-24): to the customer on payment, cancellation and the
  * refund decision, and to the hotel (owner, staff with REFUND) when a refund needs them. Called after the change is
- * committed; never throws, so a mail problem cannot undo a booking change already saved.
+ * committed; sends in the background and never throws, so a mail problem cannot slow down or undo a booking change.
  */
 @Injectable()
 export class BookingMailer {
   private readonly logger = new Logger('BookingMailer');
+  private readonly pending = new Set<Promise<void>>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -206,7 +207,25 @@ export class BookingMailer {
     });
   }
 
-  private async safely(
+  /** Resolves once the emails already started are sent (tests wait on it instead of guessing a delay). */
+  async idle() {
+    while (this.pending.size) await Promise.all([...this.pending]);
+  }
+
+  /**
+   * Sends in the background: the request (and SePay's webhook, which must answer within 30 s) never waits for SMTP.
+   */
+  private safely(
+    bookingId: string,
+    send: (booking: Details) => Promise<void>,
+  ): void {
+    const task: Promise<void> = this.deliver(bookingId, send).finally(() =>
+      this.pending.delete(task),
+    );
+    this.pending.add(task);
+  }
+
+  private async deliver(
     bookingId: string,
     send: (booking: Details) => Promise<void>,
   ) {

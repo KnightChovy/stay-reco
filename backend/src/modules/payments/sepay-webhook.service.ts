@@ -1,18 +1,24 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import type { SepayWebhookResult } from '@stayreco/shared';
 import { ConfigService } from '@nestjs/config';
+import { ErrorCode } from '../../common/errors/error-code';
 import type { Env } from '../../config/env';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditAction } from '../audit/audit.service';
 import { PaymentConfirmationService } from './payment-confirmation.service';
 import {
   bookingCodeOf,
+  describeIssues,
   type SepayTransaction,
+  sepayTransactionSchema,
   transactionTime,
 } from './sepay-webhook';
 
 /** What happened to one notification (answered to SePay, which only reads `success`). */
 export type SepayOutcome = SepayWebhookResult['outcome'];
+
+/** Raw payloads kept for manual handling are cut to this size. */
+const MAX_RAW_PAYLOAD = 4000;
 
 /**
  * SePay's webhook for every bank transaction on the platform account (decision P7, money-rules §4). Incoming
@@ -30,11 +36,45 @@ export class SepayWebhookService {
     private readonly config: ConfigService<Env, true>,
   ) {}
 
+  /**
+   * A body that does not fit even the lenient schema is logged with the failing fields and kept whole in the audit
+   * log, then refused with 400: SePay resends it for up to 5 hours, so a fix deployed meanwhile still gets it.
+   */
+  async parse(body: unknown): Promise<SepayTransaction> {
+    const result = sepayTransactionSchema.safeParse(body ?? {});
+    if (result.success) return result.data;
+
+    const problems = describeIssues(result.error, body);
+    this.logger.error(`SePay payload refused: ${problems.join('; ')}`);
+    const id = (body as { id?: unknown } | null)?.id;
+    const raw = JSON.stringify(body ?? null).slice(0, MAX_RAW_PAYLOAD);
+    await this.recordOnce(
+      AuditAction.SEPAY_TRANSFER_UNMATCHED,
+      id,
+      {
+        sepayId: id ?? null,
+        reason: 'INVALID_PAYLOAD',
+        problems,
+        raw,
+      },
+      null,
+    );
+    throw new BadRequestException({
+      code: ErrorCode.VALIDATION_ERROR,
+      message: 'Validation failed',
+      details: result.error.issues.map((issue) => ({
+        field: issue.path.join('.'),
+        message: issue.message,
+      })),
+    });
+  }
+
   async handle(transaction: SepayTransaction): Promise<SepayOutcome> {
     if (transaction.transferType !== 'in') return 'IGNORED_OUTGOING';
 
     const account = this.config.get('SEPAY_ACCOUNT_NUMBER', { infer: true });
-    if (transaction.accountNumber && transaction.accountNumber !== account) {
+    const received = transaction.accountNumber?.trim();
+    if (received && received !== account.trim()) {
       return this.record(
         AuditAction.SEPAY_TRANSFER_UNMATCHED,
         transaction,
@@ -53,7 +93,7 @@ export class SepayWebhookService {
     const result = await this.payments.confirm({
       code,
       amount: transaction.transferAmount,
-      transactionId: String(transaction.id),
+      transactionId: transaction.id,
       paidAt: transactionTime(transaction.transactionDate, new Date()),
     });
     switch (result.status) {
@@ -86,46 +126,58 @@ export class SepayWebhookService {
     }
   }
 
-  /**
-   * One audit row per SePay transaction and action: SePay may resend a notification if our answer is lost, and the
-   * team should see each transfer once.
-   */
   private async record(
     action: AuditAction,
     transaction: SepayTransaction,
     reason: string,
     extra: { code?: string; bookingId?: string } = {},
   ): Promise<SepayOutcome> {
-    const outcome =
-      action === AuditAction.SEPAY_TRANSFER_LATE ? 'LATE' : 'UNMATCHED';
-    const seen = await this.prisma.auditLog.count({
-      where: {
-        action,
-        newValue: { contains: `"sepayId":${transaction.id},` },
+    await this.recordOnce(
+      action,
+      transaction.id,
+      {
+        sepayId: transaction.id,
+        reason,
+        code: extra.code ?? null,
+        amount: transaction.transferAmount,
+        content: transaction.content,
+        accountNumber: transaction.accountNumber,
+        referenceCode: transaction.referenceCode,
+        transactionDate: transaction.transactionDate,
       },
-    });
-    if (seen) return outcome;
-
-    await this.prisma.auditLog.create({
-      data: {
-        action,
-        entityType: extra.bookingId ? 'booking' : 'sepay_transaction',
-        entityId: extra.bookingId,
-        newValue: JSON.stringify({
-          sepayId: transaction.id,
-          reason,
-          code: extra.code ?? null,
-          amount: transaction.transferAmount,
-          content: transaction.content ?? null,
-          accountNumber: transaction.accountNumber ?? null,
-          referenceCode: transaction.referenceCode ?? null,
-          transactionDate: transaction.transactionDate ?? null,
-        }),
-      },
-    });
+      extra.bookingId ?? null,
+    );
     this.logger.warn(
       `SePay ${transaction.id}: ${reason}${extra.code ? ` (${extra.code})` : ''}, kept for manual handling`,
     );
-    return outcome;
+    return action === AuditAction.SEPAY_TRANSFER_LATE ? 'LATE' : 'UNMATCHED';
+  }
+
+  /**
+   * One audit row per SePay transaction and action: SePay resends a notification when an answer is lost or late, and
+   * the team should see each transfer once. `sepayId` is always the first key, so the prefix identifies the row.
+   */
+  private async recordOnce(
+    action: AuditAction,
+    sepayId: unknown,
+    value: { sepayId: unknown } & Record<string, unknown>,
+    bookingId: string | null,
+  ) {
+    const prefix = `{"sepayId":${JSON.stringify(sepayId ?? null)},`;
+    const seen =
+      sepayId !== undefined &&
+      sepayId !== null &&
+      (await this.prisma.auditLog.count({
+        where: { action, newValue: { startsWith: prefix } },
+      })) > 0;
+    if (seen) return;
+    await this.prisma.auditLog.create({
+      data: {
+        action,
+        entityType: bookingId ? 'booking' : 'sepay_transaction',
+        entityId: bookingId,
+        newValue: JSON.stringify(value),
+      },
+    });
   }
 }

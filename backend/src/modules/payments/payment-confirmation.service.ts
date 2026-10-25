@@ -109,7 +109,7 @@ export class PaymentConfirmationService {
       );
       // After the commit: the confirmation email (P10).
       if (result.status === 'CONFIRMED') {
-        await this.mailer.bookingConfirmed(bookingId);
+        this.mailer.bookingConfirmed(bookingId);
       }
       return result;
     } catch (err) {
