@@ -206,4 +206,8 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorInfo> = {
     status: 409,
     description: 'The refund is not pending',
   },
+  INVALID_API_KEY: {
+    status: 401,
+    description: 'Missing or wrong webhook API key; nothing is processed',
+  },
 };

@@ -27,6 +27,10 @@ const TAGS: [name: string, description: string][] = [
     'Bookings with a 15-minute hold, payment details and the booking page. Guide: docs/api/customer.md#bookings',
   ],
   [
+    'payments',
+    'SePay webhook (called by SePay) and the development payment simulator. Rules: docs/money-rules.md',
+  ],
+  [
     'search',
     'Public hotel search and hotel / room type pages with prices for a stay. Guide: docs/api/customer.md',
   ],
