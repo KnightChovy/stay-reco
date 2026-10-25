@@ -70,8 +70,23 @@ const envSchema = z
      * to "true", and always off when NODE_ENV=production, so a server started without NODE_ENV never exposes it.
      */
     PAYMENT_SIMULATOR: booleanString,
+    /**
+     * API key SePay sends with every webhook call (`Authorization: Apikey <key>`), the same value as in the SePay
+     * dashboard. Required in production; without it the webhook refuses every call.
+     */
+    SEPAY_WEBHOOK_API_KEY: z.preprocess(
+      (v) => (v === '' ? undefined : v),
+      z.string().min(16).optional(),
+    ),
   })
   .superRefine((env, ctx) => {
+    if (env.NODE_ENV === 'production' && !env.SEPAY_WEBHOOK_API_KEY) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['SEPAY_WEBHOOK_API_KEY'],
+        message: 'SEPAY_WEBHOOK_API_KEY is required in production',
+      });
+    }
     if (env.CLOUDINARY_CLOUD_NAME) {
       for (const key of [
         'CLOUDINARY_API_KEY',
