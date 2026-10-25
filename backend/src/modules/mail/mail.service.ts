@@ -45,6 +45,10 @@ export class SmtpMailService extends MailService {
       port: options.port,
       secure: options.secure,
       auth: { user: options.user, pass: options.pass },
+      // Nodemailer waits up to 2 minutes by default; a blocked SMTP port (some hosts block it) would hold the request.
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 20_000,
     });
   }
 

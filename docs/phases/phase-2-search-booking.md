@@ -99,7 +99,8 @@ room_calendars:  (free) ──hold──► HELD ──paid──► BOOKED ─�
 - Payload fields used: `id` (SePay transaction id, idempotency key `sepay:<id>` and `invoice.vnpay_txn_ref`), `transferType` (`out` is ignored), `transferAmount`, `content`, `code` (filled by SePay when a payment code pattern is configured there; optional), `accountNumber` (another account is not processed), `transactionDate` (Vietnam time, becomes `paid_at`).
 - The booking code is read from `code`, then `content`, with or without the dashes banks often drop (`SR2610250842`, `SR 261025 0842`). An exact amount on a `PENDING` booking confirms it in one transaction (invoice `PAID`, `BOOKING_PAYMENT` wallet row, `room_calendars` `HELD` → `BOOKED`) and sends the confirmation email.
 - No code, an unknown code, a different amount or another account → `audit_log` `SEPAY_TRANSFER_UNMATCHED`; a transfer for a booking that is no longer `PENDING` (expired, already paid) → `SEPAY_TRANSFER_LATE`, to refund by hand. One audit row per SePay transaction. Every call with a valid key is answered `{ success: true, data: { outcome } }`, so SePay does not resend it.
-- Field names and the header were written from SePay's webhook documentation (docs.sepay.vn, "Tích hợp WebHooks") from memory; check them against that page when creating the webhook, and adjust the schema in `sepay-webhook.ts` if they differ.
+- Checked against SePay's documentation (docs.sepay.vn, "Tích hợp WebHooks", 2026-10-25): SePay counts a call as delivered only with HTTP 200/201, a body containing `{"success": true}` and an answer within 30 seconds; otherwise it resends up to 7 times over at most 5 hours (Fibonacci intervals), always with the same `id`. The handler therefore sends the confirmation email in the background, and SMTP connections time out after about 10 seconds.
+- The body is read leniently (text fields may be null or numbers, `id` a number or a string, `transferType` in any case), because SePay's test notifications and some banks differ from the documented example. A body that still does not fit is refused with `400 VALIDATION_ERROR`, the failing fields are written to the server log, and the raw payload is kept in `audit_log` (`SEPAY_TRANSFER_UNMATCHED`, reason `INVALID_PAYLOAD`); SePay's resends then succeed once a fix is deployed.
 - Local development needs a public URL for the webhook (ngrok).
 
 ## Limits (locked for this phase)
@@ -149,6 +150,7 @@ room_calendars:  (free) ──hold──► HELD ──paid──► BOOKED ─�
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-10-25 | BE | SePay webhook checked against SePay's documentation: lenient payload, refused payloads logged and kept, booking emails sent in the background (30-second answer limit), SMTP timeouts shortened |
 | 2026-10-25 | BE | SePay webhook built: API key check, dash-tolerant booking code, unmatched and late transfers in `audit_log`; new error code `INVALID_API_KEY` |
 | 2026-10-24 | BE | Booking emails built (P10 extended: refund request received, new request to the hotel, forwarded, automatic approval; Vietnamese) |
 | 2026-10-24 | BE | Hotel side built: bookings list (refund queue), forward with a note, approve (hotel pending → customer available), reject with `refundRejection`, automatic approval at the check-in time |

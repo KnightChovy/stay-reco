@@ -1,4 +1,9 @@
-import { bookingCodeOf, transactionTime } from './sepay-webhook';
+import {
+  bookingCodeOf,
+  describeIssues,
+  sepayTransactionSchema,
+  transactionTime,
+} from './sepay-webhook';
 
 describe('bookingCodeOf', () => {
   it('reads the code with or without the dashes the bank may drop', () => {
@@ -41,5 +46,63 @@ describe('transactionTime', () => {
   it('falls back when the time is missing or unreadable', () => {
     expect(transactionTime(undefined, fallback)).toBe(fallback);
     expect(transactionTime('25/10/2026', fallback)).toBe(fallback);
+  });
+});
+
+describe('sepayTransactionSchema', () => {
+  it('reads the documented payload', () => {
+    const parsed = sepayTransactionSchema.parse({
+      id: 92704,
+      gateway: 'Vietcombank',
+      transactionDate: '2024-07-02 11:08:33',
+      accountNumber: '1017588888',
+      subAccount: '',
+      code: 'SEVN63DC8E5C',
+      content: 'SEVN63DC8E5C chuyen tien',
+      transferType: 'in',
+      description: 'NGUYEN VAN A chuyen tien',
+      transferAmount: 5000000,
+      accumulated: 105000000,
+      referenceCode: 'FT24012345678',
+    });
+    expect(parsed).toEqual({
+      id: '92704',
+      gateway: 'Vietcombank',
+      transactionDate: '2024-07-02 11:08:33',
+      accountNumber: '1017588888',
+      code: 'SEVN63DC8E5C',
+      content: 'SEVN63DC8E5C chuyen tien',
+      transferType: 'in',
+      transferAmount: 5000000,
+      referenceCode: 'FT24012345678',
+    });
+  });
+
+  it('accepts nulls, numbers as strings, missing text fields and upper case', () => {
+    const parsed = sepayTransactionSchema.parse({
+      id: '92704',
+      accountNumber: 1017588888,
+      transferType: ' IN ',
+      transferAmount: '5000000',
+      gateway: null,
+    });
+    expect(parsed).toMatchObject({
+      id: '92704',
+      accountNumber: '1017588888',
+      transferType: 'in',
+      transferAmount: 5000000,
+      gateway: null,
+      content: null,
+    });
+  });
+
+  it('describes what is wrong without echoing values', () => {
+    const body = { id: 1, transferType: 'sideways', transferAmount: 'abc' };
+    const result = sepayTransactionSchema.safeParse(body);
+    expect(result.success).toBe(false);
+    const problems = describeIssues(result.error!, body);
+    expect(problems.some((p) => p.startsWith('transferType:'))).toBe(true);
+    expect(problems.some((p) => p.includes('(got string)'))).toBe(true);
+    expect(problems.join(' ')).not.toContain('sideways');
   });
 });

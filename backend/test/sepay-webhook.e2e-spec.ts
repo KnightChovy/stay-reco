@@ -1,3 +1,4 @@
+import { BookingMailer } from '../src/modules/bookings/booking-mailer';
 import { HoldExpiryService } from '../src/modules/bookings/hold-expiry.service';
 import { createTestApp } from './helpers';
 
@@ -168,6 +169,7 @@ describe('SePay webhook (e2e)', () => {
     });
     expect(invoice.vnpayTxnRef).toBe(String(body.id));
     expect(invoice.paidAt?.toISOString()).toBe('2026-10-25T07:02:37.000Z');
+    await t.app.get(BookingMailer).idle();
     expect(t.outbox.map((m) => m.subject)).toEqual([
       `Xác nhận đặt phòng ${booking.code}`,
     ]);
@@ -231,7 +233,7 @@ describe('SePay webhook (e2e)', () => {
       entityId: booking.id,
     });
     expect(JSON.parse(mismatch.newValue!)).toMatchObject({
-      sepayId: wrongAmount.id,
+      sepayId: String(wrongAmount.id),
       code: booking.code,
       amount: 1999000,
     });
@@ -256,6 +258,52 @@ describe('SePay webhook (e2e)', () => {
       code: booking.code,
     });
     expect(await t.prisma.walletTransaction.count()).toBe(0);
+  });
+
+  it('accepts the variations SePay and banks send', async () => {
+    const h = await hotel();
+    const me = await t.signIn('CUSTOMER', 'guest@mail.test');
+    const booking = await book(me.token, h.roomTypeId);
+
+    // A string id, null text fields, a numeric account number and an upper-case type, as some notifications carry.
+    const res = await notify({
+      id: String(++sepayId),
+      gateway: null,
+      transactionDate: null,
+      accountNumber: Number(ACCOUNT) || ACCOUNT,
+      subAccount: null,
+      code: null,
+      content: booking.code,
+      transferType: 'IN',
+      description: null,
+      transferAmount: '2000000',
+      accumulated: 0,
+      referenceCode: null,
+    }).expect(200);
+    expect(res.body.data.outcome).toBe('CONFIRMED');
+    expect(await status(booking.id)).toEqual(['CONFIRMED', 'PAID']);
+  });
+
+  it('refuses a payload it cannot read, logs the fields and keeps it', async () => {
+    const body = { id: 555, content: 'SR-261025-0001', transferAmount: 'abc' };
+
+    const res = await notify(body).expect(400);
+    expect(res.body.code).toBe('VALIDATION_ERROR');
+    expect(
+      (res.body.details as { field: string }[]).map((d) => d.field).sort(),
+    ).toEqual(['transferAmount', 'transferType']);
+    // SePay resends it: still one row.
+    await notify(body).expect(400);
+    const rows = await audits('SEPAY_TRANSFER_UNMATCHED');
+    expect(rows).toHaveLength(1);
+    const kept = JSON.parse(rows[0].newValue!) as {
+      reason: string;
+      problems: string[];
+      raw: string;
+    };
+    expect(kept.reason).toBe('INVALID_PAYLOAD');
+    expect(kept.problems.join(' ')).toContain('transferType');
+    expect(JSON.parse(kept.raw)).toEqual(body);
   });
 
   it('ignores outgoing transfers', async () => {
