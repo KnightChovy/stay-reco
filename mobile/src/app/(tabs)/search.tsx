@@ -1,122 +1,60 @@
 import { useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { Image } from 'expo-image';
-import { router } from 'expo-router';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import { router, useLocalSearchParams } from 'expo-router';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { HOTEL_SORTS } from '@stayreco/shared';
+import { HotelCard, HotelCardSkeleton } from '@/components/common/card/HotelCard';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
-import { Icon, type IconName } from '@/components/ui/icon';
+import { Icon } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
 import { colors, radius, shadow } from '@/constants/theme';
-import { formatVnd, hotels, type Hotel } from '@/lib/mock-data';
+import { formatDate, nightsBetween, stayFromParams } from '@/lib/stay';
+import { searchHotels } from '@/services/stays.service';
 
-const quickFilters: { label: string; icon: IconName }[] = [
-  { label: 'Giá tốt', icon: 'verified' },
-  { label: 'Gần biển', icon: 'beach_access' },
-  { label: 'Bao gồm bữa sáng', icon: 'free_breakfast' },
-  { label: 'Hủy miễn phí', icon: 'event_available' },
-];
+type Sort = (typeof HOTEL_SORTS)[number];
 
-const filterGroups: { title: string; options: { label: string; icon?: IconName }[] }[] = [
-  { title: 'Hạng sao & Phong cách', options: [{ label: '3 sao' }, { label: '4 sao' }, { label: '5 sao' }, { label: 'Villa' }] },
-  {
-    title: 'Gu trải nghiệm lưu trú',
-    options: [
-      { label: 'Yên tĩnh & Chữa lành', icon: 'self_improvement' },
-      { label: 'Sát biển ngắm bình minh', icon: 'waves' },
-      { label: 'Kiến trúc bản địa', icon: 'palette' },
-      { label: 'Khuôn viên cà phê boutique', icon: 'local_cafe' },
-    ],
-  },
-  {
-    title: 'Tiện ích ưu tiên',
-    options: [
-      { label: 'Bao gồm bữa sáng địa phương', icon: 'free_breakfast' },
-      { label: 'Hồ bơi riêng hoặc ngoài trời', icon: 'pool' },
-      { label: 'Đưa đón sân bay Đà Nẵng', icon: 'airport_shuttle' },
-    ],
-  },
-];
+const sortLabels: Record<Sort, string> = {
+  recommended: 'Phù hợp',
+  'price-asc': 'Giá thấp đến cao',
+  'price-desc': 'Giá cao đến thấp',
+  'star-desc': 'Hạng sao cao nhất',
+};
 
-function ResultCard({ hotel }: { hotel: Hotel }) {
-  const open = () => router.push(`/hotels/${hotel.id}`);
-  return (
-    <Pressable onPress={open} style={styles.card}>
-      <View>
-        <Image source={hotel.searchImage} style={styles.image} contentFit="cover" transition={200} />
-        <View style={[styles.overlayPill, styles.topLeft]}>
-          <Icon name="hotel_class" size={14} color={colors.secondary} />
-          <Text variant="caption" weight="semibold" color={colors.secondary}>
-            {hotel.category}
-          </Text>
-        </View>
-        <Pressable accessibilityLabel="Yêu thích" style={styles.fav}>
-          <Icon name="favorite" size={20} color={colors.secondary} />
-        </Pressable>
-        <View style={[styles.overlayPill, styles.bottomLeft, styles.darkPill]}>
-          <Icon name={hotel.highlightIcon} size={14} color={colors.white} />
-          <Text variant="caption" weight="medium" color={colors.white}>
-            {hotel.highlight}
-          </Text>
-        </View>
-        <View style={[styles.overlayPill, styles.bottomRight]}>
-          <Text variant="caption" weight="bold" color={colors.secondary}>
-            {hotel.rating}
-          </Text>
-          <Text variant="caption" color={colors.outline}>
-            /5 ({hotel.reviews})
-          </Text>
-        </View>
-      </View>
-      <View style={styles.body}>
-        <View>
-          <Text variant="h3" weight="bold">
-            {hotel.name}
-          </Text>
-          <View style={styles.row}>
-            <Icon name="pin_drop" size={14} color={colors.outline} />
-            <Text variant="small" color={colors.onSurfaceVariant}>
-              {hotel.searchLocation}
-            </Text>
-          </View>
-        </View>
-        <View style={styles.chips}>
-          <Chip label={hotel.chips[0].label} icon="spa" tone="primary" />
-          <Chip label={hotel.chips[1].label} tone="neutral" />
-        </View>
-        <View>
-          <Text variant="small">Hạng phòng: {hotel.roomType}</Text>
-          <View style={styles.row}>
-            <Icon name={hotel.perkIcon} size={14} color={colors.tertiaryContainer} />
-            <Text variant="small" color={colors.tertiaryContainer}>
-              {hotel.perk}
-            </Text>
-          </View>
-        </View>
-        <View style={styles.footer}>
-          <View style={styles.flex}>
-            <Text variant="price" color={colors.primary}>
-              {formatVnd(hotel.price)}
-              <Text variant="small" color={colors.onSurfaceVariant}>
-                {' '}/ đêm
-              </Text>
-            </Text>
-            <Text variant="caption" color={colors.outline}>
-              Tổng 2 đêm: {formatVnd(hotel.price * 2)} (đã gồm thuế, phí)
-            </Text>
-          </View>
-          <Button label="Xem phòng" icon="arrow_forward" size="sm" onPress={open} />
-        </View>
-      </View>
-    </Pressable>
-  );
-}
+const STARS = [5, 4, 3];
 
 export default function SearchScreen() {
-  const [filterOpen, setFilterOpen] = useState(false);
   const insets = useSafeAreaInsets();
+  const stay = stayFromParams(useLocalSearchParams());
+  const nights = nightsBetween(stay.checkIn, stay.checkOut);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [sort, setSort] = useState<Sort>('recommended');
+  const [freeCancellation, setFreeCancellation] = useState(false);
+  const [starRating, setStarRating] = useState<number[]>([]);
+
+  const query = {
+    ...stay,
+    sort,
+    page: 1,
+    pageSize: 20,
+    ...(freeCancellation ? { freeCancellation: true } : {}),
+    ...(starRating.length ? { starRating } : {}),
+  };
+  // shortcut: chỉ lấy trang đầu 20 kết quả, thêm tải tiếp khi điểm đến có nhiều khách sạn hơn.
+  const { data, isPending, isPlaceholderData, isError, refetch } = useQuery({
+    queryKey: ['stays', 'search', query],
+    queryFn: () => searchHotels(query),
+    placeholderData: keepPreviousData,
+  });
+  // Đổi bộ lọc thì vẫn giữ số kết quả cũ ở tiêu đề, nhưng danh sách hiện skeleton tới khi có kết quả mới.
+  const loading = isPending || isPlaceholderData;
+
+  const toggleStar = (star: number) =>
+    setStarRating((s) => (s.includes(star) ? s.filter((x) => x !== star) : [...s, star]));
+  const nextSort = () => setSort((s) => HOTEL_SORTS[(HOTEL_SORTS.indexOf(s) + 1) % HOTEL_SORTS.length]);
+  const filterCount = starRating.length + (freeCancellation ? 1 : 0);
 
   return (
     <View style={styles.screen}>
@@ -127,10 +65,10 @@ export default function SearchScreen() {
         </View>
         <View style={styles.flex}>
           <Text variant="label" weight="bold">
-            Đà Nẵng · 20/10 - 22/10
+            {stay.destination} · {formatDate(stay.checkIn).slice(0, 5)} - {formatDate(stay.checkOut).slice(0, 5)}
           </Text>
           <Text variant="caption" color={colors.onSurfaceVariant}>
-            2 đêm · 2 người lớn · 1 phòng
+            {nights} đêm · {stay.guests} khách · {stay.rooms} phòng
           </Text>
         </View>
         <Button label="Sửa" leadingIcon="tune" variant="secondary" size="sm" onPress={() => router.back()} />
@@ -142,43 +80,51 @@ export default function SearchScreen() {
           <Text variant="label" weight="semibold" color={colors.onPrimary}>
             Bộ lọc
           </Text>
-          <View style={styles.badge}>
-            <Text variant="caption" weight="bold" color={colors.white}>
-              4
-            </Text>
-          </View>
+          {filterCount > 0 && (
+            <View style={styles.badge}>
+              <Text variant="caption" weight="bold" color={colors.white}>
+                {filterCount}
+              </Text>
+            </View>
+          )}
         </Pressable>
-        <Chip label="Sắp xếp: Phù hợp" icon="keyboard_arrow_down" tone="outline" onPress={() => {}} />
-        {quickFilters.map((f, i) => (
-          <Chip key={f.label} label={f.label} icon={f.icon} tone={i === 0 ? 'secondary' : 'outline'} onPress={() => {}} />
-        ))}
+        <Chip label={`Sắp xếp: ${sortLabels[sort]}`} icon="sort" tone="outline" onPress={nextSort} />
+        <Chip
+          label="Hủy miễn phí"
+          icon="event_available"
+          tone={freeCancellation ? 'secondary' : 'outline'}
+          onPress={() => setFreeCancellation((v) => !v)}
+        />
       </ScrollView>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.resultHead}>
           <Text variant="label" weight="bold">
-            48 chỗ nghỉ phù hợp · <Text variant="label" color={colors.onSurfaceVariant}>Đà Nẵng</Text>
-          </Text>
-          <View style={styles.row}>
-            <Icon name="bolt" size={14} color={colors.tertiaryContainer} />
-            <Text variant="caption" color={colors.tertiaryContainer}>
-              Đã xác thực
+            {data ? `${data.meta.total} chỗ nghỉ phù hợp · ` : ''}
+            <Text variant="label" color={colors.onSurfaceVariant}>
+              {stay.destination}
             </Text>
-          </View>
+          </Text>
         </View>
-        {hotels.map((h, i) => (
-          <Animated.View key={h.id} entering={FadeInDown.delay(i * 90).springify().damping(18)}>
-            <ResultCard hotel={h} />
-          </Animated.View>
-        ))}
+        {loading && [0, 1, 2].map((i) => <HotelCardSkeleton key={i} />)}
+        {isError && (
+          <View style={styles.state}>
+            <Text variant="small" color={colors.onSurfaceVariant} center>
+              Không tải được kết quả. Vui lòng kiểm tra kết nối.
+            </Text>
+            <Button label="Thử lại" leadingIcon="refresh" variant="secondary" size="sm" onPress={() => refetch()} />
+          </View>
+        )}
+        {!loading && data?.hotels.length === 0 && (
+          <Text variant="small" color={colors.onSurfaceVariant} center>
+            Chưa có chỗ nghỉ còn phòng cho lựa chọn này. Thử đổi ngày hoặc bỏ bớt bộ lọc.
+          </Text>
+        )}
+        {!loading &&
+          data?.hotels.map((h, i) => (
+            <HotelCard key={h.id} hotel={h} stay={stay} index={i} />
+          ))}
       </ScrollView>
-
-      <Pressable style={[styles.mapBtn, { bottom: Math.max(insets.bottom, 12) + 84 }]}>
-        <Icon name="map" size={18} color={colors.white} />
-        <Text variant="label" weight="semibold" color={colors.white}>
-          Xem bản đồ Đà Nẵng
-        </Text>
-      </Pressable>
 
       <Modal visible={filterOpen} transparent animationType="slide" onRequestClose={() => setFilterOpen(false)}>
         <Pressable style={styles.backdrop} onPress={() => setFilterOpen(false)} />
@@ -197,39 +143,59 @@ export default function SearchScreen() {
           <ScrollView contentContainerStyle={styles.sheetBody}>
             <View style={styles.group}>
               <Text variant="label" weight="bold">
-                Khoảng giá / đêm
+                Hạng sao
               </Text>
-              <Text variant="h3" color={colors.primaryContainer}>
-                700.000 ₫ – 3.000.000 ₫
-              </Text>
-              <View style={styles.track}>
-                <View style={styles.trackFill} />
-              </View>
-              <View style={styles.between}>
-                <Text variant="caption" color={colors.outline}>
-                  500.000 ₫
-                </Text>
-                <Text variant="caption" color={colors.outline}>
-                  10.000.000 ₫+
-                </Text>
+              <View style={styles.chips}>
+                {STARS.map((star) => (
+                  <Chip
+                    key={star}
+                    label={`${star} sao`}
+                    tone={starRating.includes(star) ? 'selected' : 'outline'}
+                    onPress={() => toggleStar(star)}
+                  />
+                ))}
               </View>
             </View>
-            {filterGroups.map((g) => (
-              <View key={g.title} style={styles.group}>
-                <Text variant="label" weight="bold">
-                  {g.title}
-                </Text>
-                <View style={styles.chips}>
-                  {g.options.map((o, i) => (
-                    <Chip key={o.label} label={o.label} icon={o.icon} tone={i === 1 ? 'selected' : 'outline'} onPress={() => {}} />
-                  ))}
-                </View>
+            <View style={styles.group}>
+              <Text variant="label" weight="bold">
+                Chính sách hủy
+              </Text>
+              <View style={styles.chips}>
+                <Chip
+                  label="Miễn phí hủy phòng"
+                  icon="event_available"
+                  tone={freeCancellation ? 'selected' : 'outline'}
+                  onPress={() => setFreeCancellation((v) => !v)}
+                />
               </View>
-            ))}
+            </View>
+            <View style={styles.group}>
+              <Text variant="label" weight="bold">
+                Sắp xếp
+              </Text>
+              <View style={styles.chips}>
+                {HOTEL_SORTS.map((s) => (
+                  <Chip key={s} label={sortLabels[s]} tone={s === sort ? 'selected' : 'outline'} onPress={() => setSort(s)} />
+                ))}
+              </View>
+            </View>
           </ScrollView>
           <View style={styles.sheetActions}>
-            <Button label="Thiết lập lại" variant="secondary" style={styles.flex} onPress={() => setFilterOpen(false)} />
-            <Button label="Áp dụng (48 chỗ nghỉ)" style={styles.flex2} onPress={() => setFilterOpen(false)} />
+            <Button
+              label="Thiết lập lại"
+              variant="secondary"
+              style={styles.flex}
+              onPress={() => {
+                setStarRating([]);
+                setFreeCancellation(false);
+                setSort('recommended');
+              }}
+            />
+            <Button
+              label={data ? `Xem ${data.meta.total} chỗ nghỉ` : 'Áp dụng'}
+              style={styles.flex2}
+              onPress={() => setFilterOpen(false)}
+            />
           </View>
         </View>
       </Modal>
@@ -241,8 +207,6 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.surface },
   flex: { flex: 1 },
   flex2: { flex: 2 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  between: { flexDirection: 'row', justifyContent: 'space-between' },
   summary: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -280,50 +244,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: colors.secondary,
   },
-  content: { paddingHorizontal: 16, paddingBottom: 170, gap: 20 },
+  content: { paddingHorizontal: 16, paddingBottom: 120, gap: 20 },
   resultHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  card: { borderRadius: radius.lg, overflow: 'hidden', backgroundColor: colors.surfaceContainerLowest, ...shadow.card },
-  image: { width: '100%', aspectRatio: 1.6 },
-  overlayPill: {
-    position: 'absolute',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: radius.full,
-    backgroundColor: 'rgba(255,255,255,0.92)',
-  },
-  darkPill: { backgroundColor: 'rgba(0,0,0,0.55)' },
-  topLeft: { top: 12, left: 12 },
-  bottomLeft: { bottom: 12, left: 12 },
-  bottomRight: { bottom: 12, right: 12 },
-  fav: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.9)',
-  },
-  body: { padding: 16, gap: 12 },
+  state: { alignItems: 'center', gap: 10 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  footer: { flexDirection: 'row', alignItems: 'flex-end', gap: 12 },
-  mapBtn: {
-    position: 'absolute',
-    alignSelf: 'center',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    borderRadius: radius.full,
-    backgroundColor: colors.inverseSurface,
-    ...shadow.floating,
-  },
   backdrop: { flex: 1, backgroundColor: colors.scrim },
   sheet: {
     maxHeight: '85%',
@@ -335,7 +259,5 @@ const styles = StyleSheet.create({
   close: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   sheetBody: { padding: 20, gap: 24 },
   group: { gap: 10 },
-  track: { height: 6, borderRadius: 3, backgroundColor: colors.surfaceContainerHigh },
-  trackFill: { marginLeft: '10%', width: '45%', height: 6, borderRadius: 3, backgroundColor: colors.primaryContainer },
   sheetActions: { flexDirection: 'row', gap: 12, paddingHorizontal: 20, paddingTop: 12 },
 });

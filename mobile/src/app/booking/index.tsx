@@ -1,12 +1,14 @@
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { Image } from 'expo-image';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import type { AxiosError } from 'axios';
+import { createBookingSchema, type ErrorDetail } from '@stayreco/shared';
 import { ScreenHeader } from '@/components/layout/AppHeader';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Chip } from '@/components/ui/chip';
 import { Icon, type IconName } from '@/components/ui/icon';
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
@@ -14,75 +16,162 @@ import { colors, fonts, radius, shadow } from '@/constants/theme';
 import { BookingProgress } from '@/features/booking/BookingProgress';
 import { PriceLine } from '@/features/booking/PriceLine';
 import { images } from '@/lib/mock-data';
+import { formatDate, formatVnd, nightsBetween, stayFromParams } from '@/lib/stay';
+import { createBooking } from '@/services/bookings.service';
+import { hotelListingQuery } from '@/services/stays.service';
+import { useAuthStore } from '@/stores/auth.store';
 
-function CardTitle({ icon, title, right }: { icon: IconName; title: string; right?: React.ReactNode }) {
+function CardTitle({ icon, title }: { icon: IconName; title: string }) {
   return (
-    <View style={styles.between}>
-      <View style={[styles.row, styles.flex]}>
-        <Icon name={icon} size={20} color={colors.primaryContainer} />
-        <Text variant="label" weight="bold" style={styles.cardTitle}>
-          {title}
-        </Text>
-      </View>
-      {right}
+    <View style={styles.row}>
+      <Icon name={icon} size={20} color={colors.primaryContainer} />
+      <Text variant="label" weight="bold" style={styles.cardTitle}>
+        {title}
+      </Text>
     </View>
   );
 }
 
+type ApiError = AxiosError<{ code?: string; message?: string; details?: ErrorDetail[] }>;
+
 export default function BookingInfoScreen() {
   const insets = useSafeAreaInsets();
-  const [name, setName] = useState('Nguyễn Minh Anh');
-  const [email, setEmail] = useState('minhanh.traveler@gmail.com');
-  const [phone, setPhone] = useState('0912 345 678');
-  const [highFloor, setHighFloor] = useState(true);
-  const [tea, setTea] = useState(true);
-  const [agreed, setAgreed] = useState(true);
+  const params = useLocalSearchParams<{ hotelId: string; roomTypeId: string }>();
+  const stay = stayFromParams(params);
+  const nights = nightsBetween(stay.checkIn, stay.checkOut);
+  const account = useAuthStore((s) => s.account);
+  const hydrating = useAuthStore((s) => s.hydrating);
+  const queryClient = useQueryClient();
+  const { data, isError, refetch } = useQuery(hotelListingQuery(params.hotelId, stay));
+  const room = data?.roomTypes.find((r) => r.roomType.id === params.roomTypeId);
+  const offer = room?.offer;
+
+  // Chưa sửa thì lấy theo tài khoản, kể cả khi khách đăng nhập sau khi đã mở màn này.
+  const [nameInput, setName] = useState<string>();
+  const [phoneInput, setPhone] = useState<string>();
+  const name = nameInput ?? account?.fullName ?? '';
+  const phone = phoneInput ?? account?.phone ?? '';
+  const [requests, setRequests] = useState('');
+  const [agreed, setAgreed] = useState(false);
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const submit = async (expectedTotal: number) => {
+    const input = createBookingSchema.safeParse({
+      roomTypeId: params.roomTypeId,
+      checkIn: stay.checkIn,
+      checkOut: stay.checkOut,
+      guests: stay.guests,
+      rooms: stay.rooms,
+      guestName: name,
+      contactPhone: phone,
+      ...(requests.trim() ? { specialRequests: requests } : {}),
+      expectedTotal,
+    });
+    if (!input.success) {
+      setError('Vui lòng nhập họ tên và số điện thoại hợp lệ.');
+      return;
+    }
+    setError('');
+    setSubmitting(true);
+    try {
+      const booking = await createBooking(input.data);
+      void queryClient.invalidateQueries({ queryKey: ['bookings'] });
+      router.replace({ pathname: '/booking/payment', params: { id: booking.id } });
+    } catch (err) {
+      const body = (err as ApiError).response?.data;
+      if (body?.code === 'BOOKING_PRICE_CHANGED') {
+        // MSG13: backend trả tổng mới trong details; khách đồng ý thì gửi lại với tổng đó.
+        const newTotal = Number(body.details?.find((d) => d.field === 'expectedTotal')?.message);
+        // Tải lại giá để chi tiết giá và tổng tiền trên màn hiện theo giá mới.
+        void queryClient.invalidateQueries({ queryKey: ['stays', 'hotel', params.hotelId] });
+        Alert.alert('Giá phòng đã thay đổi', `Tổng tiền mới là ${formatVnd(newTotal)}. Bạn có muốn tiếp tục đặt phòng?`, [
+          { text: 'Hủy', style: 'cancel' },
+          { text: 'Đặt với giá mới', onPress: () => void submit(newTotal) },
+        ]);
+      } else if (body?.code === 'ROOM_SOLD_OUT') {
+        setError('Rất tiếc, hạng phòng này vừa hết phòng cho ngày bạn chọn. Vui lòng chọn phòng khác.');
+        void queryClient.invalidateQueries({ queryKey: ['stays', 'hotel', params.hotelId] });
+      } else {
+        setError(body?.message || 'Không đặt được phòng. Vui lòng kiểm tra kết nối và thử lại.');
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (!account) {
+    return (
+      <View style={styles.screen}>
+        <ScreenHeader title="Thông Tin Đặt Phòng" />
+        <View style={styles.state}>
+          <Text variant="small" color={colors.onSurfaceVariant} center>
+            {hydrating ? 'Đang tải...' : 'Vui lòng đăng nhập để đặt phòng.'}
+          </Text>
+          {!hydrating && <Button label="Đăng nhập" leadingIcon="login" onPress={() => router.push('/login')} />}
+        </View>
+      </View>
+    );
+  }
+
+  if (!data || !room || !offer) {
+    return (
+      <View style={styles.screen}>
+        <ScreenHeader title="Thông Tin Đặt Phòng" />
+        <View style={styles.state}>
+          <Text variant="small" color={colors.onSurfaceVariant} center>
+            {data
+              ? 'Hạng phòng này không còn mở bán cho ngày bạn chọn.'
+              : isError
+                ? 'Không tải được giá phòng. Vui lòng kiểm tra kết nối.'
+                : 'Đang tải...'}
+          </Text>
+          {!data && isError && (
+            <Button label="Thử lại" leadingIcon="refresh" variant="secondary" size="sm" onPress={() => refetch()} />
+          )}
+        </View>
+      </View>
+    );
+  }
+
+  const { hotel } = data;
 
   return (
     <View style={styles.screen}>
-      <ScreenHeader
-        title="Chi Tiết Khách Sạn"
-        right={
-          <Pressable accessibilityLabel="Chia sẻ" style={styles.iconBtn}>
-            <Icon name="share" color={colors.onSurface} />
-          </Pressable>
-        }
-      />
-      <View style={styles.hold}>
-        <Icon name="hourglass_top" size={18} color={colors.secondary} />
-        <Text variant="small" color={colors.onSecondaryContainer} style={styles.flex} numberOfLines={1}>
-          Phòng được giữ giá tốt nhất trong 19:45
-        </Text>
-        <Chip label="Đang giữ chỗ" tone="outline" />
-      </View>
+      <ScreenHeader title="Thông Tin Đặt Phòng" />
       <BookingProgress current={1} />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.card}>
           <View style={styles.row}>
             <View>
-              <Image source={images.bookingThumb} style={styles.thumb} contentFit="cover" />
-              <View style={styles.thumbTag}>
-                <Text variant="caption" weight="bold" color={colors.white}>
-                  4 Sao
-                </Text>
-              </View>
+              <Image
+                source={room.roomType.images[0]?.url ?? hotel.images[0]?.url ?? images.bookingThumb}
+                style={styles.thumb}
+                contentFit="cover"
+              />
+              {hotel.starRating != null && (
+                <View style={styles.thumbTag}>
+                  <Text variant="caption" weight="bold" color={colors.white}>
+                    {hotel.starRating} Sao
+                  </Text>
+                </View>
+              )}
             </View>
             <View style={[styles.flex, styles.gap4]}>
               <View style={styles.row}>
                 <Icon name="location_on" size={14} color={colors.secondary} />
-                <Text variant="caption" color={colors.secondary}>
-                  Sơn Trà, Đà Nẵng
+                <Text variant="caption" color={colors.secondary} style={styles.flex}>
+                  {hotel.city}
                 </Text>
               </View>
-              <Text variant="h3">An Nhiên Riverside Hotel</Text>
+              <Text variant="h3">{hotel.name}</Text>
               <View style={styles.row}>
                 <Icon name="bed" size={14} color={colors.onSurfaceVariant} />
                 <Text variant="caption" color={colors.onSurfaceVariant}>
-                  Phòng Deluxe River View (Tầng 6)
+                  {room.roomType.name}
                 </Text>
               </View>
-              <Chip label="Không hút thuốc • Ban công riêng" icon="verified_user" tone="neutral" />
             </View>
           </View>
           <View style={styles.dates}>
@@ -91,10 +180,8 @@ export default function BookingInfoScreen() {
                 Nhận phòng
               </Text>
               <Text variant="label" weight="bold">
-                14:00 • 20/10/2026
-              </Text>
-              <Text variant="caption" color={colors.onSurfaceVariant}>
-                Thứ Ba
+                {hotel.checkInTime ? `${hotel.checkInTime} • ` : ''}
+                {formatDate(stay.checkIn)}
               </Text>
             </View>
             <View style={styles.flex}>
@@ -102,10 +189,11 @@ export default function BookingInfoScreen() {
                 Trả phòng
               </Text>
               <Text variant="label" weight="bold">
-                12:00 • 22/10/2026
+                {hotel.checkOutTime ? `${hotel.checkOutTime} • ` : ''}
+                {formatDate(stay.checkOut)}
               </Text>
               <Text variant="caption" color={colors.onSurfaceVariant}>
-                Thứ Năm (2 đêm)
+                {nights} đêm
               </Text>
             </View>
           </View>
@@ -117,129 +205,57 @@ export default function BookingInfoScreen() {
               </Text>
             </View>
             <Text variant="small" weight="bold">
-              2 người lớn (1 phòng)
+              {stay.guests} khách ({stay.rooms} phòng)
             </Text>
           </View>
         </View>
 
         <View style={styles.card}>
-          <CardTitle icon="person_pin" title="Thông tin người liên hệ" right={<Chip label="Khách đặt chính" tone="primary" />} />
-          <Input
-            label="Họ và tên khách"
-            placeholder="Nhập họ và tên có dấu"
-            value={name}
-            onChangeText={setName}
-            right={<Icon name="check_circle" size={20} color={colors.onSurfaceVariant} />}
-          />
-          <Input
-            label="Email nhận xác nhận"
-            placeholder="name@example.com"
-            keyboardType="email-address"
-            autoCapitalize="none"
-            value={email}
-            onChangeText={setEmail}
-            right={<Icon name="check_circle" size={20} color={colors.onSurfaceVariant} />}
-          />
-          <Text variant="caption" color={colors.onSurfaceVariant}>
-            Vé điện tử và mã QR sẽ gửi tức thời tới địa chỉ này
-          </Text>
+          <CardTitle icon="person_pin" title="Thông tin người liên hệ" />
+          <Input label="Họ và tên khách" placeholder="Nhập họ và tên có dấu" value={name} onChangeText={setName} />
           <Input
             label="Số điện thoại di động"
             placeholder="0912 xxx xxx"
             keyboardType="phone-pad"
             value={phone}
             onChangeText={setPhone}
-            left={
-              <Text variant="label" color={colors.onSurfaceVariant}>
-                +84
-              </Text>
-            }
           />
+          <Text variant="caption" color={colors.onSurfaceVariant}>
+            Xác nhận đặt phòng sẽ gửi tới {account.email}
+          </Text>
         </View>
 
         <View style={styles.card}>
-          <CardTitle icon="hotel_class" title="Yêu cầu & Trải nghiệm riêng" />
-          <Text variant="small" color={colors.onSurfaceVariant}>
-            Khách sạn luôn ưu tiên chuẩn bị chu đáo trước giờ quý khách ghé thăm.
-          </Text>
-          <View style={styles.option}>
-            <Checkbox checked={highFloor} onChange={setHighFloor} />
-            <View style={styles.flex}>
-              <Text variant="small" weight="semibold">
-                Phòng tầng cao, ngắm trọn sông Hàn
-              </Text>
-              <Text variant="caption" color={colors.onSurfaceVariant}>
-                Ưu tiên từ tầng 6 trở lên, góc nhìn rộng và thoáng đãng
-              </Text>
-            </View>
-          </View>
-          <View style={styles.option}>
-            <Checkbox checked={tea} onChange={setTea} />
-            <View style={styles.flex}>
-              <Text variant="small" weight="semibold">
-                Set trà chiều Hội An lúc 15:00
-              </Text>
-              <Text variant="caption" color={colors.onSurfaceVariant}>
-                Dành cho 2 khách vào ngày đầu tiên nhận phòng
-              </Text>
-            </View>
-            <Chip label="Tặng kèm" tone="secondary" />
-          </View>
-          <Text variant="label" weight="semibold">
-            Ghi chú thêm cho lễ tân
-          </Text>
+          <CardTitle icon="hotel_class" title="Yêu cầu đặc biệt" />
           <TextInput
             multiline
+            maxLength={500}
             accessibilityLabel="Ghi chú thêm cho lễ tân"
-            placeholder="Ví dụ: Giờ bay dự kiến, dịp kỷ niệm đặc biệt, yêu cầu nệm phụ..."
+            placeholder="Ví dụ: Giờ bay dự kiến, phòng tầng cao, dịp kỷ niệm..."
             placeholderTextColor={colors.outline}
+            value={requests}
+            onChangeText={setRequests}
             style={styles.textarea}
           />
         </View>
 
         <View style={styles.card}>
-          <CardTitle icon="confirmation_number" title="Mã giảm giá & Điểm thưởng" right={<Chip label="+225 điểm Elite" icon="stars" tone="tertiary" />} />
-          <View style={styles.row}>
-            <View style={[styles.coupon, styles.flex]}>
-              <Text variant="label" weight="bold">
-                ANHNIEN250
-              </Text>
-              <View style={styles.row}>
-                <Icon name="check" size={14} color={colors.tertiaryContainer} />
-                <Text variant="caption" color={colors.tertiaryContainer}>
-                  Đã áp dụng
-                </Text>
-              </View>
-            </View>
-            <Button label="Đổi mã" variant="muted" />
-          </View>
-          <View style={[styles.between, styles.discount]}>
-            <Text variant="small" color={colors.onSecondaryContainer} style={styles.flex}>
-              Ưu đãi độc quyền An Nhiên Retreat
-            </Text>
-            <Text variant="small" weight="bold" color={colors.secondary}>
-              -250.000 ₫
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.card}>
-          <Text variant="h3">Chi tiết giá công khai</Text>
-          <PriceLine label="Tiền phòng (2 đêm × 1.250.000 ₫)" value="2.500.000 ₫" />
-          <PriceLine label="Voucher ưu đãi (ANHNIEN250)" value="-250.000 ₫" tone={colors.secondary} icon="sell" />
-          <PriceLine label="Thuế VAT & Phí phục vụ (8%)" value="Đã bao gồm" />
+          <Text variant="h3">Chi tiết giá</Text>
+          {offer.nightlyPrices.map((n) => (
+            <PriceLine
+              key={n.date}
+              label={`Đêm ${formatDate(n.date)}${stay.rooms > 1 ? ` × ${stay.rooms} phòng` : ''}`}
+              value={formatVnd(n.price * stay.rooms)}
+            />
+          ))}
+          <PriceLine label="Thuế VAT & Phí phục vụ" value="Đã bao gồm" />
           <View style={styles.divider} />
           <View style={styles.between}>
-            <View>
-              <Text variant="label" weight="bold">
-                Tổng tiền thanh toán
-              </Text>
-              <Text variant="caption" color={colors.onSurfaceVariant}>
-                Không phụ phí phát sinh tại quầy
-              </Text>
-            </View>
+            <Text variant="label" weight="bold">
+              Tổng tiền thanh toán
+            </Text>
             <Text variant="price" color={colors.primary}>
-              2.250.000 ₫
+              {formatVnd(offer.total)}
             </Text>
           </View>
         </View>
@@ -248,10 +264,12 @@ export default function BookingInfoScreen() {
           <Icon name="event_available" size={22} color={colors.tertiaryContainer} />
           <View style={styles.flex}>
             <Text variant="small" weight="bold" color={colors.tertiary}>
-              Chính sách hủy linh hoạt
+              Chính sách hủy
             </Text>
             <Text variant="caption" color={colors.tertiary}>
-              Miễn phí hủy phòng trước 14:00 ngày 18/10/2026. Hoàn tiền 100% trong 24h làm việc.
+              {offer.freeCancellationUntil
+                ? `Miễn phí hủy phòng trước ${new Date(offer.freeCancellationUntil).toLocaleString('vi-VN')}. Sau đó phí hủy ${offer.cancellationFeePercent}%.`
+                : `Phí hủy ${offer.cancellationFeePercent}% tổng tiền.`}
             </Text>
           </View>
         </View>
@@ -259,30 +277,32 @@ export default function BookingInfoScreen() {
         <View style={[styles.row, styles.terms]}>
           <Checkbox checked={agreed} onChange={setAgreed} />
           <Text variant="caption" color={colors.onSurfaceVariant} style={styles.flex}>
-            Tôi đã đọc và đồng ý với{' '}
-            <Text variant="caption" weight="semibold" color={colors.primary}>
-              Điều khoản dịch vụ
-            </Text>
-            , chính sách lưu trú của An Nhiên Riverside và quy chuẩn bảo mật StayReco.
+            Tôi đã đọc và đồng ý với Điều khoản dịch vụ, chính sách lưu trú của {hotel.name} và quy chuẩn bảo mật StayReco.
           </Text>
         </View>
+        {!!error && (
+          <Text variant="small" color={colors.error}>
+            {error}
+          </Text>
+        )}
       </ScrollView>
 
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
         <View>
           <Text variant="caption" color={colors.onSurfaceVariant}>
-            Tổng tiền (2 đêm)
+            Tổng tiền ({nights} đêm)
           </Text>
           <Text variant="h3" weight="bold" color={colors.primary}>
-            2.250.000 ₫
+            {formatVnd(offer.total)}
           </Text>
         </View>
         <Button
-          label="Tiếp tục thanh toán VNPay"
+          label={submitting ? 'Đang giữ phòng...' : 'Giữ phòng & thanh toán'}
           leadingIcon="lock"
           size="sm"
           style={[styles.flex, styles.cta]}
-          onPress={() => agreed && router.push('/booking/payment')}
+          disabled={!agreed || submitting}
+          onPress={() => void submit(offer.total)}
         />
       </View>
     </View>
@@ -290,6 +310,7 @@ export default function BookingInfoScreen() {
 }
 
 const styles = StyleSheet.create({
+  state: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 24 },
   screen: { flex: 1, backgroundColor: colors.surface },
   content: { padding: 16, gap: 16, paddingBottom: 32 },
   flex: { flex: 1 },
@@ -298,15 +319,6 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: 16, flexShrink: 1 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   between: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  iconBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  hold: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: colors.secondaryFixed,
-  },
   card: { padding: 16, gap: 12, borderRadius: radius.lg, backgroundColor: colors.surfaceContainerLowest, ...shadow.card },
   thumb: { width: 84, height: 84, borderRadius: radius.md },
   thumbTag: {
@@ -319,14 +331,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primaryContainer,
   },
   dates: { flexDirection: 'row', padding: 12, gap: 12, borderRadius: radius.md, backgroundColor: colors.surfaceContainerLow },
-  option: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    padding: 12,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceContainerLow,
-  },
   textarea: {
     minHeight: 80,
     padding: 12,
@@ -337,16 +341,6 @@ const styles = StyleSheet.create({
     color: colors.onSurface,
     textAlignVertical: 'top',
   },
-  coupon: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    minHeight: 44,
-    paddingHorizontal: 12,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceContainerLow,
-  },
-  discount: { padding: 12, borderRadius: radius.md, backgroundColor: colors.secondaryFixed },
   divider: { height: 1, backgroundColor: colors.surfaceContainerHigh },
   policy: { padding: 16, borderRadius: radius.lg, backgroundColor: colors.tertiaryFixed, alignItems: 'flex-start' },
   terms: { alignItems: 'flex-start' },
