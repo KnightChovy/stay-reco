@@ -1,13 +1,34 @@
 import * as argon2 from 'argon2';
-import type { SubmitVerificationInput } from '@stayreco/shared';
+import {
+  BOOKING_LIMITS,
+  type CancellationPolicyInput,
+  type SubmitVerificationInput,
+} from '@stayreco/shared';
+import {
+  addDays,
+  fromCalendarDate,
+  todayInVietnam,
+} from '../src/common/http/calendar-date';
 import { FieldCipher } from '../src/common/crypto/field-cipher';
 import {
+  Prisma,
   type PrismaClient,
   StaffPermission,
   UserRole,
 } from '../src/generated/prisma/client';
-import { basePriceRow } from '../src/modules/rooms/room.mapper';
+import { AuditAction } from '../src/modules/audit/audit.service';
+import { newBookingCode } from '../src/modules/bookings/booking-code';
+import { recordBookingEvent } from '../src/modules/bookings/booking-history';
+import {
+  cancellationPolicyOf,
+  cancellationRowsSelect,
+  fromTime,
+  toCancellationRows,
+} from '../src/modules/hotels/hotel.mapper';
+import { basePriceRow, basePriceWhere } from '../src/modules/rooms/room.mapper';
+import { freeCancellationUntil } from '../src/modules/stays/offer';
 import { toSnapshotRows } from '../src/modules/verification/verification.mapper';
+import { WalletLedger } from '../src/modules/wallets/wallet-ledger';
 
 /**
  * Demo data for the search and booking work and for FE integration: three ACTIVE hotels in Đà Nẵng, Hà Nội and
@@ -944,11 +965,14 @@ export async function seedDemo(prisma: PrismaClient) {
     }
   }
 
+  await seedBookingDemo(prisma, passwordHash);
+
   console.log(
     `Demo: +${created} hotels. Sign in with password "${password}": ${MANAGER_EMAIL}, ` +
       PARTNERS.flatMap((p) => [p.email, p.staffEmail].filter(Boolean)).join(
         ', ',
-      ),
+      ) +
+      `, ${DEMO_CUSTOMER.email}`,
   );
 }
 
@@ -991,4 +1015,388 @@ async function lookup<K extends string>(
     if (!id) throw new Error(`Seed catalog has no "${name}"`);
     return id;
   };
+}
+
+// ── Booking demo (search, pricing rules, bookings, refunds) ──
+
+const DEMO_CUSTOMER = {
+  email: 'customer@stayreco.local',
+  fullName: 'Trần Thị Mai',
+  phone: '0909123456',
+};
+
+/** Cancellation policies that differ from the default (1 day free, then 100%), by hotel name. */
+const DEMO_POLICIES: Record<string, CancellationPolicyInput> = {
+  'Sơn Trà Bay Resort & Spa': { freeCancellationDays: 3, feePercent: 50 },
+  'Hồ Gươm Heritage Hotel': { freeCancellationDays: null, feePercent: 100 },
+  'Bạch Đằng Riverside Hotel': { freeCancellationDays: 0, feePercent: 30 },
+};
+
+type DemoRule = Omit<
+  Prisma.PriceUncheckedCreateInput,
+  'roomTypeId' | 'validFrom' | 'validTo'
+> & { validFrom?: string; validTo?: string };
+
+/** Pricing rules, by hotel and room type name. Bookings below use other room types, so their prices are the base. */
+const demoRules = (today: string): [string, string, DemoRule][] => [
+  [
+    'Sơn Trà Bay Resort & Spa',
+    'Deluxe Ocean View',
+    {
+      name: 'Cuối tuần thứ Bảy',
+      ruleType: 'SEASON',
+      adjustmentType: 'PERCENT',
+      adjustmentValue: 20,
+      validFrom: today,
+      validTo: addDays(today, 365),
+      dayOfWeek: 'SAT',
+      priority: 10,
+    },
+  ],
+  [
+    'Sơn Trà Bay Resort & Spa',
+    'Premier Bungalow',
+    {
+      name: 'Đặt sớm 30 ngày',
+      ruleType: 'EARLY_BIRD',
+      adjustmentType: 'PERCENT',
+      adjustmentValue: -10,
+      minDaysBefore: 30,
+      priority: 5,
+    },
+  ],
+  [
+    'Hồ Gươm Heritage Hotel',
+    'Superior City View',
+    {
+      name: 'Phút chót 3 ngày',
+      ruleType: 'LAST_MINUTE',
+      adjustmentType: 'PERCENT',
+      adjustmentValue: -15,
+      maxDaysBefore: 3,
+      priority: 5,
+    },
+  ],
+  [
+    'Ngũ Hành Sơn Garden Retreat',
+    'Garden Villa',
+    {
+      name: 'Tết Đinh Mùi 2027',
+      ruleType: 'SEASON',
+      adjustmentType: 'SET_PRICE',
+      adjustmentValue: 5500000,
+      validFrom: '2027-02-03',
+      validTo: '2027-02-12',
+      priority: 20,
+    },
+  ],
+];
+
+type DemoBooking = {
+  hotel: string;
+  roomType: string;
+  /** Days from today to check-in (negative: a past stay). */
+  from: number;
+  nights: number;
+  /** Days before today the booking was made. */
+  bookedDaysAgo: number;
+  status: 'CONFIRMED' | 'COMPLETED' | 'CANCELLED' | 'EXPIRED';
+  /** Cancelled by the customer: the refund was approved, is waiting, or there was nothing to refund. */
+  cancel?: 'REFUND_PENDING' | 'REFUNDED' | 'NO_REFUND';
+};
+
+/** One booking per state the FE shows (confirmed, refund pending, refunded, cancelled, expired, completed). */
+const DEMO_BOOKINGS: DemoBooking[] = [
+  {
+    hotel: 'Bạch Đằng Riverside Hotel',
+    roomType: 'Deluxe River View',
+    from: 20,
+    nights: 2,
+    bookedDaysAgo: 2,
+    status: 'CONFIRMED',
+  },
+  {
+    hotel: 'Hàn River Loft Suites',
+    roomType: 'Studio River Loft',
+    from: 25,
+    nights: 2,
+    bookedDaysAgo: 3,
+    status: 'CONFIRMED',
+    cancel: 'REFUND_PENDING',
+  },
+  {
+    hotel: 'Ngũ Hành Sơn Garden Retreat',
+    roomType: 'Family Garden Suite',
+    from: 40,
+    nights: 1,
+    bookedDaysAgo: 5,
+    status: 'CANCELLED',
+    cancel: 'REFUNDED',
+  },
+  {
+    hotel: 'Hồ Gươm Heritage Hotel',
+    roomType: 'Deluxe Lake View',
+    from: 10,
+    nights: 2,
+    bookedDaysAgo: 4,
+    status: 'CANCELLED',
+    cancel: 'NO_REFUND',
+  },
+  {
+    hotel: 'Bạch Đằng Riverside Hotel',
+    roomType: 'Executive City Suite',
+    from: 15,
+    nights: 1,
+    bookedDaysAgo: 1,
+    status: 'EXPIRED',
+  },
+  {
+    hotel: 'Bạch Đằng Riverside Hotel',
+    roomType: 'Deluxe River View',
+    from: -10,
+    nights: 2,
+    bookedDaysAgo: 20,
+    status: 'COMPLETED',
+  },
+];
+
+const DAY_MS = 86_400_000;
+
+/**
+ * Pricing rules, cancellation policies and a demo customer with one booking per state, written the way the API
+ * writes them: invoice statuses, BOOKED nights, hotel and customer wallet rows, and the cancel / refund history in
+ * audit_log. Rules and policies are added when missing; the bookings only when the demo customer has none yet.
+ */
+async function seedBookingDemo(prisma: PrismaClient, passwordHash: string) {
+  const today = todayInVietnam();
+  const roomType = async (hotelName: string, roomTypeName: string) => {
+    const rt = await prisma.roomType.findFirst({
+      where: { name: roomTypeName, hotel: { name: hotelName } },
+      select: {
+        roomTypeId: true,
+        hotelId: true,
+        prices: { where: basePriceWhere, select: { pricePerNight: true } },
+        rooms: { select: { roomId: true }, orderBy: { roomNumber: 'asc' } },
+        hotel: {
+          select: {
+            checkInTime: true,
+            hotelPartnerId: true,
+            hotelPartner: { select: { commissionRate: true } },
+            hotelProperties: cancellationRowsSelect,
+          },
+        },
+      },
+    });
+    if (!rt) {
+      throw new Error(
+        `Demo room type "${roomTypeName}" of "${hotelName}" is missing`,
+      );
+    }
+    return rt;
+  };
+
+  // Cancellation policies, when the hotel has none yet.
+  for (const [hotelName, policy] of Object.entries(DEMO_POLICIES)) {
+    const hotel = await prisma.hotel.findFirst({
+      where: { name: hotelName },
+      select: { hotelId: true, hotelProperties: cancellationRowsSelect },
+    });
+    if (!hotel || hotel.hotelProperties.length) continue;
+    await prisma.hotelProperties.createMany({
+      data: toCancellationRows(policy).map((row) => ({
+        ...row,
+        hotelId: hotel.hotelId,
+      })),
+    });
+  }
+
+  // Pricing rules, when the room type has none with that name.
+  let rules = 0;
+  for (const [hotelName, roomTypeName, rule] of demoRules(today)) {
+    const rt = await roomType(hotelName, roomTypeName);
+    const exists = await prisma.price.count({
+      where: { roomTypeId: rt.roomTypeId, name: rule.name },
+    });
+    if (exists) continue;
+    const { validFrom, validTo, ...fields } = rule;
+    await prisma.price.create({
+      data: {
+        ...fields,
+        roomTypeId: rt.roomTypeId,
+        validFrom: validFrom ? fromCalendarDate(validFrom) : null,
+        validTo: validTo ? fromCalendarDate(validTo) : null,
+      },
+    });
+    rules++;
+  }
+
+  // The demo customer and the bookings.
+  const customerId = await ensureAccount(
+    prisma,
+    DEMO_CUSTOMER.email,
+    () => ({
+      fullName: DEMO_CUSTOMER.fullName,
+      phone: DEMO_CUSTOMER.phone,
+      role: UserRole.CUSTOMER,
+      customer: { create: {} },
+    }),
+    passwordHash,
+  );
+  const hasBookings = await prisma.booking.count({ where: { customerId } });
+  const ledger = new WalletLedger();
+  let bookings = 0;
+
+  for (const demo of hasBookings ? [] : DEMO_BOOKINGS) {
+    const rt = await roomType(demo.hotel, demo.roomType);
+    const base = rt.prices[0].pricePerNight!;
+    const checkIn = addDays(today, demo.from);
+    const checkOut = addDays(checkIn, demo.nights);
+    const bookedAt = new Date(Date.now() - demo.bookedDaysAgo * DAY_MS);
+    const nights = Array.from({ length: demo.nights }, (_, i) =>
+      addDays(checkIn, i),
+    );
+    const total = base.times(demo.nights);
+    const policy = cancellationPolicyOf(rt.hotel.hotelProperties);
+    const paid = demo.status !== 'EXPIRED';
+    const cancelledAt =
+      demo.status === 'CANCELLED'
+        ? new Date(bookedAt.getTime() + DAY_MS)
+        : null;
+
+    await prisma.$transaction(async (tx) => {
+      let code = newBookingCode(bookedAt);
+      while (await tx.invoice.count({ where: { invoiceNumber: code } })) {
+        code = newBookingCode(bookedAt);
+      }
+      const { bookingId } = await tx.booking.create({
+        data: {
+          customerId,
+          roomTypeId: rt.roomTypeId,
+          checkInDate: fromCalendarDate(checkIn),
+          checkOutDate: fromCalendarDate(checkOut),
+          numGuests: 2,
+          numRooms: 1,
+          nightlyPrices: nights.map((date) => ({
+            date,
+            price: base.toNumber(),
+          })),
+          totalAmount: total,
+          status: demo.status,
+          guestName: DEMO_CUSTOMER.fullName,
+          contactPhone: DEMO_CUSTOMER.phone,
+          arrivalTime: new Date('1970-01-01T15:00:00.000Z'),
+          specialRequests: 'Phòng tầng cao nếu còn',
+          freeCancelUntil: freeCancellationUntil(
+            policy,
+            checkIn,
+            fromTime(rt.hotel.checkInTime),
+            bookedAt,
+          ),
+          cancelFeePercent: policy.feePercent,
+          commissionRate: rt.hotel.hotelPartner.commissionRate,
+          cancelledAt,
+          createdAt: bookedAt,
+          // The timeline shows an expired hold at updatedAt: the end of the hold, not the day of the seed.
+          updatedAt:
+            cancelledAt ??
+            new Date(bookedAt.getTime() + BOOKING_LIMITS.holdMinutes * 60_000),
+        },
+        select: { bookingId: true },
+      });
+      await tx.invoice.create({
+        data: {
+          bookingId,
+          invoiceNumber: code,
+          subtotal: total,
+          taxAmount: 0,
+          discountAmount: 0,
+          totalAmount: total,
+          paymentMethod: 'SEPAY',
+          paymentStatus: !paid
+            ? 'FAILED'
+            : demo.cancel === 'REFUND_PENDING'
+              ? 'REFUND_PENDING'
+              : demo.cancel === 'REFUNDED'
+                ? 'REFUNDED'
+                : 'PAID',
+          paidAt: paid ? new Date(bookedAt.getTime() + 5 * 60_000) : null,
+          vnpayTxnRef: paid ? `seed-${code}` : null,
+          createdAt: bookedAt,
+        },
+      });
+      // Nights stay booked while the booking holds its rooms (also while a refund waits).
+      if (demo.status === 'CONFIRMED' || demo.status === 'COMPLETED') {
+        await tx.roomCalendars.createMany({
+          data: nights.map((date) => ({
+            roomId: rt.rooms[0].roomId,
+            date: fromCalendarDate(date),
+            bookingId,
+            status: 'BOOKED' as const,
+            priceOverride: base,
+          })),
+        });
+      }
+      if (!paid) return;
+
+      const hotelWallet = await ledger.hotelWallet(tx, rt.hotelId);
+      await ledger.post(tx, {
+        walletId: hotelWallet.walletId,
+        type: 'BOOKING_PAYMENT',
+        amount: total,
+        balance: 'pending',
+        idempotencyKey: `sepay:seed-${code}`,
+        bookingId,
+        description: `Payment of ${code}`,
+      });
+      if (!demo.cancel) return;
+
+      const refund =
+        demo.cancel === 'NO_REFUND' ? new Prisma.Decimal(0) : total;
+      await recordBookingEvent(tx, {
+        action: AuditAction.BOOKING_CANCEL_REQUESTED,
+        bookingId,
+        actor: { role: 'CUSTOMER', accountId: customerId },
+        at: new Date(bookedAt.getTime() + DAY_MS),
+        value: {
+          reason: 'Thay đổi lịch trình',
+          paid: total.toNumber(),
+          fee: total.minus(refund).toNumber(),
+          refund: refund.toNumber(),
+        },
+      });
+      if (demo.cancel !== 'REFUNDED') return;
+
+      const customerWallet = await ledger.customerWallet(tx, customerId);
+      await ledger.post(tx, {
+        walletId: hotelWallet.walletId,
+        type: 'REFUND',
+        amount: refund.negated(),
+        balance: 'pending',
+        idempotencyKey: `refund:${bookingId}:hotel`,
+        bookingId,
+        description: `Refund of ${code}`,
+      });
+      await ledger.post(tx, {
+        walletId: customerWallet.walletId,
+        type: 'REFUND',
+        amount: refund,
+        balance: 'available',
+        idempotencyKey: `refund:${bookingId}:customer`,
+        bookingId,
+        description: `Refund of ${code}`,
+      });
+      await recordBookingEvent(tx, {
+        action: AuditAction.REFUND_APPROVED,
+        bookingId,
+        actor: { role: 'HOTEL_PARTNER', accountId: rt.hotel.hotelPartnerId },
+        at: cancelledAt!,
+        value: { refund: refund.toNumber() },
+      });
+    });
+    bookings++;
+  }
+
+  console.log(
+    `Booking demo: +${rules} pricing rules, +${bookings} bookings for ${DEMO_CUSTOMER.email}`,
+  );
 }

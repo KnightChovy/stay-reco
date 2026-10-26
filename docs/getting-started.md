@@ -78,7 +78,14 @@ Shared password `Demo@123456` (change it with `SEED_DEMO_PASSWORD`).
 | `partner.hcm@stayreco.local` | Partner | Sài Gòn Riverside Grand Hotel (active) |
 | `staff.danang@stayreco.local`, `staff.hanoi@stayreco.local`, `staff.hcm@stayreco.local` | Staff: position Lễ tân (receptionist), permissions `FRONT_DESK`, `BOOKING` | The active hotel in that city |
 | `pm@stayreco.local` | Platform manager | The queue has 1 pending request (Mỹ Khê) |
+| `customer@stayreco.local` | Customer | 6 bookings, one per state: confirmed (Bạch Đằng), refund waiting for the hotel (Hàn River Loft), refunded to the wallet (Ngũ Hành Sơn), cancelled with nothing refunded (Hồ Gươm), expired hold (Bạch Đằng), completed stay (Bạch Đằng) |
 | `admin@stayreco.local` | Admin | Password is `SEED_ADMIN_PASSWORD` in `.env` (default `Admin@123456`) |
+
+Pricing and cancellation demo data:
+
+- **Pricing rules:** Sơn Trà Deluxe Ocean View +20% on Saturdays; Sơn Trà Premier Bungalow −10% when booked 30+ days ahead; Hồ Gươm Superior City View −15% within 3 days of check-in; Ngũ Hành Sơn Garden Villa 5,500,000 a night over Tết (2027-02-03 to 2027-02-12).
+- **Cancellation policies:** Sơn Trà free until 3 days before check-in, then 50%; Hồ Gươm no free cancellation, 100%; Bạch Đằng free until the check-in time, then 30%; other hotels use the default (free until 1 day before check-in, then 100%).
+- Bookings are dated from the day the seed runs and are added only while `customer@stayreco.local` has none, so seeding again does not duplicate them.
 
 Hotel and company names are fictional; images come from picsum.photos; demo documents have no real file on Cloudinary (the file link reports it as not found).
 
