@@ -24,7 +24,9 @@ const detailsSelect = {
   freeCancelUntil: true,
   cancelFeePercent: true,
   invoice: { select: { invoiceNumber: true } },
-  customer: { select: { userAccount: { select: { email: true } } } },
+  customer: {
+    select: { userAccount: { select: { email: true, fullName: true } } },
+  },
   roomType: {
     select: {
       name: true,
@@ -78,7 +80,10 @@ export class BookingMailer {
     private readonly prisma: PrismaService,
     private readonly mail: MailService,
     private readonly config: ConfigService<Env, true>,
-  ) {}
+  ) {
+    // Emails still being sent at shutdown read the database: let them finish first.
+    prisma.onBeforeDisconnect(() => this.idle());
+  }
 
   bookingConfirmed(bookingId: string) {
     return this.safely(bookingId, async (b) => {
@@ -246,7 +251,10 @@ export class BookingMailer {
     return this.mail.send({
       to: b.customer.userAccount.email,
       subject,
-      text: [`Xin chào ${b.guestName},`, '', ...lines].join('\n'),
+      // The email goes to the account that booked, who may have booked for another guest.
+      text: [`Xin chào ${b.customer.userAccount.fullName},`, '', ...lines].join(
+        '\n',
+      ),
     });
   }
 

@@ -1,6 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable } from '@nestjs/common';
 import type { BookingSummary, HotelBookingsQuery } from '@stayreco/shared';
 import { escapeLike } from '../../common/db/like';
+import { ErrorCode } from '../../common/errors/error-code';
 import { Paginated } from '../../common/http/api-response';
 import { fromCalendarDate } from '../../common/http/calendar-date';
 import type { HotelAccess } from '../../common/hotel-access/hotel-access.service';
@@ -29,6 +30,17 @@ export class HotelBookingsService {
     query: HotelBookingsQuery,
   ): Promise<Paginated<BookingSummary>> {
     assertCanSeeBookings(access);
+    // The refund queue is for the owner and the staff who handle refunds (partner.md, "Refund requests").
+    if (
+      query.paymentStatus?.includes('REFUND_PENDING') &&
+      access.role === 'STAFF' &&
+      !access.permissions.includes('REFUND')
+    ) {
+      throw new ForbiddenException({
+        code: ErrorCode.FORBIDDEN,
+        message: 'Missing staff permission REFUND for the refund queue',
+      });
+    }
     const search = query.search && escapeLike(query.search);
     const where = {
       roomType: { hotelId: access.hotelId },

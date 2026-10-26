@@ -40,7 +40,11 @@ import { PriceEngine } from '../pricing/price-engine';
 import { roomTypeNotFound } from '../rooms/room-types.service';
 import { bookableHotel, sellableRoomType } from '../stays/bookable';
 import { assertBookableDates, freeCancellationUntil } from '../stays/offer';
-import { newBookingCode } from './booking-code';
+import {
+  CODE_ATTEMPTS,
+  newBookingCode,
+  retryOnUniqueClash,
+} from './booking-code';
 import {
   bookingInclude,
   bookingSummaryInclude,
@@ -77,9 +81,6 @@ const TAB_STATUSES: Record<MyBookingsQuery['tab'], BookingStatus[]> = {
 
 /** A voucher is shown from payment until the guest has checked in (customer.md, "Voucher"). */
 const VOUCHER_STATUSES: BookingStatus[] = ['CONFIRMED', 'CHECKED_IN'];
-
-/** Codes are random, so a clash is rare; a few tries are plenty. */
-const CODE_ATTEMPTS = 5;
 
 /**
  * Booking with a 15-minute hold (UC18, UC20, customer.md "Bookings"). The stay is priced again and the rooms are held
@@ -144,88 +145,90 @@ export class BookingsService {
       price: toNumber(n.price),
     }));
 
-    const bookingId = await this.prisma.$transaction(async (tx) => {
-      await lockRoomType(tx, roomTypeId);
-      await this.holds.expireDue(roomTypeId, tx);
-      const picked = await this.availability.pickRooms(
-        tx,
-        roomTypeId,
-        checkIn,
-        checkOut,
-        rooms,
-      );
-      if (!picked) {
-        throw new ConflictException({
-          code: ErrorCode.ROOM_SOLD_OUT,
-          message: 'Not enough rooms left for every night of the stay',
-        });
-      }
-
-      const booking = await tx.booking.create({
-        data: {
-          customerId: user.accountId,
+    const bookingId = await retryOnUniqueClash(() =>
+      this.prisma.$transaction(async (tx) => {
+        await lockRoomType(tx, roomTypeId);
+        await this.holds.expireDue(roomTypeId, tx);
+        const picked = await this.availability.pickRooms(
+          tx,
           roomTypeId,
-          checkInDate: fromCalendarDate(checkIn),
-          checkOutDate: fromCalendarDate(checkOut),
-          numGuests: guests,
-          numRooms: rooms,
-          nightlyPrices,
-          totalAmount: total,
-          status: 'PENDING',
-          guestName: input.guestName,
-          contactPhone: input.contactPhone,
-          arrivalTime: input.arrivalTime
-            ? new Date(`1970-01-01T${input.arrivalTime}:00.000Z`)
-            : null,
-          specialRequests: input.specialRequests,
-          freeCancelUntil: freeCancellationUntil(
-            policy,
-            checkIn,
-            fromTime(roomType.hotel.checkInTime),
-            now,
-          ),
-          cancelFeePercent: policy.feePercent,
-          commissionRate: roomType.hotel.hotelPartner.commissionRate,
-        },
-        select: { bookingId: true },
-      });
-      await tx.invoice.create({
-        data: {
-          bookingId: booking.bookingId,
-          invoiceNumber: await this.unusedCode(tx, now),
-          subtotal: total,
-          taxAmount: 0,
-          discountAmount: 0,
-          totalAmount: total,
-          paymentMethod: 'SEPAY',
-        },
-      });
+          checkIn,
+          checkOut,
+          rooms,
+        );
+        if (!picked) {
+          throw new ConflictException({
+            code: ErrorCode.ROOM_SOLD_OUT,
+            message: 'Not enough rooms left for every night of the stay',
+          });
+        }
 
-      const nightPrice = new Map(quote.nights.map((n) => [n.date, n.price]));
-      const held = [...picked].flatMap(([date, roomIds]) =>
-        roomIds.map((roomId) => ({
-          roomId,
-          date: fromCalendarDate(date),
-          bookingId: booking.bookingId,
-          status: 'HELD' as const,
-          holdExpiresAt: expiresAt,
-          priceOverride: nightPrice.get(date),
-        })),
-      );
-      // Rows marked AVAILABLE carry nothing and would collide with the hold.
-      await tx.roomCalendars.deleteMany({
-        where: {
-          status: 'AVAILABLE',
-          roomId: { in: [...new Set(held.map((h) => h.roomId))] },
-          date: {
-            gte: fromCalendarDate(checkIn),
-            lt: fromCalendarDate(checkOut),
+        const booking = await tx.booking.create({
+          data: {
+            customerId: user.accountId,
+            roomTypeId,
+            checkInDate: fromCalendarDate(checkIn),
+            checkOutDate: fromCalendarDate(checkOut),
+            numGuests: guests,
+            numRooms: rooms,
+            nightlyPrices,
+            totalAmount: total,
+            status: 'PENDING',
+            guestName: input.guestName,
+            contactPhone: input.contactPhone,
+            arrivalTime: input.arrivalTime
+              ? new Date(`1970-01-01T${input.arrivalTime}:00.000Z`)
+              : null,
+            specialRequests: input.specialRequests,
+            freeCancelUntil: freeCancellationUntil(
+              policy,
+              checkIn,
+              fromTime(roomType.hotel.checkInTime),
+              now,
+            ),
+            cancelFeePercent: policy.feePercent,
+            commissionRate: roomType.hotel.hotelPartner.commissionRate,
           },
-        },
-      });
-      await tx.roomCalendars.createMany({ data: held });
-      return booking.bookingId;
-    });
+          select: { bookingId: true },
+        });
+        await tx.invoice.create({
+          data: {
+            bookingId: booking.bookingId,
+            invoiceNumber: await this.unusedCode(tx, now),
+            subtotal: total,
+            taxAmount: 0,
+            discountAmount: 0,
+            totalAmount: total,
+            paymentMethod: 'SEPAY',
+          },
+        });
+
+        const nightPrice = new Map(quote.nights.map((n) => [n.date, n.price]));
+        const held = [...picked].flatMap(([date, roomIds]) =>
+          roomIds.map((roomId) => ({
+            roomId,
+            date: fromCalendarDate(date),
+            bookingId: booking.bookingId,
+            status: 'HELD' as const,
+            holdExpiresAt: expiresAt,
+            priceOverride: nightPrice.get(date),
+          })),
+        );
+        // Rows marked AVAILABLE carry nothing and would collide with the hold.
+        await tx.roomCalendars.deleteMany({
+          where: {
+            status: 'AVAILABLE',
+            roomId: { in: [...new Set(held.map((h) => h.roomId))] },
+            date: {
+              gte: fromCalendarDate(checkIn),
+              lt: fromCalendarDate(checkOut),
+            },
+          },
+        });
+        await tx.roomCalendars.createMany({ data: held });
+        return booking.bookingId;
+      }),
+    );
     return this.load(bookingId);
   }
 

@@ -145,7 +145,8 @@ describe('Booking emails (e2e)', () => {
       ['guest@mail.test', `Xác nhận đặt phòng ${booking.code}`],
     ]);
     const text = t.outbox[0].text;
-    expect(text).toContain('Xin chào Nguyễn Văn A,');
+    // Greets the account that booked (signIn names it after the email), not the guest of the booking.
+    expect(text).toContain('Xin chào guest,');
     expect(text).toContain('Khách sạn: Riverside');
     expect(text).toContain('Loại phòng: Deluxe × 1 phòng');
     expect(text).toContain(
