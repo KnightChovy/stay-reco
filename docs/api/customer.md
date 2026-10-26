@@ -1,7 +1,7 @@
 # API: Customer (`CUSTOMER`)
 
 > FE screens: home page, `search`, `hotels/[id]`, `hotels/[id]/rooms/[roomId]`, `booking/*`, `account/bookings/*`.
-> **Status: Agreed** (phase 2, being built). Business rules behind these endpoints (prices, holds, payment, cancellation, refunds): [money-rules.md](../money-rules.md) and [phases/phase-2-search-booking.md](../phases/phase-2-search-booking.md).
+> **Status: Agreed** (phase 2, backend built; becomes `Integrated` once FE uses it). Business rules behind these endpoints (prices, holds, payment, cancellation, refunds): [money-rules.md](../money-rules.md) and [phases/phase-2-search-booking.md](../phases/phase-2-search-booking.md).
 
 ## Available now
 
