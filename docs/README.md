@@ -23,14 +23,14 @@ Where BE, FE web and mobile agree on **which phase we are in** and **what the AP
 
 ## Where we are
 
-> **Phase 1**: BE done, FE web and mobile integrating. **Phase 2** (search, booking, SePay): API `Agreed`, backend being built.
+> **Phase 1**: BE done, FE web and mobile integrating. **Phase 2** (search, booking, SePay): BE done (SePay webhook live on staging), FE integrating.
 > Update this line and the table below in the same PR when a status changes.
 
 | Phase | Content | Status | API |
 |---|---|---|---|
 | [0](./phases/phase-0-foundation.md) | Foundation: auth, envelope, shared package | 🟡 BE done, FE integrating | [auth](./api/auth.md) |
 | [1](./phases/phase-1-hotel-onboarding.md) | Partners list their hotels, managers verify them | 🟡 BE done, FE integrating | [partner](./api/partner.md), [staff](./api/staff.md), [manager](./api/manager.md) |
-| [2](./phases/phase-2-search-booking.md) | Search, booking, payment | 🟡 API Agreed, BE in progress | [customer](./api/customer.md), [partner](./api/partner.md#pricing-rules-phase-2), [staff](./api/staff.md#coming-in-phase-2) |
+| [2](./phases/phase-2-search-booking.md) | Search, booking, payment | 🟡 BE done, FE integrating | [customer](./api/customer.md), [partner](./api/partner.md#pricing-rules-phase-2), [staff](./api/staff.md#coming-in-phase-2) |
 | [3](./phases/phase-3-operations.md) | Operations: check-in/out, refunds, inbox | ⬜ Not started | |
 | [4](./phases/phase-4-loyalty-promotions.md) | Loyalty, promotions, reviews, wallet | ⬜ Not started | |
 | [5](./phases/phase-5-ai-marketing.md) | AI recommendations, assistant, marketing | ⬜ Not started | |
