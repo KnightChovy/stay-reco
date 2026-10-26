@@ -274,19 +274,12 @@ const PARTNERS: DemoPartner[] = [
         roomTypes: [
           {
             name: 'Deluxe River View',
-            description:
-              'Phòng hướng sông Hàn, ban công kính nhìn cầu Rồng về đêm.',
+            description: 'Phòng hướng sông Hàn, ban công kính nhìn cầu Rồng về đêm.',
             maxOccupancy: 2,
             areaSqm: 32,
             basePrice: 1850000,
             beds: [['Giường King', 1]],
-            amenities: [
-              'Điều hòa',
-              'TV màn hình phẳng',
-              'Minibar',
-              'Ban công',
-              'Máy sấy tóc',
-            ],
+            amenities: ['Điều hòa', 'TV màn hình phẳng', 'Minibar', 'Ban công', 'Máy sấy tóc'],
             rooms: [
               ['501', 5],
               ['502', 5],
@@ -306,14 +299,7 @@ const PARTNERS: DemoPartner[] = [
               ['Giường King', 1],
               ['Sofa giường', 1],
             ],
-            amenities: [
-              'Điều hòa',
-              'TV màn hình phẳng',
-              'Minibar',
-              'Két sắt',
-              'Bàn làm việc',
-              'Bồn tắm',
-            ],
+            amenities: ['Điều hòa', 'TV màn hình phẳng', 'Minibar', 'Két sắt', 'Bàn làm việc', 'Bồn tắm'],
             rooms: [
               ['601', 6],
               ['602', 6],
@@ -341,20 +327,13 @@ const PARTNERS: DemoPartner[] = [
         website: 'https://anthuongbeachhouse.demo',
         checkInTime: '14:00',
         checkOutTime: '11:00',
-        amenities: [
-          'Wi-Fi miễn phí',
-          'Lễ tân 24/7',
-          'Bữa sáng',
-          'Quầy bar',
-          'Giữ hành lý',
-        ],
+        amenities: ['Wi-Fi miễn phí', 'Lễ tân 24/7', 'Bữa sáng', 'Quầy bar', 'Giữ hành lý'],
         policies: POLICIES,
         totalRooms: 8,
         roomTypes: [
           {
             name: 'Garden Double',
-            description:
-              'Phòng đôi nhìn vườn nhiệt đới, yên tĩnh và nhiều cây xanh.',
+            description: 'Phòng đôi nhìn vườn nhiệt đới, yên tĩnh và nhiều cây xanh.',
             maxOccupancy: 2,
             areaSqm: 26,
             basePrice: 1150000,
@@ -369,18 +348,12 @@ const PARTNERS: DemoPartner[] = [
           },
           {
             name: 'Balcony Twin',
-            description:
-              'Phòng hai giường đơn có ban công thoáng, phù hợp bạn bè.',
+            description: 'Phòng hai giường đơn có ban công thoáng, phù hợp bạn bè.',
             maxOccupancy: 2,
             areaSqm: 30,
             basePrice: 1350000,
             beds: [['Giường đơn', 2]],
-            amenities: [
-              'Điều hòa',
-              'TV màn hình phẳng',
-              'Ban công',
-              'Máy sấy tóc',
-            ],
+            amenities: ['Điều hòa', 'TV màn hình phẳng', 'Ban công', 'Máy sấy tóc'],
             rooms: [
               ['T01', 2],
               ['T02', 2],
@@ -408,31 +381,18 @@ const PARTNERS: DemoPartner[] = [
         website: 'https://hanriverloft.demo',
         checkInTime: '15:00',
         checkOutTime: '12:00',
-        amenities: [
-          'Wi-Fi miễn phí',
-          'Lễ tân 24/7',
-          'Thang máy',
-          'Giặt ủi',
-          'Chỗ đậu xe',
-        ],
+        amenities: ['Wi-Fi miễn phí', 'Lễ tân 24/7', 'Thang máy', 'Giặt ủi', 'Chỗ đậu xe'],
         policies: POLICIES,
         totalRooms: 6,
         roomTypes: [
           {
             name: 'Studio River Loft',
-            description:
-              'Studio mở với cửa sổ lớn nhìn sông, có bếp nhỏ và bàn ăn.',
+            description: 'Studio mở với cửa sổ lớn nhìn sông, có bếp nhỏ và bàn ăn.',
             maxOccupancy: 2,
             areaSqm: 38,
             basePrice: 2350000,
             beds: [['Giường Queen', 1]],
-            amenities: [
-              'Điều hòa',
-              'TV màn hình phẳng',
-              'Minibar',
-              'Bàn làm việc',
-              'Máy sấy tóc',
-            ],
+            amenities: ['Điều hòa', 'TV màn hình phẳng', 'Minibar', 'Bàn làm việc', 'Máy sấy tóc'],
             rooms: [
               ['L01', 1],
               ['L02', 1],
@@ -477,20 +437,12 @@ const PARTNERS: DemoPartner[] = [
         roomTypes: [
           {
             name: 'Garden Villa',
-            description:
-              'Villa một phòng ngủ có hiên riêng nhìn vườn nhiệt đới.',
+            description: 'Villa một phòng ngủ có hiên riêng nhìn vườn nhiệt đới.',
             maxOccupancy: 3,
             areaSqm: 65,
             basePrice: 3600000,
             beds: [['Giường King', 1]],
-            amenities: [
-              'Điều hòa',
-              'TV màn hình phẳng',
-              'Minibar',
-              'Bồn tắm',
-              'Ban công',
-              'Máy sấy tóc',
-            ],
+            amenities: ['Điều hòa', 'TV màn hình phẳng', 'Minibar', 'Bồn tắm', 'Ban công', 'Máy sấy tóc'],
             rooms: [
               ['V01', 1],
               ['V02', 1],
@@ -502,8 +454,7 @@ const PARTNERS: DemoPartner[] = [
           },
           {
             name: 'Family Garden Suite',
-            description:
-              'Suite gia đình hai phòng ngủ, có khu vui chơi nhỏ cho trẻ.',
+            description: 'Suite gia đình hai phòng ngủ, có khu vui chơi nhỏ cho trẻ.',
             maxOccupancy: 4,
             areaSqm: 90,
             basePrice: 5200000,
@@ -511,13 +462,7 @@ const PARTNERS: DemoPartner[] = [
               ['Giường King', 1],
               ['Giường tầng', 1],
             ],
-            amenities: [
-              'Điều hòa',
-              'TV màn hình phẳng',
-              'Minibar',
-              'Bồn tắm',
-              'Ban công',
-            ],
+            amenities: ['Điều hòa', 'TV màn hình phẳng', 'Minibar', 'Bồn tắm', 'Ban công'],
             rooms: [
               ['F01', 2],
               ['F02', 2],
