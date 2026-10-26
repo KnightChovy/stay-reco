@@ -150,6 +150,7 @@ room_calendars:  (free) ──hold──► HELD ──paid──► BOOKED ─�
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-10-26 | BE | Review follow-ups: refund queue filter for owner and REFUND staff only, booking emails greet the booking account, booking creation retried on a booking code clash, emails in flight finish before the database disconnects at shutdown |
 | 2026-10-25 | BE | SePay webhook checked against SePay's documentation: lenient payload, refused payloads logged and kept, booking emails sent in the background (30-second answer limit), SMTP timeouts shortened |
 | 2026-10-25 | BE | SePay webhook built: API key check, dash-tolerant booking code, unmatched and late transfers in `audit_log`; new error code `INVALID_API_KEY` |
 | 2026-10-24 | BE | Booking emails built (P10 extended: refund request received, new request to the hotel, forwarded, automatic approval; Vietnamese) |

@@ -192,6 +192,7 @@ describe('Hotel bookings and refund decisions (e2e)', () => {
       const h = await hotel();
       const other = await hotel('other@hotel.test');
       const url = `/api/v1/hotels/${h.hotelId}/bookings`;
+      const queue = `${url}?paymentStatus=REFUND_PENDING`;
       for (const permission of ['BOOKING', 'REFUND'] as const) {
         const staff = await t.signInStaff(
           h.hotelId,
@@ -199,7 +200,14 @@ describe('Hotel bookings and refund decisions (e2e)', () => {
           [permission],
         );
         await t.api().get(url).set(auth(staff.token)).expect(200);
+        // The refund queue is only for staff who handle refunds.
+        await t
+          .api()
+          .get(queue)
+          .set(auth(staff.token))
+          .expect(permission === 'REFUND' ? 200 : 403);
       }
+      await t.api().get(queue).set(auth(h.token)).expect(200);
       const front = await t.signInStaff(h.hotelId, 'front@hotel.test', [
         'FRONT_DESK',
       ]);
