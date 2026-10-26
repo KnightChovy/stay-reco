@@ -1,7 +1,8 @@
 import * as argon2 from 'argon2';
-import type {
-  CancellationPolicyInput,
-  SubmitVerificationInput,
+import {
+  BOOKING_LIMITS,
+  type CancellationPolicyInput,
+  type SubmitVerificationInput,
 } from '@stayreco/shared';
 import {
   addDays,
@@ -1350,6 +1351,10 @@ async function seedBookingDemo(prisma: PrismaClient, passwordHash: string) {
           commissionRate: rt.hotel.hotelPartner.commissionRate,
           cancelledAt,
           createdAt: bookedAt,
+          // The timeline shows an expired hold at updatedAt: the end of the hold, not the day of the seed.
+          updatedAt:
+            cancelledAt ??
+            new Date(bookedAt.getTime() + BOOKING_LIMITS.holdMinutes * 60_000),
         },
         select: { bookingId: true },
       });
