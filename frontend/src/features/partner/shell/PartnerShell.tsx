@@ -22,6 +22,7 @@ import Sidebar, {
 } from "@/components/common/sidebar/Sidebar";
 import { SidebarInset } from "@/components/ui/sidebar";
 import { useAuthStore } from "@/lib/auth-store";
+import { useRefundQueueCount } from "../api/partner-queries";
 import { usePartnerHotel } from "../components";
 import { hotelStatusLabels } from "../lib/labels";
 
@@ -104,9 +105,12 @@ export function PartnerShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const user = useAuthStore((state) => state.user);
   const { hotel } = usePartnerHotel();
+  // Refund requests wait for the partner's decision, so they are the bookings badge.
+  const { count: refundQueue } = useRefundQueueCount(hotel?.id);
   const items = navigation.map((item) => ({
     ...item,
     isActive: pathname === item.href,
+    badge: item.href === "/partner/bookings" && refundQueue > 0 ? refundQueue : item.badge,
   }));
   const hotelMeta = hotel
     ? [hotel.starRating ? `${hotel.starRating}-Star` : null, hotel.city].filter(Boolean).join(" · ")
