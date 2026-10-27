@@ -30,6 +30,7 @@ const errorMessages: Record<string, string> = {
   VERIFICATION_PENDING: "Khách sạn đã có hồ sơ đang chờ thẩm định.",
   VERIFICATION_DOCUMENTS_MISSING: "Còn thiếu tài liệu bắt buộc (giấy phép kinh doanh, PCCC, an ninh trật tự).",
   VERIFICATION_NOT_FOUND: "Không tìm thấy hồ sơ hoặc tài liệu.",
+  VERIFICATION_ALREADY_DECIDED: "Hồ sơ đã được một quản lý khác xử lý. Hồ sơ đã được tải lại.",
   UPLOAD_INVALID_FILE: "Tệp không hợp lệ: sai định dạng, quá 10 MB hoặc bị hỏng.",
   UPLOAD_UNAVAILABLE: "Tải tệp tạm thời không khả dụng. Vui lòng thử lại sau.",
   IMAGE_NOT_FOUND: "Không tìm thấy ảnh. Danh sách đã được tải lại.",
