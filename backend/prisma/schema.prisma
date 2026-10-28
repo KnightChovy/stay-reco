@@ -465,6 +465,10 @@ model Booking {
   conversations      Conversation[]
   aiFunctionCalls    AiFunctionCall[]
 
+  // Hotel-scoped reads reach bookings through the room type: by stay date (bookings list, arrivals, dashboard
+  // figures) and by booking date (bookings created in a period).
+  @@index([roomTypeId, checkInDate])
+  @@index([roomTypeId, createdAt])
   @@map("booking")
 }
 
@@ -1285,5 +1289,7 @@ model WalletTransaction {
   booking             Booking?         @relation(fields: [bookingId], references: [bookingId])
   platformManager     PlatformManager? @relation(fields: [platformManagerId], references: [platformManagerId])
 
+  // A wallet's ledger over a period (dashboard cash figures, statements).
+  @@index([walletId, createdAt])
   @@map("wallet_transaction")
 }
