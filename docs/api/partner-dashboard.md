@@ -283,7 +283,7 @@ Not in the first release. For partners with 2 or more hotels: every hotel the pa
 - **Module**: `modules/stats` (`StatsController`, `StatsService`, an action-items service), hotel access as in the other hotel routes: `member` for action items, today and forecast; `owner-view` (owner only, allowed while suspended) for overview and series.
 - **Queries**: aggregate in SQL (`$queryRaw` with `generate_series` for the days and buckets, `jsonb_array_elements` over `nightly_prices`), never by loading bookings into memory. Day boundaries of `timestamptz` columns use `AT TIME ZONE 'Asia/Ho_Chi_Minh'`.
 - **Tenant** (PD3): `booking` has no `hotel_id`; hotel-scoped queries join through `room_type` (`room_type.hotel_id`), covered by the indexes below. Adding `booking.hotel_id` is reconsidered only if a measurement shows it is needed.
-- **Indexes** (one migration with the module, SQL shown to the user before it is applied): `booking(room_type_id, check_in_date)`, `booking(room_type_id, created_at)`, `room_calendars(date, status)`, `wallet_transaction(wallet_id, created_at)`. Reviews get `review(hotel_id, created_at)` with the loyalty phase.
+- **Indexes** (one migration with the module): `booking(room_type_id, check_in_date)`, `booking(room_type_id, created_at)`, `wallet_transaction(wallet_id, created_at)`. `room_calendars` needs none: its unique `(room_id, date)` already serves a hotel's rooms over a date range. Reviews get `review(hotel_id, created_at)` with the loyalty phase.
 - **Tests** (e2e): a hotel with bookings across a month boundary, a multi-room booking, a cancellation with and without refund, an expired hold, a blocked room and a refund; every metric of §3 checked against hand-computed values; partner A gets `HOTEL_NOT_FOUND` for partner B's hotel; staff get `FORBIDDEN` on owner-only routes and only their action item types.
 - **Demo seed**: older bookings spread over a few months so the chart and the KPIs have values for screenshots.
 
@@ -306,5 +306,6 @@ Changes from FE's draft (2026-10-22), because of the booking data model: booking
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-10-28 | BE | First release built: the five endpoints, indexes `booking(room_type_id, check_in_date)`, `booking(room_type_id, created_at)`, `wallet_transaction(wallet_id, created_at)` (migration `dashboard_indexes`); e2e checks every figure against hand-computed values |
 | 2026-10-28 | BE | Revised against the booking data model; decisions PD1–PD8; first release scoped to five endpoints |
 | 2026-10-22 | FE | Draft proposal |
