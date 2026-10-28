@@ -45,7 +45,7 @@ UX rules this API is designed for:
 | Rule | Value |
 |---|---|
 | Time zone | All day boundaries ("today", `from`/`to`, buckets) are computed in **Asia/Ho_Chi_Minh**. Timestamps in responses are ISO UTC. `date` columns (`check_in_date`, `room_calendars.date`) are already local dates. |
-| Period query | `from`, `to`: `YYYY-MM-DD`, both inclusive (api-guide §5). Default: from the 1st of the current month to today. `from > to` → `VALIDATION_ERROR` (field `to`). Future dates are allowed (bookings already on the books). |
+| Period query | `from`, `to`: `YYYY-MM-DD`, both inclusive (api-guide §5), sent **together or not at all** (only one → `VALIDATION_ERROR`, field `to`). Default: from the 1st of the current month to today. `from > to` → `VALIDATION_ERROR` (field `to`). Future dates are allowed (bookings already on the books). |
 | Maximum range | `overview`: 366 days. `series`: depends on `granularity` (§4.4). Over the limit → `VALIDATION_ERROR` (field `to`). |
 | Comparison period | The `n` days just before `from`, where `n` is the length of the period. Example: 2026-10-01..2026-10-21 is compared with 2026-09-10..2026-09-30. |
 | Money | VND as JSON numbers. Revenue, earnings, commission and refunds are sums of whole-dong amounts (BR-29); ADR and RevPAR are rounded half up to 2 decimals. |
@@ -275,8 +275,8 @@ Not in the first release. For partners with 2 or more hotels: every hotel the pa
 
 | File | Content |
 |---|---|
-| `src/schemas/stats.ts` | `statsRangeQuerySchema` (`from`, `to` with the defaults and the 366-day limit), `statsSeriesQuerySchema` (+ `granularity`, per-granularity limit), `occupancyForecastQuerySchema` (`days` 7–90), `todayStatsQuerySchema` (`arrivalsLimit` 1–20), `STATS_GRANULARITIES = ['day','week','month']`, `STATS_LIMITS` |
-| `src/responses/stats.ts` | `Metric`, `RateMetric`, `StatsPeriod`, `ActionItem` (+ `ACTION_ITEM_TYPES`, `ACTION_ITEM_SEVERITIES`), `ActionItemList`, `HotelTodayStats`, `HotelStatsOverview`, `HotelStatsSeries`, `OccupancyForecast`, all registered in `responseSchemas` for Swagger |
+| `src/schemas/stats.ts` | `statsRangeQuerySchema` (`from` + `to` together, 366-day limit), `statsSeriesQuerySchema` (+ `granularity`, bucket limit per granularity), `occupancyForecastQuerySchema` (`days` 7–90, default 30), `todayStatsQuerySchema` (`arrivalsLimit` 1–20, default 5), `STATS_GRANULARITIES`, `STATS_LIMITS`, and the helpers `defaultGranularity(from, to)` and `statsBucketCount(from, to, granularity)` |
+| `src/responses/stats.ts` | `Metric`, `RateMetric`, `StatsPeriod`, `ActionItem` (a union on `type`, so each type has typed `params`; + `ACTION_ITEM_TYPES`, `ACTION_ITEM_SEVERITIES`, `SETUP_STEPS`), `ActionItemList`, `TodayArrival`, `HotelTodayStats`, `HotelStatsOverview`, `StatsSeriesPoint`, `HotelStatsSeries`, `OccupancyForecastDay`, `OccupancyForecast`, all registered in `responseSchemas` for Swagger |
 
 ## 6. Backend notes
 
