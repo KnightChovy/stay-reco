@@ -87,6 +87,13 @@ Pricing and cancellation demo data:
 - **Cancellation policies:** Sơn Trà free until 3 days before check-in, then 50%; Hồ Gươm no free cancellation, 100%; Bạch Đằng free until the check-in time, then 30%; other hotels use the default (free until 1 day before check-in, then 100%).
 - Bookings are dated from the day the seed runs and are added only while `customer@stayreco.local` has none, so seeding again does not duplicate them.
 
+Dashboard history (for the partner dashboard charts and KPIs):
+
+- About 1,100 bookings in **Bạch Đằng**, **Sơn Trà** and **Hồ Gươm**, check-ins from 150 days before the seed day to 45 days after: completed stays in the past, confirmed stays ahead, about 5% cancelled (refunded in full, in part, or not at all). Weekends and summer are busier; dates further ahead have fewer bookings yet.
+- They belong to six guest accounts `khach.an`, `khach.binh`, `khach.cuong`, `khach.dung`, `khach.hai`, `khach.lan` (`@stayreco.local`, same password), so `customer@stayreco.local` keeps a short list of trips.
+- Added only while those guests have no booking. Every run also dates the demo hotels' rooms 180 days back and the demo wallet rows at their payment or refund, then recomputes the demo wallets' balances.
+- Commission is not charged yet (it comes with check-out), so completed stays keep their full amount in the hotel wallet's pending balance.
+
 Hotel and company names are fictional; images come from picsum.photos; demo documents have no real file on Cloudinary (the file link reports it as not found).
 
 ## Common errors
