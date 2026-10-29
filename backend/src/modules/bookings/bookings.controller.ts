@@ -71,7 +71,7 @@ export class BookingsController {
       'Poll it every 3–5 s on the payment page until `status` leaves `PENDING`.',
   })
   @ApiAccess(
-    'The customer who booked; the hotel owner (also while suspended); staff of the hotel with `BOOKING` or `REFUND`. Anyone else gets `BOOKING_NOT_FOUND`.',
+    'The customer who booked; the hotel owner (also while suspended); staff of the hotel with `BOOKING`, `REFUND` or `FRONT_DESK`. Anyone else gets `BOOKING_NOT_FOUND`.',
   )
   @ApiData(bookingResponseSchema)
   @ApiErrors(ErrorCode.BOOKING_NOT_FOUND, ErrorCode.FORBIDDEN)

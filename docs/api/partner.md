@@ -213,10 +213,12 @@ UC57: the partner sees the bookings of the selected hotel, read-only.
 
 | Method | Path | Access | Query | Response |
 |---|---|---|---|---|
-| GET | `/hotels/:hotelId/bookings` | owner (also while suspended); staff with `BOOKING` or `REFUND` | `?status=&paymentStatus=&checkInFrom=&checkInTo=&search=&sort=&page=&pageSize=` (`hotelBookingsQuerySchema`) | `BookingSummary[]` + `meta` |
-| GET | `/bookings/:id` | owner; staff with `BOOKING` or `REFUND`; the customer who booked | | `Booking` ([customer.md](./customer.md#types)) |
+| GET | `/hotels/:hotelId/bookings` | owner (also while suspended); staff with `BOOKING`, `REFUND` or `FRONT_DESK` | `?status=&paymentStatus=&changeRequest=&checkInFrom=&checkInTo=&search=&sort=&page=&pageSize=` (`hotelBookingsQuerySchema`) | `BookingSummary[]` + `meta` |
+| GET | `/bookings/:id` | owner; staff with `BOOKING`, `REFUND` or `FRONT_DESK`; the customer who booked | | `Booking` ([customer.md](./customer.md#types)) |
 
 - `search` matches the booking code or the guest name. `sort`: `check-in-asc` (default), `check-in-desc`, `created-desc`.
+- `changeRequest=PENDING` (phase 3): bookings with a change request waiting for the hotel.
+- Phase 3: the owner can also check guests in and out, mark no-shows, mark rooms cleaned and decide change requests ([staff.md](./staff.md#front-desk-phase-3)); `FRONT_DESK` was added to the staff who can read bookings.
 
 ## Refund requests (phase 2)
 

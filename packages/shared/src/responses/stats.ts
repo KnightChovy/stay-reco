@@ -48,7 +48,9 @@ export type ActionItemSeverity = (typeof ACTION_ITEM_SEVERITIES)[number];
 /** In display order within a severity; more types come with later phases (the FE ignores unknown ones). */
 export const ACTION_ITEM_TYPES = [
   'VERIFICATION_NEEDS_REVISION',
+  'OVERDUE_CHECKOUTS',
   'REFUND_REQUESTS_PENDING',
+  'CHANGE_REQUESTS_PENDING',
   'SETUP_INCOMPLETE',
   'ROOMS_LOCKED_LONG',
   'NO_AVAILABILITY_DATES',
@@ -72,7 +74,9 @@ const item = <T extends ActionItemType, P extends z.ZodRawShape>(type: T, params
 export const actionItemResponseSchema = z
   .discriminatedUnion('type', [
     item('VERIFICATION_NEEDS_REVISION', { requestId: z.uuid() }),
+    item('OVERDUE_CHECKOUTS', { bookingIds: z.array(z.uuid()) }),
     item('REFUND_REQUESTS_PENDING', { oldestAt: isoDateTime() }),
+    item('CHANGE_REQUESTS_PENDING', { oldestAt: isoDateTime() }),
     item('SETUP_INCOMPLETE', { missing: z.array(z.enum(SETUP_STEPS)) }),
     item('ROOMS_LOCKED_LONG', { roomIds: z.array(z.uuid()), days: z.number().int() }),
     item('NO_AVAILABILITY_DATES', { dates: z.array(calendarDate()) }),

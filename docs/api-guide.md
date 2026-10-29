@@ -211,6 +211,15 @@ There is no `status` field in the body; the HTTP status is already available as 
 | `INVALID_API_KEY` | 401 | SePay webhook called with a missing or wrong API key | Not for clients: check `SEPAY_WEBHOOK_API_KEY` and the key in the SePay dashboard |
 | `PRICING_RULE_NOT_FOUND` | 404 | Pricing rule doesn't exist or belongs to another hotel | Reload the rules |
 | `AVAILABILITY_BELOW_BOOKED` | 409 | More rooms asked on sale than are left after bookings and holds on some day | Show the days in `details` with the rooms left |
+| `VOUCHER_INVALID` | 400 | The voucher QR token was edited or is not a StayReco voucher | MSG20, ask for the booking code |
+| `CHECK_IN_NOT_OPEN` | 409 | Check-in before the check-in date, or on / after the check-out date | "Check-in is open from <check-in date>" |
+| `REFUND_DECISION_PENDING` | 409 | Check-in or no-show while a refund request waits for the hotel | "Decide the refund request first" |
+| `ROOM_NOT_ASSIGNABLE` | 409 | A chosen room is of another room type, not `AVAILABLE`, or taken on a remaining night | Reload the room options |
+| `NO_SHOW_NOT_ALLOWED` | 409 | Marking a no-show before the day after the check-in date | "Possible from <day after check-in>" |
+| `ROOM_STATUS_CONFLICT` | 409 | Marking a room cleaned when it is not `CLEANING` | Reload the room |
+| `CHANGE_REQUEST_PENDING` | 409 | The booking already has a change request waiting | Show the waiting request |
+| `CHANGE_REQUEST_STATUS_CONFLICT` | 409 | Accepting or rejecting when no change request is waiting | Reload the booking |
+| `NOTIFICATION_NOT_FOUND` | 404 | Notification doesn't exist or belongs to someone else | Reload the list |
 
 Important: **refresh only when `status === 401` and `code === 'UNAUTHENTICATED'`.** Refreshing on the other 401 errors (`AUTH_INVALID_CREDENTIALS`, `AUTH_WRONG_PASSWORD`, `AUTH_REFRESH_TOKEN_INVALID`) causes infinite loops or unexpected sign-outs.
 

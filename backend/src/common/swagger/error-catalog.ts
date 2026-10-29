@@ -206,6 +206,44 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorInfo> = {
     status: 409,
     description: 'The refund is not pending',
   },
+  VOUCHER_INVALID: {
+    status: 400,
+    description: 'The voucher QR token was edited or is not a StayReco voucher',
+  },
+  CHECK_IN_NOT_OPEN: {
+    status: 409,
+    description:
+      'Check-in before the check-in date, or on / after the check-out date',
+  },
+  REFUND_DECISION_PENDING: {
+    status: 409,
+    description: 'A refund request waits for the hotel; decide it first',
+  },
+  ROOM_NOT_ASSIGNABLE: {
+    status: 409,
+    description:
+      'A chosen room is of another room type, not AVAILABLE, or taken on a remaining night',
+  },
+  NO_SHOW_NOT_ALLOWED: {
+    status: 409,
+    description: 'A no-show can be marked from the day after the check-in date',
+  },
+  ROOM_STATUS_CONFLICT: {
+    status: 409,
+    description: 'The room is not CLEANING',
+  },
+  CHANGE_REQUEST_PENDING: {
+    status: 409,
+    description: 'The booking already has a change request waiting',
+  },
+  CHANGE_REQUEST_STATUS_CONFLICT: {
+    status: 409,
+    description: 'No change request is waiting',
+  },
+  NOTIFICATION_NOT_FOUND: {
+    status: 404,
+    description: "Notification doesn't exist or belongs to someone else",
+  },
   INVALID_API_KEY: {
     status: 401,
     description: 'Missing or wrong webhook API key; nothing is processed',

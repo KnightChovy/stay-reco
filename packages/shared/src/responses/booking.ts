@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { BookingStatus, DayOfWeek, PaymentStatus, PriceAdjustmentType, PriceRuleType } from '../enums';
+import { BookingStatus, DayOfWeek, PaymentStatus, PriceAdjustmentType, PriceRuleType, RoomStatus } from '../enums';
+import { CHANGE_REQUEST_STATUSES } from '../schemas/booking';
 import {
   amenityResponseSchema,
   cancellationPolicyResponseSchema,
@@ -205,10 +206,45 @@ export const bookingResponseSchema = bookingSummaryResponseSchema
       .describe('Set when the hotel rejected the latest refund request; the booking stays CONFIRMED.'),
     cancelReason: z.string().nullable(),
     cancelledAt: isoDateTime().nullable(),
+    assignedRooms: z
+      .array(z.object({ id: z.uuid(), roomNumber: z.string() }))
+      .describe(
+        'Rooms of the stay: held at booking, replaced by the rooms assigned at check-in. Empty for the customer before check-in.',
+      ),
+    changeRequest: z
+      .object({
+        status: z.enum(CHANGE_REQUEST_STATUSES),
+        changes: z.object({
+          guestName: z.string().optional(),
+          contactPhone: z.string().optional(),
+          arrivalTime: z.string().nullable().optional(),
+          specialRequests: z.string().nullable().optional(),
+        }),
+        requestedAt: isoDateTime(),
+        decidedAt: isoDateTime().nullable(),
+        reason: z.string().nullable().describe('Set when the hotel rejected the request.'),
+      })
+      .nullable()
+      .describe('The latest request to change guest details (UC25), null when there was none.'),
     timeline: z.array(z.object({ at: isoDateTime(), event: z.string() })),
   })
   .register(responseSchemas, { id: 'Booking' });
 export type Booking = z.infer<typeof bookingResponseSchema>;
+
+export const roomOptionResponseSchema = z
+  .object({ id: z.uuid(), roomNumber: z.string(), status: z.enum(RoomStatus) })
+  .register(responseSchemas, { id: 'RoomOption' });
+export type RoomOption = z.infer<typeof roomOptionResponseSchema>;
+
+export const roomOptionsResponseSchema = z
+  .object({
+    held: z.array(roomOptionResponseSchema).describe('Rooms the booking holds now.'),
+    available: z
+      .array(roomOptionResponseSchema)
+      .describe('Other rooms of the booked type, AVAILABLE and free on every remaining night.'),
+  })
+  .register(responseSchemas, { id: 'RoomOptions', description: 'Rooms to assign at check-in (UC38, BR-10).' });
+export type RoomOptions = z.infer<typeof roomOptionsResponseSchema>;
 
 export const bookingVoucherResponseSchema = z
   .object({

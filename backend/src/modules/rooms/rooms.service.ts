@@ -40,7 +40,7 @@ const collator = new Intl.Collator('en', {
   numeric: true,
   sensitivity: 'base',
 });
-const byNumber = (a: string, b: string) => collator.compare(a, b);
+export const byRoomNumber = (a: string, b: string) => collator.compare(a, b);
 const floorOrder = (floor: number | null, direction: 1 | -1) =>
   floor === null ? Number.POSITIVE_INFINITY : floor * direction;
 
@@ -48,14 +48,14 @@ const COMPARE: Record<
   RoomListQuery['sort'],
   (a: RoomRow, b: RoomRow) => number
 > = {
-  'room-number-asc': (a, b) => byNumber(a.roomNumber, b.roomNumber),
-  'room-number-desc': (a, b) => byNumber(b.roomNumber, a.roomNumber),
+  'room-number-asc': (a, b) => byRoomNumber(a.roomNumber, b.roomNumber),
+  'room-number-desc': (a, b) => byRoomNumber(b.roomNumber, a.roomNumber),
   'floor-asc': (a, b) =>
     floorOrder(a.floor, 1) - floorOrder(b.floor, 1) ||
-    byNumber(a.roomNumber, b.roomNumber),
+    byRoomNumber(a.roomNumber, b.roomNumber),
   'floor-desc': (a, b) =>
     floorOrder(a.floor, -1) - floorOrder(b.floor, -1) ||
-    byNumber(a.roomNumber, b.roomNumber),
+    byRoomNumber(a.roomNumber, b.roomNumber),
 };
 
 /**

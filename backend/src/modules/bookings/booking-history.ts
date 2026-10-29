@@ -3,7 +3,7 @@ import { AuditAction } from '../audit/audit.service';
 
 /**
  * What happened to a booking after it was paid, kept as `audit_log` rows on the booking (no extra column or table,
- * decision P11): the customer's cancellations, staff forwarding and the hotel's refund decisions.
+ * decision P11): the customer's cancellations, staff forwarding, the hotel's refund decisions and the front desk.
  */
 const HISTORY_ACTIONS = {
   [AuditAction.BOOKING_CANCEL_REQUESTED]: 'CANCEL_REQUESTED',
@@ -11,6 +11,8 @@ const HISTORY_ACTIONS = {
   [AuditAction.REFUND_APPROVED]: 'REFUND_APPROVED',
   [AuditAction.REFUND_AUTO_APPROVED]: 'REFUND_APPROVED',
   [AuditAction.REFUND_REJECTED]: 'REFUND_REJECTED',
+  [AuditAction.BOOKING_CHECKED_IN]: 'CHECKED_IN',
+  [AuditAction.BOOKING_CHECKED_OUT]: 'COMPLETED',
 } as const;
 
 type HistoryAction = keyof typeof HISTORY_ACTIONS;
@@ -28,10 +30,17 @@ export interface CancelRequest {
   refund: number;
 }
 
+export interface StayRoom {
+  id: string;
+  roomNumber: string;
+}
+
 export interface BookingHistory {
   cancelRequest: CancelRequest | null;
   /** The hotel rejected the latest cancel request. */
   rejection: { reason: string; at: Date } | null;
+  /** The rooms assigned at check-in, null before it. */
+  checkedInRooms: StayRoom[] | null;
   /** Timeline entries, oldest first. */
   events: { at: Date; event: string }[];
 }
@@ -91,6 +100,7 @@ export async function loadBookingHistory(
 
   let cancelRequest: CancelRequest | null = null;
   let rejection: BookingHistory['rejection'] = null;
+  let checkedInRooms: StayRoom[] | null = null;
   for (const row of rows) {
     const action = row.action as HistoryAction;
     const value = JSON.parse(row.newValue ?? '{}') as Record<string, unknown>;
@@ -102,11 +112,14 @@ export async function loadBookingHistory(
       rejection = null;
     } else if (action === AuditAction.REFUND_REJECTED) {
       rejection = { reason: String(value.reason), at: row.createdAt };
+    } else if (action === AuditAction.BOOKING_CHECKED_IN) {
+      checkedInRooms = value.rooms as StayRoom[];
     }
   }
   return {
     cancelRequest,
     rejection,
+    checkedInRooms,
     events: rows.map((r) => ({
       at: r.createdAt,
       event: HISTORY_ACTIONS[r.action as HistoryAction],

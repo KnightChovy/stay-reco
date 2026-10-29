@@ -188,7 +188,7 @@ describe('Hotel bookings and refund decisions (e2e)', () => {
       expect(ids(byCode.body)).toEqual([early.id]);
     });
 
-    it('is for the owner and staff with BOOKING or REFUND', async () => {
+    it('is for the owner and staff with BOOKING, REFUND or FRONT_DESK', async () => {
       const h = await hotel();
       const other = await hotel('other@hotel.test');
       const url = `/api/v1/hotels/${h.hotelId}/bookings`;
@@ -208,10 +208,16 @@ describe('Hotel bookings and refund decisions (e2e)', () => {
           .expect(permission === 'REFUND' ? 200 : 403);
       }
       await t.api().get(queue).set(auth(h.token)).expect(200);
+      // Front desk staff see the bookings, but not the refund queue.
       const front = await t.signInStaff(h.hotelId, 'front@hotel.test', [
         'FRONT_DESK',
       ]);
-      await t.api().get(url).set(auth(front.token)).expect(403);
+      await t.api().get(url).set(auth(front.token)).expect(200);
+      await t.api().get(queue).set(auth(front.token)).expect(403);
+      const care = await t.signInStaff(h.hotelId, 'care@hotel.test', [
+        'CUSTOMER_CARE',
+      ]);
+      await t.api().get(url).set(auth(care.token)).expect(403);
       const hidden = await t.api().get(url).set(auth(other.token)).expect(404);
       expect(hidden.body.code).toBe('HOTEL_NOT_FOUND');
     });

@@ -8,6 +8,7 @@ import { configureApp } from '../src/app.setup';
 import { UserRole } from '../src/generated/prisma/client';
 import { MailMessage, MailService } from '../src/modules/mail/mail.service';
 import { StorageService } from '../src/modules/storage/storage.service';
+import { PLATFORM_WALLET_ID } from '../src/modules/wallets/wallet-ledger';
 import { PrismaService } from '../src/prisma/prisma.service';
 
 export const PASSWORD = 'Password123';
@@ -89,6 +90,10 @@ export async function createTestApp() {
     await prisma.$executeRawUnsafe(
       'TRUNCATE TABLE user_account, audit_log RESTART IDENTITY CASCADE',
     );
+    // The cascade empties `wallet`; the platform wallet comes from a migration, so it is put back here.
+    await prisma.wallet.create({
+      data: { walletId: PLATFORM_WALLET_ID, ownerType: 'PLATFORM' },
+    });
   };
 
   /** Creates an ACTIVE account directly and signs in; returns its id and access token. */
