@@ -89,7 +89,7 @@ Pricing and cancellation demo data:
 
 Dashboard history (for the partner dashboard charts and KPIs):
 
-- About 1,100 bookings in **Bạch Đằng**, **Sơn Trà** and **Hồ Gươm**, check-ins from 150 days before the seed day to 45 days after: completed stays in the past, confirmed stays ahead, about 5% cancelled (refunded in full, in part, or not at all). Weekends and summer are busier; dates further ahead have fewer bookings yet.
+- About 1,150 bookings in **Bạch Đằng**, **Sơn Trà** and **Hồ Gươm**, check-ins from 150 days before the seed day to 45 days after: completed stays in the past, confirmed stays ahead, about 5% cancelled (refunded in full, in part, or not at all). Weekends and summer are busier; dates further ahead have fewer bookings yet.
 - They belong to six guest accounts `khach.an`, `khach.binh`, `khach.cuong`, `khach.dung`, `khach.hai`, `khach.lan` (`@stayreco.local`, same password), so `customer@stayreco.local` keeps a short list of trips.
 - Added only while those guests have no booking. Every run also dates the demo hotels' rooms 180 days back and the demo wallet rows at their payment or refund, then recomputes the demo wallets' balances.
 - Commission is not charged yet (it comes with check-out), so completed stays keep their full amount in the hotel wallet's pending balance.

@@ -1480,18 +1480,17 @@ async function seedDashboardHistory(
   const now = new Date();
   const hotelNames = PARTNERS.flatMap((p) => p.hotels.map((h) => h.name));
 
-  // Rooms exist before the oldest history booking, so past days have rooms to sell.
+  // Rooms exist before the oldest history booking, so past days have rooms to sell. Raw SQL, because Prisma would
+  // also bump `updated_at`, which the "rooms locked for long" action item falls back on.
   const roomsSince = vietnamDateTime(
     addDays(today, -ROOMS_SINCE_DAYS),
     '00:00',
   );
-  await prisma.room.updateMany({
-    where: {
-      roomType: { hotel: { name: { in: hotelNames } } },
-      createdAt: { gt: roomsSince },
-    },
-    data: { createdAt: roomsSince },
-  });
+  await prisma.$executeRaw`
+    UPDATE room r SET created_at = ${roomsSince}
+    FROM room_type rt JOIN hotel h ON h.hotel_id = rt.hotel_id
+    WHERE rt.room_type_id = r.room_type_id
+      AND h.name = ANY(${hotelNames}) AND r.created_at > ${roomsSince}`;
 
   const guests: Guest[] = [];
   for (const [email, fullName, phone] of HISTORY_GUESTS) {
