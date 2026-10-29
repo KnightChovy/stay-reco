@@ -1,13 +1,17 @@
 import * as argon2 from 'argon2';
+import { randomUUID } from 'crypto';
 import {
   BOOKING_LIMITS,
   type CancellationPolicyInput,
+  daysBetween,
   type SubmitVerificationInput,
 } from '@stayreco/shared';
 import {
   addDays,
   fromCalendarDate,
   todayInVietnam,
+  toCalendarDate,
+  vietnamDateTime,
 } from '../src/common/http/calendar-date';
 import { FieldCipher } from '../src/common/crypto/field-cipher';
 import {
@@ -19,6 +23,7 @@ import {
 import { AuditAction } from '../src/modules/audit/audit.service';
 import { newBookingCode } from '../src/modules/bookings/booking-code';
 import { recordBookingEvent } from '../src/modules/bookings/booking-history';
+import { cancellationAmounts } from '../src/modules/bookings/cancellation';
 import {
   cancellationPolicyOf,
   cancellationRowsSelect,
@@ -26,7 +31,10 @@ import {
   toCancellationRows,
 } from '../src/modules/hotels/hotel.mapper';
 import { basePriceRow, basePriceWhere } from '../src/modules/rooms/room.mapper';
-import { freeCancellationUntil } from '../src/modules/stays/offer';
+import {
+  DEFAULT_CHECK_IN_TIME,
+  freeCancellationUntil,
+} from '../src/modules/stays/offer';
 import { toSnapshotRows } from '../src/modules/verification/verification.mapper';
 import { WalletLedger } from '../src/modules/wallets/wallet-ledger';
 
@@ -966,6 +974,7 @@ export async function seedDemo(prisma: PrismaClient) {
   }
 
   await seedBookingDemo(prisma, passwordHash);
+  await seedDashboardHistory(prisma, passwordHash);
 
   console.log(
     `Demo: +${created} hotels. Sign in with password "${password}": ${MANAGER_EMAIL}, ` +
@@ -1399,4 +1408,472 @@ async function seedBookingDemo(prisma: PrismaClient, passwordHash: string) {
   console.log(
     `Booking demo: +${rules} pricing rules, +${bookings} bookings for ${DEMO_CUSTOMER.email}`,
   );
+}
+
+// ── Dashboard history: a few months of bookings for the partner dashboard ──
+
+/** Hotels that get a booking history. */
+const HISTORY_HOTELS = [
+  'Bạch Đằng Riverside Hotel',
+  'Sơn Trà Bay Resort & Spa',
+  'Hồ Gươm Heritage Hotel',
+];
+/** Check-ins from this many days ago to this many days ahead. */
+const HISTORY_PAST_DAYS = 150;
+const HISTORY_AHEAD_DAYS = 45;
+/** The demo hotels' rooms exist from this many days ago, before the oldest history booking. */
+const ROOMS_SINCE_DAYS = 180;
+
+/** Guests of the history bookings, apart from customer@stayreco.local so its trips stay readable. */
+const HISTORY_GUESTS: [email: string, fullName: string, phone: string][] = [
+  ['khach.an@stayreco.local', 'Nguyễn Văn An', '0901000001'],
+  ['khach.binh@stayreco.local', 'Lê Thị Bình', '0901000002'],
+  ['khach.cuong@stayreco.local', 'Phạm Quốc Cường', '0901000003'],
+  ['khach.dung@stayreco.local', 'Hoàng Mỹ Dung', '0901000004'],
+  ['khach.hai@stayreco.local', 'Võ Thanh Hải', '0901000005'],
+  ['khach.lan@stayreco.local', 'Đặng Ngọc Lan', '0901000006'],
+];
+
+const HOUR_MS = 3_600_000;
+
+/** Small seeded generator (mulberry32): every machine seeds the same history for the same day. */
+function randomOf(seed: number) {
+  let s = seed >>> 0;
+  return () => {
+    s = (s + 0x6d2b79f5) >>> 0;
+    let x = Math.imul(s ^ (s >>> 15), 1 | s);
+    x = (x + Math.imul(x ^ (x >>> 7), 61 | x)) ^ x;
+    return ((x ^ (x >>> 14)) >>> 0) / 4_294_967_296;
+  };
+}
+
+/** Chance that a free room starts a stay on `date`: weekends and summer are busier, the future is not booked yet. */
+function demandOf(date: string, today: string) {
+  const weekday = fromCalendarDate(date).getUTCDay();
+  const month = fromCalendarDate(date).getUTCMonth() + 1;
+  let chance = 0.2;
+  if (weekday === 5 || weekday === 6) chance += 0.12;
+  if (month >= 6 && month <= 8) chance += 0.06;
+  if (date > today) {
+    chance *= Math.max(
+      0.15,
+      1 - (daysBetween(today, date) / HISTORY_AHEAD_DAYS) * 0.85,
+    );
+  }
+  return chance;
+}
+
+const nightsOf = (r: number) => (r < 0.3 ? 1 : r < 0.65 ? 2 : r < 0.85 ? 3 : 4);
+
+type Guest = { id: string; fullName: string; phone: string };
+
+/**
+ * Past and coming bookings for the dashboard charts and KPIs, written the way the API writes them (invoice, BOOKED
+ * nights, wallet rows, cancel / refund history) and spread over HISTORY_GUESTS. Added only while those guests have no
+ * booking. Every run also dates the demo rooms before the history and the demo ledger rows at their payment or refund.
+ */
+async function seedDashboardHistory(
+  prisma: PrismaClient,
+  passwordHash: string,
+) {
+  const today = todayInVietnam();
+  const now = new Date();
+  const hotelNames = PARTNERS.flatMap((p) => p.hotels.map((h) => h.name));
+
+  // Rooms exist before the oldest history booking, so past days have rooms to sell. Raw SQL, because Prisma would
+  // also bump `updated_at`, which the "rooms locked for long" action item falls back on.
+  const roomsSince = vietnamDateTime(
+    addDays(today, -ROOMS_SINCE_DAYS),
+    '00:00',
+  );
+  await prisma.$executeRaw`
+    UPDATE room r SET created_at = ${roomsSince}
+    FROM room_type rt JOIN hotel h ON h.hotel_id = rt.hotel_id
+    WHERE rt.room_type_id = r.room_type_id
+      AND h.name = ANY(${hotelNames}) AND r.created_at > ${roomsSince}`;
+
+  const guests: Guest[] = [];
+  for (const [email, fullName, phone] of HISTORY_GUESTS) {
+    const id = await ensureAccount(
+      prisma,
+      email,
+      () => ({
+        fullName,
+        phone,
+        role: UserRole.CUSTOMER,
+        customer: { create: {} },
+      }),
+      passwordHash,
+    );
+    guests.push({ id, fullName, phone });
+  }
+  const hasHistory = await prisma.booking.count({
+    where: { customerId: { in: guests.map((g) => g.id) } },
+  });
+  const created = hasHistory
+    ? 0
+    : await createHistory(prisma, guests, today, now);
+
+  await alignDemoLedger(prisma, hotelNames, [
+    DEMO_CUSTOMER.email,
+    ...HISTORY_GUESTS.map(([email]) => email),
+  ]);
+  console.log(
+    `Dashboard history: +${created} bookings in ${HISTORY_HOTELS.length} hotels, check-ins ${addDays(today, -HISTORY_PAST_DAYS)} to ${addDays(today, HISTORY_AHEAD_DAYS)}`,
+  );
+}
+
+async function createHistory(
+  prisma: PrismaClient,
+  guests: Guest[],
+  today: string,
+  now: Date,
+): Promise<number> {
+  const random = randomOf(20261028);
+  const from = addDays(today, -HISTORY_PAST_DAYS);
+  const to = addDays(today, HISTORY_AHEAD_DAYS);
+  const ledger = new WalletLedger();
+  const codes = new Set(
+    (await prisma.invoice.findMany({ select: { invoiceNumber: true } })).map(
+      (i) => i.invoiceNumber,
+    ),
+  );
+  const customerWallets = new Map<string, string>();
+  for (const g of guests) {
+    const wallet = await prisma.$transaction((tx) =>
+      ledger.customerWallet(tx, g.id),
+    );
+    customerWallets.set(g.id, wallet.walletId);
+  }
+
+  const bookings: Prisma.BookingCreateManyInput[] = [];
+  const invoices: Prisma.InvoiceCreateManyInput[] = [];
+  const nights: Prisma.RoomCalendarsCreateManyInput[] = [];
+  const entries: Prisma.WalletTransactionCreateManyInput[] = [];
+  const events: Prisma.AuditLogCreateManyInput[] = [];
+  let guestIndex = 0;
+
+  for (const hotelName of HISTORY_HOTELS) {
+    const roomTypes = await prisma.roomType.findMany({
+      where: { hotel: { name: hotelName } },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        roomTypeId: true,
+        maxOccupancy: true,
+        prices: { where: basePriceWhere, select: { pricePerNight: true } },
+        rooms: {
+          where: { status: { not: 'MAINTENANCE' } },
+          orderBy: { roomNumber: 'asc' },
+          select: { roomId: true },
+        },
+        hotel: {
+          select: {
+            hotelId: true,
+            hotelPartnerId: true,
+            checkInTime: true,
+            hotelPartner: { select: { commissionRate: true } },
+            hotelProperties: cancellationRowsSelect,
+          },
+        },
+      },
+    });
+    if (!roomTypes.length) continue;
+    const hotel = roomTypes[0].hotel;
+    const policy = cancellationPolicyOf(hotel.hotelProperties);
+    const checkInTime = fromTime(hotel.checkInTime);
+    const hotelWallet = (
+      await prisma.$transaction((tx) => ledger.hotelWallet(tx, hotel.hotelId))
+    ).walletId;
+
+    // Nights already taken (the other demo bookings, closures) stay taken.
+    const roomIds = roomTypes.flatMap((rt) => rt.rooms.map((r) => r.roomId));
+    const taken = new Set(
+      (
+        await prisma.roomCalendars.findMany({
+          where: {
+            roomId: { in: roomIds },
+            date: {
+              gte: fromCalendarDate(from),
+              lte: fromCalendarDate(addDays(to, 4)),
+            },
+          },
+          select: { roomId: true, date: true },
+        })
+      ).map((c) => `${c.roomId}|${toCalendarDate(c.date)}`),
+    );
+    const isFree = (roomId: string, checkIn: string, count: number) =>
+      Array.from({ length: count }, (_, i) => addDays(checkIn, i)).every(
+        (d) => !taken.has(`${roomId}|${d}`),
+      );
+
+    for (let date = from; date <= to; date = addDays(date, 1)) {
+      const chance = demandOf(date, today);
+      for (const rt of roomTypes) {
+        const base = rt.prices[0]?.pricePerNight;
+        if (!base) continue;
+        for (const room of rt.rooms) {
+          if (random() >= chance) continue;
+          const count = nightsOf(random());
+          if (!isFree(room.roomId, date, count)) continue;
+          const held = [room.roomId];
+          if (random() < 0.12) {
+            const other = rt.rooms.find(
+              (r) => r.roomId !== room.roomId && isFree(r.roomId, date, count),
+            );
+            if (other) held.push(other.roomId);
+          }
+
+          const checkIn = date;
+          const checkOut = addDays(checkIn, count);
+          const guest = guests[guestIndex++ % guests.length];
+          const lead = Math.floor(random() ** 2 * 40);
+          let createdAt = new Date(
+            vietnamDateTime(addDays(checkIn, -lead), '09:00').getTime() +
+              Math.floor(random() * 12 * HOUR_MS),
+          );
+          // Coming stays whose booking day is still ahead were booked in the last two days.
+          if (createdAt > now) {
+            createdAt = new Date(
+              now.getTime() - Math.floor((1 + random() * 47) * HOUR_MS),
+            );
+          }
+          const paidAt = new Date(createdAt.getTime() + 5 * 60_000);
+          const total = base.times(count * held.length);
+          const freeCancelUntil = freeCancellationUntil(
+            policy,
+            checkIn,
+            checkInTime,
+            createdAt,
+          );
+          let code = newBookingCode(createdAt);
+          while (codes.has(code)) code = newBookingCode(createdAt);
+          codes.add(code);
+          const bookingId = randomUUID();
+
+          // Cancelled before the check-in time, never after it (BR-09).
+          const checkInAt = vietnamDateTime(
+            checkIn,
+            checkInTime ?? DEFAULT_CHECK_IN_TIME,
+          );
+          const cancelBefore = Math.min(now.getTime(), checkInAt.getTime());
+          // Stays that ended before today are completed; today's departures and guests in house stay confirmed,
+          // as there is no check-out yet.
+          const past = checkOut < today;
+          const cancelled =
+            random() < (past ? 0.07 : 0.06) &&
+            cancelBefore - paidAt.getTime() > HOUR_MS;
+
+          let status: 'COMPLETED' | 'CONFIRMED' | 'CANCELLED' = past
+            ? 'COMPLETED'
+            : 'CONFIRMED';
+          let paymentStatus: 'PAID' | 'REFUNDED' | 'PARTIALLY_REFUNDED' =
+            'PAID';
+          let cancelledAt: Date | null = null;
+
+          if (cancelled) {
+            const requestAt = new Date(
+              paidAt.getTime() +
+                Math.floor(
+                  random() * (cancelBefore - paidAt.getTime() - HOUR_MS),
+                ),
+            );
+            const { fee, refund } = cancellationAmounts(
+              {
+                freeCancelUntil,
+                cancelFeePercent: new Prisma.Decimal(policy.feePercent),
+              },
+              total,
+              requestAt,
+            );
+            status = 'CANCELLED';
+            events.push({
+              action: AuditAction.BOOKING_CANCEL_REQUESTED,
+              customerId: guest.id,
+              entityType: 'booking',
+              entityId: bookingId,
+              newValue: JSON.stringify({
+                reason: 'Thay đổi lịch trình',
+                paid: total.toNumber(),
+                fee: fee.toNumber(),
+                refund: refund.toNumber(),
+              }),
+              createdAt: requestAt,
+            });
+            if (refund.isZero()) {
+              cancelledAt = requestAt;
+            } else {
+              // The partner approved within a few hours.
+              cancelledAt = new Date(
+                Math.min(requestAt.getTime() + 6 * HOUR_MS, now.getTime()),
+              );
+              paymentStatus = fee.isZero() ? 'REFUNDED' : 'PARTIALLY_REFUNDED';
+              entries.push(
+                {
+                  walletId: hotelWallet,
+                  bookingId,
+                  type: 'REFUND',
+                  amount: refund.negated(),
+                  balanceAfter: 0,
+                  idempotencyKey: `refund:${bookingId}:hotel`,
+                  description: `Refund of ${code}`,
+                  createdAt: cancelledAt,
+                },
+                {
+                  walletId: customerWallets.get(guest.id)!,
+                  bookingId,
+                  type: 'REFUND',
+                  amount: refund,
+                  balanceAfter: 0,
+                  idempotencyKey: `refund:${bookingId}:customer`,
+                  description: `Refund of ${code}`,
+                  createdAt: cancelledAt,
+                },
+              );
+              events.push({
+                action: AuditAction.REFUND_APPROVED,
+                hotelPartnerId: hotel.hotelPartnerId,
+                entityType: 'booking',
+                entityId: bookingId,
+                newValue: JSON.stringify({ refund: refund.toNumber() }),
+                createdAt: cancelledAt,
+              });
+            }
+          } else {
+            for (const roomId of held) {
+              for (let i = 0; i < count; i++) {
+                const night = addDays(checkIn, i);
+                taken.add(`${roomId}|${night}`);
+                nights.push({
+                  roomId,
+                  date: fromCalendarDate(night),
+                  bookingId,
+                  status: 'BOOKED',
+                  priceOverride: base,
+                });
+              }
+            }
+          }
+
+          bookings.push({
+            bookingId,
+            customerId: guest.id,
+            roomTypeId: rt.roomTypeId,
+            checkInDate: fromCalendarDate(checkIn),
+            checkOutDate: fromCalendarDate(checkOut),
+            numGuests: Math.min(2, rt.maxOccupancy) * held.length,
+            numRooms: held.length,
+            nightlyPrices: Array.from({ length: count }, (_, i) => ({
+              date: addDays(checkIn, i),
+              price: base.toNumber(),
+            })),
+            totalAmount: total,
+            status,
+            guestName: guest.fullName,
+            contactPhone: guest.phone,
+            freeCancelUntil,
+            cancelFeePercent: policy.feePercent,
+            commissionRate: hotel.hotelPartner.commissionRate,
+            cancelledAt,
+            createdAt,
+            updatedAt: cancelledAt ?? paidAt,
+          });
+          invoices.push({
+            bookingId,
+            invoiceNumber: code,
+            subtotal: total,
+            taxAmount: 0,
+            discountAmount: 0,
+            totalAmount: total,
+            paymentMethod: 'SEPAY',
+            paymentStatus,
+            paidAt,
+            vnpayTxnRef: `seed-${code}`,
+            createdAt,
+          });
+          entries.push({
+            walletId: hotelWallet,
+            bookingId,
+            type: 'BOOKING_PAYMENT',
+            amount: total,
+            balanceAfter: 0,
+            idempotencyKey: `sepay:seed-${code}`,
+            description: `Payment of ${code}`,
+            createdAt: paidAt,
+          });
+        }
+      }
+    }
+  }
+
+  // One transaction: a failed run leaves no half history behind.
+  await prisma.$transaction(
+    async (tx) => {
+      const chunks = <T>(rows: T[]) =>
+        Array.from({ length: Math.ceil(rows.length / 1000) }, (_, i) =>
+          rows.slice(i * 1000, (i + 1) * 1000),
+        );
+      for (const data of chunks(bookings))
+        await tx.booking.createMany({ data });
+      for (const data of chunks(invoices))
+        await tx.invoice.createMany({ data });
+      for (const data of chunks(nights))
+        await tx.roomCalendars.createMany({ data });
+      for (const data of chunks(entries)) {
+        await tx.walletTransaction.createMany({ data });
+      }
+      for (const data of chunks(events)) await tx.auditLog.createMany({ data });
+    },
+    { timeout: 120_000 },
+  );
+  return bookings.length;
+}
+
+/**
+ * The ledger rows of the demo bookings are dated at the payment or the refund approval (the ledger stamps them with
+ * the seed time), then the running `balance_after` and the balances of the demo wallets are recomputed. Until
+ * check-out moves money from pending to available, a hotel wallet holds everything in pending and a customer wallet
+ * in available; wallets with other kinds of rows are left alone.
+ */
+async function alignDemoLedger(
+  prisma: PrismaClient,
+  hotelNames: string[],
+  customerEmails: string[],
+) {
+  await prisma.$executeRaw`
+    UPDATE wallet_transaction wt SET created_at = i.paid_at
+    FROM invoice i
+    WHERE wt.idempotency_key = 'sepay:seed-' || i.invoice_number
+      AND i.paid_at IS NOT NULL AND wt.created_at <> i.paid_at`;
+  await prisma.$executeRaw`
+    UPDATE wallet_transaction wt SET created_at = b.cancelled_at
+    FROM booking b JOIN user_account u ON u.user_account_id = b.customer_id
+    WHERE u.email = ANY(${customerEmails})
+      AND wt.idempotency_key IN ('refund:' || b.booking_id || ':hotel', 'refund:' || b.booking_id || ':customer')
+      AND b.cancelled_at IS NOT NULL AND wt.created_at <> b.cancelled_at`;
+
+  const wallets = await prisma.$queryRaw<{ wallet_id: string }[]>`
+    SELECT w.wallet_id FROM wallet w
+    LEFT JOIN hotel h ON h.hotel_id = w.hotel_id
+    LEFT JOIN user_account u ON u.user_account_id = w.customer_id
+    WHERE (h.name = ANY(${hotelNames}) OR u.email = ANY(${customerEmails}))
+      AND NOT EXISTS (
+        SELECT 1 FROM wallet_transaction x
+        WHERE x.wallet_id = w.wallet_id AND x.type NOT IN ('BOOKING_PAYMENT', 'REFUND')
+      )`;
+  const ids = wallets.map((w) => w.wallet_id);
+  if (!ids.length) return;
+  await prisma.$executeRaw`
+    UPDATE wallet_transaction wt SET balance_after = s.running
+    FROM (
+      SELECT wallet_transaction_id,
+        sum(amount) OVER (PARTITION BY wallet_id ORDER BY created_at, wallet_transaction_id) AS running
+      FROM wallet_transaction WHERE wallet_id = ANY(${ids}::uuid[])
+    ) s
+    WHERE wt.wallet_transaction_id = s.wallet_transaction_id`;
+  await prisma.$executeRaw`
+    UPDATE wallet w SET
+      balance_pending = CASE WHEN w.owner_type = 'HOTEL' THEN t.total ELSE w.balance_pending END,
+      balance_available = CASE WHEN w.owner_type = 'CUSTOMER' THEN t.total ELSE w.balance_available END
+    FROM (SELECT wallet_id, sum(amount) AS total FROM wallet_transaction GROUP BY wallet_id) t
+    WHERE t.wallet_id = w.wallet_id AND w.wallet_id = ANY(${ids}::uuid[])`;
 }
