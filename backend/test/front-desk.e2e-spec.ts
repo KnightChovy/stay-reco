@@ -717,5 +717,62 @@ describe('Front desk and settlement (e2e)', () => {
         platform: 160000,
       });
     });
+
+    it('makes the money kept from a cancellation available, without commission', async () => {
+      // 30% after a 3-day free period; and non-refundable.
+      const h = await hotel('owner@hotel.test', {
+        freeCancellationDays: 3,
+        feePercent: 30,
+      });
+      const strict = await hotel('strict@hotel.test', {
+        freeCancellationDays: null,
+        feePercent: 100,
+      });
+      const me = await t.signIn('CUSTOMER', 'guest@mail.test');
+      const cancel = (id: string) =>
+        t
+          .api()
+          .post(`/api/v1/bookings/${id}/cancel`)
+          .set(auth(me.token))
+          .send({ reason: 'Plans changed' })
+          .expect(200);
+      const approve = (token: string, id: string) =>
+        t
+          .api()
+          .post(`/api/v1/bookings/${id}/approve-refund`)
+          .set(auth(token))
+          .expect(200);
+
+      const free = await paidBooking(me.token, h.roomTypeId, { from: 30 });
+      await cancel(free.id);
+      await approve(h.token, free.id); // REFUNDED: nothing kept
+      const late = await paidBooking(me.token, h.roomTypeId);
+      await cancel(late.id);
+      await approve(h.token, late.id); // PARTIALLY_REFUNDED: 600,000 kept
+      const kept = await paidBooking(me.token, strict.roomTypeId);
+      await cancel(kept.id); // cancelled at once: 2,000,000 kept
+
+      const settlement = t.app.get(SettlementService);
+      expect(await settlement.settleDue(new Date(Date.now() + 3_600_000))).toBe(
+        0,
+      );
+      const later = new Date(Date.now() + 86_400_000 + 60_000);
+      expect(await settlement.settleDue(later)).toBe(2);
+      expect(await settlement.settleDue(later)).toBe(0);
+
+      expect((await ledger(late.id)).slice(-2)).toEqual([
+        ['SETTLEMENT', -600000, `settlement:${late.id}:pending`],
+        ['SETTLEMENT', 600000, `settlement:${late.id}:available`],
+      ]);
+      expect(await ledger(free.id)).toHaveLength(3); // payment and the two refund rows
+      expect(await balances(h.hotelId)).toEqual({
+        hotel: { pending: 0, available: 600000 },
+        platform: 0,
+      });
+      expect(await balances(strict.hotelId)).toEqual({
+        hotel: { pending: 0, available: 2000000 },
+        platform: 0,
+      });
+    });
   });
 });
