@@ -1,5 +1,7 @@
 import {
+  bookingLookupQuerySchema,
   cancelBookingSchema,
+  checkInSchema,
   createBookingSchema,
   forwardRefundSchema,
   hotelBookingsQuerySchema,
@@ -14,3 +16,5 @@ export class MyBookingsQueryDto extends zodDto(myBookingsQuerySchema) {}
 export class HotelBookingsQueryDto extends zodDto(hotelBookingsQuerySchema) {}
 export class ForwardRefundDto extends zodDto(forwardRefundSchema) {}
 export class RejectRefundDto extends zodDto(rejectRefundSchema) {}
+export class BookingLookupQueryDto extends zodDto(bookingLookupQuerySchema) {}
+export class CheckInDto extends zodDto(checkInSchema) {}

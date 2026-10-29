@@ -27,6 +27,10 @@ const TAGS: [name: string, description: string][] = [
     'Bookings with a 15-minute hold, payment details and the booking page. Guide: docs/api/customer.md#bookings',
   ],
   [
+    'front-desk',
+    'Booking lookup, room assignment and check-in by the front desk. Guide: docs/api/staff.md#front-desk-phase-3',
+  ],
+  [
     'payments',
     'SePay webhook (called by SePay) and the development payment simulator. Rules: docs/money-rules.md',
   ],

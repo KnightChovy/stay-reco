@@ -4,7 +4,7 @@ import { toCalendarDate } from '../../common/http/calendar-date';
 import { toNumber } from '../../common/http/decimal';
 import type { Prisma } from '../../generated/prisma/client';
 import { fromTime } from '../hotels/hotel.mapper';
-import type { BookingHistory } from './booking-history';
+import type { BookingHistory, StayRoom } from './booking-history';
 
 /** What a booking card needs (my trips, the hotel's booking list). */
 export const bookingSummaryInclude = {
@@ -94,6 +94,7 @@ export function toBooking(
   b: BookingWithDetails,
   paymentDetails: PaymentDetails,
   history: BookingHistory,
+  assignedRooms: StayRoom[],
 ): Booking {
   const { cancelRequest, rejection } = history;
   const invoice = b.invoice!;
@@ -140,8 +141,8 @@ export function toBooking(
         : null,
     cancelReason: cancelRequest?.reason ?? null,
     cancelledAt: b.cancelledAt?.toISOString() ?? null,
-    // Filled in by check-in (assigned rooms) and change requests; neither exists yet.
-    assignedRooms: [],
+    assignedRooms,
+    // Filled in by change requests, which do not exist yet.
     changeRequest: null,
     timeline: timeline.map((t) => ({ at: t.at.toISOString(), event: t.event })),
   };

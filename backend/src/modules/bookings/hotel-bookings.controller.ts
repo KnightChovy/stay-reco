@@ -53,7 +53,7 @@ export class HotelBookingsController {
   })
   @HotelAccessRequired('member')
   @ApiAccess(
-    'The owner (also while suspended) or staff with `BOOKING` or `REFUND`; other staff get `FORBIDDEN`.',
+    'The owner (also while suspended) or staff with `BOOKING`, `REFUND` or `FRONT_DESK`; other staff get `FORBIDDEN`.',
   )
   @ApiPage(bookingSummaryResponseSchema)
   @Get('hotels/:hotelId/bookings')

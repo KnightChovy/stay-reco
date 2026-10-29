@@ -36,6 +36,8 @@ export enum AuditAction {
   REFUND_REJECTED = 'REFUND_REJECTED',
   /** Approved by the system at the check-in time, for a request made before it (decision P11). */
   REFUND_AUTO_APPROVED = 'REFUND_AUTO_APPROVED',
+  /** Staff checked the guest in; `new_value` holds the assigned rooms (decision O3). */
+  BOOKING_CHECKED_IN = 'BOOKING_CHECKED_IN',
   /** A SePay transfer that confirmed nothing (no or unknown code, wrong amount, other account): for manual handling. */
   SEPAY_TRANSFER_UNMATCHED = 'SEPAY_TRANSFER_UNMATCHED',
   /** A SePay transfer for a booking no longer waiting for payment (expired, already paid): refund by hand. */

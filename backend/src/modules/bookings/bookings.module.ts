@@ -6,6 +6,8 @@ import { BookingsController } from './bookings.controller';
 import { BookingCancellationService } from './booking-cancellation.service';
 import { BookingMailer } from './booking-mailer';
 import { BookingsService } from './bookings.service';
+import { FrontDeskController } from './front-desk.controller';
+import { FrontDeskService } from './front-desk.service';
 import { HoldExpiryService } from './hold-expiry.service';
 import { HotelBookingsController } from './hotel-bookings.controller';
 import { HotelBookingsService } from './hotel-bookings.service';
@@ -14,11 +16,16 @@ import { SepayPayment } from './sepay-payment';
 
 @Module({
   imports: [PricingModule, AvailabilityModule, WalletsModule],
-  controllers: [BookingsController, HotelBookingsController],
+  controllers: [
+    BookingsController,
+    HotelBookingsController,
+    FrontDeskController,
+  ],
   providers: [
     BookingsService,
     BookingCancellationService,
     BookingMailer,
+    FrontDeskService,
     HotelBookingsService,
     RefundDecisionsService,
     HoldExpiryService,

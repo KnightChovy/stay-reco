@@ -38,6 +38,7 @@ import {
 } from '../hotels/hotel.mapper';
 import { PriceEngine } from '../pricing/price-engine';
 import { roomTypeNotFound } from '../rooms/room-types.service';
+import { byRoomNumber } from '../rooms/rooms.service';
 import { bookableHotel, sellableRoomType } from '../stays/bookable';
 import { assertBookableDates, freeCancellationUntil } from '../stays/offer';
 import {
@@ -53,7 +54,7 @@ import {
   toBookingSummary,
 } from './booking.mapper';
 import { assertCanSeeBookings } from './booking-access';
-import { loadBookingHistory } from './booking-history';
+import { loadBookingHistory, type StayRoom } from './booking-history';
 import { HoldExpiryService } from './hold-expiry.service';
 import { SepayPayment } from './sepay-payment';
 import { signVoucher } from './voucher-token';
@@ -232,7 +233,7 @@ export class BookingsService {
     return this.load(bookingId);
   }
 
-  /** The customer who booked, the hotel owner (also while suspended), or staff with BOOKING or REFUND. */
+  /** The customer who booked, the hotel owner (also while suspended), or staff with BOOKING, REFUND or FRONT_DESK. */
   async findOne(user: AuthUser, bookingId: string): Promise<Booking> {
     const booking = isUuid(bookingId)
       ? await this.prisma.booking.findUnique({
@@ -256,7 +257,7 @@ export class BookingsService {
       );
       assertCanSeeBookings(access);
     }
-    return this.load(bookingId);
+    return this.load(bookingId, user.role !== 'CUSTOMER');
   }
 
   /** The signed-in customer's bookings for one tab of My trips, newest first. */
@@ -327,7 +328,11 @@ export class BookingsService {
     };
   }
 
-  private async load(bookingId: string): Promise<Booking> {
+  /**
+   * The customer sees the rooms once checked in; the hotel also sees the rooms held before (customer.md,
+   * `assignedRooms`).
+   */
+  private async load(bookingId: string, forHotel = false): Promise<Booking> {
     const [booking, history] = await Promise.all([
       this.prisma.booking.findUniqueOrThrow({
         where: { bookingId },
@@ -335,7 +340,21 @@ export class BookingsService {
       }),
       loadBookingHistory(this.prisma, bookingId),
     ]);
-    return toBooking(booking, this.sepay.details, history);
+    const rooms =
+      history.checkedInRooms ??
+      (forHotel ? await this.heldRooms(bookingId) : []);
+    return toBooking(booking, this.sepay.details, history, rooms);
+  }
+
+  /** Every room the booking has a night on, in room number order. */
+  private async heldRooms(bookingId: string): Promise<StayRoom[]> {
+    const rooms = await this.prisma.room.findMany({
+      where: { roomCalendars: { some: { bookingId } } },
+      select: { roomId: true, roomNumber: true },
+    });
+    return rooms
+      .map((r) => ({ id: r.roomId, roomNumber: r.roomNumber }))
+      .sort((a, b) => byRoomNumber(a.roomNumber, b.roomNumber));
   }
 
   private async unusedCode(tx: Prisma.TransactionClient, now: Date) {
