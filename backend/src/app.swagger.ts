@@ -42,6 +42,10 @@ const TAGS: [name: string, description: string][] = [
     'verification',
     'Hotel verification: partner submissions and the platform manager review. Guides: docs/api/partner.md, docs/api/manager.md',
   ],
+  [
+    'dashboard',
+    'Partner dashboard: action items, today, KPIs with the previous period, chart series, occupancy forecast. Guide: docs/api/partner-dashboard.md',
+  ],
 ];
 
 /** The OpenAPI document served by Swagger UI; also built by the Swagger e2e test. */

@@ -34,7 +34,7 @@ Where BE, FE web and mobile agree on **which phase we are in** and **what the AP
 | [3](./phases/phase-3-operations.md) | Operations: check-in/out, refunds, inbox | ⬜ Not started | |
 | [4](./phases/phase-4-loyalty-promotions.md) | Loyalty, promotions, reviews, wallet | ⬜ Not started | |
 | [5](./phases/phase-5-ai-marketing.md) | AI recommendations, assistant, marketing | ⬜ Not started | |
-| [6](./phases/phase-6-reporting-admin.md) | Reporting, administration | ⬜ Not started | |
+| [6](./phases/phase-6-reporting-admin.md) | Reporting, administration | ⬜ Not started; partner dashboard API `Draft`, built early | [partner-dashboard](./api/partner-dashboard.md) |
 
 Phase status: ⬜ Not started · 🟡 In progress · ✅ Done.
 API status of a phase: `Draft` → `Agreed` → `BE Done` → `Integrated` (shown at the top of the phase file).

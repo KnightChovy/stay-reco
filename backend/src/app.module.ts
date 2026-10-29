@@ -18,6 +18,7 @@ import { PaymentsModule } from './modules/payments/payments.module';
 import { PricingModule } from './modules/pricing/pricing.module';
 import { RoomsModule } from './modules/rooms/rooms.module';
 import { StaffModule } from './modules/staff/staff.module';
+import { StatsModule } from './modules/stats/stats.module';
 import { StaysModule } from './modules/stays/stays.module';
 import { MailModule } from './modules/mail/mail.module';
 import { StorageModule } from './modules/storage/storage.module';
@@ -60,6 +61,7 @@ import { PrismaModule } from './prisma/prisma.module';
     PaymentsModule,
     StaffModule,
     VerificationModule,
+    StatsModule,
   ],
   controllers: [AppController],
   providers: [
