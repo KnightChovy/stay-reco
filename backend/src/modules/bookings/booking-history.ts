@@ -12,6 +12,7 @@ const HISTORY_ACTIONS = {
   [AuditAction.REFUND_AUTO_APPROVED]: 'REFUND_APPROVED',
   [AuditAction.REFUND_REJECTED]: 'REFUND_REJECTED',
   [AuditAction.BOOKING_CHECKED_IN]: 'CHECKED_IN',
+  [AuditAction.BOOKING_CHECKED_OUT]: 'COMPLETED',
 } as const;
 
 type HistoryAction = keyof typeof HISTORY_ACTIONS;

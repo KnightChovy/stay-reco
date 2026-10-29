@@ -10,6 +10,7 @@ import type {
   BookingLookupQuery,
   CheckInInput,
   RoomOption,
+  Room,
   RoomOptions,
 } from '@stayreco/shared';
 import type { AuthUser } from '../../common/decorators/current-user.decorator';
@@ -30,17 +31,26 @@ import type { Env } from '../../config/env';
 import type { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditAction } from '../audit/audit.service';
+import { toRoom } from '../rooms/room.mapper';
 import { byRoomNumber } from '../rooms/rooms.service';
+import { WalletLedger } from '../wallets/wallet-ledger';
 import { assertCanLookUp, assertFrontDesk } from './booking-access';
-import { recordBookingEvent } from './booking-history';
+import { loadBookingHistory, recordBookingEvent } from './booking-history';
 import type { NightlyPrices } from './booking.mapper';
 import { BookingsService } from './bookings.service';
+import { chargeCommission } from './commission';
 import { verifyVoucher } from './voucher-token';
 
 const bookingNotFound = () =>
   new NotFoundException({
     code: ErrorCode.BOOKING_NOT_FOUND,
     message: 'Booking not found',
+  });
+
+const roomNotFound = () =>
+  new NotFoundException({
+    code: ErrorCode.ROOM_NOT_FOUND,
+    message: 'Room not found',
   });
 
 const statusConflict = (message: string) =>
@@ -68,8 +78,8 @@ const stayRowSelect = {
 type StayRow = Prisma.BookingGetPayload<{ select: typeof stayRowSelect }>;
 
 /**
- * The front desk (staff.md "Front desk", decisions O2–O3): finding the guest's booking by code or voucher QR, the
- * rooms it can be given, and check-in. Room moves run under the room type lock that bookings and holds take, so a
+ * The front desk (staff.md "Front desk", decisions O2–O9): finding the guest's booking by code or voucher QR, the
+ * rooms it can be given, check-in, check-out and cleaned rooms. Room moves run under the room type lock that bookings and holds take, so a
  * room is never given to two stays for the same night (BR-10).
  */
 @Injectable()
@@ -78,6 +88,7 @@ export class FrontDeskService {
     private readonly prisma: PrismaService,
     private readonly access: HotelAccessService,
     private readonly bookings: BookingsService,
+    private readonly ledger: WalletLedger,
     private readonly config: ConfigService<Env, true>,
   ) {}
 
@@ -104,15 +115,16 @@ export class FrontDeskService {
     return this.bookings.findOne(user, invoice.bookingId);
   }
 
-  /** Only a CONFIRMED booking: the rooms it holds on the remaining nights, and the other rooms it could move to. */
+  /** A booking check-in accepts now: the rooms it holds on the remaining nights, and the other rooms it could move to. */
   async roomOptions(user: AuthUser, bookingId: string): Promise<RoomOptions> {
     const booking = await this.findForFrontDesk(user, bookingId);
-    if (booking.status !== 'CONFIRMED') {
-      throw statusConflict(`A ${booking.status} booking is not checked in`);
-    }
+    // Also keeps `nights` non-empty: with no night, every AVAILABLE room would look free.
+    assertCheckInOpen(booking);
     const nights = remainingNights(booking);
-    const held = await this.heldRooms(this.prisma, booking, nights);
-    const free = await this.freeRooms(this.prisma, booking, nights);
+    const [held, free] = await Promise.all([
+      this.heldRooms(this.prisma, booking, nights),
+      this.freeRooms(this.prisma, booking, nights),
+    ]);
     const heldIds = new Set(held.map((r) => r.id));
     return {
       held,
@@ -198,10 +210,17 @@ export class FrontDeskService {
         throw notAssignable('A chosen room is no longer AVAILABLE');
       }
       const now = new Date();
-      await tx.booking.update({
-        where: { bookingId },
+      // Conditional as well: the re-read above holds only against writers that take the room type lock.
+      const checkedIn = await tx.booking.updateMany({
+        where: {
+          bookingId,
+          status: 'CONFIRMED',
+          invoice: { paymentStatus: 'PAID' },
+        },
         data: { status: 'CHECKED_IN' },
       });
+      if (!checkedIn.count)
+        throw statusConflict('The booking changed meanwhile');
       await recordBookingEvent(tx, {
         action: AuditAction.BOOKING_CHECKED_IN,
         bookingId,
@@ -213,6 +232,78 @@ export class FrontDeskService {
       });
     });
     return this.bookings.findOne(user, bookingId);
+  }
+
+  /**
+   * Only CHECKED_IN, early or late (O9). The booking becomes COMPLETED, the nights from today on are released
+   * without refund, the rooms become CLEANING and the commission is charged (O6). The conditional status change makes
+   * two check-outs at once charge it once.
+   */
+  async checkOut(user: AuthUser, bookingId: string): Promise<Booking> {
+    const booking = await this.findForFrontDesk(user, bookingId);
+    if (booking.status !== 'CHECKED_IN') {
+      throw statusConflict(`A ${booking.status} booking cannot be checked out`);
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await lockRoomType(tx, booking.roomTypeId);
+      const { count } = await tx.booking.updateMany({
+        where: { bookingId, status: 'CHECKED_IN' },
+        data: { status: 'COMPLETED' },
+      });
+      if (!count) throw statusConflict('The booking is no longer CHECKED_IN');
+      const released = remainingNights(booking);
+      await tx.roomCalendars.deleteMany({
+        where: { bookingId, date: { in: released.map(fromCalendarDate) } },
+      });
+      const { checkedInRooms } = await loadBookingHistory(tx, bookingId);
+      await tx.room.updateMany({
+        where: {
+          roomId: { in: (checkedInRooms ?? []).map((r) => r.id) },
+          status: 'OCCUPIED',
+        },
+        data: { status: 'CLEANING' },
+      });
+      const commission = await chargeCommission(tx, this.ledger, bookingId);
+      await recordBookingEvent(tx, {
+        action: AuditAction.BOOKING_CHECKED_OUT,
+        bookingId,
+        actor: actorOf(user),
+        at: new Date(),
+        value: { commission: commission.toNumber(), releasedNights: released },
+      });
+    });
+    return this.bookings.findOne(user, bookingId);
+  }
+
+  /** A room the guest has left: CLEANING → AVAILABLE. */
+  async cleanRoom(user: AuthUser, roomId: string): Promise<Room> {
+    const room = isUuid(roomId)
+      ? await this.prisma.room.findUnique({
+          where: { roomId },
+          select: { roomType: { select: { hotelId: true } } },
+        })
+      : null;
+    const access = await this.access.assertResource(
+      user,
+      room?.roomType.hotelId,
+      'member',
+      roomNotFound,
+    );
+    assertFrontDesk(access);
+    const { count } = await this.prisma.room.updateMany({
+      where: { roomId, status: 'CLEANING' },
+      data: { status: 'AVAILABLE' },
+    });
+    if (!count) {
+      throw new ConflictException({
+        code: ErrorCode.ROOM_STATUS_CONFLICT,
+        message: 'Only a room being cleaned can be marked cleaned',
+      });
+    }
+    return toRoom(
+      await this.prisma.room.findUniqueOrThrow({ where: { roomId } }),
+    );
   }
 
   /** The held rooms when they cover every remaining night; otherwise staff pick the rooms. */

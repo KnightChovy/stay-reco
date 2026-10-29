@@ -33,6 +33,11 @@ const envSchema = z
     EMAIL_OTP_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
     /** Platform commission (%) given to newly registered partners. Business rule: 8–15%. */
     DEFAULT_COMMISSION_RATE: z.coerce.number().min(8).max(15),
+    /** Holding period (BR-22): days after check-out or no-show before the hotel's money becomes available. */
+    WALLET_HOLD_DAYS: z.preprocess(
+      (v) => (v === '' ? undefined : v),
+      z.coerce.number().int().min(0).default(1),
+    ),
     /** SMTP for real emails. Leave SMTP_HOST empty to print emails to the console instead (dev, tests). */
     SMTP_HOST: z.string().optional(),
     SMTP_PORT: z.coerce.number().int().positive().default(587),

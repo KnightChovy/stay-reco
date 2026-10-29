@@ -13,6 +13,7 @@ import { HotelBookingsController } from './hotel-bookings.controller';
 import { HotelBookingsService } from './hotel-bookings.service';
 import { RefundDecisionsService } from './refund-decisions.service';
 import { SepayPayment } from './sepay-payment';
+import { SettlementService } from './settlement.service';
 
 @Module({
   imports: [PricingModule, AvailabilityModule, WalletsModule],
@@ -30,6 +31,7 @@ import { SepayPayment } from './sepay-payment';
     RefundDecisionsService,
     HoldExpiryService,
     SepayPayment,
+    SettlementService,
   ],
   exports: [
     BookingsService,

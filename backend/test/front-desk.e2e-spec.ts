@@ -1,7 +1,9 @@
+import { SettlementService } from '../src/modules/bookings/settlement.service';
 import { PaymentConfirmationService } from '../src/modules/payments/payment-confirmation.service';
+import { PLATFORM_WALLET_ID } from '../src/modules/wallets/wallet-ledger';
 import { createTestApp } from './helpers';
 
-describe('Front desk: lookup, room options, check-in (e2e)', () => {
+describe('Front desk and settlement (e2e)', () => {
   let t: Awaited<ReturnType<typeof createTestApp>>;
   let king: string;
 
@@ -158,6 +160,34 @@ describe('Front desk: lookup, room options, check-in (e2e)', () => {
 
   const checkIn = (token: string, id: string, body: object = {}) =>
     t.api().post(`/api/v1/bookings/${id}/check-in`).set(auth(token)).send(body);
+
+  const checkOut = (token: string, id: string) =>
+    t.api().post(`/api/v1/bookings/${id}/check-out`).set(auth(token));
+
+  /** The booking's wallet movements in order: type, amount, idempotency key. */
+  const ledger = async (bookingId: string) => {
+    const rows = await t.prisma.walletTransaction.findMany({
+      where: { bookingId },
+      orderBy: [{ createdAt: 'asc' }, { amount: 'asc' }],
+    });
+    return rows.map((r) => [r.type, r.amount.toNumber(), r.idempotencyKey]);
+  };
+
+  const balances = async (hotelId: string) => {
+    const hotel = await t.prisma.wallet.findUniqueOrThrow({
+      where: { hotelId },
+    });
+    const platform = await t.prisma.wallet.findUniqueOrThrow({
+      where: { walletId: PLATFORM_WALLET_ID },
+    });
+    return {
+      hotel: {
+        pending: hotel.balancePending.toNumber(),
+        available: hotel.balanceAvailable.toNumber(),
+      },
+      platform: platform.balanceAvailable.toNumber(),
+    };
+  };
 
   beforeAll(async () => {
     t = await createTestApp();
@@ -435,6 +465,47 @@ describe('Front desk: lookup, room options, check-in (e2e)', () => {
       await shift(past.id, 2); // the check-out date is today
       const late = await checkIn(h.token, past.id).expect(409);
       expect(late.body.code).toBe('CHECK_IN_NOT_OPEN');
+      // Room options follow check-in: no night left means nothing to offer.
+      const options = await t
+        .api()
+        .get(`/api/v1/bookings/${past.id}/room-options`)
+        .set(auth(h.token))
+        .expect(409);
+      expect(options.body.code).toBe('CHECK_IN_NOT_OPEN');
+    });
+
+    it('never checks in a booking the customer is cancelling at the same moment', async () => {
+      const h = await hotel('owner@hotel.test', {
+        freeCancellationDays: null,
+        feePercent: 50,
+      });
+      const me = await t.signIn('CUSTOMER', 'guest@mail.test');
+      // Three tries, each on its own room.
+      for (let i = 0; i < 3; i++) {
+        const booking = await paidBooking(me.token, h.roomTypeId);
+        const [checkedIn, cancelled] = await Promise.all([
+          checkIn(h.token, booking.id),
+          t
+            .api()
+            .post(`/api/v1/bookings/${booking.id}/cancel`)
+            .set(auth(me.token))
+            .send({ reason: 'Plans changed' }),
+        ]);
+        const row = await t.prisma.booking.findUniqueOrThrow({
+          where: { bookingId: booking.id },
+          select: {
+            status: true,
+            invoice: { select: { paymentStatus: true } },
+          },
+        });
+        // Exactly one wins, and the loser leaves no trace in the state.
+        expect([checkedIn.status, cancelled.status].sort()).toEqual([200, 409]);
+        expect([row.status, row.invoice!.paymentStatus]).toEqual(
+          checkedIn.status === 200
+            ? ['CHECKED_IN', 'PAID']
+            : ['CONFIRMED', 'REFUND_PENDING'],
+        );
+      }
     });
 
     it('waits for a pending refund decision', async () => {
@@ -453,6 +524,12 @@ describe('Front desk: lookup, room options, check-in (e2e)', () => {
 
       const res = await checkIn(h.token, booking.id).expect(409);
       expect(res.body.code).toBe('REFUND_DECISION_PENDING');
+      const options = await t
+        .api()
+        .get(`/api/v1/bookings/${booking.id}/room-options`)
+        .set(auth(h.token))
+        .expect(409);
+      expect(options.body.code).toBe('REFUND_DECISION_PENDING');
     });
 
     it('needs FRONT_DESK, or an owner who is not suspended', async () => {
@@ -474,6 +551,171 @@ describe('Front desk: lookup, room options, check-in (e2e)', () => {
       const suspended = await checkIn(h.token, booking.id).expect(403);
       expect(suspended.body.code).toBe('PARTNER_SUSPENDED');
       expect(await roomStatus(h.rooms['101'])).toBe('AVAILABLE');
+    });
+  });
+
+  describe('POST /bookings/:id/check-out', () => {
+    it('completes the stay, sends the rooms to cleaning and charges the commission once', async () => {
+      const h = await hotel();
+      const me = await t.signIn('CUSTOMER', 'guest@mail.test');
+      const booking = await paidBooking(me.token, h.roomTypeId, { rooms: 2 });
+      await checkIn(h.token, booking.id).expect(200);
+      await shift(booking.id, 2); // the check-out date is today
+
+      const desk = await t.signInStaff(h.hotelId, 'desk@hotel.test', [
+        'FRONT_DESK',
+      ]);
+      const results = await Promise.all([
+        checkOut(desk.token, booking.id),
+        checkOut(h.token, booking.id),
+      ]);
+      expect(results.map((r) => r.status).sort()).toEqual([200, 409]);
+      const done = results.find((r) => r.status === 200)!;
+      expect(done.body.data).toMatchObject({
+        status: 'COMPLETED',
+        paymentStatus: 'PAID',
+        assignedRooms: [
+          { id: h.rooms['101'], roomNumber: '101' },
+          { id: h.rooms['102'], roomNumber: '102' },
+        ],
+      });
+      expect(
+        (done.body.data.timeline as { event: string }[]).map((e) => e.event),
+      ).toEqual(['CREATED', 'PAID', 'CHECKED_IN', 'COMPLETED']);
+      expect(await roomStatus(h.rooms['101'])).toBe('CLEANING');
+      expect(await roomStatus(h.rooms['102'])).toBe('CLEANING');
+      // Nothing to release on the check-out date: the nights stay as the record of the stay.
+      expect(await nights(booking.id)).toHaveLength(4);
+
+      // 4,000,000 × 8% = 320,000.
+      expect(await ledger(booking.id)).toEqual([
+        ['BOOKING_PAYMENT', 4000000, `sepay:txn-${booking.code}`],
+        ['COMMISSION', -320000, `commission:${booking.id}:hotel`],
+        ['COMMISSION', 320000, `commission:${booking.id}:platform`],
+      ]);
+      expect(await balances(h.hotelId)).toEqual({
+        hotel: { pending: 3680000, available: 0 },
+        platform: 320000,
+      });
+      const audit = await t.prisma.auditLog.findFirstOrThrow({
+        where: { entityId: booking.id, action: 'BOOKING_CHECKED_OUT' },
+      });
+      expect(JSON.parse(audit.newValue!)).toEqual({
+        commission: 320000,
+        releasedNights: [],
+      });
+    });
+
+    it('releases the nights from today on when the guest leaves early, without refund', async () => {
+      const h = await hotel();
+      const me = await t.signIn('CUSTOMER', 'guest@mail.test');
+      const booking = await paidBooking(me.token, h.roomTypeId);
+      await shift(booking.id, 1); // second day of a two-night stay
+      await checkIn(h.token, booking.id).expect(200);
+
+      const res = await checkOut(h.token, booking.id).expect(200);
+      expect(res.body.data).toMatchObject({
+        status: 'COMPLETED',
+        paymentStatus: 'PAID',
+        refund: null,
+        totalAmount: 2000000,
+      });
+      expect((await nights(booking.id)).map((n) => n.date)).toEqual([day(-1)]);
+      // Tonight is free again for another guest.
+      const availability = await t
+        .api()
+        .get(
+          `/api/v1/hotels/${h.hotelId}/availability?from=${day(0)}&to=${day(0)}`,
+        )
+        .set(auth(h.token))
+        .expect(200);
+      expect(availability.body.data[0]).toMatchObject({ booked: 0 });
+      expect(await balances(h.hotelId)).toEqual({
+        hotel: { pending: 1840000, available: 0 },
+        platform: 160000,
+      });
+    });
+
+    it('needs a CHECKED_IN booking and FRONT_DESK', async () => {
+      const h = await hotel();
+      const me = await t.signIn('CUSTOMER', 'guest@mail.test');
+      const booking = await paidBooking(me.token, h.roomTypeId);
+      const early = await checkOut(h.token, booking.id).expect(409);
+      expect(early.body.code).toBe('BOOKING_STATUS_CONFLICT');
+
+      await checkIn(h.token, booking.id).expect(200);
+      const staff = await t.signInStaff(h.hotelId, 'booking@hotel.test', [
+        'BOOKING',
+      ]);
+      await checkOut(staff.token, booking.id).expect(403);
+      const stranger = await hotel('other@hotel.test');
+      await checkOut(stranger.token, booking.id).expect(404);
+      expect(await ledger(booking.id)).toHaveLength(1);
+    });
+  });
+
+  describe('POST /rooms/:id/clean', () => {
+    it('puts a cleaned room back on sale', async () => {
+      const h = await hotel();
+      const other = await hotel('other@hotel.test');
+      await t.prisma.room.update({
+        where: { roomId: h.rooms['101'] },
+        data: { status: 'CLEANING' },
+      });
+      const clean = (token: string, roomId = h.rooms['101']) =>
+        t.api().post(`/api/v1/rooms/${roomId}/clean`).set(auth(token));
+
+      const staff = await t.signInStaff(h.hotelId, 'booking@hotel.test', [
+        'BOOKING',
+      ]);
+      await clean(staff.token).expect(403);
+      const hidden = await clean(other.token).expect(404);
+      expect(hidden.body.code).toBe('ROOM_NOT_FOUND');
+
+      const desk = await t.signInStaff(h.hotelId, 'desk@hotel.test', [
+        'FRONT_DESK',
+      ]);
+      const res = await clean(desk.token).expect(200);
+      expect(res.body.data).toMatchObject({
+        id: h.rooms['101'],
+        status: 'AVAILABLE',
+      });
+      const again = await clean(desk.token).expect(409);
+      expect(again.body.code).toBe('ROOM_STATUS_CONFLICT');
+      const occupied = await clean(desk.token, h.rooms['102']).expect(409);
+      expect(occupied.body.code).toBe('ROOM_STATUS_CONFLICT');
+    });
+  });
+
+  describe('settlement', () => {
+    it('makes the net amount available after the holding period, once', async () => {
+      const h = await hotel();
+      const me = await t.signIn('CUSTOMER', 'guest@mail.test');
+      const booking = await paidBooking(me.token, h.roomTypeId);
+      await checkIn(h.token, booking.id).expect(200);
+      await checkOut(h.token, booking.id).expect(200);
+
+      const settlement = t.app.get(SettlementService);
+      // WALLET_HOLD_DAYS defaults to 1 day after the check-out.
+      expect(await settlement.settleDue(new Date(Date.now() + 3_600_000))).toBe(
+        0,
+      );
+      const later = new Date(Date.now() + 86_400_000 + 60_000);
+      const runs = await Promise.all([
+        settlement.settleDue(later),
+        settlement.settleDue(later),
+      ]);
+      expect(runs[0] + runs[1]).toBe(1);
+      expect(await settlement.settleDue(later)).toBe(0);
+
+      expect((await ledger(booking.id)).slice(3)).toEqual([
+        ['SETTLEMENT', -1840000, `settlement:${booking.id}:pending`],
+        ['SETTLEMENT', 1840000, `settlement:${booking.id}:available`],
+      ]);
+      expect(await balances(h.hotelId)).toEqual({
+        hotel: { pending: 0, available: 1840000 },
+        platform: 160000,
+      });
     });
   });
 });

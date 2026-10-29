@@ -12,6 +12,7 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
   bookingResponseSchema,
   roomOptionsResponseSchema,
+  roomResponseSchema,
 } from '@stayreco/shared';
 import {
   type AuthUser,
@@ -63,7 +64,7 @@ export class FrontDeskController {
   @ApiOperation({
     summary: 'Rooms that can be assigned at check-in',
     description:
-      'UC38, BR-10. Only a `CONFIRMED` booking. `held`: the rooms it holds on the remaining nights, with their status. `available`: other rooms of the booked type that are `AVAILABLE` and free on every remaining night (from today, or the check-in date when it is ahead, to the night before check-out).',
+      'UC38, BR-10. Only a booking check-in accepts now, with the same errors (`BOOKING_STATUS_CONFLICT`, `REFUND_DECISION_PENDING`, `CHECK_IN_NOT_OPEN`). `held`: the rooms it holds on the remaining nights, with their status. `available`: other rooms of the booked type that are `AVAILABLE` and free on every remaining night (from today, or the check-in date when it is ahead, to the night before check-out).',
   })
   @ApiHotelAccess('member', ErrorCode.BOOKING_NOT_FOUND)
   @ApiAccess(FRONT_DESK_ACCESS)
@@ -72,6 +73,8 @@ export class FrontDeskController {
     ErrorCode.FORBIDDEN,
     ErrorCode.PARTNER_SUSPENDED,
     ErrorCode.BOOKING_STATUS_CONFLICT,
+    ErrorCode.CHECK_IN_NOT_OPEN,
+    ErrorCode.REFUND_DECISION_PENDING,
   )
   @Get('bookings/:id/room-options')
   roomOptions(@CurrentUser() user: AuthUser, @Param('id') id: string) {
@@ -102,5 +105,43 @@ export class FrontDeskController {
     @Body() dto: CheckInDto,
   ) {
     return this.frontDesk.checkIn(user, id, dto);
+  }
+
+  @ApiOperation({
+    summary: 'Check the guest out',
+    description:
+      'UC39. Only a `CHECKED_IN` booking, early or late (O9). The booking becomes `COMPLETED` and its rooms `CLEANING`. Leaving before the check-out date releases the nights from today on, without refund. The platform commission is charged now; the hotel\x27s money becomes available after the holding period (money-rules §5.4).',
+  })
+  @ApiHotelAccess('member', ErrorCode.BOOKING_NOT_FOUND)
+  @ApiAccess(FRONT_DESK_ACCESS)
+  @ApiData(bookingResponseSchema)
+  @ApiErrors(
+    ErrorCode.FORBIDDEN,
+    ErrorCode.PARTNER_SUSPENDED,
+    ErrorCode.BOOKING_STATUS_CONFLICT,
+  )
+  @Post('bookings/:id/check-out')
+  @HttpCode(HttpStatus.OK)
+  checkOut(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.frontDesk.checkOut(user, id);
+  }
+
+  @ApiOperation({
+    summary: 'Mark a room cleaned',
+    description:
+      '`CLEANING` → `AVAILABLE`; another status answers `ROOM_STATUS_CONFLICT`.',
+  })
+  @ApiHotelAccess('member', ErrorCode.ROOM_NOT_FOUND)
+  @ApiAccess(FRONT_DESK_ACCESS)
+  @ApiData(roomResponseSchema)
+  @ApiErrors(
+    ErrorCode.FORBIDDEN,
+    ErrorCode.PARTNER_SUSPENDED,
+    ErrorCode.ROOM_STATUS_CONFLICT,
+  )
+  @Post('rooms/:id/clean')
+  @HttpCode(HttpStatus.OK)
+  clean(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.frontDesk.cleanRoom(user, id);
   }
 }
