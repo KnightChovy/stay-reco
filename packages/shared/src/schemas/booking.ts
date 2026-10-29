@@ -52,8 +52,7 @@ const checkStay = (v: Stay, ctx: z.RefinementCtx) => {
 
 const guests = (coerce: boolean) =>
   (coerce ? z.coerce.number() : z.number()).int().min(1).max(BOOKING_LIMITS.maxGuests);
-const rooms = (coerce: boolean) =>
-  (coerce ? z.coerce.number() : z.number()).int().min(1).max(BOOKING_LIMITS.maxRooms);
+const rooms = (coerce: boolean) => (coerce ? z.coerce.number() : z.number()).int().min(1).max(BOOKING_LIMITS.maxRooms);
 
 // ── Search and listings (public) ────────────────────────────
 
@@ -160,6 +159,8 @@ export const hotelBookingsQuerySchema = listQuerySchema
   .extend({
     status: repeatedQuery(z.enum(BookingStatus)).optional(),
     paymentStatus: repeatedQuery(z.enum(PaymentStatus)).optional(),
+    /** `PENDING`: bookings with a change request waiting for the hotel (phase 3). */
+    changeRequest: z.enum(['PENDING']).optional(),
     checkInFrom: dateSchema.optional(),
     checkInTo: dateSchema.optional(),
     sort: z.enum(HOTEL_BOOKING_SORTS).default('check-in-asc'),
@@ -182,3 +183,60 @@ export const rejectRefundSchema = z.strictObject({
   reason: z.string().trim().min(1).max(BOOKING_LIMITS.refundNoteMax),
 });
 export type RejectRefundInput = z.infer<typeof rejectRefundSchema>;
+
+// ── Front desk (staff with FRONT_DESK, the owner) ───────────
+
+/**
+ * `GET /hotels/:hotelId/bookings/lookup` (UC37): the code typed at the desk (dashes optional) or the token read from
+ * the voucher QR, exactly one of them.
+ */
+export const bookingLookupQuerySchema = z
+  .object({
+    code: z.string().trim().min(1).max(50).optional(),
+    qrToken: z.string().trim().min(1).max(200).optional(),
+  })
+  .superRefine((v, ctx) => {
+    if ((v.code === undefined) === (v.qrToken === undefined)) {
+      ctx.addIssue({ code: 'custom', path: ['code'], message: 'send either code or qrToken' });
+    }
+  });
+export type BookingLookupQuery = z.infer<typeof bookingLookupQuerySchema>;
+
+/**
+ * `POST /bookings/:id/check-in` (UC36, BR-10): `roomIds` (as many as the booking's rooms, all different) replaces the
+ * rooms held at booking; without it the held rooms are used.
+ */
+export const checkInSchema = z.strictObject({
+  roomIds: z
+    .array(z.uuid())
+    .min(1)
+    .max(BOOKING_LIMITS.maxRooms)
+    .refine((ids) => new Set(ids).size === ids.length, 'rooms must be different')
+    .optional(),
+});
+export type CheckInInput = z.infer<typeof checkInSchema>;
+
+// ── Change requests (UC25, UC43) ────────────────────────────
+
+export const CHANGE_REQUEST_STATUSES = ['PENDING', 'ACCEPTED', 'REJECTED'] as const;
+export type ChangeRequestStatus = (typeof CHANGE_REQUEST_STATUSES)[number];
+
+/**
+ * `POST /bookings/:id/change-request` (the customer who booked): only details that do not change the price (BR-09);
+ * `null` clears `arrivalTime` or `specialRequests`. At least one field.
+ */
+export const changeRequestSchema = z
+  .strictObject({
+    guestName: z.string().trim().min(1).max(BOOKING_LIMITS.guestNameMax).optional(),
+    contactPhone: phoneSchema.optional(),
+    arrivalTime: timeSchema.nullable().optional(),
+    specialRequests: z.string().trim().max(BOOKING_LIMITS.specialRequestsMax).nullable().optional(),
+  })
+  .refine((v) => Object.keys(v).length > 0, 'send at least one field to change');
+export type ChangeRequestInput = z.infer<typeof changeRequestSchema>;
+
+/** `POST /bookings/:id/reject-change` (BOOKING staff, the owner): the reason is sent to the customer. */
+export const rejectChangeSchema = z.strictObject({
+  reason: z.string().trim().min(1).max(BOOKING_LIMITS.refundNoteMax),
+});
+export type RejectChangeInput = z.infer<typeof rejectChangeSchema>;

@@ -140,6 +140,9 @@ export function toBooking(
         : null,
     cancelReason: cancelRequest?.reason ?? null,
     cancelledAt: b.cancelledAt?.toISOString() ?? null,
+    // Filled in by check-in (assigned rooms) and change requests; neither exists yet.
+    assignedRooms: [],
+    changeRequest: null,
     timeline: timeline.map((t) => ({ at: t.at.toISOString(), event: t.event })),
   };
 }

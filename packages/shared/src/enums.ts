@@ -115,6 +115,17 @@ export const PaymentStatus = {
 } as const;
 export type PaymentStatus = (typeof PaymentStatus)[keyof typeof PaymentStatus];
 
+/** What an in-app notification is about (the FE picks the icon). */
+export const NotificationType = {
+  BOOKING: 'BOOKING',
+  PAYMENT: 'PAYMENT',
+  PROMOTION: 'PROMOTION',
+  REVIEW: 'REVIEW',
+  ALERT: 'ALERT',
+  SYSTEM: 'SYSTEM',
+} as const;
+export type NotificationType = (typeof NotificationType)[keyof typeof NotificationType];
+
 /** Kinds of pricing rule. BASE is the room type's base price, managed through the room type itself. */
 export const PriceRuleType = {
   BASE: 'BASE',

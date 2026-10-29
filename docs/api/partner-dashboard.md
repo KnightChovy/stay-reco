@@ -123,7 +123,9 @@ Things to act on, sorted by `severity` (CRITICAL → WARNING → INFO) and then 
 | `type` | Severity | When | `params` | Staff | FE target |
 |---|---|---|---|---|---|
 | `VERIFICATION_NEEDS_REVISION` | CRITICAL | The hotel's latest verification request is `NEEDS_REVISION` or `REJECTED` (includes a manager's re-verification request) | `requestId` | — | `/partner/verification` |
+| `OVERDUE_CHECKOUTS` | CRITICAL | *(hotel operations phase)* `CHECKED_IN` bookings whose check-out date is before today, or today and past the hotel's check-out time (12:00 when not set) | `bookingIds` | FRONT_DESK | departures |
 | `REFUND_REQUESTS_PENDING` | WARNING | Bookings whose invoice is `REFUND_PENDING` (waiting for the hotel's decision) | `oldestAt` (when the oldest request was made) | REFUND | `/partner/bookings` (refund filter) |
+| `CHANGE_REQUESTS_PENDING` | WARNING | *(hotel operations phase)* Bookings with a change request waiting for the hotel | `oldestAt` | BOOKING | `/staff/bookings?changeRequest=PENDING` |
 | `SETUP_INCOMPLETE` | WARNING | Hotel `DRAFT` with missing steps (same steps as the FE onboarding checklist) | `missing`: subset of `["AMENITIES","POLICIES","IMAGES","ROOM_CONFIG","ROOMS"]` | — | `/partner/hotel` |
 | `ROOMS_LOCKED_LONG` | WARNING | Rooms in `MAINTENANCE` for more than 7 days (from the audit log of the lock) | `roomIds`, `days` (7) | — | `/partner/rooms?status=MAINTENANCE` |
 | `NO_AVAILABILITY_DATES` | WARNING | Days in the next 30 with no room left to sell **because of closures**: at least one `BLOCKED` room and booked + held + blocked ≥ sellable rooms | `dates` | — | availability |
@@ -131,7 +133,7 @@ Things to act on, sorted by `severity` (CRITICAL → WARNING → INFO) and then 
 | `VERIFICATION_PENDING` | INFO | A verification request is waiting for the platform manager | `submittedAt` | — | `/partner/verification` |
 | `HIGH_DEMAND_DATES` | INFO | Days in the next 30 with forecast occupancy (§4.5) ≥ 90 % (hint: raise prices); `count` = number of days | `firstDate`, `threshold` (90) | — | pricing |
 
-Types added with later phases (not sent before): `OVERDUE_CHECKOUTS` and arrivals not checked in (hotel operations, staff `FRONT_DESK`), `NEW_REVIEWS` (loyalty phase, staff `CUSTOMER_CARE`). The draft's `ARRIVALS_WITHOUT_ROOM` is dropped: a booking holds concrete rooms from the moment it is made (phase 2 decision P1), so no booking is ever without a room; room changes at check-in belong to the hotel operations phase.
+`OVERDUE_CHECKOUTS` and `CHANGE_REQUESTS_PENDING` come with the hotel operations phase ([phase-3-operations.md](../phases/phase-3-operations.md)); `NEW_REVIEWS` (staff `CUSTOMER_CARE`) comes with the loyalty phase. The draft's `ARRIVALS_WITHOUT_ROOM` is dropped: a booking holds concrete rooms from the moment it is made (phase 2 decision P1), so no booking is ever without a room; room changes at check-in belong to the hotel operations phase.
 
 Adding a type later is not a breaking change: the FE ignores unknown types (and logs them).
 
@@ -306,6 +308,7 @@ Changes from FE's draft (2026-10-22), because of the booking data model: booking
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-10-29 | BE | Action items `OVERDUE_CHECKOUTS` (staff `FRONT_DESK`) and `CHANGE_REQUESTS_PENDING` (staff `BOOKING`) added to the types, sent once check-out and change requests are built |
 | 2026-10-28 | BE | First release built: the five endpoints, indexes `booking(room_type_id, check_in_date)`, `booking(room_type_id, created_at)`, `wallet_transaction(wallet_id, created_at)` (migration `dashboard_indexes`); e2e checks every figure against hand-computed values |
 | 2026-10-28 | BE | Revised against the booking data model; decisions PD1–PD8; first release scoped to five endpoints |
 | 2026-10-22 | FE | Draft proposal |
