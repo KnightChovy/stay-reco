@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import {
   ArrowLeft,
   BedDouble,
@@ -8,6 +9,8 @@ import {
   CalendarDays,
   CheckCircle2,
   Loader2,
+  Minus,
+  Plus,
   ShieldCheck,
   Users,
 } from "lucide-react";
@@ -38,6 +41,10 @@ export function RoomTypeDetail({
 }) {
   const roomQuery = useRoomTypeListing(roomTypeId, query);
   const hotelQuery = useHotelListing(hotelId, query);
+
+  const available = roomQuery.data?.offer?.available ?? query.rooms;
+  const maxRooms = Math.max(1, Math.min(8, available));
+  const [rooms, setRooms] = useState(() => Math.max(1, query.rooms));
 
   if (roomQuery.isLoading) {
     return (
@@ -78,7 +85,9 @@ export function RoomTypeDetail({
   const nights = query.checkIn && query.checkOut
     ? Math.max(1, Math.round((new Date(`${query.checkOut}T00:00:00`).getTime() - new Date(`${query.checkIn}T00:00:00`).getTime()) / 86_400_000))
     : 0;
-  const bookingHref = `/booking?roomTypeId=${roomType.id}&hotelId=${hotelId}&checkIn=${query.checkIn ?? ""}&checkOut=${query.checkOut ?? ""}&guests=${query.guests}&rooms=${query.rooms}`;
+  const selectedRooms = Math.min(Math.max(1, rooms), maxRooms);
+  const selectedTotal = offer ? offer.perRoomTotal * selectedRooms : 0;
+  const bookingHref = `/booking?roomTypeId=${roomType.id}&hotelId=${hotelId}&checkIn=${query.checkIn ?? ""}&checkOut=${query.checkOut ?? ""}&guests=${query.guests}&rooms=${selectedRooms}`;
 
   return (
     <div className="flex min-h-screen flex-col bg-[#fbfaf8] text-slate-800 antialiased">
@@ -154,11 +163,45 @@ export function RoomTypeDetail({
                 <CalendarDays className="size-4 text-primary" /> Kỳ nghỉ của bạn
               </h2>
               <p className="mb-4 text-xs text-muted-foreground">
-                {formatDate(query.checkIn)} – {formatDate(query.checkOut)} · {nights} đêm · {query.guests} khách · {query.rooms} phòng
+                {formatDate(query.checkIn)} – {formatDate(query.checkOut)} · {nights} đêm · {query.guests} khách · {selectedRooms} phòng
               </p>
 
               {offer ? (
                 <>
+                  <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-border p-3">
+                    <div>
+                      <span className="text-xs font-bold text-foreground">Số phòng</span>
+                      <p className="mt-0.5 text-[11px] text-muted-foreground">
+                        Slot còn trống: <strong className="text-emerald-700">{offer.available} phòng</strong> · tối đa{" "}
+                        {maxRooms} phòng/đơn
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="size-8"
+                        onClick={() => setRooms((current) => Math.max(1, current - 1))}
+                        disabled={selectedRooms <= 1}
+                        aria-label="Giảm số phòng"
+                      >
+                        <Minus className="size-3.5" />
+                      </Button>
+                      <span className="w-6 text-center text-sm font-bold text-foreground">{selectedRooms}</span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="size-8"
+                        onClick={() => setRooms((current) => Math.min(maxRooms, current + 1))}
+                        disabled={selectedRooms >= maxRooms}
+                        aria-label="Tăng số phòng"
+                      >
+                        <Plus className="size-3.5" />
+                      </Button>
+                    </div>
+                  </div>
                   <div className="mb-3 space-y-1.5 rounded-lg bg-slate-50 p-3 text-xs">
                     {offer.nightlyPrices.map((night) => (
                       <div key={night.date} className="flex justify-between">
@@ -170,11 +213,13 @@ export function RoomTypeDetail({
                   <div className="space-y-2 border-t border-border pt-3 text-xs">
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Mỗi phòng</span>
-                      <span className="font-semibold text-foreground">{formatMoney(offer.perRoomTotal)}</span>
+                      <span className="font-semibold text-foreground">
+                        {formatMoney(offer.perRoomTotal)} × {selectedRooms}
+                      </span>
                     </div>
                     <div className="flex justify-between text-base">
                       <span className="font-semibold text-foreground">Tổng cộng</span>
-                      <span className="font-bold text-primary">{formatMoney(offer.total)}</span>
+                      <span className="font-bold text-primary">{formatMoney(selectedTotal)}</span>
                     </div>
                   </div>
                   <div className="mt-3 rounded-lg bg-emerald-50 p-3 text-xs text-emerald-800">
@@ -183,8 +228,8 @@ export function RoomTypeDetail({
                       : `Không hoàn huỷ · phí huỷ ${offer.cancellationFeePercent}%`}
                   </div>
                   <Link href={bookingHref} className="mt-4 block">
-                    <Button className="w-full" disabled={!offer.fitsGuests || offer.available < query.rooms}>
-                      {offer.fitsGuests && offer.available >= query.rooms ? "Đặt phòng" : "Không đủ phòng"}
+                    <Button className="w-full" disabled={!offer.fitsGuests || offer.available < selectedRooms}>
+                      {offer.fitsGuests && offer.available >= selectedRooms ? "Đặt phòng" : "Không đủ phòng"}
                     </Button>
                   </Link>
                 </>

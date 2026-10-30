@@ -108,7 +108,8 @@ function BookingContent() {
       },
       {
         onSuccess: (booking) => {
-          router.push(`/booking/payment?id=${booking.id}`);
+          // Replace, not push: browser Back from the payment page must not return to a form that can book again.
+          router.replace(`/booking/payment?id=${booking.id}`);
         },
         onError: (error) => {
           const code = getApiErrorCode(error);
@@ -358,6 +359,11 @@ function BookingContent() {
                     {nights} đêm · {guests} khách · {rooms} phòng
                   </span>
                 </div>
+              </div>
+
+              <div className="flex items-center justify-between rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+                <span>Slot còn trống cho kỳ nghỉ</span>
+                <strong>{offer.available} phòng</strong>
               </div>
 
               <div className="space-y-1.5 border-t border-slate-200 pt-3 text-xs">

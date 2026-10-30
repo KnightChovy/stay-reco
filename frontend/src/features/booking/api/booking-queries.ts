@@ -23,6 +23,8 @@ export function useCreateBooking() {
     onSuccess: (booking) => {
       queryClient.setQueryData(bookingKeys.detail(booking.id), booking);
       void queryClient.invalidateQueries({ queryKey: [...bookingKeys.all, "my-trips"] });
+      // The rooms are held now: the hotel/room listing must show the new availability if the user goes back.
+      void queryClient.invalidateQueries({ queryKey: ["stays"] });
     },
   });
 }
