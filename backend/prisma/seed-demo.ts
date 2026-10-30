@@ -15,6 +15,7 @@ import {
 } from '../src/common/http/calendar-date';
 import { FieldCipher } from '../src/common/crypto/field-cipher';
 import {
+  type BookingStatus,
   Prisma,
   type PrismaClient,
   StaffPermission,
@@ -1983,7 +1984,10 @@ async function runDemoOperations(
   });
   const has = new Set(recorded.map((r) => `${r.entityId}|${r.action}`));
 
-  const statuses = new Map<string, 'CHECKED_IN' | 'COMPLETED' | 'NO_SHOW'>();
+  const statuses = new Map<
+    string,
+    { from: BookingStatus; to: 'CHECKED_IN' | 'COMPLETED' | 'NO_SHOW' }
+  >();
   const events: Prisma.AuditLogCreateManyInput[] = [];
   const entries: Prisma.WalletTransactionCreateManyInput[] = [];
   const counts = { checkedIn: 0, closed: 0, commissions: 0, settlements: 0 };
@@ -2006,10 +2010,10 @@ async function runDemoOperations(
     }
     if (status === 'CHECKED_IN' && checkOut < today) status = 'COMPLETED';
     if (status !== b.status) {
-      statuses.set(
-        b.bookingId,
-        status as 'CHECKED_IN' | 'COMPLETED' | 'NO_SHOW',
-      );
+      statuses.set(b.bookingId, {
+        from: b.status,
+        to: status as 'CHECKED_IN' | 'COMPLETED' | 'NO_SHOW',
+      });
     }
 
     const actor = { hotelPartnerId: hotel.hotelPartnerId };
@@ -2166,18 +2170,38 @@ async function runDemoOperations(
 
   await prisma.$transaction(
     async (tx) => {
-      for (const status of ['CHECKED_IN', 'COMPLETED', 'NO_SHOW'] as const) {
-        const ids = [...statuses].filter(([, s]) => s === status);
-        if (ids.length) {
-          await tx.booking.updateMany({
-            where: { bookingId: { in: ids.map(([id]) => id) } },
-            data: { status },
-          });
-        }
+      // Only from the status read above: a booking the running server changed meanwhile (the no-show job, the front
+      // desk) keeps the server's status, and gets none of the rows written for it here.
+      const changed = new Set<string>();
+      const moves = new Map<string, string[]>();
+      for (const [id, { from, to }] of statuses) {
+        moves.set(`${from}>${to}`, [...(moves.get(`${from}>${to}`) ?? []), id]);
       }
-      if (events.length) await tx.auditLog.createMany({ data: events });
-      if (entries.length) {
-        await tx.walletTransaction.createMany({ data: entries });
+      for (const [move, ids] of moves) {
+        const [from, to] = move.split('>') as [BookingStatus, BookingStatus];
+        const updated = await tx.booking.updateManyAndReturn({
+          where: { bookingId: { in: ids }, status: from },
+          data: { status: to },
+          select: { bookingId: true },
+        });
+        for (const u of updated) changed.add(u.bookingId);
+      }
+      const skipped = (row: {
+        entityId?: string | null;
+        bookingId?: string | null;
+      }) => {
+        const id = row.entityId ?? row.bookingId;
+        return !!id && statuses.has(id) && !changed.has(id);
+      };
+      const newEvents = events.filter((e) => !skipped(e));
+      const newEntries = entries.filter((e) => !skipped(e));
+      if (newEvents.length) await tx.auditLog.createMany({ data: newEvents });
+      // The server's jobs may have written the same commission or settlement meanwhile: same key, same amount.
+      if (newEntries.length) {
+        await tx.walletTransaction.createMany({
+          data: newEntries,
+          skipDuplicates: true,
+        });
       }
       // Rooms with a guest in house are OCCUPIED; those whose guest has left are free again (locked rooms untouched).
       await tx.$executeRaw`
