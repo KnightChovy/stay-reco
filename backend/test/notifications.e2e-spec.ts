@@ -64,6 +64,14 @@ describe('In-app notifications (e2e)', () => {
       (unread.body.data as { title: string }[]).map((n) => n.title),
     ).toEqual(['Thông báo 3', 'Thông báo 2', 'Thông báo 1']);
 
+    // `false` is no filter, not "read only".
+    const all = await t
+      .api()
+      .get('/api/v1/me/notifications?unread=false')
+      .set(auth(me.token))
+      .expect(200);
+    expect(all.body.meta.total).toBe(4);
+
     const count = await t
       .api()
       .get('/api/v1/me/notifications/unread-count')

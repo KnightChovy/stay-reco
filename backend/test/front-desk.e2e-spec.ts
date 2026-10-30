@@ -1,6 +1,10 @@
 import { vietnamDateTime } from '../src/common/http/calendar-date';
 import { CHANGE_CLOSED_REASON } from '../src/modules/bookings/booking-history';
 import { BookingMailer } from '../src/modules/bookings/booking-mailer';
+import {
+  type MailMessage,
+  MailService,
+} from '../src/modules/mail/mail.service';
 import { NoShowService } from '../src/modules/bookings/no-show.service';
 import { SettlementService } from '../src/modules/bookings/settlement.service';
 import { PaymentConfirmationService } from '../src/modules/payments/payment-confirmation.service';
@@ -964,12 +968,29 @@ describe('Hotel operations: front desk, settlement, change requests (e2e)', () =
         },
       ]);
 
-      await t
-        .api()
-        .post(`/api/v1/bookings/${booking.id}/cancel`)
-        .set(auth(me.token))
-        .send({ reason: 'Plans changed' })
-        .expect(200);
+      // Every notification of the refund request exists before the first of its emails goes out.
+      const mail = t.app.get(MailService);
+      const send: MailService['send'] = mail.send.bind(mail);
+      const seenAtSend: number[] = [];
+      mail.send = async (m: MailMessage) => {
+        seenAtSend.push(
+          await t.prisma.notification.count({ where: { type: 'PAYMENT' } }),
+        );
+        return send(m);
+      };
+      try {
+        await t
+          .api()
+          .post(`/api/v1/bookings/${booking.id}/cancel`)
+          .set(auth(me.token))
+          .send({ reason: 'Plans changed' })
+          .expect(200);
+        await t.app.get(BookingMailer).idle();
+      } finally {
+        mail.send = send;
+      }
+      // Customer, owner and the REFUND staff member: three notifications, then three emails.
+      expect(seenAtSend).toEqual([3, 3, 3]);
       const [requested] = await inbox(me.token);
       expect(requested).toMatchObject({
         type: 'PAYMENT',
