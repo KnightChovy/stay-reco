@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { type UserRole, useAuthStore } from '@/lib/auth-store';
 
 const protectedRoutes: Array<{ prefix: string; role: UserRole }> = [
+  { prefix: '/booking', role: 'customer' },
   { prefix: '/account', role: 'customer' },
   { prefix: '/partner', role: 'partner' },
   { prefix: '/staff', role: 'staff' },
@@ -30,7 +31,9 @@ export default function AuthRouteGuard({ children }: Readonly<{ children: React.
     if (!hasHydrated || !requiredRoute) return;
 
     if (!user) {
-      router.replace(`/login?next=${encodeURIComponent(pathname)}`);
+      // Keep the query string: /booking?roomTypeId=… must survive the login round-trip.
+      const search = typeof window === "undefined" ? "" : window.location.search;
+      router.replace(`/login?next=${encodeURIComponent(`${pathname}${search}`)}`);
       return;
     }
 
