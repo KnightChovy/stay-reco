@@ -73,6 +73,8 @@ Access: check-in, check-out, no-show and room cleaned need `FRONT_DESK`; change 
 | enum `wallet_txn_type` | + `SETTLEMENT` (O8) |
 | `notification` | + `link` varchar(500) null: the app path the notification opens (`/account/bookings/<id>`, `/staff/bookings/<id>`…) (O12) |
 
+Added later (approved 2026-10-30): index `audit_log(entity_type, entity_id, created_at)` for the booking timeline and the change-request queue (migration `audit_log_entity_index`).
+
 No other table changes: check-in rooms live in `room_calendars`, events and change requests in `audit_log`, money in `wallet_transaction`.
 
 ## States

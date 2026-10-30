@@ -19,7 +19,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { BookingMailer } from './booking-mailer';
 import { BookingsService } from './bookings.service';
 import { AuditAction } from '../audit/audit.service';
-import { recordBookingEvent } from './booking-history';
+import { closePendingChange, recordBookingEvent } from './booking-history';
 import { cancellationAmounts } from './cancellation';
 
 const bookingNotFound = () =>
@@ -115,6 +115,7 @@ export class BookingCancellationService {
         if (!count) throw notCancellable('changed');
         // Nothing to refund: the hotel keeps the money as the fee, and the nights go back on sale.
         await tx.roomCalendars.deleteMany({ where: { bookingId } });
+        await closePendingChange(tx, bookingId, now);
       }
       await recordBookingEvent(tx, {
         action: AuditAction.BOOKING_CANCEL_REQUESTED,

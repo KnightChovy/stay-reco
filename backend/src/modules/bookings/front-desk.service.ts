@@ -34,28 +34,30 @@ import { AuditAction } from '../audit/audit.service';
 import { toRoom } from '../rooms/room.mapper';
 import { byRoomNumber } from '../rooms/rooms.service';
 import { WalletLedger } from '../wallets/wallet-ledger';
-import { assertCanLookUp, assertFrontDesk } from './booking-access';
-import { loadBookingHistory, recordBookingEvent } from './booking-history';
+import {
+  assertCanLookUp,
+  assertFrontDesk,
+  bookingNotFound,
+  bookingStatusConflict,
+  hotelActor,
+  refundDecisionPending,
+} from './booking-access';
+import {
+  closePendingChange,
+  loadBookingHistory,
+  recordBookingEvent,
+} from './booking-history';
 import type { NightlyPrices } from './booking.mapper';
 import { BookingsService } from './bookings.service';
 import { chargeCommission } from './commission';
 import { NoShowService } from './no-show.service';
 import { verifyVoucher } from './voucher-token';
 
-const bookingNotFound = () =>
-  new NotFoundException({
-    code: ErrorCode.BOOKING_NOT_FOUND,
-    message: 'Booking not found',
-  });
-
 const roomNotFound = () =>
   new NotFoundException({
     code: ErrorCode.ROOM_NOT_FOUND,
     message: 'Room not found',
   });
-
-const statusConflict = (message: string) =>
-  new ConflictException({ code: ErrorCode.BOOKING_STATUS_CONFLICT, message });
 
 const notAssignable = (message: string) =>
   new ConflictException({ code: ErrorCode.ROOM_NOT_ASSIGNABLE, message });
@@ -222,11 +224,12 @@ export class FrontDeskService {
         data: { status: 'CHECKED_IN' },
       });
       if (!checkedIn.count)
-        throw statusConflict('The booking changed meanwhile');
+        throw bookingStatusConflict('The booking changed meanwhile');
+      await closePendingChange(tx, bookingId, now);
       await recordBookingEvent(tx, {
         action: AuditAction.BOOKING_CHECKED_IN,
         bookingId,
-        actor: actorOf(user),
+        actor: hotelActor(user),
         at: now,
         value: {
           rooms: rooms.map((r) => ({ id: r.id, roomNumber: r.roomNumber })),
@@ -245,8 +248,8 @@ export class FrontDeskService {
     assertNoShowAllowed(booking);
     await this.prisma.$transaction(async (tx) => {
       await lockRoomType(tx, booking.roomTypeId);
-      const marked = await this.noShows.markIn(tx, bookingId, actorOf(user));
-      if (!marked) throw statusConflict('The booking changed meanwhile');
+      const marked = await this.noShows.markIn(tx, bookingId, hotelActor(user));
+      if (!marked) throw bookingStatusConflict('The booking changed meanwhile');
     });
     return this.bookings.findOne(user, bookingId);
   }
@@ -259,7 +262,9 @@ export class FrontDeskService {
   async checkOut(user: AuthUser, bookingId: string): Promise<Booking> {
     const booking = await this.findForFrontDesk(user, bookingId);
     if (booking.status !== 'CHECKED_IN') {
-      throw statusConflict(`A ${booking.status} booking cannot be checked out`);
+      throw bookingStatusConflict(
+        `A ${booking.status} booking cannot be checked out`,
+      );
     }
 
     await this.prisma.$transaction(async (tx) => {
@@ -268,7 +273,8 @@ export class FrontDeskService {
         where: { bookingId, status: 'CHECKED_IN' },
         data: { status: 'COMPLETED' },
       });
-      if (!count) throw statusConflict('The booking is no longer CHECKED_IN');
+      if (!count)
+        throw bookingStatusConflict('The booking is no longer CHECKED_IN');
       const released = remainingNights(booking);
       await tx.roomCalendars.deleteMany({
         where: { bookingId, date: { in: released.map(fromCalendarDate) } },
@@ -285,7 +291,7 @@ export class FrontDeskService {
       await recordBookingEvent(tx, {
         action: AuditAction.BOOKING_CHECKED_OUT,
         bookingId,
-        actor: actorOf(user),
+        actor: hotelActor(user),
         at: new Date(),
         value: { commission: commission.toNumber(), releasedNights: released },
       });
@@ -445,17 +451,14 @@ function remainingNights(booking: StayRow, today = todayInVietnam()) {
 /** CONFIRMED and PAID; a waiting refund request is for the owner to decide first (O2, O4). */
 function assertConfirmedAndPaid(booking: StayRow, action: string) {
   if (booking.status !== 'CONFIRMED') {
-    throw statusConflict(`A ${booking.status} booking cannot be ${action}`);
+    throw bookingStatusConflict(
+      `A ${booking.status} booking cannot be ${action}`,
+    );
   }
   const payment = booking.invoice!.paymentStatus;
-  if (payment === 'REFUND_PENDING') {
-    throw new ConflictException({
-      code: ErrorCode.REFUND_DECISION_PENDING,
-      message: 'A refund request waits for the hotel; decide it first',
-    });
-  }
+  if (payment === 'REFUND_PENDING') throw refundDecisionPending();
   if (payment !== 'PAID') {
-    throw statusConflict(
+    throw bookingStatusConflict(
       `A booking with a ${payment} invoice cannot be ${action}`,
     );
   }
@@ -497,9 +500,3 @@ const toOption = (r: {
 
 const compareOptions = (a: RoomOption, b: RoomOption) =>
   byRoomNumber(a.roomNumber, b.roomNumber);
-
-/** Staff or the owning partner; the guards let no one else through. */
-const actorOf = (user: AuthUser) => ({
-  role: user.role as 'HOTEL_STAFF' | 'HOTEL_PARTNER',
-  accountId: user.accountId,
-});

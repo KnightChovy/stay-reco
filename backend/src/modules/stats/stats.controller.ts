@@ -38,7 +38,7 @@ export class StatsController {
   })
   @HotelAccessRequired('member')
   @ApiAccess(
-    'The owner (also while suspended) gets every type; staff only the types of their permission groups (refund requests for `REFUND`).',
+    'The owner (also while suspended) gets every type; staff only the types of their permission groups (overdue check-outs for `FRONT_DESK`, refund requests for `REFUND`, change requests for `BOOKING`).',
   )
   @ApiData(actionItemListResponseSchema)
   @Get('action-items')
@@ -49,7 +49,7 @@ export class StatsController {
   @ApiOperation({
     summary: "Today's arrivals, departures, rooms and holds",
     description:
-      'The current day in Asia/Ho_Chi_Minh, live; no money. `checkedIn`, `checkedOut` and `inHouse` stay 0 until check-in and check-out exist.',
+      'The current day in Asia/Ho_Chi_Minh, live; no money. `checkedIn`, `checkedOut` and `inHouse` count the bookings checked in and out at the front desk; an early check-out counts on the booking\x27s check-out date.',
   })
   @HotelAccessRequired('member')
   @ApiData(hotelTodayStatsResponseSchema)

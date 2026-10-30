@@ -2,7 +2,6 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
-  NotFoundException,
 } from '@nestjs/common';
 import type {
   Booking,
@@ -19,8 +18,14 @@ import {
 import type { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditAction } from '../audit/audit.service';
-import { fromTime } from '../hotels/hotel.mapper';
-import { assertCanDecideChanges } from './booking-access';
+import { fromTime, toTime } from '../hotels/hotel.mapper';
+import {
+  assertCanDecideChanges,
+  bookingNotFound,
+  bookingStatusConflict,
+  hotelActor,
+  refundDecisionPending,
+} from './booking-access';
 import {
   type GuestChanges,
   loadBookingHistory,
@@ -28,15 +33,6 @@ import {
 } from './booking-history';
 import { BookingMailer } from './booking-mailer';
 import { BookingsService } from './bookings.service';
-
-const bookingNotFound = () =>
-  new NotFoundException({
-    code: ErrorCode.BOOKING_NOT_FOUND,
-    message: 'Booking not found',
-  });
-
-const statusConflict = (message: string) =>
-  new ConflictException({ code: ErrorCode.BOOKING_STATUS_CONFLICT, message });
 
 const noPendingRequest = () =>
   new ConflictException({
@@ -50,9 +46,22 @@ const guestSelect = {
   contactPhone: true,
   arrivalTime: true,
   specialRequests: true,
+  invoice: { select: { paymentStatus: true } },
 } satisfies Prisma.BookingSelect;
 
 type GuestRow = Prisma.BookingGetPayload<{ select: typeof guestSelect }>;
+
+/** CONFIRMED, and no refund request waiting: a booking being cancelled is not changed meanwhile. */
+function assertChangeable(booking: GuestRow) {
+  if (booking.status !== 'CONFIRMED') {
+    throw bookingStatusConflict(
+      `A ${booking.status} booking cannot be changed`,
+    );
+  }
+  if (booking.invoice?.paymentStatus === 'REFUND_PENDING') {
+    throw refundDecisionPending();
+  }
+}
 
 /**
  * Change requests (UC25, UC43, decision O11), kept in `audit_log` like cancel requests: the customer asks to change
@@ -82,9 +91,7 @@ export class ChangeRequestsService {
         where: { bookingId },
         select: guestSelect,
       });
-      if (current.status !== 'CONFIRMED') {
-        throw statusConflict(`A ${current.status} booking cannot be changed`);
-      }
+      assertChangeable(current);
       const { changeRequest } = await loadBookingHistory(tx, bookingId);
       if (changeRequest?.status === 'PENDING') {
         throw new ConflictException({
@@ -122,30 +129,25 @@ export class ChangeRequestsService {
     const changes = await this.prisma.$transaction(async (tx) => {
       await lockBooking(tx, bookingId);
       const changes = await pendingChanges(tx, bookingId);
-      const { status } = await tx.booking.findUniqueOrThrow({
-        where: { bookingId },
-        select: { status: true },
-      });
-      if (status !== 'CONFIRMED') {
-        throw statusConflict(`A ${status} booking cannot be changed`);
-      }
+      assertChangeable(
+        await tx.booking.findUniqueOrThrow({
+          where: { bookingId },
+          select: guestSelect,
+        }),
+      );
       await tx.booking.update({
         where: { bookingId },
         data: {
           guestName: changes.guestName,
           contactPhone: changes.contactPhone,
-          arrivalTime:
-            changes.arrivalTime === undefined
-              ? undefined
-              : changes.arrivalTime &&
-                new Date(`1970-01-01T${changes.arrivalTime}:00.000Z`),
+          arrivalTime: toTime(changes.arrivalTime),
           specialRequests: changes.specialRequests,
         },
       });
       await recordBookingEvent(tx, {
         action: AuditAction.BOOKING_CHANGE_ACCEPTED,
         bookingId,
-        actor: actorOf(user),
+        actor: hotelActor(user),
         at: new Date(),
         value: {},
       });
@@ -171,7 +173,7 @@ export class ChangeRequestsService {
       await recordBookingEvent(tx, {
         action: AuditAction.BOOKING_CHANGE_REJECTED,
         bookingId,
-        actor: actorOf(user),
+        actor: hotelActor(user),
         at: new Date(),
         value: { reason: input.reason },
       });
@@ -244,9 +246,3 @@ function changesFrom(
   }
   return changes;
 }
-
-/** Staff or the owning partner; the guards let no one else through. */
-const actorOf = (user: AuthUser) => ({
-  role: user.role as 'HOTEL_STAFF' | 'HOTEL_PARTNER',
-  accountId: user.accountId,
-});

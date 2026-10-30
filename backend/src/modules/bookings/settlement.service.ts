@@ -36,7 +36,11 @@ export class SettlementService extends PeriodicJob {
     const cutoff = new Date(now.getTime() - holdDays * DAY);
     const due = await this.prisma.booking.findMany({
       where: {
-        walletTransactions: { none: { type: 'SETTLEMENT' } },
+        // Paid through the ledger and not settled yet.
+        AND: [
+          { walletTransactions: { some: { type: 'BOOKING_PAYMENT' } } },
+          { walletTransactions: { none: { type: 'SETTLEMENT' } } },
+        ],
         OR: [
           // Completed stays and no-shows, counted from their commission.
           {
@@ -67,8 +71,8 @@ export class SettlementService extends PeriodicJob {
 
     let settled = 0;
     for (const booking of due) {
-      const payment = booking.walletTransactions[0];
-      if (payment && (await this.settle(payment.walletId, booking))) settled++;
+      const { walletId } = booking.walletTransactions[0];
+      if (await this.settle(walletId, booking)) settled++;
     }
     if (settled) this.logger.log(`Settled ${settled} bookings`);
     return settled;
@@ -88,7 +92,13 @@ export class SettlementService extends PeriodicJob {
           _sum: { amount: true },
         });
         const net = _sum.amount ?? new Prisma.Decimal(0);
-        if (!net.gt(0)) return false;
+        if (!net.gt(0)) {
+          // No flow leaves a due booking without money; such a ledger needs a look, not a silent retry.
+          this.logger.warn(
+            `Booking ${bookingId} is due for settlement but leaves ${net.toString()} in the hotel wallet`,
+          );
+          return false;
+        }
         const description = `Settlement of ${booking.invoice!.invoiceNumber}`;
         await this.ledger.post(tx, {
           walletId,

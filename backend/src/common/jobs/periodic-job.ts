@@ -7,8 +7,8 @@ import { ConfigService } from '@nestjs/config';
 import type { Env } from '../../config/env';
 
 /**
- * A job that runs `run()` every `everyMs` while the app is up. Not started in tests: they call the job's method
- * themselves. A run still going when the next one is due is not overlapped; the next one is skipped.
+ * A job that runs `run()` at startup and then every `everyMs` while the app is up. Not started in tests: they call the
+ * job's method themselves. A run still going when the next one is due is not overlapped; the next one is skipped.
  */
 export abstract class PeriodicJob
   implements OnApplicationBootstrap, OnModuleDestroy
@@ -29,6 +29,8 @@ export abstract class PeriodicJob
 
   onApplicationBootstrap() {
     if (this.jobConfig.get('NODE_ENV', { infer: true }) === 'test') return;
+    // Once at startup too: after a restart (or an idle instance waking up) nothing waits a full interval.
+    void this.tick();
     this.timer = setInterval(() => void this.tick(), this.everyMs);
   }
 

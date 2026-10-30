@@ -14,7 +14,7 @@ import {
 } from '../../common/http/calendar-date';
 import type { HotelAccess } from '../../common/hotel-access/hotel-access.service';
 import { PrismaService } from '../../prisma/prisma.service';
-import { pendingChangeBookingIds } from '../bookings/booking-history';
+import { pendingChangeRequests } from '../bookings/booking-history';
 import { fromTime, POLICY_PREFIX } from '../hotels/hotel.mapper';
 import { DEFAULT_CHECK_OUT_TIME } from '../stays/offer';
 import { StatsService } from './stats.service';
@@ -190,29 +190,17 @@ export class ActionItemsService {
 
   /** Change requests waiting for the hotel (O11); `oldestAt` is when the oldest one was made. */
   private async changeRequests(hotelId: string): Promise<Item[]> {
-    const waiting = await pendingChangeBookingIds(this.prisma, hotelId);
-    if (!waiting.length) return [];
-    // The waiting request of a booking is its latest one.
-    const requests = await this.prisma.auditLog.groupBy({
-      by: ['entityId'],
-      where: {
-        entityType: 'booking',
-        entityId: { in: waiting },
-        action: 'BOOKING_CHANGE_REQUESTED',
-      },
-      _max: { createdAt: true },
-    });
-    const times = requests
-      .map((r) => r._max.createdAt)
-      .filter((at): at is Date => at !== null)
-      .map((at) => at.getTime());
-    return [
-      {
-        type: 'CHANGE_REQUESTS_PENDING',
-        count: waiting.length,
-        params: { oldestAt: new Date(Math.min(...times)).toISOString() },
-      },
-    ];
+    // Oldest first.
+    const waiting = await pendingChangeRequests(this.prisma, hotelId);
+    return waiting.length
+      ? [
+          {
+            type: 'CHANGE_REQUESTS_PENDING',
+            count: waiting.length,
+            params: { oldestAt: waiting[0].requestedAt.toISOString() },
+          },
+        ]
+      : [];
   }
 
   /** A DRAFT hotel's missing onboarding steps, the same as the FE checklist. */

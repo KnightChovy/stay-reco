@@ -189,20 +189,50 @@ export async function loadBookingHistory(
   };
 }
 
-/** CONFIRMED bookings of the hotel whose latest change request is still waiting (`?changeRequest=PENDING`). */
-export async function pendingChangeBookingIds(
+/** Shown to the customer when the booking stopped being CONFIRMED while a change request waited. */
+export const CHANGE_CLOSED_REASON =
+  'Đơn không còn ở trạng thái chờ nhận phòng nên yêu cầu được đóng tự động.';
+
+/**
+ * Closes the waiting change request, if any, when the booking leaves CONFIRMED (cancelled, checked in, no-show): a
+ * rejection by the system with a fixed reason, so the customer never sees a request waiting for nothing. Call in the
+ * transaction that changes the status, with its instant: the row is dated one millisecond earlier, so the timeline
+ * (ordered by time; audit ids are random) always shows it just before the status change.
+ */
+export async function closePendingChange(db: Db, bookingId: string, at: Date) {
+  const { changeRequest } = await loadBookingHistory(db, bookingId);
+  if (changeRequest?.status !== 'PENDING') return;
+  await recordBookingEvent(db, {
+    action: AuditAction.BOOKING_CHANGE_REJECTED,
+    bookingId,
+    actor: null,
+    at: new Date(at.getTime() - 1),
+    value: { reason: CHANGE_CLOSED_REASON, automatic: true },
+  });
+}
+
+/**
+ * CONFIRMED bookings of the hotel whose latest change request is still waiting (`?changeRequest=PENDING`), with when
+ * it was made. One index lookup per booking on `audit_log(entity_type, entity_id, created_at)`.
+ */
+export async function pendingChangeRequests(
   db: Pick<Prisma.TransactionClient, '$queryRaw'>,
   hotelId: string,
-): Promise<string[]> {
-  const rows = await db.$queryRaw<{ booking_id: string }[]>`
-    SELECT b.booking_id FROM booking b
+): Promise<{ bookingId: string; requestedAt: Date }[]> {
+  const rows = await db.$queryRaw<{ booking_id: string; requested_at: Date }[]>`
+    SELECT b.booking_id, last.created_at AS requested_at FROM booking b
     JOIN room_type rt ON rt.room_type_id = b.room_type_id
+    JOIN LATERAL (
+      SELECT a.action, a.created_at FROM audit_log a
+      WHERE a.entity_type = 'booking' AND a.entity_id = b.booking_id
+        AND a.action IN (${Prisma.join(CHANGE_ACTIONS)})
+      ORDER BY a.created_at DESC LIMIT 1
+    ) last ON true
     WHERE rt.hotel_id = ${hotelId}::uuid AND b.status = 'CONFIRMED'
-      AND (
-        SELECT a.action FROM audit_log a
-        WHERE a.entity_type = 'booking' AND a.entity_id = b.booking_id
-          AND a.action IN (${Prisma.join(CHANGE_ACTIONS)})
-        ORDER BY a.created_at DESC LIMIT 1
-      ) = ${AuditAction.BOOKING_CHANGE_REQUESTED}`;
-  return rows.map((r) => r.booking_id);
+      AND last.action = ${AuditAction.BOOKING_CHANGE_REQUESTED}
+    ORDER BY last.created_at`;
+  return rows.map((r) => ({
+    bookingId: r.booking_id,
+    requestedAt: r.requested_at,
+  }));
 }

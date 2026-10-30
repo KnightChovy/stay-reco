@@ -35,13 +35,14 @@ export class ChangeRequestsController {
   @ApiOperation({
     summary: 'Ask the hotel to change guest details',
     description:
-      'UC25, decision O11. For the customer who booked, only while `CONFIRMED` (`BOOKING_STATUS_CONFLICT`), one waiting request at a time (`CHANGE_REQUEST_PENDING`). Only the guest name, contact phone, arrival time and special requests (`null` clears the last two); dates, room type and guests never change (BR-09). Fields equal to the booking are dropped; when none is left the answer is `VALIDATION_ERROR`. The hotel is emailed; `changeRequest` shows the request.',
+      'UC25, decision O11. For the customer who booked, only while `CONFIRMED` (`BOOKING_STATUS_CONFLICT`) and not while a refund request waits (`REFUND_DECISION_PENDING`), one waiting request at a time (`CHANGE_REQUEST_PENDING`). Only the guest name, contact phone, arrival time and special requests (`null` clears the last two); dates, room type and guests never change (BR-09). Fields equal to the booking are dropped; when none is left the answer is `VALIDATION_ERROR`. The hotel is emailed; `changeRequest` shows the request. A request still waiting when the booking is cancelled, checked in or marked no-show is closed automatically (`REJECTED`, with a fixed reason).',
   })
   @Roles(UserRole.CUSTOMER)
   @ApiData(bookingResponseSchema)
   @ApiErrors(
     ErrorCode.BOOKING_NOT_FOUND,
     ErrorCode.BOOKING_STATUS_CONFLICT,
+    ErrorCode.REFUND_DECISION_PENDING,
     ErrorCode.CHANGE_REQUEST_PENDING,
   )
   @Post('bookings/:id/change-request')
@@ -57,7 +58,7 @@ export class ChangeRequestsController {
   @ApiOperation({
     summary: 'Accept the waiting change request',
     description:
-      'UC43. The booking must still be `CONFIRMED` (`BOOKING_STATUS_CONFLICT`) and takes the requested values; the customer is emailed. No waiting request: `CHANGE_REQUEST_STATUS_CONFLICT`.',
+      'UC43. The booking must still be `CONFIRMED` (`BOOKING_STATUS_CONFLICT`) with no refund request waiting (`REFUND_DECISION_PENDING`: the owner decides the refund first) and takes the requested values; the customer is emailed. No waiting request: `CHANGE_REQUEST_STATUS_CONFLICT`.',
   })
   @ApiHotelAccess('member', ErrorCode.BOOKING_NOT_FOUND)
   @ApiAccess(DECIDE_ACCESS)
@@ -66,6 +67,7 @@ export class ChangeRequestsController {
     ErrorCode.FORBIDDEN,
     ErrorCode.PARTNER_SUSPENDED,
     ErrorCode.BOOKING_STATUS_CONFLICT,
+    ErrorCode.REFUND_DECISION_PENDING,
     ErrorCode.CHANGE_REQUEST_STATUS_CONFLICT,
   )
   @Post('bookings/:id/accept-change')
@@ -77,7 +79,7 @@ export class ChangeRequestsController {
   @ApiOperation({
     summary: 'Reject the waiting change request',
     description:
-      'UC43. The booking keeps its details; `reason` is emailed to the customer and shown in `changeRequest`. Possible whatever the booking status, to close a request left waiting. No waiting request: `CHANGE_REQUEST_STATUS_CONFLICT`.',
+      'UC43. The booking keeps its details; `reason` is emailed to the customer and shown in `changeRequest`. Possible whatever the booking status. No waiting request: `CHANGE_REQUEST_STATUS_CONFLICT`.',
   })
   @ApiHotelAccess('member', ErrorCode.BOOKING_NOT_FOUND)
   @ApiAccess(DECIDE_ACCESS)

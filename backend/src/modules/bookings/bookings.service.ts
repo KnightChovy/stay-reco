@@ -35,6 +35,7 @@ import {
   cancellationPolicyOf,
   cancellationRowsSelect,
   fromTime,
+  toTime,
 } from '../hotels/hotel.mapper';
 import { PriceEngine } from '../pricing/price-engine';
 import { roomTypeNotFound } from '../rooms/room-types.service';
@@ -177,9 +178,7 @@ export class BookingsService {
             status: 'PENDING',
             guestName: input.guestName,
             contactPhone: input.contactPhone,
-            arrivalTime: input.arrivalTime
-              ? new Date(`1970-01-01T${input.arrivalTime}:00.000Z`)
-              : null,
+            arrivalTime: toTime(input.arrivalTime) ?? null,
             specialRequests: input.specialRequests,
             freeCancelUntil: freeCancellationUntil(
               policy,

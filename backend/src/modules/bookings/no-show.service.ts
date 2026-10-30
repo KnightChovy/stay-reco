@@ -16,7 +16,7 @@ import { AuditAction } from '../audit/audit.service';
 import { fromTime } from '../hotels/hotel.mapper';
 import { DEFAULT_CHECK_OUT_TIME } from '../stays/offer';
 import { WalletLedger } from '../wallets/wallet-ledger';
-import { recordBookingEvent } from './booking-history';
+import { closePendingChange, recordBookingEvent } from './booking-history';
 import { chargeCommission } from './commission';
 
 const EVERY_FIVE_MINUTES = 5 * 60_000;
@@ -114,6 +114,7 @@ export class NoShowService extends PeriodicJob {
     await tx.roomCalendars.deleteMany({
       where: { bookingId, date: { in: released.map(fromCalendarDate) } },
     });
+    await closePendingChange(tx, bookingId, now);
     const commission = await chargeCommission(tx, this.ledger, bookingId);
     await recordBookingEvent(tx, {
       action: AuditAction.BOOKING_NO_SHOW,

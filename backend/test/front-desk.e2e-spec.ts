@@ -1,4 +1,5 @@
 import { vietnamDateTime } from '../src/common/http/calendar-date';
+import { CHANGE_CLOSED_REASON } from '../src/modules/bookings/booking-history';
 import { BookingMailer } from '../src/modules/bookings/booking-mailer';
 import { NoShowService } from '../src/modules/bookings/no-show.service';
 import { SettlementService } from '../src/modules/bookings/settlement.service';
@@ -1087,15 +1088,75 @@ describe('Hotel operations: front desk, settlement, change requests (e2e)', () =
       ]);
       expect(results.map((r) => r.status).sort()).toEqual([200, 409]);
 
-      // Accepting needs the booking still CONFIRMED.
-      await checkIn(h.token, booking.id).expect(200);
+      // Checking in closes the waiting request: nothing is left to decide.
+      const checkedIn = await checkIn(h.token, booking.id).expect(200);
+      expect(checkedIn.body.data.changeRequest).toMatchObject({
+        status: 'REJECTED',
+        reason: CHANGE_CLOSED_REASON,
+      });
+      const events = (checkedIn.body.data.timeline as { event: string }[]).map(
+        (e) => e.event,
+      );
+      expect(events.slice(-2)).toEqual(['CHANGE_REJECTED', 'CHECKED_IN']);
       const late = await accept(h.token, booking.id).expect(409);
-      expect(late.body.code).toBe('BOOKING_STATUS_CONFLICT');
-      await reject(h.token, booking.id).expect(200);
+      expect(late.body.code).toBe('CHANGE_REQUEST_STATUS_CONFLICT');
       const closed = await requestChange(me.token, booking.id, {
         guestName: 'Lê E',
       }).expect(409);
       expect(closed.body.code).toBe('BOOKING_STATUS_CONFLICT');
+    });
+
+    it('waits for a refund decision and closes the request when the booking is cancelled', async () => {
+      const h = await hotel('owner@hotel.test', {
+        freeCancellationDays: null,
+        feePercent: 50,
+      });
+      const strict = await hotel('strict@hotel.test', {
+        freeCancellationDays: null,
+        feePercent: 100,
+      });
+      const me = await t.signIn('CUSTOMER', 'guest@mail.test');
+      const cancel = (id: string) =>
+        t
+          .api()
+          .post(`/api/v1/bookings/${id}/cancel`)
+          .set(auth(me.token))
+          .send({ reason: 'Plans changed' })
+          .expect(200);
+
+      // A request made before the cancel: it cannot be accepted until the owner decides the refund.
+      const refunding = await paidBooking(me.token, h.roomTypeId);
+      await requestChange(me.token, refunding.id, { guestName: 'Lê B' }).expect(
+        200,
+      );
+      await cancel(refunding.id);
+      const blocked = await accept(h.token, refunding.id).expect(409);
+      expect(blocked.body.code).toBe('REFUND_DECISION_PENDING');
+      const asked = await requestChange(me.token, refunding.id, {
+        arrivalTime: '20:00',
+      }).expect(409);
+      expect(asked.body.code).toBe('REFUND_DECISION_PENDING');
+      expect(await queue(h.token, h.hotelId)).toEqual([refunding.id]);
+      // The refund approval cancels the booking and closes the request.
+      const approved = await t
+        .api()
+        .post(`/api/v1/bookings/${refunding.id}/approve-refund`)
+        .set(auth(h.token))
+        .expect(200);
+      expect(approved.body.data.changeRequest).toMatchObject({
+        status: 'REJECTED',
+        reason: CHANGE_CLOSED_REASON,
+      });
+      expect(await queue(h.token, h.hotelId)).toEqual([]);
+
+      // Cancelled at once (nothing to refund): closed in the same step.
+      const kept = await paidBooking(me.token, strict.roomTypeId);
+      await requestChange(me.token, kept.id, { guestName: 'Lê C' }).expect(200);
+      const res = await cancel(kept.id);
+      expect(res.body.data).toMatchObject({
+        status: 'CANCELLED',
+        changeRequest: { status: 'REJECTED', reason: CHANGE_CLOSED_REASON },
+      });
     });
   });
 });

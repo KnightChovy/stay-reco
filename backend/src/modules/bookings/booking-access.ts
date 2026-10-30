@@ -1,10 +1,38 @@
-import { ForbiddenException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
+import type { AuthUser } from '../../common/decorators/current-user.decorator';
 import { ErrorCode } from '../../common/errors/error-code';
 import {
   type HotelAccess,
   partnerSuspended,
 } from '../../common/hotel-access/hotel-access.service';
 import type { StaffPermission } from '../../generated/prisma/client';
+
+/** Also for bookings of another customer or hotel: their existence is not revealed. */
+export const bookingNotFound = () =>
+  new NotFoundException({
+    code: ErrorCode.BOOKING_NOT_FOUND,
+    message: 'Booking not found',
+  });
+
+export const bookingStatusConflict = (message: string) =>
+  new ConflictException({ code: ErrorCode.BOOKING_STATUS_CONFLICT, message });
+
+/** A waiting refund request is for the owner to decide before the booking changes (O2, O4, O11). */
+export const refundDecisionPending = () =>
+  new ConflictException({
+    code: ErrorCode.REFUND_DECISION_PENDING,
+    message: 'A refund request waits for the hotel; decide it first',
+  });
+
+/** The audit actor of a hotel action: staff or the owning partner, the only roles the guards let through. */
+export const hotelActor = (user: AuthUser) => ({
+  role: user.role as 'HOTEL_STAFF' | 'HOTEL_PARTNER',
+  accountId: user.accountId,
+});
 
 /** The owner, or staff with one of `permissions`. */
 function assertAnyPermission(

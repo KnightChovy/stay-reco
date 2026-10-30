@@ -59,7 +59,7 @@ The partner approves or rejects refunds (slide "08. Cancellation And Refund"). N
 | POST | `/bookings/:id/accept-change` | `BOOKING`, owner | | `Booking` |
 | POST | `/bookings/:id/reject-change` | `BOOKING`, owner | `{ reason }` (`rejectChangeSchema`) | `Booking` |
 
-- Accept applies the requested values to the booking, only while it is still `CONFIRMED` (`409 BOOKING_STATUS_CONFLICT` otherwise); reject keeps it as it was and sends `reason` to the customer, whatever the booking status (so a request left waiting when the booking was cancelled or checked in can be closed). Both email and notify the customer. Staff without `BOOKING` get `403 FORBIDDEN`, a suspended owner `403 PARTNER_SUSPENDED`.
+- Accept applies the requested values to the booking, only while it is still `CONFIRMED` (`409 BOOKING_STATUS_CONFLICT` otherwise) and no refund request waits (`409 REFUND_DECISION_PENDING`: decide the refund first); reject keeps it as it was and sends `reason` to the customer. A request still waiting when the booking is cancelled, checked in or marked no-show is closed by the system (rejected with a fixed reason), so it leaves the queue on its own. Both email and notify the customer. Staff without `BOOKING` get `403 FORBIDDEN`, a suspended owner `403 PARTNER_SUSPENDED`.
 - No waiting request: `409 CHANGE_REQUEST_STATUS_CONFLICT`. Waiting requests are counted by the dashboard action item `CHANGE_REQUESTS_PENDING` and filtered with `GET /hotels/:hotelId/bookings?changeRequest=PENDING`.
 
 ## Permission groups

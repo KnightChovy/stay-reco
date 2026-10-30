@@ -2,7 +2,6 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
-  NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type {
@@ -29,17 +28,16 @@ import { AuditAction } from '../audit/audit.service';
 import { fromTime } from '../hotels/hotel.mapper';
 import { DEFAULT_CHECK_IN_TIME } from '../stays/offer';
 import { WalletLedger } from '../wallets/wallet-ledger';
-import { loadBookingHistory, recordBookingEvent } from './booking-history';
+import { bookingNotFound } from './booking-access';
+import {
+  closePendingChange,
+  loadBookingHistory,
+  recordBookingEvent,
+} from './booking-history';
 import { BookingMailer } from './booking-mailer';
 import { BookingsService } from './bookings.service';
 
 const EVERY_MINUTE = 60_000;
-
-const bookingNotFound = () =>
-  new NotFoundException({
-    code: ErrorCode.BOOKING_NOT_FOUND,
-    message: 'Booking not found',
-  });
 
 const notPending = () =>
   new ConflictException({
@@ -224,6 +222,7 @@ export class RefundDecisionsService extends PeriodicJob {
       },
     });
     await tx.roomCalendars.deleteMany({ where: { bookingId } });
+    await closePendingChange(tx, bookingId, now);
 
     const code = booking.invoice!.invoiceNumber;
     const hotelWallet = await this.ledger.hotelWallet(
