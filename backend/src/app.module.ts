@@ -21,6 +21,7 @@ import { StaffModule } from './modules/staff/staff.module';
 import { StatsModule } from './modules/stats/stats.module';
 import { StaysModule } from './modules/stays/stays.module';
 import { MailModule } from './modules/mail/mail.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 import { StorageModule } from './modules/storage/storage.module';
 import { VerificationModule } from './modules/verification/verification.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -62,6 +63,7 @@ import { PrismaModule } from './prisma/prisma.module';
     StaffModule,
     VerificationModule,
     StatsModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [

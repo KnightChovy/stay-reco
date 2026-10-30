@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AvailabilityModule } from '../availability/availability.module';
 import { PricingModule } from '../pricing/pricing.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { WalletsModule } from '../wallets/wallets.module';
 import { BookingsController } from './bookings.controller';
 import { BookingCancellationService } from './booking-cancellation.service';
@@ -19,7 +20,12 @@ import { SepayPayment } from './sepay-payment';
 import { SettlementService } from './settlement.service';
 
 @Module({
-  imports: [PricingModule, AvailabilityModule, WalletsModule],
+  imports: [
+    PricingModule,
+    AvailabilityModule,
+    WalletsModule,
+    NotificationsModule,
+  ],
   controllers: [
     BookingsController,
     HotelBookingsController,

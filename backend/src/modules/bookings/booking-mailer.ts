@@ -6,10 +6,11 @@ import {
   vietnamDateTime,
 } from '../../common/http/calendar-date';
 import type { Env } from '../../config/env';
-import type { Prisma } from '../../generated/prisma/client';
+import type { NotificationType, Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { fromTime } from '../hotels/hotel.mapper';
 import { MailService } from '../mail/mail.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { DEFAULT_CHECK_IN_TIME } from '../stays/offer';
 import { type GuestChanges, loadBookingHistory } from './booking-history';
 
@@ -24,6 +25,8 @@ const detailsSelect = {
   freeCancelUntil: true,
   cancelFeePercent: true,
   invoice: { select: { invoiceNumber: true } },
+  // Role rows share the account id, so these are the notification recipients too.
+  customerId: true,
   customer: {
     select: { userAccount: { select: { email: true, fullName: true } } },
   },
@@ -34,6 +37,7 @@ const detailsSelect = {
         select: {
           name: true,
           checkInTime: true,
+          hotelPartnerId: true,
           hotelPartner: {
             select: { userAccount: { select: { email: true } } },
           },
@@ -44,6 +48,7 @@ const detailsSelect = {
               userAccount: { status: 'ACTIVE' },
             },
             select: {
+              hotelStaffId: true,
               permissions: true,
               userAccount: { select: { email: true } },
             },
@@ -72,8 +77,9 @@ const moment = (at: Date) => {
 /**
  * Booking emails in Vietnamese (decision P10, extended 2026-10-24 and in phase 3): to the customer on payment,
  * cancellation, the refund decision and the change-request decision, and to the hotel (owner, staff with REFUND or
- * BOOKING) when a refund or a change request needs them. Called after the change is
- * committed; sends in the background and never throws, so a mail problem cannot slow down or undo a booking change.
+ * BOOKING) when a refund or a change request needs them. Every email also writes an in-app notification for the same
+ * person (O12). Called after the change is committed; sends in the background and never throws, so a mail problem
+ * cannot slow down or undo a booking change.
  */
 @Injectable()
 export class BookingMailer {
@@ -83,6 +89,7 @@ export class BookingMailer {
   constructor(
     private readonly prisma: PrismaService,
     private readonly mail: MailService,
+    private readonly notifications: NotificationsService,
     private readonly config: ConfigService<Env, true>,
   ) {
     // Emails still being sent at shutdown read the database: let them finish first.
@@ -143,26 +150,37 @@ export class BookingMailer {
             ]
           : [];
 
-      await this.toCustomer(b, `Đã nhận yêu cầu hủy đơn ${code(b)}`, [
-        `Chúng tôi đã nhận yêu cầu hủy đơn ${code(b)}.`,
-        `Số tiền dự kiến hoàn: ${money(cancelRequest.refund)} (phí hủy ${money(cancelRequest.fee)}).`,
-        '',
-        'Khách sạn sẽ xem xét yêu cầu; phòng vẫn được giữ cho bạn cho tới khi có quyết định.',
-        ...autoApproval,
-        '',
-        `Xem đơn: ${this.customerLink(b)}`,
-      ]);
-      await this.toHotel(b, 'REFUND', `Yêu cầu hoàn tiền mới: ${code(b)}`, [
-        `Khách vừa hủy đơn ${code(b)} và có tiền cần hoàn.`,
-        '',
-        ...stay(b),
-        `Khách: ${b.guestName}`,
-        `Lý do: ${cancelRequest.reason}`,
-        `Số tiền hoàn: ${money(cancelRequest.refund)} (phí hủy ${money(cancelRequest.fee)})`,
-        ...autoApproval,
-        '',
-        `Xử lý yêu cầu: ${this.partnerLink()}`,
-      ]);
+      await this.toCustomer(
+        b,
+        `Đã nhận yêu cầu hủy đơn ${code(b)}`,
+        [
+          `Chúng tôi đã nhận yêu cầu hủy đơn ${code(b)}.`,
+          `Số tiền dự kiến hoàn: ${money(cancelRequest.refund)} (phí hủy ${money(cancelRequest.fee)}).`,
+          '',
+          'Khách sạn sẽ xem xét yêu cầu; phòng vẫn được giữ cho bạn cho tới khi có quyết định.',
+          ...autoApproval,
+          '',
+          `Xem đơn: ${this.customerLink(b)}`,
+        ],
+        'PAYMENT',
+      );
+      await this.toHotel(
+        b,
+        'REFUND',
+        `Yêu cầu hoàn tiền mới: ${code(b)}`,
+        [
+          `Khách vừa hủy đơn ${code(b)} và có tiền cần hoàn.`,
+          '',
+          ...stay(b),
+          `Khách: ${b.guestName}`,
+          `Lý do: ${cancelRequest.reason}`,
+          `Số tiền hoàn: ${money(cancelRequest.refund)} (phí hủy ${money(cancelRequest.fee)})`,
+          ...autoApproval,
+          '',
+          `Xử lý yêu cầu: ${this.partnerLink()}`,
+        ],
+        'PAYMENT',
+      );
     });
   }
 
@@ -177,6 +195,7 @@ export class BookingMailer {
           '',
           `Xử lý yêu cầu: ${this.partnerLink()}`,
         ],
+        'PAYMENT',
       );
     });
   }
@@ -189,30 +208,45 @@ export class BookingMailer {
         bookingId,
       );
       const refund = money(cancelRequest?.refund ?? 0);
-      await this.toCustomer(b, `Hoàn tiền đơn ${code(b)} đã được duyệt`, [
-        `Yêu cầu hủy đơn ${code(b)} đã được duyệt. Đơn đã được hủy.`,
-        `${refund} đã được cộng vào ví StayReco của bạn.`,
-        '',
-        `Xem đơn: ${this.customerLink(b)}`,
-      ]);
+      await this.toCustomer(
+        b,
+        `Hoàn tiền đơn ${code(b)} đã được duyệt`,
+        [
+          `Yêu cầu hủy đơn ${code(b)} đã được duyệt. Đơn đã được hủy.`,
+          `${refund} đã được cộng vào ví StayReco của bạn.`,
+          '',
+          `Xem đơn: ${this.customerLink(b)}`,
+        ],
+        'PAYMENT',
+      );
       if (automatic) {
-        await this.toOwner(b, `Đã tự động duyệt hoàn tiền đơn ${code(b)}`, [
-          `Yêu cầu hoàn tiền của đơn ${code(b)} chưa được quyết định khi tới giờ nhận phòng, nên hệ thống đã tự động duyệt.`,
-          `Số tiền hoàn: ${refund}. Đơn đã được hủy và phòng đã được mở bán lại.`,
-        ]);
+        await this.toOwner(
+          b,
+          `Đã tự động duyệt hoàn tiền đơn ${code(b)}`,
+          [
+            `Yêu cầu hoàn tiền của đơn ${code(b)} chưa được quyết định khi tới giờ nhận phòng, nên hệ thống đã tự động duyệt.`,
+            `Số tiền hoàn: ${refund}. Đơn đã được hủy và phòng đã được mở bán lại.`,
+          ],
+          'PAYMENT',
+        );
       }
     });
   }
 
   refundRejected(bookingId: string, reason: string) {
     return this.safely(bookingId, async (b) => {
-      await this.toCustomer(b, `Yêu cầu hoàn tiền đơn ${code(b)} bị từ chối`, [
-        `Khách sạn đã từ chối yêu cầu hủy và hoàn tiền của đơn ${code(b)}.`,
-        `Lý do: ${reason}`,
-        '',
-        'Đơn đặt phòng vẫn được giữ nguyên. Nếu có thắc mắc, vui lòng liên hệ khách sạn.',
-        `Xem đơn: ${this.customerLink(b)}`,
-      ]);
+      await this.toCustomer(
+        b,
+        `Yêu cầu hoàn tiền đơn ${code(b)} bị từ chối`,
+        [
+          `Khách sạn đã từ chối yêu cầu hủy và hoàn tiền của đơn ${code(b)}.`,
+          `Lý do: ${reason}`,
+          '',
+          'Đơn đặt phòng vẫn được giữ nguyên. Nếu có thắc mắc, vui lòng liên hệ khách sạn.',
+          `Xem đơn: ${this.customerLink(b)}`,
+        ],
+        'PAYMENT',
+      );
     });
   }
 
@@ -292,8 +326,14 @@ export class BookingMailer {
     }
   }
 
-  private toCustomer(b: Details, subject: string, lines: string[]) {
-    return this.mail.send({
+  private async toCustomer(
+    b: Details,
+    subject: string,
+    lines: string[],
+    type: NotificationType = 'BOOKING',
+  ) {
+    await this.notify(b.customerId, type, subject, lines, customerPath(b));
+    await this.mail.send({
       to: b.customer.userAccount.email,
       subject,
       // The email goes to the account that booked, who may have booked for another guest.
@@ -303,33 +343,69 @@ export class BookingMailer {
     });
   }
 
-  private toOwner(b: Details, subject: string, lines: string[]) {
-    return this.mail.send({
-      to: b.roomType.hotel.hotelPartner.userAccount.email,
+  private async toOwner(
+    b: Details,
+    subject: string,
+    lines: string[],
+    type: NotificationType = 'BOOKING',
+  ) {
+    const owner = b.roomType.hotel;
+    await this.notify(owner.hotelPartnerId, type, subject, lines, PARTNER_PATH);
+    await this.mail.send({
+      to: owner.hotelPartner.userAccount.email,
       subject,
-      text: [`Khách sạn ${b.roomType.hotel.name}`, '', ...lines].join('\n'),
+      text: [`Khách sạn ${owner.name}`, '', ...lines].join('\n'),
     });
   }
 
-  /** The owner and the active staff with `permission`, one email each. */
+  /** The owner and the active staff with `permission`: one notification and one email each. */
   private async toHotel(
     b: Details,
     permission: 'REFUND' | 'BOOKING',
     subject: string,
     lines: string[],
+    type: NotificationType = 'BOOKING',
   ) {
-    const emails = new Set([
-      b.roomType.hotel.hotelPartner.userAccount.email,
-      ...b.roomType.hotel.hotelStaffs
-        .filter((s) => s.permissions.includes(permission))
-        .map((s) => s.userAccount.email),
-    ]);
-    for (const to of emails) {
+    await this.toOwner(b, subject, lines, type);
+    const owner = b.roomType.hotel.hotelPartner.userAccount.email;
+    for (const s of b.roomType.hotel.hotelStaffs) {
+      if (!s.permissions.includes(permission)) continue;
+      await this.notify(s.hotelStaffId, type, subject, lines, staffPath(b));
+      // A staff account sharing the owner's address gets the email once.
+      if (s.userAccount.email === owner) continue;
       await this.mail.send({
-        to,
+        to: s.userAccount.email,
         subject,
         text: [`Khách sạn ${b.roomType.hotel.name}`, '', ...lines].join('\n'),
       });
+    }
+  }
+
+  /**
+   * The in-app notification next to an email (O12): the subject as title, the first paragraph as message. Never
+   * blocks the email: a failed insert is logged.
+   */
+  private async notify(
+    userAccountId: string,
+    type: NotificationType,
+    title: string,
+    lines: string[],
+    link: string,
+  ) {
+    const end = lines.indexOf('');
+    const message = (end < 0 ? lines : lines.slice(0, end)).join(' ');
+    try {
+      await this.notifications.create({
+        userAccountId,
+        type,
+        title,
+        message,
+        link,
+      });
+    } catch (err) {
+      this.logger.error(
+        `Notification for ${userAccountId} failed: ${String(err)}`,
+      );
     }
   }
 
@@ -347,6 +423,11 @@ export class BookingMailer {
 }
 
 const code = (b: Details) => b.invoice!.invoiceNumber;
+
+/** App paths the notifications open (O12). */
+const customerPath = (b: Details) => `/account/bookings/${b.bookingId}`;
+const staffPath = (b: Details) => `/staff/bookings/${b.bookingId}`;
+const PARTNER_PATH = '/partner/bookings';
 
 function stay(b: Details) {
   const checkIn = toCalendarDate(b.checkInDate);

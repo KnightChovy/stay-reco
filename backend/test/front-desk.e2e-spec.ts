@@ -922,6 +922,75 @@ describe('Hotel operations: front desk, settlement, change requests (e2e)', () =
     });
   });
 
+  describe('notifications next to the booking emails', () => {
+    const inbox = async (token: string) => {
+      await t.app.get(BookingMailer).idle();
+      const res = await t
+        .api()
+        .get('/api/v1/me/notifications')
+        .set(auth(token))
+        .expect(200);
+      return res.body.data as {
+        type: string;
+        title: string;
+        message: string;
+        link: string;
+      }[];
+    };
+
+    it('writes one for each email, to the same person, with the screen to open', async () => {
+      const h = await hotel('owner@hotel.test', {
+        freeCancellationDays: null,
+        feePercent: 50,
+      });
+      const refunds = await t.signInStaff(h.hotelId, 'refund@hotel.test', [
+        'REFUND',
+      ]);
+      const desk = await t.signInStaff(h.hotelId, 'desk@hotel.test', [
+        'FRONT_DESK',
+      ]);
+      const me = await t.signIn('CUSTOMER', 'guest@mail.test');
+      const booking = await paidBooking(me.token, h.roomTypeId);
+
+      expect(await inbox(me.token)).toEqual([
+        {
+          id: expect.any(String),
+          type: 'BOOKING',
+          title: `Xác nhận đặt phòng ${booking.code}`,
+          message: `Đơn đặt phòng ${booking.code} đã được thanh toán và xác nhận.`,
+          link: `/account/bookings/${booking.id}`,
+          isRead: false,
+          createdAt: expect.any(String),
+        },
+      ]);
+
+      await t
+        .api()
+        .post(`/api/v1/bookings/${booking.id}/cancel`)
+        .set(auth(me.token))
+        .send({ reason: 'Plans changed' })
+        .expect(200);
+      const [requested] = await inbox(me.token);
+      expect(requested).toMatchObject({
+        type: 'PAYMENT',
+        title: `Đã nhận yêu cầu hủy đơn ${booking.code}`,
+      });
+      // The hotel side: the owner and the staff with REFUND, each with their own screen.
+      const title = `Yêu cầu hoàn tiền mới: ${booking.code}`;
+      expect((await inbox(h.token))[0]).toMatchObject({
+        type: 'PAYMENT',
+        title,
+        link: '/partner/bookings',
+      });
+      expect((await inbox(refunds.token))[0]).toMatchObject({
+        type: 'PAYMENT',
+        title,
+        link: `/staff/bookings/${booking.id}`,
+      });
+      expect(await inbox(desk.token)).toEqual([]);
+    });
+  });
+
   describe('change requests', () => {
     const requestChange = (token: string, id: string, body: object) =>
       t
