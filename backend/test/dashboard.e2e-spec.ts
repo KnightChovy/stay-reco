@@ -628,6 +628,92 @@ describe('Partner dashboard (e2e)', () => {
     });
   });
 
+  it('counts stays and flags overdue check-outs and waiting change requests', async () => {
+    const h = await hotel('owner@hotel.test', ['101']);
+    // Check-out time at midnight: a guest still in on the check-out date is overdue whatever the hour of the test.
+    await t.prisma.hotel.update({
+      where: { hotelId: h.hotelId },
+      data: { checkOutTime: new Date('1970-01-01T00:00:00.000Z') },
+    });
+    const now = Date.now();
+    const stay = (checkIn: number, nights: number, status: BookingStatus) =>
+      book(h, {
+        checkIn: addDays(today(), checkIn),
+        prices: Array<number>(nights).fill(1000000),
+        status,
+        createdAt: new Date(now - 10 * 86_400_000),
+      });
+    const leftYesterday = await stay(-3, 2, 'CHECKED_IN');
+    const leavesToday = await stay(-2, 2, 'CHECKED_IN');
+    await stay(-1, 2, 'CHECKED_IN'); // leaves tomorrow
+    await stay(0, 1, 'CHECKED_IN'); // arrived today
+    await stay(-1, 1, 'COMPLETED'); // left today
+    const waiting = await stay(3, 1, 'CONFIRMED');
+    const decided = await stay(4, 1, 'CONFIRMED');
+    const requestedAt = new Date(now - 3_600_000);
+    const change = (bookingId: string, action: string, createdAt: Date) =>
+      t.prisma.auditLog.create({
+        data: {
+          action,
+          entityType: 'booking',
+          entityId: bookingId,
+          newValue: JSON.stringify({ changes: { guestName: 'Lê B' } }),
+          createdAt,
+        },
+      });
+    await change(waiting.bookingId, 'BOOKING_CHANGE_REQUESTED', requestedAt);
+    await change(decided.bookingId, 'BOOKING_CHANGE_REQUESTED', requestedAt);
+    await change(decided.bookingId, 'BOOKING_CHANGE_ACCEPTED', new Date(now));
+
+    const todayStats = await t
+      .api()
+      .get(`/api/v1/hotels/${h.hotelId}/stats/today`)
+      .set(auth(h.token))
+      .expect(200);
+    expect(todayStats.body.data).toMatchObject({
+      arrivals: { expected: 1, checkedIn: 1 },
+      departures: { expected: 2, checkedOut: 1 },
+      inHouse: { bookings: 4, guests: 8 },
+    });
+
+    const items = async (token: string) =>
+      (
+        await t
+          .api()
+          .get(`/api/v1/hotels/${h.hotelId}/action-items`)
+          .set(auth(token))
+          .expect(200)
+      ).body.data.items as { type: string }[];
+    expect(await items(h.token)).toEqual([
+      {
+        type: 'OVERDUE_CHECKOUTS',
+        severity: 'CRITICAL',
+        count: 2,
+        params: {
+          bookingIds: [leftYesterday.bookingId, leavesToday.bookingId],
+        },
+      },
+      {
+        type: 'CHANGE_REQUESTS_PENDING',
+        severity: 'WARNING',
+        count: 1,
+        params: { oldestAt: requestedAt.toISOString() },
+      },
+    ]);
+    const desk = await t.signInStaff(h.hotelId, 'desk@hotel.test', [
+      'FRONT_DESK',
+    ]);
+    const bookings = await t.signInStaff(h.hotelId, 'booking@hotel.test', [
+      'BOOKING',
+    ]);
+    expect((await items(desk.token)).map((i) => i.type)).toEqual([
+      'OVERDUE_CHECKOUTS',
+    ]);
+    expect((await items(bookings.token)).map((i) => i.type)).toEqual([
+      'CHANGE_REQUESTS_PENDING',
+    ]);
+  });
+
   it('flags a returned verification request and the missing setup steps of a draft hotel', async () => {
     const h = await hotel('owner@hotel.test', ['101'], 'DRAFT');
     const request = await t.prisma.hotelVerificationRequest.create({

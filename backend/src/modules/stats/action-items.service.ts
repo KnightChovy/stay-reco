@@ -6,10 +6,17 @@ import type {
   ActionItemType,
 } from '@stayreco/shared';
 import { ACTION_ITEM_TYPES, SETUP_STEPS } from '@stayreco/shared';
-import { todayInVietnam } from '../../common/http/calendar-date';
+import {
+  fromCalendarDate,
+  toCalendarDate,
+  todayInVietnam,
+  vietnamDateTime,
+} from '../../common/http/calendar-date';
 import type { HotelAccess } from '../../common/hotel-access/hotel-access.service';
 import { PrismaService } from '../../prisma/prisma.service';
-import { POLICY_PREFIX } from '../hotels/hotel.mapper';
+import { pendingChangeBookingIds } from '../bookings/booking-history';
+import { fromTime, POLICY_PREFIX } from '../hotels/hotel.mapper';
+import { DEFAULT_CHECK_OUT_TIME } from '../stays/offer';
 import { StatsService } from './stats.service';
 
 const DAY_MS = 86_400_000;
@@ -39,8 +46,8 @@ type Item = Omit<ActionItem, 'severity'>;
 
 /**
  * "Việc cần làm" (docs/api/partner-dashboard.md §4.1): one item per type with a count, ordered as `ACTION_ITEM_TYPES`
- * (which follows the severities). Staff only get the types of their permission groups: today, refund requests for
- * `REFUND`.
+ * (which follows the severities). Staff only get the types of their permission groups: overdue check-outs for
+ * `FRONT_DESK`, refund requests for `REFUND`, change requests for `BOOKING`.
  */
 @Injectable()
 export class ActionItemsService {
@@ -53,8 +60,14 @@ export class ActionItemsService {
     const { hotelId } = access;
     const owner = access.role === 'OWNER';
     const checks: Promise<Item[]>[] = [];
+    if (owner || access.permissions.includes('FRONT_DESK')) {
+      checks.push(this.overdueCheckouts(hotelId, now));
+    }
     if (owner || access.permissions.includes('REFUND')) {
       checks.push(this.refundRequests(hotelId));
+    }
+    if (owner || access.permissions.includes('BOOKING')) {
+      checks.push(this.changeRequests(hotelId));
     }
     if (owner) {
       checks.push(
@@ -135,6 +148,67 @@ export class ActionItemsService {
     return [
       {
         type: 'REFUND_REQUESTS_PENDING',
+        count: waiting.length,
+        params: { oldestAt: new Date(Math.min(...times)).toISOString() },
+      },
+    ];
+  }
+
+  /** Guests still in house after the check-out time of their check-out date (12:00 when the hotel has none, O9). */
+  private async overdueCheckouts(hotelId: string, now: Date): Promise<Item[]> {
+    const staying = await this.prisma.booking.findMany({
+      where: {
+        roomType: { hotelId },
+        status: 'CHECKED_IN',
+        checkOutDate: { lte: fromCalendarDate(todayInVietnam(now)) },
+      },
+      orderBy: [{ checkOutDate: 'asc' }, { bookingId: 'asc' }],
+      select: {
+        bookingId: true,
+        checkOutDate: true,
+        roomType: { select: { hotel: { select: { checkOutTime: true } } } },
+      },
+    });
+    const overdue = staying.filter(
+      (b) =>
+        now >=
+        vietnamDateTime(
+          toCalendarDate(b.checkOutDate),
+          fromTime(b.roomType.hotel.checkOutTime) ?? DEFAULT_CHECK_OUT_TIME,
+        ),
+    );
+    return overdue.length
+      ? [
+          {
+            type: 'OVERDUE_CHECKOUTS',
+            count: overdue.length,
+            params: { bookingIds: overdue.map((b) => b.bookingId) },
+          },
+        ]
+      : [];
+  }
+
+  /** Change requests waiting for the hotel (O11); `oldestAt` is when the oldest one was made. */
+  private async changeRequests(hotelId: string): Promise<Item[]> {
+    const waiting = await pendingChangeBookingIds(this.prisma, hotelId);
+    if (!waiting.length) return [];
+    // The waiting request of a booking is its latest one.
+    const requests = await this.prisma.auditLog.groupBy({
+      by: ['entityId'],
+      where: {
+        entityType: 'booking',
+        entityId: { in: waiting },
+        action: 'BOOKING_CHANGE_REQUESTED',
+      },
+      _max: { createdAt: true },
+    });
+    const times = requests
+      .map((r) => r._max.createdAt)
+      .filter((at): at is Date => at !== null)
+      .map((at) => at.getTime());
+    return [
+      {
+        type: 'CHANGE_REQUESTS_PENDING',
         count: waiting.length,
         params: { oldestAt: new Date(Math.min(...times)).toISOString() },
       },
