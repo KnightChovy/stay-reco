@@ -96,7 +96,7 @@ export function toBooking(
   history: BookingHistory,
   assignedRooms: StayRoom[],
 ): Booking {
-  const { cancelRequest, rejection } = history;
+  const { cancelRequest, rejection, changeRequest } = history;
   const invoice = b.invoice!;
   const summary = toBookingSummary(b);
   const totalAmount = summary.totalAmount;
@@ -145,8 +145,13 @@ export function toBooking(
     cancelReason: cancelRequest?.reason ?? null,
     cancelledAt: b.cancelledAt?.toISOString() ?? null,
     assignedRooms,
-    // Filled in by change requests, which do not exist yet.
-    changeRequest: null,
+    changeRequest: changeRequest && {
+      status: changeRequest.status,
+      changes: changeRequest.changes,
+      requestedAt: changeRequest.requestedAt.toISOString(),
+      decidedAt: changeRequest.decidedAt?.toISOString() ?? null,
+      reason: changeRequest.reason,
+    },
     timeline: timeline.map((t) => ({ at: t.at.toISOString(), event: t.event })),
   };
 }

@@ -6,6 +6,8 @@ import { BookingsController } from './bookings.controller';
 import { BookingCancellationService } from './booking-cancellation.service';
 import { BookingMailer } from './booking-mailer';
 import { BookingsService } from './bookings.service';
+import { ChangeRequestsController } from './change-requests.controller';
+import { ChangeRequestsService } from './change-requests.service';
 import { FrontDeskController } from './front-desk.controller';
 import { FrontDeskService } from './front-desk.service';
 import { HoldExpiryService } from './hold-expiry.service';
@@ -22,11 +24,13 @@ import { SettlementService } from './settlement.service';
     BookingsController,
     HotelBookingsController,
     FrontDeskController,
+    ChangeRequestsController,
   ],
   providers: [
     BookingsService,
     BookingCancellationService,
     BookingMailer,
+    ChangeRequestsService,
     FrontDeskService,
     HotelBookingsService,
     RefundDecisionsService,

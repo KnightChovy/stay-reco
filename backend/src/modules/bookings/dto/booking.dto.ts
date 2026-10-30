@@ -1,11 +1,13 @@
 import {
   bookingLookupQuerySchema,
   cancelBookingSchema,
+  changeRequestSchema,
   checkInSchema,
   createBookingSchema,
   forwardRefundSchema,
   hotelBookingsQuerySchema,
   myBookingsQuerySchema,
+  rejectChangeSchema,
   rejectRefundSchema,
 } from '@stayreco/shared';
 import { zodDto } from '../../../common/pipes/validation';
@@ -18,3 +20,5 @@ export class ForwardRefundDto extends zodDto(forwardRefundSchema) {}
 export class RejectRefundDto extends zodDto(rejectRefundSchema) {}
 export class BookingLookupQueryDto extends zodDto(bookingLookupQuerySchema) {}
 export class CheckInDto extends zodDto(checkInSchema) {}
+export class ChangeRequestDto extends zodDto(changeRequestSchema) {}
+export class RejectChangeDto extends zodDto(rejectChangeSchema) {}

@@ -124,7 +124,7 @@ Changing dates, room type or guests is not offered: cancel and book again (BR-09
   "specialRequests": null }        // optional, max 500; null clears it
 ```
 
-- At least one field, and it must differ from the booking (`400 VALIDATION_ERROR` otherwise). Dates, room type and guests cannot change (BR-09): cancel and book again.
+- At least one field. Fields equal to the booking are dropped from the request; when none is left the answer is `400 VALIDATION_ERROR` (`details`: each field sent, "same as the booking"). An empty `specialRequests` counts as none. Dates, room type and guests cannot change (BR-09): cancel and book again.
 - Only a `CONFIRMED` booking (`409 BOOKING_STATUS_CONFLICT` otherwise), one waiting request at a time (`409 CHANGE_REQUEST_PENDING`).
 - The hotel (staff with `BOOKING`, the owner) is emailed and notified; it accepts (the booking takes the new values) or rejects with a reason. The customer is emailed and notified either way.
 - `Booking.changeRequest` shows the latest request: `{ status: "PENDING" | "ACCEPTED" | "REJECTED", changes: { … }, requestedAt, decidedAt, reason }`. The timeline gains `CHANGE_REQUESTED`, then `CHANGE_ACCEPTED` or `CHANGE_REJECTED`.

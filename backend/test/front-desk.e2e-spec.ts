@@ -1,11 +1,12 @@
 import { vietnamDateTime } from '../src/common/http/calendar-date';
+import { BookingMailer } from '../src/modules/bookings/booking-mailer';
 import { NoShowService } from '../src/modules/bookings/no-show.service';
 import { SettlementService } from '../src/modules/bookings/settlement.service';
 import { PaymentConfirmationService } from '../src/modules/payments/payment-confirmation.service';
 import { PLATFORM_WALLET_ID } from '../src/modules/wallets/wallet-ledger';
 import { createTestApp } from './helpers';
 
-describe('Front desk and settlement (e2e)', () => {
+describe('Hotel operations: front desk, settlement, change requests (e2e)', () => {
   let t: Awaited<ReturnType<typeof createTestApp>>;
   let king: string;
 
@@ -917,6 +918,184 @@ describe('Front desk and settlement (e2e)', () => {
         hotel: { pending: 0, available: 2000000 },
         platform: 0,
       });
+    });
+  });
+
+  describe('change requests', () => {
+    const requestChange = (token: string, id: string, body: object) =>
+      t
+        .api()
+        .post(`/api/v1/bookings/${id}/change-request`)
+        .set(auth(token))
+        .send(body);
+    const accept = (token: string, id: string) =>
+      t.api().post(`/api/v1/bookings/${id}/accept-change`).set(auth(token));
+    const reject = (token: string, id: string, reason = 'Không đổi được') =>
+      t
+        .api()
+        .post(`/api/v1/bookings/${id}/reject-change`)
+        .set(auth(token))
+        .send({ reason });
+    const queue = async (token: string, hotelId: string) => {
+      const res = await t
+        .api()
+        .get(`/api/v1/hotels/${hotelId}/bookings?changeRequest=PENDING`)
+        .set(auth(token))
+        .expect(200);
+      return (res.body.data as { id: string }[]).map((b) => b.id);
+    };
+    const mailsTo = async () => {
+      await t.app.get(BookingMailer).idle();
+      const sent = t.outbox.map((m) => [m.to, m.subject]);
+      t.outbox.length = 0;
+      return sent;
+    };
+
+    it('keeps the changed fields, queues the request and applies it when accepted', async () => {
+      const h = await hotel();
+      const me = await t.signIn('CUSTOMER', 'guest@mail.test');
+      const booking = await paidBooking(me.token, h.roomTypeId);
+      const other = await paidBooking(me.token, h.roomTypeId);
+      const desk = await t.signInStaff(h.hotelId, 'booking@hotel.test', [
+        'BOOKING',
+      ]);
+      await t.signInStaff(h.hotelId, 'refund@hotel.test', ['REFUND']);
+      await mailsTo();
+
+      // The phone is the booking's own: only the name and the requests change.
+      const res = await requestChange(me.token, booking.id, {
+        guestName: 'Trần Văn B',
+        contactPhone: '0905123456',
+        specialRequests: 'Phòng tầng cao',
+      }).expect(200);
+      expect(res.body.data.changeRequest).toMatchObject({
+        status: 'PENDING',
+        changes: { guestName: 'Trần Văn B', specialRequests: 'Phòng tầng cao' },
+        decidedAt: null,
+        reason: null,
+      });
+      expect(res.body.data.changeRequest.changes).not.toHaveProperty(
+        'contactPhone',
+      );
+      expect(res.body.data.guestName).toBe('Nguyễn Văn A');
+      // The owner and staff with BOOKING, not the refund-only staff.
+      const subject = `Yêu cầu đổi thông tin đơn ${booking.code}`;
+      expect((await mailsTo()).sort()).toEqual([
+        ['booking@hotel.test', subject],
+        ['owner@hotel.test', subject],
+      ]);
+
+      const twice = await requestChange(me.token, booking.id, {
+        guestName: 'Lê C',
+      }).expect(409);
+      expect(twice.body.code).toBe('CHANGE_REQUEST_PENDING');
+      expect(await queue(desk.token, h.hotelId)).toEqual([booking.id]);
+      expect(await queue(h.token, h.hotelId)).not.toContain(other.id);
+
+      const accepted = await accept(desk.token, booking.id).expect(200);
+      expect(accepted.body.data).toMatchObject({
+        guestName: 'Trần Văn B',
+        specialRequests: 'Phòng tầng cao',
+        changeRequest: { status: 'ACCEPTED', reason: null },
+      });
+      expect(
+        (accepted.body.data.timeline as { event: string }[]).map(
+          (e) => e.event,
+        ),
+      ).toEqual(['CREATED', 'PAID', 'CHANGE_REQUESTED', 'CHANGE_ACCEPTED']);
+      expect(await mailsTo()).toEqual([
+        ['guest@mail.test', `Đơn ${booking.code} đã được cập nhật`],
+      ]);
+      expect(await queue(desk.token, h.hotelId)).toEqual([]);
+      const again = await accept(desk.token, booking.id).expect(409);
+      expect(again.body.code).toBe('CHANGE_REQUEST_STATUS_CONFLICT');
+    });
+
+    it('rejects with a reason, after which the customer may ask again', async () => {
+      const h = await hotel();
+      const me = await t.signIn('CUSTOMER', 'guest@mail.test');
+      const booking = await paidBooking(me.token, h.roomTypeId);
+      await requestChange(me.token, booking.id, {
+        arrivalTime: '21:00',
+      }).expect(200);
+
+      const desk = await t.signInStaff(h.hotelId, 'desk@hotel.test', [
+        'FRONT_DESK',
+      ]);
+      await reject(desk.token, booking.id).expect(403);
+      await mailsTo();
+      const res = await reject(
+        h.token,
+        booking.id,
+        'Hết phòng tầng cao',
+      ).expect(200);
+      expect(res.body.data).toMatchObject({
+        arrivalTime: null,
+        changeRequest: {
+          status: 'REJECTED',
+          changes: { arrivalTime: '21:00' },
+          reason: 'Hết phòng tầng cao',
+        },
+      });
+      expect(await mailsTo()).toEqual([
+        [
+          'guest@mail.test',
+          `Yêu cầu đổi thông tin đơn ${booking.code} bị từ chối`,
+        ],
+      ]);
+      await reject(h.token, booking.id).expect(409);
+
+      // A new request replaces the rejected one; clearing a value it already lacks is no change.
+      const empty = await requestChange(me.token, booking.id, {
+        specialRequests: null,
+      }).expect(400);
+      expect(empty.body.details).toEqual([
+        { field: 'specialRequests', message: 'same as the booking' },
+      ]);
+      const next = await requestChange(me.token, booking.id, {
+        arrivalTime: '19:00',
+      }).expect(200);
+      expect(next.body.data.changeRequest).toMatchObject({
+        status: 'PENDING',
+        changes: { arrivalTime: '19:00' },
+      });
+
+      await t.prisma.hotelPartner.update({
+        where: { hotelPartnerId: h.id },
+        data: { status: 'SUSPENDED' },
+      });
+      const suspended = await accept(h.token, booking.id).expect(403);
+      expect(suspended.body.code).toBe('PARTNER_SUSPENDED');
+    });
+
+    it('is only for the customer, a CONFIRMED booking and one request at a time', async () => {
+      const h = await hotel();
+      const me = await t.signIn('CUSTOMER', 'guest@mail.test');
+      const stranger = await t.signIn('CUSTOMER', 'other@mail.test');
+      const booking = await paidBooking(me.token, h.roomTypeId);
+
+      await requestChange(me.token, booking.id, {}).expect(400);
+      const hidden = await requestChange(stranger.token, booking.id, {
+        guestName: 'X',
+      }).expect(404);
+      expect(hidden.body.code).toBe('BOOKING_NOT_FOUND');
+      await requestChange(h.token, booking.id, { guestName: 'X' }).expect(403);
+
+      const results = await Promise.all([
+        requestChange(me.token, booking.id, { guestName: 'Lê C' }),
+        requestChange(me.token, booking.id, { guestName: 'Lê D' }),
+      ]);
+      expect(results.map((r) => r.status).sort()).toEqual([200, 409]);
+
+      // Accepting needs the booking still CONFIRMED.
+      await checkIn(h.token, booking.id).expect(200);
+      const late = await accept(h.token, booking.id).expect(409);
+      expect(late.body.code).toBe('BOOKING_STATUS_CONFLICT');
+      await reject(h.token, booking.id).expect(200);
+      const closed = await requestChange(me.token, booking.id, {
+        guestName: 'Lê E',
+      }).expect(409);
+      expect(closed.body.code).toBe('BOOKING_STATUS_CONFLICT');
     });
   });
 });

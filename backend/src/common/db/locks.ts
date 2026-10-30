@@ -9,6 +9,9 @@ import type { Prisma } from '../../generated/prisma/client';
 export const lockHotel = (tx: Prisma.TransactionClient, hotelId: string) =>
   tx.$executeRaw`SELECT 1 FROM hotel WHERE hotel_id = ${hotelId}::uuid FOR UPDATE`;
 
+export const lockBooking = (tx: Prisma.TransactionClient, bookingId: string) =>
+  tx.$executeRaw`SELECT 1 FROM booking WHERE booking_id = ${bookingId}::uuid FOR UPDATE`;
+
 export const lockRoomType = (
   tx: Prisma.TransactionClient,
   roomTypeId: string,
