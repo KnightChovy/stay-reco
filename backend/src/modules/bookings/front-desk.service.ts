@@ -39,6 +39,7 @@ import { loadBookingHistory, recordBookingEvent } from './booking-history';
 import type { NightlyPrices } from './booking.mapper';
 import { BookingsService } from './bookings.service';
 import { chargeCommission } from './commission';
+import { NoShowService } from './no-show.service';
 import { verifyVoucher } from './voucher-token';
 
 const bookingNotFound = () =>
@@ -79,7 +80,7 @@ type StayRow = Prisma.BookingGetPayload<{ select: typeof stayRowSelect }>;
 
 /**
  * The front desk (staff.md "Front desk", decisions O2–O9): finding the guest's booking by code or voucher QR, the
- * rooms it can be given, check-in, check-out and cleaned rooms. Room moves run under the room type lock that bookings and holds take, so a
+ * rooms it can be given, check-in, no-show, check-out and cleaned rooms. Room moves run under the room type lock that bookings and holds take, so a
  * room is never given to two stays for the same night (BR-10).
  */
 @Injectable()
@@ -89,6 +90,7 @@ export class FrontDeskService {
     private readonly access: HotelAccessService,
     private readonly bookings: BookingsService,
     private readonly ledger: WalletLedger,
+    private readonly noShows: NoShowService,
     private readonly config: ConfigService<Env, true>,
   ) {}
 
@@ -230,6 +232,21 @@ export class FrontDeskService {
           rooms: rooms.map((r) => ({ id: r.id, roomNumber: r.roomNumber })),
         },
       });
+    });
+    return this.bookings.findOne(user, bookingId);
+  }
+
+  /**
+   * Only CONFIRMED and PAID, from the day after the check-in date (O4). The booking becomes NO_SHOW, the nights from
+   * today on are released, the hotel keeps the payment and the commission is charged (O5).
+   */
+  async noShow(user: AuthUser, bookingId: string): Promise<Booking> {
+    const booking = await this.findForFrontDesk(user, bookingId);
+    assertNoShowAllowed(booking);
+    await this.prisma.$transaction(async (tx) => {
+      await lockRoomType(tx, booking.roomTypeId);
+      const marked = await this.noShows.markIn(tx, bookingId, actorOf(user));
+      if (!marked) throw statusConflict('The booking changed meanwhile');
     });
     return this.bookings.findOne(user, bookingId);
   }
@@ -425,9 +442,10 @@ function remainingNights(booking: StayRow, today = todayInVietnam()) {
   return nights;
 }
 
-function assertCheckInOpen(booking: StayRow, today = todayInVietnam()) {
+/** CONFIRMED and PAID; a waiting refund request is for the owner to decide first (O2, O4). */
+function assertConfirmedAndPaid(booking: StayRow, action: string) {
   if (booking.status !== 'CONFIRMED') {
-    throw statusConflict(`A ${booking.status} booking cannot be checked in`);
+    throw statusConflict(`A ${booking.status} booking cannot be ${action}`);
   }
   const payment = booking.invoice!.paymentStatus;
   if (payment === 'REFUND_PENDING') {
@@ -438,9 +456,25 @@ function assertCheckInOpen(booking: StayRow, today = todayInVietnam()) {
   }
   if (payment !== 'PAID') {
     throw statusConflict(
-      `A booking with a ${payment} invoice cannot be checked in`,
+      `A booking with a ${payment} invoice cannot be ${action}`,
     );
   }
+}
+
+/** From the day after the check-in date (O4). */
+function assertNoShowAllowed(booking: StayRow, today = todayInVietnam()) {
+  assertConfirmedAndPaid(booking, 'marked as a no-show');
+  const from = addDays(toCalendarDate(booking.checkInDate), 1);
+  if (today < from) {
+    throw new ConflictException({
+      code: ErrorCode.NO_SHOW_NOT_ALLOWED,
+      message: `A no-show can be marked from ${from}`,
+    });
+  }
+}
+
+function assertCheckInOpen(booking: StayRow, today = todayInVietnam()) {
+  assertConfirmedAndPaid(booking, 'checked in');
   const checkIn = toCalendarDate(booking.checkInDate);
   const checkOut = toCalendarDate(booking.checkOutDate);
   if (today < checkIn || today >= checkOut) {

@@ -108,6 +108,27 @@ export class FrontDeskController {
   }
 
   @ApiOperation({
+    summary: 'Mark a no-show',
+    description:
+      'Decisions O4, O5. Only a `CONFIRMED` booking with a `PAID` invoice, from the day after the check-in date (otherwise `NO_SHOW_NOT_ALLOWED`); a waiting refund request answers `REFUND_DECISION_PENDING`. The booking becomes `NO_SHOW`, the nights from today on are released, the hotel keeps the payment and the platform commission is charged. A job does the same for bookings still `CONFIRMED` at the hotel\x27s check-out time (12:00 when not set) on the check-out date.',
+  })
+  @ApiHotelAccess('member', ErrorCode.BOOKING_NOT_FOUND)
+  @ApiAccess(FRONT_DESK_ACCESS)
+  @ApiData(bookingResponseSchema)
+  @ApiErrors(
+    ErrorCode.FORBIDDEN,
+    ErrorCode.PARTNER_SUSPENDED,
+    ErrorCode.BOOKING_STATUS_CONFLICT,
+    ErrorCode.NO_SHOW_NOT_ALLOWED,
+    ErrorCode.REFUND_DECISION_PENDING,
+  )
+  @Post('bookings/:id/no-show')
+  @HttpCode(HttpStatus.OK)
+  noShow(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.frontDesk.noShow(user, id);
+  }
+
+  @ApiOperation({
     summary: 'Check the guest out',
     description:
       'UC39. Only a `CHECKED_IN` booking, early or late (O9). The booking becomes `COMPLETED` and its rooms `CLEANING`. Leaving before the check-out date releases the nights from today on, without refund. The platform commission is charged now; the hotel\x27s money becomes available after the holding period (money-rules §5.4).',

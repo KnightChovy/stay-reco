@@ -11,6 +11,7 @@ import { FrontDeskService } from './front-desk.service';
 import { HoldExpiryService } from './hold-expiry.service';
 import { HotelBookingsController } from './hotel-bookings.controller';
 import { HotelBookingsService } from './hotel-bookings.service';
+import { NoShowService } from './no-show.service';
 import { RefundDecisionsService } from './refund-decisions.service';
 import { SepayPayment } from './sepay-payment';
 import { SettlementService } from './settlement.service';
@@ -30,6 +31,7 @@ import { SettlementService } from './settlement.service';
     HotelBookingsService,
     RefundDecisionsService,
     HoldExpiryService,
+    NoShowService,
     SepayPayment,
     SettlementService,
   ],

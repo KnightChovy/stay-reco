@@ -13,6 +13,7 @@ const HISTORY_ACTIONS = {
   [AuditAction.REFUND_REJECTED]: 'REFUND_REJECTED',
   [AuditAction.BOOKING_CHECKED_IN]: 'CHECKED_IN',
   [AuditAction.BOOKING_CHECKED_OUT]: 'COMPLETED',
+  [AuditAction.BOOKING_NO_SHOW]: 'NO_SHOW',
 } as const;
 
 type HistoryAction = keyof typeof HISTORY_ACTIONS;
@@ -61,7 +62,7 @@ export function recordBookingEvent(
   input: {
     action: HistoryAction;
     bookingId: string;
-    /** Null for the system (automatic approval). */
+    /** Null for the system (automatic approval, automatic no-show). */
     actor: { role: keyof typeof ACTOR_COLUMN; accountId: string } | null;
     /** The same instant the booking was changed with, so the timeline keeps its order. */
     at: Date;

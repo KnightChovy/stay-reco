@@ -40,6 +40,8 @@ export enum AuditAction {
   BOOKING_CHECKED_IN = 'BOOKING_CHECKED_IN',
   /** Staff checked the guest out; `new_value` holds the commission and the nights released early (decisions O6, O9). */
   BOOKING_CHECKED_OUT = 'BOOKING_CHECKED_OUT',
+  /** The guest never arrived, marked by staff or by the system at the check-out time (decisions O4, O5). */
+  BOOKING_NO_SHOW = 'BOOKING_NO_SHOW',
   /** A SePay transfer that confirmed nothing (no or unknown code, wrong amount, other account): for manual handling. */
   SEPAY_TRANSFER_UNMATCHED = 'SEPAY_TRANSFER_UNMATCHED',
   /** A SePay transfer for a booking no longer waiting for payment (expired, already paid): refund by hand. */

@@ -1,3 +1,5 @@
+import { vietnamDateTime } from '../src/common/http/calendar-date';
+import { NoShowService } from '../src/modules/bookings/no-show.service';
 import { SettlementService } from '../src/modules/bookings/settlement.service';
 import { PaymentConfirmationService } from '../src/modules/payments/payment-confirmation.service';
 import { PLATFORM_WALLET_ID } from '../src/modules/wallets/wallet-ledger';
@@ -551,6 +553,148 @@ describe('Front desk and settlement (e2e)', () => {
       const suspended = await checkIn(h.token, booking.id).expect(403);
       expect(suspended.body.code).toBe('PARTNER_SUSPENDED');
       expect(await roomStatus(h.rooms['101'])).toBe('AVAILABLE');
+    });
+  });
+
+  describe('no-show', () => {
+    const noShow = (token: string, id: string) =>
+      t.api().post(`/api/v1/bookings/${id}/no-show`).set(auth(token));
+
+    it('is marked by staff from the day after check-in: nights from today released, commission charged', async () => {
+      const h = await hotel();
+      const me = await t.signIn('CUSTOMER', 'guest@mail.test');
+      const booking = await paidBooking(me.token, h.roomTypeId);
+      await shift(booking.id, 1); // the check-in date was yesterday
+
+      const desk = await t.signInStaff(h.hotelId, 'desk@hotel.test', [
+        'FRONT_DESK',
+      ]);
+      const res = await noShow(desk.token, booking.id).expect(200);
+      expect(res.body.data).toMatchObject({
+        status: 'NO_SHOW',
+        paymentStatus: 'PAID',
+        refund: null,
+      });
+      expect(
+        (res.body.data.timeline as { event: string }[]).map((e) => e.event),
+      ).toEqual(['CREATED', 'PAID', 'NO_SHOW']);
+      expect((await nights(booking.id)).map((n) => n.date)).toEqual([day(-1)]);
+      expect((await ledger(booking.id)).slice(1)).toEqual([
+        ['COMMISSION', -160000, `commission:${booking.id}:hotel`],
+        ['COMMISSION', 160000, `commission:${booking.id}:platform`],
+      ]);
+      const audit = await t.prisma.auditLog.findFirstOrThrow({
+        where: { entityId: booking.id, action: 'BOOKING_NO_SHOW' },
+      });
+      expect(audit.hotelStaffId).toBe(desk.id);
+      expect(JSON.parse(audit.newValue!)).toEqual({
+        commission: 160000,
+        releasedNights: [day(0)],
+      });
+
+      const again = await noShow(desk.token, booking.id).expect(409);
+      expect(again.body.code).toBe('BOOKING_STATUS_CONFLICT');
+      await checkIn(desk.token, booking.id).expect(409);
+    });
+
+    it('waits for the day after check-in, a refund decision and FRONT_DESK', async () => {
+      const h = await hotel('owner@hotel.test', {
+        freeCancellationDays: null,
+        feePercent: 50,
+      });
+      const me = await t.signIn('CUSTOMER', 'guest@mail.test');
+      const today = await paidBooking(me.token, h.roomTypeId);
+      const early = await noShow(h.token, today.id).expect(409);
+      expect(early.body).toMatchObject({
+        code: 'NO_SHOW_NOT_ALLOWED',
+        message: `A no-show can be marked from ${day(1)}`,
+      });
+
+      const staff = await t.signInStaff(h.hotelId, 'booking@hotel.test', [
+        'BOOKING',
+      ]);
+      await shift(today.id, 1);
+      await noShow(staff.token, today.id).expect(403);
+
+      await t
+        .api()
+        .post(`/api/v1/bookings/${today.id}/cancel`)
+        .set(auth(me.token))
+        .send({ reason: 'Plans changed' })
+        .expect(200);
+      const pending = await noShow(h.token, today.id).expect(409);
+      expect(pending.body.code).toBe('REFUND_DECISION_PENDING');
+    });
+
+    it('is marked by the job at the check-out time on the check-out date', async () => {
+      const h = await hotel('owner@hotel.test', {
+        freeCancellationDays: null,
+        feePercent: 50,
+      });
+      const me = await t.signIn('CUSTOMER', 'guest@mail.test');
+      const away = await paidBooking(me.token, h.roomTypeId);
+      const staying = await paidBooking(me.token, h.roomTypeId);
+      const refunding = await paidBooking(me.token, h.roomTypeId);
+      await checkIn(h.token, staying.id).expect(200);
+      await t
+        .api()
+        .post(`/api/v1/bookings/${refunding.id}/cancel`)
+        .set(auth(me.token))
+        .send({ reason: 'Plans changed' })
+        .expect(200);
+      for (const b of [away, staying, refunding]) await shift(b.id, 2); // check-out date today
+
+      const job = t.app.get(NoShowService);
+      // No check-out time set: 12:00.
+      expect(await job.markDue(vietnamDateTime(day(0), '11:59'))).toBe(0);
+      expect(await job.markDue(vietnamDateTime(day(0), '12:00'))).toBe(1);
+      expect(await job.markDue(vietnamDateTime(day(0), '12:05'))).toBe(0);
+
+      const statuses = await t.prisma.booking.findMany({
+        where: { bookingId: { in: [away.id, staying.id, refunding.id] } },
+        select: { bookingId: true, status: true },
+      });
+      expect(
+        Object.fromEntries(statuses.map((b) => [b.bookingId, b.status])),
+      ).toEqual({
+        [away.id]: 'NO_SHOW',
+        [staying.id]: 'CHECKED_IN',
+        [refunding.id]: 'CONFIRMED',
+      });
+      const audit = await t.prisma.auditLog.findFirstOrThrow({
+        where: { entityId: away.id, action: 'BOOKING_NO_SHOW' },
+      });
+      expect([audit.hotelStaffId, audit.hotelPartnerId]).toEqual([null, null]);
+      // Nothing left to release on the check-out date.
+      expect(JSON.parse(audit.newValue!)).toMatchObject({ releasedNights: [] });
+    });
+
+    it('follows the hotel check-out time and marks once when staff and the job race', async () => {
+      const h = await hotel();
+      await t.prisma.hotel.update({
+        where: { hotelId: h.hotelId },
+        data: { checkOutTime: new Date('1970-01-01T10:00:00.000Z') },
+      });
+      const me = await t.signIn('CUSTOMER', 'guest@mail.test');
+      const booking = await paidBooking(me.token, h.roomTypeId);
+      await shift(booking.id, 2);
+
+      const job = t.app.get(NoShowService);
+      expect(await job.markDue(vietnamDateTime(day(0), '09:59'))).toBe(0);
+      const [byStaff, byJob] = await Promise.all([
+        noShow(h.token, booking.id),
+        job.markDue(vietnamDateTime(day(0), '10:00')),
+      ]);
+      // Exactly one of them marks it; the other finds it already NO_SHOW.
+      expect([byStaff.status, byJob]).toEqual(
+        byStaff.status === 200 ? [200, 0] : [409, 1],
+      );
+      expect(await ledger(booking.id)).toHaveLength(3);
+      expect(
+        await t.prisma.auditLog.count({
+          where: { entityId: booking.id, action: 'BOOKING_NO_SHOW' },
+        }),
+      ).toBe(1);
     });
   });
 
