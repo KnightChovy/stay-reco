@@ -2,10 +2,12 @@ import type { Prisma, UserRole } from '../../generated/prisma/client';
 import { AuditAction } from '../audit/audit.service';
 
 /**
- * What happened to a booking after it was paid, kept as `audit_log` rows on the booking (no extra column or table,
- * decision P11): the customer's cancellations, staff forwarding, the hotel's refund decisions and the front desk.
+ * What happened to a booking, kept as `audit_log` rows on the booking (no extra column or table, decisions P11, O15):
+ * payment or expiry, the customer's cancellations, staff forwarding, the hotel's refund decisions and the front desk.
  */
 const HISTORY_ACTIONS = {
+  [AuditAction.BOOKING_CONFIRMED]: 'PAID',
+  [AuditAction.BOOKING_EXPIRED]: 'EXPIRED',
   [AuditAction.BOOKING_CANCEL_REQUESTED]: 'CANCEL_REQUESTED',
   [AuditAction.REFUND_FORWARDED]: 'REFUND_FORWARDED',
   [AuditAction.REFUND_APPROVED]: 'REFUND_APPROVED',

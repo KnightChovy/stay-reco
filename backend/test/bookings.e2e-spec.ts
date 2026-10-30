@@ -267,6 +267,11 @@ describe('Bookings with a hold (e2e)', () => {
         (expired.body.data.timeline as { event: string }[]).map((e) => e.event),
       ).toEqual(['CREATED', 'EXPIRED']);
       expect(await t.prisma.roomCalendars.count()).toBe(0);
+      expect(
+        await t.prisma.auditLog.count({
+          where: { entityId: id, action: 'BOOKING_EXPIRED' },
+        }),
+      ).toBe(1);
     });
 
     it('releases a stale hold of the room type before a new booking', async () => {

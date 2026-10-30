@@ -104,8 +104,11 @@ export function toBooking(
     b.status === 'PENDING' ? (b.roomCalendars[0]?.holdExpiresAt ?? null) : null;
 
   const timeline = [{ at: b.createdAt, event: 'CREATED' }];
-  if (invoice.paidAt) timeline.push({ at: invoice.paidAt, event: 'PAID' });
-  if (b.status === 'EXPIRED')
+  // Bookings paid or expired before those events were recorded (O15) show them from their columns.
+  const recorded = new Set(history.events.map((e) => e.event));
+  if (invoice.paidAt && !recorded.has('PAID'))
+    timeline.push({ at: invoice.paidAt, event: 'PAID' });
+  if (b.status === 'EXPIRED' && !recorded.has('EXPIRED'))
     timeline.push({ at: b.updatedAt, event: 'EXPIRED' });
   timeline.push(...history.events);
   if (b.cancelledAt) timeline.push({ at: b.cancelledAt, event: 'CANCELLED' });

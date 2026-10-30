@@ -36,6 +36,10 @@ export enum AuditAction {
   REFUND_REJECTED = 'REFUND_REJECTED',
   /** Approved by the system at the check-in time, for a request made before it (decision P11). */
   REFUND_AUTO_APPROVED = 'REFUND_AUTO_APPROVED',
+  /** SePay reported the payment and the booking was confirmed; `new_value` holds the transaction id and amount (O15). */
+  BOOKING_CONFIRMED = 'BOOKING_CONFIRMED',
+  /** The 15-minute hold ran out unpaid (O15). */
+  BOOKING_EXPIRED = 'BOOKING_EXPIRED',
   /** Staff checked the guest in; `new_value` holds the assigned rooms (decision O3). */
   BOOKING_CHECKED_IN = 'BOOKING_CHECKED_IN',
   /** Staff checked the guest out; `new_value` holds the commission and the nights released early (decisions O6, O9). */

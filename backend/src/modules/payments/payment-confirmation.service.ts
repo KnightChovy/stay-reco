@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import type { BookingStatus } from '@stayreco/shared';
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AuditAction } from '../audit/audit.service';
+import { recordBookingEvent } from '../bookings/booking-history';
 import { BookingMailer } from '../bookings/booking-mailer';
 import { WalletLedger } from '../wallets/wallet-ledger';
 
@@ -90,6 +92,16 @@ export class PaymentConfirmationService {
           await tx.roomCalendars.updateMany({
             where: { bookingId, status: 'HELD' },
             data: { status: 'BOOKED', holdExpiresAt: null },
+          });
+          await recordBookingEvent(tx, {
+            action: AuditAction.BOOKING_CONFIRMED,
+            bookingId,
+            actor: null,
+            at: notice.paidAt,
+            value: {
+              transactionId: notice.transactionId,
+              amount: notice.amount,
+            },
           });
           const wallet = await this.ledger.hotelWallet(
             tx,

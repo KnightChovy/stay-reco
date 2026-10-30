@@ -4,6 +4,8 @@ import { PeriodicJob } from '../../common/jobs/periodic-job';
 import type { Env } from '../../config/env';
 import type { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AuditAction } from '../audit/audit.service';
+import { recordBookingEvent } from './booking-history';
 
 const EVERY_MINUTE = 60_000;
 
@@ -66,6 +68,13 @@ export class HoldExpiryService extends PeriodicJob {
     });
     await tx.roomCalendars.deleteMany({
       where: { bookingId, status: 'HELD' },
+    });
+    await recordBookingEvent(tx, {
+      action: AuditAction.BOOKING_EXPIRED,
+      bookingId,
+      actor: null,
+      at: new Date(),
+      value: {},
     });
     return true;
   }
