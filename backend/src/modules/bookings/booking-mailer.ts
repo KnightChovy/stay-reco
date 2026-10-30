@@ -9,7 +9,7 @@ import type { Env } from '../../config/env';
 import type { NotificationType, Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { fromTime } from '../hotels/hotel.mapper';
-import { MailService } from '../mail/mail.service';
+import { type MailMessage, MailService } from '../mail/mail.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { DEFAULT_CHECK_IN_TIME } from '../stays/offer';
 import { type GuestChanges, loadBookingHistory } from './booking-history';
@@ -97,11 +97,11 @@ export class BookingMailer {
   }
 
   bookingConfirmed(bookingId: string) {
-    return this.safely(bookingId, async (b) => {
+    return this.safely(bookingId, async (b, out) => {
       const policy = b.freeCancelUntil
         ? `Hủy miễn phí trước ${moment(b.freeCancelUntil)}; sau đó phí hủy ${Number(b.cancelFeePercent)}% số tiền đã trả.`
         : `Đơn này không có thời gian hủy miễn phí; phí hủy ${Number(b.cancelFeePercent)}% số tiền đã trả.`;
-      await this.toCustomer(b, `Xác nhận đặt phòng ${code(b)}`, [
+      await this.toCustomer(out, b, `Xác nhận đặt phòng ${code(b)}`, [
         `Đơn đặt phòng ${code(b)} đã được thanh toán và xác nhận.`,
         '',
         ...stay(b),
@@ -117,12 +117,12 @@ export class BookingMailer {
 
   /** Nothing to refund: the booking is already cancelled. */
   cancelledAtOnce(bookingId: string) {
-    return this.safely(bookingId, async (b) => {
+    return this.safely(bookingId, async (b, out) => {
       const { cancelRequest } = await loadBookingHistory(
         this.prisma,
         bookingId,
       );
-      await this.toCustomer(b, `Đơn ${code(b)} đã được hủy`, [
+      await this.toCustomer(out, b, `Đơn ${code(b)} đã được hủy`, [
         `Đơn đặt phòng ${code(b)} đã được hủy theo yêu cầu của bạn.`,
         `Lý do: ${cancelRequest?.reason ?? ''}`,
         '',
@@ -135,7 +135,7 @@ export class BookingMailer {
 
   /** Money to refund: the customer is told it is waiting, the hotel that it has to decide. */
   refundRequested(bookingId: string) {
-    return this.safely(bookingId, async (b) => {
+    return this.safely(bookingId, async (b, out) => {
       const { cancelRequest } = await loadBookingHistory(
         this.prisma,
         bookingId,
@@ -151,6 +151,7 @@ export class BookingMailer {
           : [];
 
       await this.toCustomer(
+        out,
         b,
         `Đã nhận yêu cầu hủy đơn ${code(b)}`,
         [
@@ -165,6 +166,7 @@ export class BookingMailer {
         'PAYMENT',
       );
       await this.toHotel(
+        out,
         b,
         'REFUND',
         `Yêu cầu hoàn tiền mới: ${code(b)}`,
@@ -185,8 +187,9 @@ export class BookingMailer {
   }
 
   refundForwarded(bookingId: string, note: string) {
-    return this.safely(bookingId, async (b) => {
+    return this.safely(bookingId, async (b, out) => {
       await this.toOwner(
+        out,
         b,
         `Yêu cầu hoàn tiền ${code(b)} đã được nhân viên chuyển tới`,
         [
@@ -202,13 +205,14 @@ export class BookingMailer {
 
   /** `automatic`: approved by the system at the check-in time; the owner is told too. */
   refundApproved(bookingId: string, automatic = false) {
-    return this.safely(bookingId, async (b) => {
+    return this.safely(bookingId, async (b, out) => {
       const { cancelRequest } = await loadBookingHistory(
         this.prisma,
         bookingId,
       );
       const refund = money(cancelRequest?.refund ?? 0);
       await this.toCustomer(
+        out,
         b,
         `Hoàn tiền đơn ${code(b)} đã được duyệt`,
         [
@@ -221,6 +225,7 @@ export class BookingMailer {
       );
       if (automatic) {
         await this.toOwner(
+          out,
           b,
           `Đã tự động duyệt hoàn tiền đơn ${code(b)}`,
           [
@@ -234,8 +239,9 @@ export class BookingMailer {
   }
 
   refundRejected(bookingId: string, reason: string) {
-    return this.safely(bookingId, async (b) => {
+    return this.safely(bookingId, async (b, out) => {
       await this.toCustomer(
+        out,
         b,
         `Yêu cầu hoàn tiền đơn ${code(b)} bị từ chối`,
         [
@@ -252,21 +258,27 @@ export class BookingMailer {
 
   /** A change request for the hotel (owner, staff with BOOKING) to decide (UC43). */
   changeRequested(bookingId: string, changes: GuestChanges) {
-    return this.safely(bookingId, async (b) => {
-      await this.toHotel(b, 'BOOKING', `Yêu cầu đổi thông tin đơn ${code(b)}`, [
-        `Khách yêu cầu đổi thông tin của đơn ${code(b)}:`,
-        ...changeLines(changes),
-        '',
-        ...stay(b),
-        '',
-        `Xử lý yêu cầu: ${this.partnerLink()}`,
-      ]);
+    return this.safely(bookingId, async (b, out) => {
+      await this.toHotel(
+        out,
+        b,
+        'BOOKING',
+        `Yêu cầu đổi thông tin đơn ${code(b)}`,
+        [
+          `Khách yêu cầu đổi thông tin của đơn ${code(b)}:`,
+          ...changeLines(changes),
+          '',
+          ...stay(b),
+          '',
+          `Xử lý yêu cầu: ${this.partnerLink()}`,
+        ],
+      );
     });
   }
 
   changeAccepted(bookingId: string, changes: GuestChanges) {
-    return this.safely(bookingId, async (b) => {
-      await this.toCustomer(b, `Đơn ${code(b)} đã được cập nhật`, [
+    return this.safely(bookingId, async (b, out) => {
+      await this.toCustomer(out, b, `Đơn ${code(b)} đã được cập nhật`, [
         `Khách sạn đã chấp nhận yêu cầu đổi thông tin của đơn ${code(b)}:`,
         ...changeLines(changes),
         '',
@@ -276,8 +288,9 @@ export class BookingMailer {
   }
 
   changeRejected(bookingId: string, reason: string) {
-    return this.safely(bookingId, async (b) => {
+    return this.safely(bookingId, async (b, out) => {
       await this.toCustomer(
+        out,
         b,
         `Yêu cầu đổi thông tin đơn ${code(b)} bị từ chối`,
         [
@@ -301,7 +314,7 @@ export class BookingMailer {
    */
   private safely(
     bookingId: string,
-    send: (booking: Details) => Promise<void>,
+    send: (booking: Details, out: MailMessage[]) => Promise<void>,
   ): void {
     const task: Promise<void> = this.deliver(bookingId, send).finally(() =>
       this.pending.delete(task),
@@ -309,16 +322,23 @@ export class BookingMailer {
     this.pending.add(task);
   }
 
+  /**
+   * The notifications are written while `send` runs; the emails it queued in `out` go after, so a slow SMTP server
+   * never delays a notification.
+   */
   private async deliver(
     bookingId: string,
-    send: (booking: Details) => Promise<void>,
+    send: (booking: Details, out: MailMessage[]) => Promise<void>,
   ) {
     try {
       const booking = await this.prisma.booking.findUnique({
         where: { bookingId },
         select: detailsSelect,
       });
-      if (booking) await send(booking);
+      if (!booking) return;
+      const out: MailMessage[] = [];
+      await send(booking, out);
+      for (const message of out) await this.mail.send(message);
     } catch (err) {
       this.logger.error(
         `Booking email for ${bookingId} failed: ${String(err)}`,
@@ -327,13 +347,14 @@ export class BookingMailer {
   }
 
   private async toCustomer(
+    out: MailMessage[],
     b: Details,
     subject: string,
     lines: string[],
     type: NotificationType = 'BOOKING',
   ) {
     await this.notify(b.customerId, type, subject, lines, customerPath(b));
-    await this.mail.send({
+    out.push({
       to: b.customer.userAccount.email,
       subject,
       // The email goes to the account that booked, who may have booked for another guest.
@@ -344,6 +365,7 @@ export class BookingMailer {
   }
 
   private async toOwner(
+    out: MailMessage[],
     b: Details,
     subject: string,
     lines: string[],
@@ -351,7 +373,7 @@ export class BookingMailer {
   ) {
     const owner = b.roomType.hotel;
     await this.notify(owner.hotelPartnerId, type, subject, lines, PARTNER_PATH);
-    await this.mail.send({
+    out.push({
       to: owner.hotelPartner.userAccount.email,
       subject,
       text: [`Khách sạn ${owner.name}`, '', ...lines].join('\n'),
@@ -360,20 +382,21 @@ export class BookingMailer {
 
   /** The owner and the active staff with `permission`: one notification and one email each. */
   private async toHotel(
+    out: MailMessage[],
     b: Details,
     permission: 'REFUND' | 'BOOKING',
     subject: string,
     lines: string[],
     type: NotificationType = 'BOOKING',
   ) {
-    await this.toOwner(b, subject, lines, type);
+    await this.toOwner(out, b, subject, lines, type);
     const owner = b.roomType.hotel.hotelPartner.userAccount.email;
     for (const s of b.roomType.hotel.hotelStaffs) {
       if (!s.permissions.includes(permission)) continue;
       await this.notify(s.hotelStaffId, type, subject, lines, staffPath(b));
       // A staff account sharing the owner's address gets the email once.
       if (s.userAccount.email === owner) continue;
-      await this.mail.send({
+      out.push({
         to: s.userAccount.email,
         subject,
         text: [`Khách sạn ${b.roomType.hotel.name}`, '', ...lines].join('\n'),

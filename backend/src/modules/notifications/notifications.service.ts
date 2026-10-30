@@ -53,14 +53,14 @@ export class NotificationsService {
     });
   }
 
-  /** Newest first; `unread` keeps only the unread ones. */
+  /** Newest first; `unread=true` keeps only the unread ones, `false` or nothing lists all. */
   async list(
     accountId: string,
     query: NotificationListQuery,
   ): Promise<Paginated<Notification>> {
     const where = {
       userAccountId: accountId,
-      ...(query.unread !== undefined && { isRead: !query.unread }),
+      ...(query.unread && { isRead: false }),
     } satisfies Prisma.NotificationWhereInput;
     const [rows, total] = await Promise.all([
       this.prisma.notification.findMany({

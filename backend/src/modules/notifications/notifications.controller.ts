@@ -35,7 +35,7 @@ export class NotificationsController {
   @ApiOperation({
     summary: 'My notifications',
     description:
-      'Newest first. `unread=true` keeps only the unread ones. `link` is the app path to open (`/account/bookings/<id>`, `/staff/bookings/<id>`, `/partner/bookings`), null when there is nothing to open.',
+      'Newest first. `unread=true` keeps only the unread ones; `false` or no value lists all. `link` is the app path to open (`/account/bookings/<id>`, `/staff/bookings/<id>`, `/partner/bookings`), null when there is nothing to open.',
   })
   @ApiPage(notificationResponseSchema)
   @Get()
