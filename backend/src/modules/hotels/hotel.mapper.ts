@@ -109,7 +109,8 @@ type HotelSummaryRow = Prisma.HotelGetPayload<{
 export const fromTime = (value: Date | null) =>
   value ? value.toISOString().slice(11, 16) : null;
 
-const toTime = (value: string | null | undefined) =>
+/** `"HH:mm"` to a `TIME` column value; `null` clears it, `undefined` leaves it untouched. */
+export const toTime = (value: string | null | undefined) =>
   value == null ? value : new Date(`1970-01-01T${value}:00.000Z`);
 
 /** Maps validated create/update input to Prisma data; `undefined` fields are left untouched by Prisma. */

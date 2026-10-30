@@ -98,14 +98,14 @@ There is **no** payment-transaction table and no refund-request table.
 | Customer holds rooms | `PENDING` | `UNPAID` | none |
 | SePay reports a matching transfer | `CONFIRMED` | `PAID`, with the SePay transaction id and payment time | booking payment into the hotel wallet's **pending** balance (BR-22) |
 | 15 minutes without payment | `EXPIRED` | `FAILED` | none (rooms released) |
-| Customer cancels, nothing to refund | `CANCELLED` | stays `PAID` | none (rooms released; the hotel keeps the money as the cancellation fee) |
+| Customer cancels, nothing to refund | `CANCELLED` | stays `PAID` | none (rooms released; the hotel keeps the money as the cancellation fee, settled after the holding period) |
 | Customer cancels, money to refund | stays `CONFIRMED` | `REFUND_PENDING` | none (waiting for the decision, section 7) |
 | Partner approves the refund | `CANCELLED` | `REFUNDED` or `PARTIALLY_REFUNDED` | hotel wallet debited, customer wallet credited (rooms released) |
 | Partner rejects the refund | stays `CONFIRMED` | back to `PAID` | none |
 | Staff check the guest in | `CHECKED_IN` | unchanged | none |
 | Staff check the guest out (also early) | `COMPLETED` | unchanged | commission as a pair: hotel wallet **pending** −commission, **platform wallet available** +commission (BR-13); leaving early refunds nothing (BR-09) |
 | Guest never arrives (staff from the day after check-in, or the job at the check-out time) | `NO_SHOW` | unchanged | the hotel keeps the payment (BR-20); commission as at check-out |
-| Holding period over (`WALLET_HOLD_DAYS` after check-out / no-show, default 1 day) | unchanged | unchanged | settlement as a pair on the hotel wallet: pending −net, available +net, net = payment − commission (BR-22) |
+| Holding period over (`WALLET_HOLD_DAYS` after check-out / no-show, or after a cancellation that left the hotel a fee; default 1 day) | unchanged | unchanged | settlement as a pair on the hotel wallet: pending −net, available +net, net = payment − commission − refund (BR-22) |
 
 ### 5.3 Platform wallet
 
@@ -123,6 +123,7 @@ StayReco's own money is tracked like a party of its own, so revenue is managed p
 - Commission = booking total × rate, rounded half up to whole dong, recorded once at check-out or no-show (keys `commission:<bookingId>:hotel` and `commission:<bookingId>:platform`).
 - Refunds happen only before check-in, so they never meet a commission. Should one ever correct a commission later, it is a new adjustment entry; the original entry is never edited (SRS 3.5.7).
 - **Settlement** (BR-22): `WALLET_HOLD_DAYS` after the check-out or no-show (default 1 day, an env setting until the admin screen exists), a job moves the hotel's net amount (payment − commission) from pending to available as a pair of `SETTLEMENT` transactions (keys `settlement:<bookingId>:pending` and `settlement:<bookingId>:available`). The total balance does not change; only the available part grows.
+- A **cancelled** booking that left the hotel money (the whole payment with nothing to refund, or the fee of a partial refund) is settled the same way, `WALLET_HOLD_DAYS` after the cancellation, with no commission: net = payment − refund. Example: 5,000,000 ₫ paid, 30% fee, refund 3,500,000 ₫ approved → 1,500,000 ₫ becomes available one day after the approval. A full refund leaves nothing to settle.
 - A partner withdraws at most the available balance, only to the declared beneficiary account, with one pending request per hotel at a time; platform managers process it within 2 working days (BR-22). Not built yet (phase 6).
 
 ## 6. Cancellation policy
@@ -189,7 +190,7 @@ Per BR-20, only when: the booking was already refunded or the request is a dupli
 - BR-29: nightly prices and booking totals are rounded to whole dong (the SRS says 2 decimals), so the transfer amount is exact.
 - UC27 (phase 3): bookings are confirmed automatically on payment; staff do not confirm or reject them.
 - BR-13 (phase 3): commission is also charged on no-shows, not only completed stays.
-- BR-22 (phase 3): holding period of 1 day after check-out (`WALLET_HOLD_DAYS`) until the admin setting exists.
+- BR-22 (phase 3): holding period of 1 day after check-out (`WALLET_HOLD_DAYS`) until the admin setting exists; the cancellation fee a hotel keeps is settled 1 day after the cancellation.
 
 ## 9. Not built yet, or still open
 
@@ -212,3 +213,4 @@ Per BR-20, only when: the booking was already refunded or the request is a dupli
 | 2026-10-24 | Refunds: approval debits the hotel's pending balance and credits the customer's available balance; a rejected customer may cancel again (a new request) and sees the reason on the booking |
 | 2026-10-23 | Wallets: the full amount goes to the hotel on payment (commission at check-out); a platform wallet holds StayReco's revenue; a transfer counts while the booking is still `PENDING` |
 | 2026-10-29 | Hotel operations: commission at check-out and on no-shows (whole dong, a hotel / platform pair); the hotel keeps a no-show's payment; early check-out is not refunded; settlement of the net amount from pending to available `WALLET_HOLD_DAYS` (default 1 day) after check-out or no-show, as `SETTLEMENT` transactions |
+| 2026-10-29 | Settlement also covers cancelled bookings: the money the hotel keeps as the fee becomes available `WALLET_HOLD_DAYS` after the cancellation, with no commission |

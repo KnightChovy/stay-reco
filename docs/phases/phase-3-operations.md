@@ -54,8 +54,8 @@ Already built with bookings: the hotel's bookings list (UC26, UC57) and refund r
 | O4 | No-show: staff mark it from the day after the check-in date. A job also turns a booking still `CONFIRMED` at the hotel's check-out time (12:00 when not set) on the check-out date into `NO_SHOW`. Nights from today on are released. Not while a refund request is waiting. |
 | O5 | A no-show keeps the money with the hotel (BR-20: no refund) and pays the platform commission like a completed stay. |
 | O6 | Commission is recorded at check-out or no-show: booking total × `booking.commission_rate` (the rate fixed at booking), rounded half up to whole dong, as a pair of wallet transactions: hotel wallet pending −commission, platform wallet available +commission. Keys `commission:<bookingId>:hotel` and `commission:<bookingId>:platform`. |
-| O7 | Holding period (BR-22): **1 day** after check-out or no-show, from env `WALLET_HOLD_DAYS` (default 1) until an admin setting exists. An hourly job settles due bookings. |
-| O8 | Settlement moves the hotel's net amount of the booking (payment − commission) from pending to available as a pair of `SETTLEMENT` wallet transactions on the hotel wallet (new value of `wallet_txn_type`), keys `settlement:<bookingId>:pending` and `settlement:<bookingId>:available`. |
+| O7 | Holding period (BR-22): **1 day** after check-out or no-show, from env `WALLET_HOLD_DAYS` (default 1) until an admin setting exists. An hourly job settles due bookings. A cancelled booking that left the hotel money (no refund, or the fee of a partial refund) is settled `WALLET_HOLD_DAYS` after the cancellation, with no commission (decided 2026-10-29). |
+| O8 | Settlement moves the hotel's net amount of the booking (payment − commission − refund) from pending to available as a pair of `SETTLEMENT` wallet transactions on the hotel wallet (new value of `wallet_txn_type`), keys `settlement:<bookingId>:pending` and `settlement:<bookingId>:available`. |
 | O9 | Early check-out releases the nights from today on, with no refund (BR-09: paid in full). Late check-out is allowed; the dashboard shows it as `OVERDUE_CHECKOUTS`. There is no automatic check-out. |
 | O10 | Deposits, extra charges and ID scanning are not recorded in StayReco; the check-out screen shows the amount paid and refunds only. |
 | O11 | Change requests (UC25, UC43) are stored in `audit_log` like cancel requests (no new table): at most one waiting request per booking, only while it is `CONFIRMED`. Staff with `BOOKING` or the owner accept it (the booking is updated) or reject it with a reason sent to the customer. Fields: guest name, contact phone, arrival time, special requests (never dates, room type or guests, BR-09). |
@@ -73,6 +73,8 @@ Access: check-in, check-out, no-show and room cleaned need `FRONT_DESK`; change 
 | enum `wallet_txn_type` | + `SETTLEMENT` (O8) |
 | `notification` | + `link` varchar(500) null: the app path the notification opens (`/account/bookings/<id>`, `/staff/bookings/<id>`…) (O12) |
 
+Added later (approved 2026-10-30): index `audit_log(entity_type, entity_id, created_at)` for the booking timeline and the change-request queue (migration `audit_log_entity_index`).
+
 No other table changes: check-in rooms live in `room_calendars`, events and change requests in `audit_log`, money in `wallet_transaction`.
 
 ## States
@@ -85,7 +87,8 @@ room_status:     AVAILABLE ──check-in──► OCCUPIED ──check-out─�
                  AVAILABLE / CLEANING ──lock──► MAINTENANCE ──unlock──► AVAILABLE
 room_calendars:  BOOKED rows move to the assigned rooms at check-in; nights from today on are deleted at early check-out and no-show
 hotel wallet:    payment → pending; check-out / no-show: pending −commission (platform +commission);
-                 after WALLET_HOLD_DAYS: pending −net, available +net (SETTLEMENT)
+                 after WALLET_HOLD_DAYS: pending −net, available +net (SETTLEMENT);
+                 cancelled with a fee kept: the same, WALLET_HOLD_DAYS after the cancellation, no commission
 ```
 
 ## Limits (locked for this phase)
@@ -95,7 +98,7 @@ hotel wallet:    payment → pending; check-out / no-show: pending −commission
 | Check-in | from the check-in date to the day before the check-out date |
 | No-show by staff | from the day after the check-in date |
 | Automatic no-show | the hotel's check-out time on the check-out date (12:00 when not set), job every 5 minutes |
-| Holding period | `WALLET_HOLD_DAYS`, default 1 day after check-out / no-show; settlement job every hour |
+| Holding period | `WALLET_HOLD_DAYS`, default 1 day after check-out / no-show / a cancellation that left a fee; settlement job every hour |
 | Change request | guest name ≤ 100, contact phone ≤ 20, special requests ≤ 500, reject reason ≤ 500; one waiting request per booking |
 | Notifications | list page size 1–100 (default 10) |
 
@@ -130,3 +133,4 @@ hotel wallet:    payment → pending; check-out / no-show: pending −commission
 | Date | Who | Change |
 |---|---|---|
 | 2026-10-29 | BE | Draft: decisions O1–O15, schema changes, endpoints for check-in / check-out / no-show / rooms, change requests, notifications |
+| 2026-10-29 | BE | Built check-in, check-out, room cleaned, commission and settlement; O7: the fee a hotel keeps from a cancellation is settled after the holding period too; room options follow the check-in conditions |

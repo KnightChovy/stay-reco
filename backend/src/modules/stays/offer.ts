@@ -16,6 +16,8 @@ import type { StayQuote } from '../pricing/price-engine';
 
 /** Used when the hotel has not set its check-in time (decision P4). */
 export const DEFAULT_CHECK_IN_TIME = '14:00';
+/** Used when the hotel has not set its check-out time (phase 3 contract): when unarrived guests become no-shows. */
+export const DEFAULT_CHECK_OUT_TIME = '12:00';
 
 export interface Stay {
   checkIn: string;

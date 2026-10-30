@@ -11,7 +11,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { fromTime } from '../hotels/hotel.mapper';
 import { MailService } from '../mail/mail.service';
 import { DEFAULT_CHECK_IN_TIME } from '../stays/offer';
-import { loadBookingHistory } from './booking-history';
+import { type GuestChanges, loadBookingHistory } from './booking-history';
 
 const detailsSelect = {
   bookingId: true,
@@ -37,13 +37,16 @@ const detailsSelect = {
           hotelPartner: {
             select: { userAccount: { select: { email: true } } },
           },
-          // The staff who handle refunds (slide 08), only while their account is active.
+          // The staff who handle refunds (slide 08) or bookings (change requests), only while their account is active.
           hotelStaffs: {
             where: {
-              permissions: { has: 'REFUND' },
+              permissions: { hasSome: ['REFUND', 'BOOKING'] },
               userAccount: { status: 'ACTIVE' },
             },
-            select: { userAccount: { select: { email: true } } },
+            select: {
+              permissions: true,
+              userAccount: { select: { email: true } },
+            },
           },
         },
       },
@@ -67,8 +70,9 @@ const moment = (at: Date) => {
 };
 
 /**
- * Booking emails in Vietnamese (decision P10, extended 2026-10-24): to the customer on payment, cancellation and the
- * refund decision, and to the hotel (owner, staff with REFUND) when a refund needs them. Called after the change is
+ * Booking emails in Vietnamese (decision P10, extended 2026-10-24 and in phase 3): to the customer on payment,
+ * cancellation, the refund decision and the change-request decision, and to the hotel (owner, staff with REFUND or
+ * BOOKING) when a refund or a change request needs them. Called after the change is
  * committed; sends in the background and never throws, so a mail problem cannot slow down or undo a booking change.
  */
 @Injectable()
@@ -148,7 +152,7 @@ export class BookingMailer {
         '',
         `Xem đơn: ${this.customerLink(b)}`,
       ]);
-      await this.toHotel(b, `Yêu cầu hoàn tiền mới: ${code(b)}`, [
+      await this.toHotel(b, 'REFUND', `Yêu cầu hoàn tiền mới: ${code(b)}`, [
         `Khách vừa hủy đơn ${code(b)} và có tiền cần hoàn.`,
         '',
         ...stay(b),
@@ -212,6 +216,47 @@ export class BookingMailer {
     });
   }
 
+  /** A change request for the hotel (owner, staff with BOOKING) to decide (UC43). */
+  changeRequested(bookingId: string, changes: GuestChanges) {
+    return this.safely(bookingId, async (b) => {
+      await this.toHotel(b, 'BOOKING', `Yêu cầu đổi thông tin đơn ${code(b)}`, [
+        `Khách yêu cầu đổi thông tin của đơn ${code(b)}:`,
+        ...changeLines(changes),
+        '',
+        ...stay(b),
+        '',
+        `Xử lý yêu cầu: ${this.partnerLink()}`,
+      ]);
+    });
+  }
+
+  changeAccepted(bookingId: string, changes: GuestChanges) {
+    return this.safely(bookingId, async (b) => {
+      await this.toCustomer(b, `Đơn ${code(b)} đã được cập nhật`, [
+        `Khách sạn đã chấp nhận yêu cầu đổi thông tin của đơn ${code(b)}:`,
+        ...changeLines(changes),
+        '',
+        `Xem đơn: ${this.customerLink(b)}`,
+      ]);
+    });
+  }
+
+  changeRejected(bookingId: string, reason: string) {
+    return this.safely(bookingId, async (b) => {
+      await this.toCustomer(
+        b,
+        `Yêu cầu đổi thông tin đơn ${code(b)} bị từ chối`,
+        [
+          `Khách sạn đã từ chối yêu cầu đổi thông tin của đơn ${code(b)}.`,
+          `Lý do: ${reason}`,
+          '',
+          'Đơn đặt phòng vẫn giữ thông tin cũ.',
+          `Xem đơn: ${this.customerLink(b)}`,
+        ],
+      );
+    });
+  }
+
   /** Resolves once the emails already started are sent (tests wait on it instead of guessing a delay). */
   async idle() {
     while (this.pending.size) await Promise.all([...this.pending]);
@@ -266,11 +311,18 @@ export class BookingMailer {
     });
   }
 
-  /** The owner and the active staff with REFUND, one email each. */
-  private async toHotel(b: Details, subject: string, lines: string[]) {
+  /** The owner and the active staff with `permission`, one email each. */
+  private async toHotel(
+    b: Details,
+    permission: 'REFUND' | 'BOOKING',
+    subject: string,
+    lines: string[],
+  ) {
     const emails = new Set([
       b.roomType.hotel.hotelPartner.userAccount.email,
-      ...b.roomType.hotel.hotelStaffs.map((s) => s.userAccount.email),
+      ...b.roomType.hotel.hotelStaffs
+        .filter((s) => s.permissions.includes(permission))
+        .map((s) => s.userAccount.email),
     ]);
     for (const to of emails) {
       await this.mail.send({
@@ -305,6 +357,19 @@ function stay(b: Details) {
     `Nhận phòng: ${day(checkIn)} – Trả phòng: ${day(checkOut)} (${daysBetween(checkIn, checkOut)} đêm)`,
     `Số khách: ${b.numGuests ?? b.numRooms}`,
   ];
+}
+
+/** One line per changed guest detail; a cleared value shows as "(bỏ trống)". */
+function changeLines(changes: GuestChanges) {
+  const labels: Record<keyof GuestChanges, string> = {
+    guestName: 'Tên khách',
+    contactPhone: 'Số điện thoại',
+    arrivalTime: 'Giờ đến dự kiến',
+    specialRequests: 'Yêu cầu đặc biệt',
+  };
+  return (Object.keys(labels) as (keyof GuestChanges)[])
+    .filter((field) => field in changes)
+    .map((field) => `- ${labels[field]}: ${changes[field] ?? '(bỏ trống)'}`);
 }
 
 /** The hotel check-in time on the check-in date, in Vietnam time (14:00 when not set). */

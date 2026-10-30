@@ -34,27 +34,30 @@ import { AuditAction } from '../audit/audit.service';
 import { toRoom } from '../rooms/room.mapper';
 import { byRoomNumber } from '../rooms/rooms.service';
 import { WalletLedger } from '../wallets/wallet-ledger';
-import { assertCanLookUp, assertFrontDesk } from './booking-access';
-import { loadBookingHistory, recordBookingEvent } from './booking-history';
+import {
+  assertCanLookUp,
+  assertFrontDesk,
+  bookingNotFound,
+  bookingStatusConflict,
+  hotelActor,
+  refundDecisionPending,
+} from './booking-access';
+import {
+  closePendingChange,
+  loadBookingHistory,
+  recordBookingEvent,
+} from './booking-history';
 import type { NightlyPrices } from './booking.mapper';
 import { BookingsService } from './bookings.service';
 import { chargeCommission } from './commission';
+import { NoShowService } from './no-show.service';
 import { verifyVoucher } from './voucher-token';
-
-const bookingNotFound = () =>
-  new NotFoundException({
-    code: ErrorCode.BOOKING_NOT_FOUND,
-    message: 'Booking not found',
-  });
 
 const roomNotFound = () =>
   new NotFoundException({
     code: ErrorCode.ROOM_NOT_FOUND,
     message: 'Room not found',
   });
-
-const statusConflict = (message: string) =>
-  new ConflictException({ code: ErrorCode.BOOKING_STATUS_CONFLICT, message });
 
 const notAssignable = (message: string) =>
   new ConflictException({ code: ErrorCode.ROOM_NOT_ASSIGNABLE, message });
@@ -79,7 +82,7 @@ type StayRow = Prisma.BookingGetPayload<{ select: typeof stayRowSelect }>;
 
 /**
  * The front desk (staff.md "Front desk", decisions O2–O9): finding the guest's booking by code or voucher QR, the
- * rooms it can be given, check-in, check-out and cleaned rooms. Room moves run under the room type lock that bookings and holds take, so a
+ * rooms it can be given, check-in, no-show, check-out and cleaned rooms. Room moves run under the room type lock that bookings and holds take, so a
  * room is never given to two stays for the same night (BR-10).
  */
 @Injectable()
@@ -89,6 +92,7 @@ export class FrontDeskService {
     private readonly access: HotelAccessService,
     private readonly bookings: BookingsService,
     private readonly ledger: WalletLedger,
+    private readonly noShows: NoShowService,
     private readonly config: ConfigService<Env, true>,
   ) {}
 
@@ -220,16 +224,32 @@ export class FrontDeskService {
         data: { status: 'CHECKED_IN' },
       });
       if (!checkedIn.count)
-        throw statusConflict('The booking changed meanwhile');
+        throw bookingStatusConflict('The booking changed meanwhile');
+      await closePendingChange(tx, bookingId, now);
       await recordBookingEvent(tx, {
         action: AuditAction.BOOKING_CHECKED_IN,
         bookingId,
-        actor: actorOf(user),
+        actor: hotelActor(user),
         at: now,
         value: {
           rooms: rooms.map((r) => ({ id: r.id, roomNumber: r.roomNumber })),
         },
       });
+    });
+    return this.bookings.findOne(user, bookingId);
+  }
+
+  /**
+   * Only CONFIRMED and PAID, from the day after the check-in date (O4). The booking becomes NO_SHOW, the nights from
+   * today on are released, the hotel keeps the payment and the commission is charged (O5).
+   */
+  async noShow(user: AuthUser, bookingId: string): Promise<Booking> {
+    const booking = await this.findForFrontDesk(user, bookingId);
+    assertNoShowAllowed(booking);
+    await this.prisma.$transaction(async (tx) => {
+      await lockRoomType(tx, booking.roomTypeId);
+      const marked = await this.noShows.markIn(tx, bookingId, hotelActor(user));
+      if (!marked) throw bookingStatusConflict('The booking changed meanwhile');
     });
     return this.bookings.findOne(user, bookingId);
   }
@@ -242,7 +262,9 @@ export class FrontDeskService {
   async checkOut(user: AuthUser, bookingId: string): Promise<Booking> {
     const booking = await this.findForFrontDesk(user, bookingId);
     if (booking.status !== 'CHECKED_IN') {
-      throw statusConflict(`A ${booking.status} booking cannot be checked out`);
+      throw bookingStatusConflict(
+        `A ${booking.status} booking cannot be checked out`,
+      );
     }
 
     await this.prisma.$transaction(async (tx) => {
@@ -251,7 +273,8 @@ export class FrontDeskService {
         where: { bookingId, status: 'CHECKED_IN' },
         data: { status: 'COMPLETED' },
       });
-      if (!count) throw statusConflict('The booking is no longer CHECKED_IN');
+      if (!count)
+        throw bookingStatusConflict('The booking is no longer CHECKED_IN');
       const released = remainingNights(booking);
       await tx.roomCalendars.deleteMany({
         where: { bookingId, date: { in: released.map(fromCalendarDate) } },
@@ -268,7 +291,7 @@ export class FrontDeskService {
       await recordBookingEvent(tx, {
         action: AuditAction.BOOKING_CHECKED_OUT,
         bookingId,
-        actor: actorOf(user),
+        actor: hotelActor(user),
         at: new Date(),
         value: { commission: commission.toNumber(), releasedNights: released },
       });
@@ -425,22 +448,36 @@ function remainingNights(booking: StayRow, today = todayInVietnam()) {
   return nights;
 }
 
-function assertCheckInOpen(booking: StayRow, today = todayInVietnam()) {
+/** CONFIRMED and PAID; a waiting refund request is for the owner to decide first (O2, O4). */
+function assertConfirmedAndPaid(booking: StayRow, action: string) {
   if (booking.status !== 'CONFIRMED') {
-    throw statusConflict(`A ${booking.status} booking cannot be checked in`);
-  }
-  const payment = booking.invoice!.paymentStatus;
-  if (payment === 'REFUND_PENDING') {
-    throw new ConflictException({
-      code: ErrorCode.REFUND_DECISION_PENDING,
-      message: 'A refund request waits for the hotel; decide it first',
-    });
-  }
-  if (payment !== 'PAID') {
-    throw statusConflict(
-      `A booking with a ${payment} invoice cannot be checked in`,
+    throw bookingStatusConflict(
+      `A ${booking.status} booking cannot be ${action}`,
     );
   }
+  const payment = booking.invoice!.paymentStatus;
+  if (payment === 'REFUND_PENDING') throw refundDecisionPending();
+  if (payment !== 'PAID') {
+    throw bookingStatusConflict(
+      `A booking with a ${payment} invoice cannot be ${action}`,
+    );
+  }
+}
+
+/** From the day after the check-in date (O4). */
+function assertNoShowAllowed(booking: StayRow, today = todayInVietnam()) {
+  assertConfirmedAndPaid(booking, 'marked as a no-show');
+  const from = addDays(toCalendarDate(booking.checkInDate), 1);
+  if (today < from) {
+    throw new ConflictException({
+      code: ErrorCode.NO_SHOW_NOT_ALLOWED,
+      message: `A no-show can be marked from ${from}`,
+    });
+  }
+}
+
+function assertCheckInOpen(booking: StayRow, today = todayInVietnam()) {
+  assertConfirmedAndPaid(booking, 'checked in');
   const checkIn = toCalendarDate(booking.checkInDate);
   const checkOut = toCalendarDate(booking.checkOutDate);
   if (today < checkIn || today >= checkOut) {
@@ -463,9 +500,3 @@ const toOption = (r: {
 
 const compareOptions = (a: RoomOption, b: RoomOption) =>
   byRoomNumber(a.roomNumber, b.roomNumber);
-
-/** Staff or the owning partner; the guards let no one else through. */
-const actorOf = (user: AuthUser) => ({
-  role: user.role as 'HOTEL_STAFF' | 'HOTEL_PARTNER',
-  accountId: user.accountId,
-});

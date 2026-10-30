@@ -1,9 +1,13 @@
+import { vietnamDateTime } from '../src/common/http/calendar-date';
+import { CHANGE_CLOSED_REASON } from '../src/modules/bookings/booking-history';
+import { BookingMailer } from '../src/modules/bookings/booking-mailer';
+import { NoShowService } from '../src/modules/bookings/no-show.service';
 import { SettlementService } from '../src/modules/bookings/settlement.service';
 import { PaymentConfirmationService } from '../src/modules/payments/payment-confirmation.service';
 import { PLATFORM_WALLET_ID } from '../src/modules/wallets/wallet-ledger';
 import { createTestApp } from './helpers';
 
-describe('Front desk and settlement (e2e)', () => {
+describe('Hotel operations: front desk, settlement, change requests (e2e)', () => {
   let t: Awaited<ReturnType<typeof createTestApp>>;
   let king: string;
 
@@ -554,6 +558,148 @@ describe('Front desk and settlement (e2e)', () => {
     });
   });
 
+  describe('no-show', () => {
+    const noShow = (token: string, id: string) =>
+      t.api().post(`/api/v1/bookings/${id}/no-show`).set(auth(token));
+
+    it('is marked by staff from the day after check-in: nights from today released, commission charged', async () => {
+      const h = await hotel();
+      const me = await t.signIn('CUSTOMER', 'guest@mail.test');
+      const booking = await paidBooking(me.token, h.roomTypeId);
+      await shift(booking.id, 1); // the check-in date was yesterday
+
+      const desk = await t.signInStaff(h.hotelId, 'desk@hotel.test', [
+        'FRONT_DESK',
+      ]);
+      const res = await noShow(desk.token, booking.id).expect(200);
+      expect(res.body.data).toMatchObject({
+        status: 'NO_SHOW',
+        paymentStatus: 'PAID',
+        refund: null,
+      });
+      expect(
+        (res.body.data.timeline as { event: string }[]).map((e) => e.event),
+      ).toEqual(['CREATED', 'PAID', 'NO_SHOW']);
+      expect((await nights(booking.id)).map((n) => n.date)).toEqual([day(-1)]);
+      expect((await ledger(booking.id)).slice(1)).toEqual([
+        ['COMMISSION', -160000, `commission:${booking.id}:hotel`],
+        ['COMMISSION', 160000, `commission:${booking.id}:platform`],
+      ]);
+      const audit = await t.prisma.auditLog.findFirstOrThrow({
+        where: { entityId: booking.id, action: 'BOOKING_NO_SHOW' },
+      });
+      expect(audit.hotelStaffId).toBe(desk.id);
+      expect(JSON.parse(audit.newValue!)).toEqual({
+        commission: 160000,
+        releasedNights: [day(0)],
+      });
+
+      const again = await noShow(desk.token, booking.id).expect(409);
+      expect(again.body.code).toBe('BOOKING_STATUS_CONFLICT');
+      await checkIn(desk.token, booking.id).expect(409);
+    });
+
+    it('waits for the day after check-in, a refund decision and FRONT_DESK', async () => {
+      const h = await hotel('owner@hotel.test', {
+        freeCancellationDays: null,
+        feePercent: 50,
+      });
+      const me = await t.signIn('CUSTOMER', 'guest@mail.test');
+      const today = await paidBooking(me.token, h.roomTypeId);
+      const early = await noShow(h.token, today.id).expect(409);
+      expect(early.body).toMatchObject({
+        code: 'NO_SHOW_NOT_ALLOWED',
+        message: `A no-show can be marked from ${day(1)}`,
+      });
+
+      const staff = await t.signInStaff(h.hotelId, 'booking@hotel.test', [
+        'BOOKING',
+      ]);
+      await shift(today.id, 1);
+      await noShow(staff.token, today.id).expect(403);
+
+      await t
+        .api()
+        .post(`/api/v1/bookings/${today.id}/cancel`)
+        .set(auth(me.token))
+        .send({ reason: 'Plans changed' })
+        .expect(200);
+      const pending = await noShow(h.token, today.id).expect(409);
+      expect(pending.body.code).toBe('REFUND_DECISION_PENDING');
+    });
+
+    it('is marked by the job at the check-out time on the check-out date', async () => {
+      const h = await hotel('owner@hotel.test', {
+        freeCancellationDays: null,
+        feePercent: 50,
+      });
+      const me = await t.signIn('CUSTOMER', 'guest@mail.test');
+      const away = await paidBooking(me.token, h.roomTypeId);
+      const staying = await paidBooking(me.token, h.roomTypeId);
+      const refunding = await paidBooking(me.token, h.roomTypeId);
+      await checkIn(h.token, staying.id).expect(200);
+      await t
+        .api()
+        .post(`/api/v1/bookings/${refunding.id}/cancel`)
+        .set(auth(me.token))
+        .send({ reason: 'Plans changed' })
+        .expect(200);
+      for (const b of [away, staying, refunding]) await shift(b.id, 2); // check-out date today
+
+      const job = t.app.get(NoShowService);
+      // No check-out time set: 12:00.
+      expect(await job.markDue(vietnamDateTime(day(0), '11:59'))).toBe(0);
+      expect(await job.markDue(vietnamDateTime(day(0), '12:00'))).toBe(1);
+      expect(await job.markDue(vietnamDateTime(day(0), '12:05'))).toBe(0);
+
+      const statuses = await t.prisma.booking.findMany({
+        where: { bookingId: { in: [away.id, staying.id, refunding.id] } },
+        select: { bookingId: true, status: true },
+      });
+      expect(
+        Object.fromEntries(statuses.map((b) => [b.bookingId, b.status])),
+      ).toEqual({
+        [away.id]: 'NO_SHOW',
+        [staying.id]: 'CHECKED_IN',
+        [refunding.id]: 'CONFIRMED',
+      });
+      const audit = await t.prisma.auditLog.findFirstOrThrow({
+        where: { entityId: away.id, action: 'BOOKING_NO_SHOW' },
+      });
+      expect([audit.hotelStaffId, audit.hotelPartnerId]).toEqual([null, null]);
+      // Nothing left to release on the check-out date.
+      expect(JSON.parse(audit.newValue!)).toMatchObject({ releasedNights: [] });
+    });
+
+    it('follows the hotel check-out time and marks once when staff and the job race', async () => {
+      const h = await hotel();
+      await t.prisma.hotel.update({
+        where: { hotelId: h.hotelId },
+        data: { checkOutTime: new Date('1970-01-01T10:00:00.000Z') },
+      });
+      const me = await t.signIn('CUSTOMER', 'guest@mail.test');
+      const booking = await paidBooking(me.token, h.roomTypeId);
+      await shift(booking.id, 2);
+
+      const job = t.app.get(NoShowService);
+      expect(await job.markDue(vietnamDateTime(day(0), '09:59'))).toBe(0);
+      const [byStaff, byJob] = await Promise.all([
+        noShow(h.token, booking.id),
+        job.markDue(vietnamDateTime(day(0), '10:00')),
+      ]);
+      // Exactly one of them marks it; the other finds it already NO_SHOW.
+      expect([byStaff.status, byJob]).toEqual(
+        byStaff.status === 200 ? [200, 0] : [409, 1],
+      );
+      expect(await ledger(booking.id)).toHaveLength(3);
+      expect(
+        await t.prisma.auditLog.count({
+          where: { entityId: booking.id, action: 'BOOKING_NO_SHOW' },
+        }),
+      ).toBe(1);
+    });
+  });
+
   describe('POST /bookings/:id/check-out', () => {
     it('completes the stay, sends the rooms to cleaning and charges the commission once', async () => {
       const h = await hotel();
@@ -715,6 +861,301 @@ describe('Front desk and settlement (e2e)', () => {
       expect(await balances(h.hotelId)).toEqual({
         hotel: { pending: 0, available: 1840000 },
         platform: 160000,
+      });
+    });
+
+    it('makes the money kept from a cancellation available, without commission', async () => {
+      // 30% after a 3-day free period; and non-refundable.
+      const h = await hotel('owner@hotel.test', {
+        freeCancellationDays: 3,
+        feePercent: 30,
+      });
+      const strict = await hotel('strict@hotel.test', {
+        freeCancellationDays: null,
+        feePercent: 100,
+      });
+      const me = await t.signIn('CUSTOMER', 'guest@mail.test');
+      const cancel = (id: string) =>
+        t
+          .api()
+          .post(`/api/v1/bookings/${id}/cancel`)
+          .set(auth(me.token))
+          .send({ reason: 'Plans changed' })
+          .expect(200);
+      const approve = (token: string, id: string) =>
+        t
+          .api()
+          .post(`/api/v1/bookings/${id}/approve-refund`)
+          .set(auth(token))
+          .expect(200);
+
+      const free = await paidBooking(me.token, h.roomTypeId, { from: 30 });
+      await cancel(free.id);
+      await approve(h.token, free.id); // REFUNDED: nothing kept
+      const late = await paidBooking(me.token, h.roomTypeId);
+      await cancel(late.id);
+      await approve(h.token, late.id); // PARTIALLY_REFUNDED: 600,000 kept
+      const kept = await paidBooking(me.token, strict.roomTypeId);
+      await cancel(kept.id); // cancelled at once: 2,000,000 kept
+
+      const settlement = t.app.get(SettlementService);
+      expect(await settlement.settleDue(new Date(Date.now() + 3_600_000))).toBe(
+        0,
+      );
+      const later = new Date(Date.now() + 86_400_000 + 60_000);
+      expect(await settlement.settleDue(later)).toBe(2);
+      expect(await settlement.settleDue(later)).toBe(0);
+
+      expect((await ledger(late.id)).slice(-2)).toEqual([
+        ['SETTLEMENT', -600000, `settlement:${late.id}:pending`],
+        ['SETTLEMENT', 600000, `settlement:${late.id}:available`],
+      ]);
+      expect(await ledger(free.id)).toHaveLength(3); // payment and the two refund rows
+      expect(await balances(h.hotelId)).toEqual({
+        hotel: { pending: 0, available: 600000 },
+        platform: 0,
+      });
+      expect(await balances(strict.hotelId)).toEqual({
+        hotel: { pending: 0, available: 2000000 },
+        platform: 0,
+      });
+    });
+  });
+
+  describe('change requests', () => {
+    const requestChange = (token: string, id: string, body: object) =>
+      t
+        .api()
+        .post(`/api/v1/bookings/${id}/change-request`)
+        .set(auth(token))
+        .send(body);
+    const accept = (token: string, id: string) =>
+      t.api().post(`/api/v1/bookings/${id}/accept-change`).set(auth(token));
+    const reject = (token: string, id: string, reason = 'Không đổi được') =>
+      t
+        .api()
+        .post(`/api/v1/bookings/${id}/reject-change`)
+        .set(auth(token))
+        .send({ reason });
+    const queue = async (token: string, hotelId: string) => {
+      const res = await t
+        .api()
+        .get(`/api/v1/hotels/${hotelId}/bookings?changeRequest=PENDING`)
+        .set(auth(token))
+        .expect(200);
+      return (res.body.data as { id: string }[]).map((b) => b.id);
+    };
+    const mailsTo = async () => {
+      await t.app.get(BookingMailer).idle();
+      const sent = t.outbox.map((m) => [m.to, m.subject]);
+      t.outbox.length = 0;
+      return sent;
+    };
+
+    it('keeps the changed fields, queues the request and applies it when accepted', async () => {
+      const h = await hotel();
+      const me = await t.signIn('CUSTOMER', 'guest@mail.test');
+      const booking = await paidBooking(me.token, h.roomTypeId);
+      const other = await paidBooking(me.token, h.roomTypeId);
+      const desk = await t.signInStaff(h.hotelId, 'booking@hotel.test', [
+        'BOOKING',
+      ]);
+      await t.signInStaff(h.hotelId, 'refund@hotel.test', ['REFUND']);
+      await mailsTo();
+
+      // The phone is the booking's own: only the name and the requests change.
+      const res = await requestChange(me.token, booking.id, {
+        guestName: 'Trần Văn B',
+        contactPhone: '0905123456',
+        specialRequests: 'Phòng tầng cao',
+      }).expect(200);
+      expect(res.body.data.changeRequest).toMatchObject({
+        status: 'PENDING',
+        changes: { guestName: 'Trần Văn B', specialRequests: 'Phòng tầng cao' },
+        decidedAt: null,
+        reason: null,
+      });
+      expect(res.body.data.changeRequest.changes).not.toHaveProperty(
+        'contactPhone',
+      );
+      expect(res.body.data.guestName).toBe('Nguyễn Văn A');
+      // The owner and staff with BOOKING, not the refund-only staff.
+      const subject = `Yêu cầu đổi thông tin đơn ${booking.code}`;
+      expect((await mailsTo()).sort()).toEqual([
+        ['booking@hotel.test', subject],
+        ['owner@hotel.test', subject],
+      ]);
+
+      const twice = await requestChange(me.token, booking.id, {
+        guestName: 'Lê C',
+      }).expect(409);
+      expect(twice.body.code).toBe('CHANGE_REQUEST_PENDING');
+      expect(await queue(desk.token, h.hotelId)).toEqual([booking.id]);
+      expect(await queue(h.token, h.hotelId)).not.toContain(other.id);
+
+      const accepted = await accept(desk.token, booking.id).expect(200);
+      expect(accepted.body.data).toMatchObject({
+        guestName: 'Trần Văn B',
+        specialRequests: 'Phòng tầng cao',
+        changeRequest: { status: 'ACCEPTED', reason: null },
+      });
+      expect(
+        (accepted.body.data.timeline as { event: string }[]).map(
+          (e) => e.event,
+        ),
+      ).toEqual(['CREATED', 'PAID', 'CHANGE_REQUESTED', 'CHANGE_ACCEPTED']);
+      expect(await mailsTo()).toEqual([
+        ['guest@mail.test', `Đơn ${booking.code} đã được cập nhật`],
+      ]);
+      expect(await queue(desk.token, h.hotelId)).toEqual([]);
+      const again = await accept(desk.token, booking.id).expect(409);
+      expect(again.body.code).toBe('CHANGE_REQUEST_STATUS_CONFLICT');
+    });
+
+    it('rejects with a reason, after which the customer may ask again', async () => {
+      const h = await hotel();
+      const me = await t.signIn('CUSTOMER', 'guest@mail.test');
+      const booking = await paidBooking(me.token, h.roomTypeId);
+      await requestChange(me.token, booking.id, {
+        arrivalTime: '21:00',
+      }).expect(200);
+
+      const desk = await t.signInStaff(h.hotelId, 'desk@hotel.test', [
+        'FRONT_DESK',
+      ]);
+      await reject(desk.token, booking.id).expect(403);
+      await mailsTo();
+      const res = await reject(
+        h.token,
+        booking.id,
+        'Hết phòng tầng cao',
+      ).expect(200);
+      expect(res.body.data).toMatchObject({
+        arrivalTime: null,
+        changeRequest: {
+          status: 'REJECTED',
+          changes: { arrivalTime: '21:00' },
+          reason: 'Hết phòng tầng cao',
+        },
+      });
+      expect(await mailsTo()).toEqual([
+        [
+          'guest@mail.test',
+          `Yêu cầu đổi thông tin đơn ${booking.code} bị từ chối`,
+        ],
+      ]);
+      await reject(h.token, booking.id).expect(409);
+
+      // A new request replaces the rejected one; clearing a value it already lacks is no change.
+      const empty = await requestChange(me.token, booking.id, {
+        specialRequests: null,
+      }).expect(400);
+      expect(empty.body.details).toEqual([
+        { field: 'specialRequests', message: 'same as the booking' },
+      ]);
+      const next = await requestChange(me.token, booking.id, {
+        arrivalTime: '19:00',
+      }).expect(200);
+      expect(next.body.data.changeRequest).toMatchObject({
+        status: 'PENDING',
+        changes: { arrivalTime: '19:00' },
+      });
+
+      await t.prisma.hotelPartner.update({
+        where: { hotelPartnerId: h.id },
+        data: { status: 'SUSPENDED' },
+      });
+      const suspended = await accept(h.token, booking.id).expect(403);
+      expect(suspended.body.code).toBe('PARTNER_SUSPENDED');
+    });
+
+    it('is only for the customer, a CONFIRMED booking and one request at a time', async () => {
+      const h = await hotel();
+      const me = await t.signIn('CUSTOMER', 'guest@mail.test');
+      const stranger = await t.signIn('CUSTOMER', 'other@mail.test');
+      const booking = await paidBooking(me.token, h.roomTypeId);
+
+      await requestChange(me.token, booking.id, {}).expect(400);
+      const hidden = await requestChange(stranger.token, booking.id, {
+        guestName: 'X',
+      }).expect(404);
+      expect(hidden.body.code).toBe('BOOKING_NOT_FOUND');
+      await requestChange(h.token, booking.id, { guestName: 'X' }).expect(403);
+
+      const results = await Promise.all([
+        requestChange(me.token, booking.id, { guestName: 'Lê C' }),
+        requestChange(me.token, booking.id, { guestName: 'Lê D' }),
+      ]);
+      expect(results.map((r) => r.status).sort()).toEqual([200, 409]);
+
+      // Checking in closes the waiting request: nothing is left to decide.
+      const checkedIn = await checkIn(h.token, booking.id).expect(200);
+      expect(checkedIn.body.data.changeRequest).toMatchObject({
+        status: 'REJECTED',
+        reason: CHANGE_CLOSED_REASON,
+      });
+      const events = (checkedIn.body.data.timeline as { event: string }[]).map(
+        (e) => e.event,
+      );
+      expect(events.slice(-2)).toEqual(['CHANGE_REJECTED', 'CHECKED_IN']);
+      const late = await accept(h.token, booking.id).expect(409);
+      expect(late.body.code).toBe('CHANGE_REQUEST_STATUS_CONFLICT');
+      const closed = await requestChange(me.token, booking.id, {
+        guestName: 'Lê E',
+      }).expect(409);
+      expect(closed.body.code).toBe('BOOKING_STATUS_CONFLICT');
+    });
+
+    it('waits for a refund decision and closes the request when the booking is cancelled', async () => {
+      const h = await hotel('owner@hotel.test', {
+        freeCancellationDays: null,
+        feePercent: 50,
+      });
+      const strict = await hotel('strict@hotel.test', {
+        freeCancellationDays: null,
+        feePercent: 100,
+      });
+      const me = await t.signIn('CUSTOMER', 'guest@mail.test');
+      const cancel = (id: string) =>
+        t
+          .api()
+          .post(`/api/v1/bookings/${id}/cancel`)
+          .set(auth(me.token))
+          .send({ reason: 'Plans changed' })
+          .expect(200);
+
+      // A request made before the cancel: it cannot be accepted until the owner decides the refund.
+      const refunding = await paidBooking(me.token, h.roomTypeId);
+      await requestChange(me.token, refunding.id, { guestName: 'Lê B' }).expect(
+        200,
+      );
+      await cancel(refunding.id);
+      const blocked = await accept(h.token, refunding.id).expect(409);
+      expect(blocked.body.code).toBe('REFUND_DECISION_PENDING');
+      const asked = await requestChange(me.token, refunding.id, {
+        arrivalTime: '20:00',
+      }).expect(409);
+      expect(asked.body.code).toBe('REFUND_DECISION_PENDING');
+      expect(await queue(h.token, h.hotelId)).toEqual([refunding.id]);
+      // The refund approval cancels the booking and closes the request.
+      const approved = await t
+        .api()
+        .post(`/api/v1/bookings/${refunding.id}/approve-refund`)
+        .set(auth(h.token))
+        .expect(200);
+      expect(approved.body.data.changeRequest).toMatchObject({
+        status: 'REJECTED',
+        reason: CHANGE_CLOSED_REASON,
+      });
+      expect(await queue(h.token, h.hotelId)).toEqual([]);
+
+      // Cancelled at once (nothing to refund): closed in the same step.
+      const kept = await paidBooking(me.token, strict.roomTypeId);
+      await requestChange(me.token, kept.id, { guestName: 'Lê C' }).expect(200);
+      const res = await cancel(kept.id);
+      expect(res.body.data).toMatchObject({
+        status: 'CANCELLED',
+        changeRequest: { status: 'REJECTED', reason: CHANGE_CLOSED_REASON },
       });
     });
   });
