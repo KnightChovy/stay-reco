@@ -1,10 +1,6 @@
-import {
-  Injectable,
-  Logger,
-  OnApplicationBootstrap,
-  OnModuleDestroy,
-} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { PeriodicJob } from '../../common/jobs/periodic-job';
 import type { Env } from '../../config/env';
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -20,30 +16,18 @@ const DAY = 86_400_000;
  * idempotency keys write it once even when two runs overlap.
  */
 @Injectable()
-export class SettlementService
-  implements OnApplicationBootstrap, OnModuleDestroy
-{
-  private readonly logger = new Logger('Settlement');
-  private timer?: NodeJS.Timeout;
-
+export class SettlementService extends PeriodicJob {
   constructor(
     private readonly prisma: PrismaService,
     private readonly ledger: WalletLedger,
     private readonly config: ConfigService<Env, true>,
-  ) {}
-
-  /** Tests call `settleDue` themselves instead of waiting for the timer. */
-  onApplicationBootstrap() {
-    if (this.config.get('NODE_ENV', { infer: true }) === 'test') return;
-    this.timer = setInterval(() => {
-      this.settleDue().catch((err: unknown) =>
-        this.logger.error(`Settlement failed: ${String(err)}`),
-      );
-    }, EVERY_HOUR);
+  ) {
+    super('Settlement', EVERY_HOUR, config);
   }
 
-  onModuleDestroy() {
-    clearInterval(this.timer);
+  /** Tests call `settleDue` themselves instead of waiting for the timer. */
+  protected run() {
+    return this.settleDue();
   }
 
   /** Settles the bookings whose holding period is over; resolves to the number settled. */

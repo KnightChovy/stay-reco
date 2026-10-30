@@ -1,10 +1,6 @@
-import {
-  Injectable,
-  Logger,
-  OnApplicationBootstrap,
-  OnModuleDestroy,
-} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { PeriodicJob } from '../../common/jobs/periodic-job';
 import type { Env } from '../../config/env';
 import type { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -17,29 +13,17 @@ const EVERY_MINUTE = 60_000;
  * Every step is conditional on the current status, so a payment confirmed at the same moment wins cleanly.
  */
 @Injectable()
-export class HoldExpiryService
-  implements OnApplicationBootstrap, OnModuleDestroy
-{
-  private readonly logger = new Logger('HoldExpiry');
-  private timer?: NodeJS.Timeout;
-
+export class HoldExpiryService extends PeriodicJob {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly config: ConfigService<Env, true>,
-  ) {}
-
-  /** Tests call `expireDue` themselves instead of waiting for the timer. */
-  onApplicationBootstrap() {
-    if (this.config.get('NODE_ENV', { infer: true }) === 'test') return;
-    this.timer = setInterval(() => {
-      this.expireDue().catch((err: unknown) =>
-        this.logger.error(`Expiring holds failed: ${String(err)}`),
-      );
-    }, EVERY_MINUTE);
+    config: ConfigService<Env, true>,
+  ) {
+    super('HoldExpiry', EVERY_MINUTE, config);
   }
 
-  onModuleDestroy() {
-    clearInterval(this.timer);
+  /** Tests call `expireDue` themselves instead of waiting for the timer. */
+  protected run() {
+    return this.expireDue();
   }
 
   /** Expires the due holds, of one room type when given; resolves to the number of bookings expired. */
