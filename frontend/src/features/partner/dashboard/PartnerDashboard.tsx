@@ -2,11 +2,21 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { BedDouble, Building2, ShieldCheck, UsersRound, type LucideIcon } from "lucide-react";
+import {
+  BedDouble,
+  Building2,
+  CalendarCheck,
+  ReceiptText,
+  ShieldCheck,
+  UsersRound,
+  type LucideIcon,
+} from "lucide-react";
 import type { Hotel } from "@stayreco/shared";
 import {
   useHotel,
+  useHotelBookings,
   useHotelStaff,
+  useRefundQueueCount,
   useRooms,
   useRoomTypes,
   useVerificationRequests,
@@ -22,6 +32,7 @@ import {
   usePartnerHotel,
 } from "../components";
 import { HotelSetupChecklist } from "../hotel/HotelSetupChecklist";
+import { todayInVietnam } from "../lib/dates";
 import { formatDateTime, hotelStatusLabels, verificationStatusLabels } from "../lib/labels";
 
 export default function PartnerDashboard() {
@@ -61,7 +72,8 @@ function DashboardContent({ hotelId }: { hotelId: string }) {
     <section className="grid gap-6 xl:grid-cols-[1fr_300px]">
       <div className="min-w-0 space-y-6">
         <HotelCard hotel={hotel} />
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <BookingMetrics hotelId={hotel.id} />
           <RoomMetrics hotel={hotel} />
           <StaffMetric hotelId={hotel.id} />
           <VerificationMetric hotelId={hotel.id} />
@@ -210,6 +222,40 @@ function StaffMetric({ hotelId }: { hotelId: string }) {
       href="/partner/staff"
       isLoading={staff.isLoading}
     />
+  );
+}
+
+function BookingMetrics({ hotelId }: { hotelId: string }) {
+  const today = todayInVietnam();
+  // Only `meta.total` is needed, so one row per page is enough.
+  const arrivals = useHotelBookings(hotelId, {
+    checkInFrom: today,
+    checkInTo: today,
+    status: ["CONFIRMED", "CHECKED_IN"],
+    page: 1,
+    pageSize: 1,
+  });
+  const refunds = useRefundQueueCount(hotelId);
+
+  return (
+    <>
+      <Metric
+        icon={CalendarCheck}
+        label="Nhận phòng hôm nay"
+        value={arrivals.data?.meta.total ?? 0}
+        hint="Booking đã xác nhận hoặc đã check-in"
+        href="/partner/bookings"
+        isLoading={arrivals.isLoading}
+      />
+      <Metric
+        icon={ReceiptText}
+        label="Chờ hoàn tiền"
+        value={refunds.count}
+        hint={refunds.count > 0 ? "Cần bạn duyệt hoặc từ chối" : "Không có yêu cầu nào"}
+        href="/partner/bookings"
+        isLoading={refunds.isLoading}
+      />
+    </>
   );
 }
 

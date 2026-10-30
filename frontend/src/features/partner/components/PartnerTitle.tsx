@@ -1,7 +1,10 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import {
+  NativeSelect,
+  NativeSelectOption,
+} from "@/components/ui/native-select";
 import { usePartnerHotel } from "./PartnerHotelProvider";
 
 export function PartnerTitle({
@@ -18,8 +21,6 @@ export function PartnerTitle({
       <div className="min-w-0">
         <div className="mb-2 flex items-center gap-2 text-[11px] font-medium text-muted-foreground">
           <PartnerHotelSwitcher />
-          <span aria-hidden="true">/</span>
-          <span className="text-primary">Partner Workspace</span>
         </div>
         <h1 className="max-w-4xl text-[clamp(1.6rem,2.3vw,2.15rem)] font-bold leading-[1.18] tracking-[-0.025em] text-primary">
           {title}

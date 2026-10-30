@@ -39,7 +39,7 @@
     "typescript": "~6.0.3"
   },
   "scripts": {
-    "shared:build": "npm --prefix ../packages/shared install && npm --prefix ../packages/shared run build",
+    "shared:build": "cd ../packages/shared && npm install && npm run build",
     "postinstall": "npm run shared:build",
     "prestart": "npm run shared:build",
     "start": "expo start",

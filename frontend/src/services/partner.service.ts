@@ -1,8 +1,19 @@
 import { api } from "@/lib/axios";
 import type {
   Amenity,
+  AvailabilityDay,
+  AvailabilityQuery,
   BedType,
+  Booking,
+  BookingSummary,
+  CancellationPolicyInput,
   CreateHotelInput,
+  CreatePricingRuleInput,
+  HotelBookingsQuery,
+  PricePreview,
+  PricingRule,
+  UpdateAvailabilityInput,
+  UpdatePricingRuleInput,
   CreateRoomInput,
   CreateRoomTypeInput,
   Hotel,
@@ -253,5 +264,87 @@ export async function getVerificationRequest(requestId: string) {
 /** A signed link valid for 5 minutes; ask for a new one every time. */
 export async function getVerificationDocumentLink(documentId: string) {
   const { data } = await api.get<APIResponse<VerificationFileLink>>(`/verification-documents/${documentId}/file`);
+  return data.data;
+}
+
+// ── Cancellation policy ─────────────────────────────────────
+
+/** Fixed on each booking when it is made: a change never affects existing bookings. */
+export async function setCancellationPolicy(hotelId: string, input: CancellationPolicyInput) {
+  const { data } = await api.patch<APIResponse<Hotel>>(`/hotels/${hotelId}/cancellation-policy`, input);
+  return data.data;
+}
+
+// ── Pricing rules ───────────────────────────────────────────
+
+/** Highest priority first. */
+export async function getPricingRules(hotelId: string, roomTypeId?: string) {
+  const { data } = await api.get<APIResponse<PricingRule[]>>(`/hotels/${hotelId}/pricing-rules`, {
+    params: { roomTypeId },
+  });
+  return data.data;
+}
+
+export async function createPricingRule(hotelId: string, input: CreatePricingRuleInput) {
+  const { data } = await api.post<APIResponse<PricingRule>>(`/hotels/${hotelId}/pricing-rules`, input);
+  return data.data;
+}
+
+export async function updatePricingRule(ruleId: string, input: UpdatePricingRuleInput) {
+  const { data } = await api.patch<APIResponse<PricingRule>>(`/pricing-rules/${ruleId}`, input);
+  return data.data;
+}
+
+export async function deletePricingRule(ruleId: string) {
+  await api.delete(`/pricing-rules/${ruleId}`);
+}
+
+/** Price of one night; `date` is treated as the check-in date and `bookedOn` defaults to today. */
+export async function getPricePreview(roomTypeId: string, params: { date: string; bookedOn?: string }) {
+  const { data } = await api.get<APIResponse<PricePreview>>(`/room-types/${roomTypeId}/price-preview`, { params });
+  return data.data;
+}
+
+// ── Availability calendar ──────────────────────────────────
+
+/** One entry per room type and date; at most 62 days per request. */
+export async function getAvailability(hotelId: string, params: AvailabilityQuery) {
+  const { data } = await api.get<APIResponse<AvailabilityDay[]>>(`/hotels/${hotelId}/availability`, { params });
+  return data.data;
+}
+
+/** Keeps `onSale` rooms sellable on each day of the range; booked and held nights are never touched. */
+export async function updateAvailability(hotelId: string, input: UpdateAvailabilityInput) {
+  const { data } = await api.patch<APIResponse<AvailabilityDay[]>>(`/hotels/${hotelId}/availability`, input);
+  return data.data;
+}
+
+// ── Bookings and refunds ────────────────────────────────────
+
+export type HotelBookingsParams = Partial<HotelBookingsQuery>;
+
+export async function getHotelBookings(hotelId: string, params: HotelBookingsParams) {
+  const { data } = await api.get<APIResponse<BookingSummary[]>>(`/hotels/${hotelId}/bookings`, {
+    params,
+    // Repeated filters are sent as `status=a&status=b`, not `status[]=` (api-guide §5).
+    paramsSerializer: { indexes: null },
+  });
+  return { bookings: data.data, meta: data.meta as PageMeta };
+}
+
+export async function getBooking(bookingId: string) {
+  const { data } = await api.get<APIResponse<Booking>>(`/bookings/${bookingId}`);
+  return data.data;
+}
+
+/** The booking becomes CANCELLED and the refund moves to the customer's wallet. Allowed while suspended. */
+export async function approveRefund(bookingId: string) {
+  const { data } = await api.post<APIResponse<Booking>>(`/bookings/${bookingId}/approve-refund`);
+  return data.data;
+}
+
+/** Only for the BR-20 reasons; the reason is emailed to the customer. */
+export async function rejectRefund(bookingId: string, reason: string) {
+  const { data } = await api.post<APIResponse<Booking>>(`/bookings/${bookingId}/reject-refund`, { reason });
   return data.data;
 }
