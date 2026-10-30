@@ -1,119 +1,106 @@
 'use client';
 
-import React, { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import AccountSubNav from '@/features/account/AccountSubNav';
 import AppBreadcrumb from '@/components/common/breadcrumb/AppBreadcrumb';
+import Pagination from '@/components/common/pagination/Pagination';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
-  Search,
+  AlertCircle,
+  Award,
+  Calendar,
   CheckCircle2,
   Clock,
-  QrCode,
-  Star,
-  MapPin,
-  Calendar,
-  RefreshCcw,
-  MoreVertical,
-  ShieldCheck,
-  Award,
   Headset,
-  Map,
-  ArrowUpRight,
-  FileText
+  MapPin,
+  QrCode,
+  Search,
+  ShieldCheck,
+  Star,
 } from 'lucide-react';
+import type { BookingStatus, MyBookingsQuery, PaymentStatus } from '@stayreco/shared';
+import { getApiErrorMessage } from '@/lib/api-error';
+import { useAuthStore } from '@/lib/auth-store';
+import { useMyBookings } from '@/features/booking/api/booking-queries';
+import { useDebounce } from '@/hooks/use-debounce';
+import { formatDate, formatMoney } from '@/features/stays/lib/format';
 
-type BookingTab = 'all' | 'upcoming' | 'pending' | 'completed' | 'cancelled';
+const FALLBACK_IMAGE =
+  'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=500&q=80';
+
+type BookingTab = NonNullable<MyBookingsQuery['tab']>;
+
+const STATUS_TABS: { id: BookingTab; label: string }[] = [
+  { id: 'upcoming', label: 'Sắp tới' },
+  { id: 'staying', label: 'Đang lưu trú' },
+  { id: 'completed', label: 'Đã hoàn tất' },
+  { id: 'cancelled', label: 'Đã hủy' },
+];
+
+const BOOKING_STATUS: Record<BookingStatus, string> = {
+  PENDING: 'Chờ thanh toán',
+  CONFIRMED: 'Đã xác nhận',
+  CHECKED_IN: 'Đang lưu trú',
+  COMPLETED: 'Đã hoàn tất',
+  CANCELLED: 'Đã hủy',
+  EXPIRED: 'Hết hạn giữ chỗ',
+  NO_SHOW: 'Không đến nhận phòng',
+};
+
+const PAYMENT_STATUS: Record<PaymentStatus, string> = {
+  UNPAID: 'Chưa thanh toán',
+  PAID: 'Đã thanh toán',
+  REFUND_PENDING: 'Chờ hoàn tiền',
+  PARTIALLY_REFUNDED: 'Đã hoàn một phần',
+  REFUNDED: 'Đã hoàn tiền',
+  FAILED: 'Thanh toán thất bại',
+};
+
+function tabForStatus(status: BookingStatus): BookingTab {
+  if (status === 'PENDING') return 'upcoming';
+  if (status === 'CONFIRMED') return 'upcoming';
+  if (status === 'CHECKED_IN') return 'staying';
+  if (status === 'COMPLETED' || status === 'NO_SHOW') return 'completed';
+  return 'cancelled';
+}
 
 export default function MyBookingsPage() {
+  const user = useAuthStore((state) => state.user);
   const [activeTab, setActiveTab] = useState<BookingTab>('upcoming');
   const [searchQuery, setSearchQuery] = useState('');
+  const [page, setPage] = useState(1);
+  const debouncedSearch = useDebounce(searchQuery);
 
-  const bookings = [
-    {
-      id: 'SR-261020-0842',
-      hotelName: 'An Nhiên Riverside Hotel',
-      hotelImage: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=400&q=80',
-      address: '128 Bạch Đằng, Quận Hải Châu, Đà Nẵng',
-      category: 'Boutique 4 sao',
-      roomType: 'Phòng Deluxe River View',
-      bedType: '1 Giường King',
-      guests: '2 khách lớn',
-      checkIn: '20/10/2026 (14:00)',
-      checkOut: '22/10/2026 (12:00)',
-      nights: 2,
-      originalPrice: '2.500.000 ₫',
-      finalPrice: '2.250.000 ₫',
-      status: 'upcoming',
-      statusLabel: 'Đã xác nhận',
-      paymentLabel: 'Đã thanh toán (VNPay)',
-      floorInfo: 'Tầng 6 • View sông',
-      dateCreated: '12/10/2026',
-    },
-    {
-      id: 'SR-151120-1102',
-      hotelName: 'Mộc Nhiên Eco Lodge',
-      hotelImage: 'https://images.unsplash.com/photo-1582719508461-905c673771fd?auto=format&fit=crop&w=400&q=80',
-      address: 'Thung Lũng Hoa Vàng, Đường Khe Sanh, Đà Lạt',
-      category: 'Eco Boutique Resort',
-      roomType: 'Phòng Pine Hill Suite',
-      bedType: '1 Giường Đôi Lớn',
-      guests: 'Bao gồm ăn sáng',
-      checkIn: '15/11/2026',
-      checkOut: '16/11/2026',
-      nights: 1,
-      originalPrice: '1.450.000 ₫',
-      finalPrice: '1.450.000 ₫',
-      status: 'pending',
-      statusLabel: 'Giữ chỗ tạm thời',
-      paymentLabel: 'Chờ thanh toán',
-      floorInfo: 'Đồi thông • Ban công gỗ',
-      dateCreated: 'Hôm nay, 14:15',
-    },
-    {
-      id: 'SR-020820-0419',
-      hotelName: 'Phố Hoài Heritage Villa',
-      hotelImage: 'https://images.unsplash.com/photo-1571896349842-33c89424de2d?auto=format&fit=crop&w=400&q=80',
-      address: '45 Trần Phú, Cẩm Phô, Hội An',
-      category: 'Di sản kiến trúc',
-      roomType: 'Superior Heritage Room',
-      bedType: '1 Giường Đôi',
-      guests: 'Kèm trà thảo mộc chiều',
-      checkIn: '02/08/2026',
-      checkOut: '05/08/2026',
-      nights: 3,
-      originalPrice: '3.180.000 ₫',
-      finalPrice: '3.180.000 ₫',
-      status: 'completed',
-      statusLabel: 'Đã hoàn tất kỳ nghỉ',
-      paymentLabel: 'Đã thanh toán đủ',
-      floorInfo: 'Khu phố cổ • Sân vườn',
-      dateCreated: '02/08/2026',
-    },
-  ];
+  const params = useMemo(
+    () => ({
+      tab: activeTab,
+      search: debouncedSearch.trim() || undefined,
+      page,
+      pageSize: 6,
+    }),
+    [activeTab, debouncedSearch, page],
+  );
 
-  const filteredBookings = bookings.filter((item) => {
-    const matchesTab = activeTab === 'all' || item.status === activeTab;
-    const matchesSearch =
-      item.hotelName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.id.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesTab && matchesSearch;
-  });
+  const { data, isLoading, error, refetch } = useMyBookings(params);
+  const bookings = data?.bookings ?? [];
+  const meta = data?.meta;
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#f7f9ff] font-sans antialiased text-[#202B36]">
+    <div className="flex min-h-screen flex-col bg-[#f7f9ff] font-sans text-[#202B36] antialiased">
       <Header />
 
-      <main className="flex-1 w-full bg-[#f7f9ff]">
+      <main className="w-full flex-1 bg-[#f7f9ff]">
         <AccountSubNav activeTab="bookings" />
 
-        <div className="max-w-marketplace mx-auto px-4 sm:px-6 py-6 sm:py-8 w-full">
-          
+        <div className="mx-auto w-full max-w-marketplace px-4 py-6 sm:px-6 sm:py-8">
           <AppBreadcrumb
             items={[
               { label: 'Trang chủ', href: '/' },
@@ -122,253 +109,268 @@ export default function MyBookingsPage() {
             ]}
           />
 
-          {/* PAGE TITLE */}
-          <section className="flex flex-col md:flex-row md:items-end justify-between gap-4 my-6 pb-4 border-b border-slate-200/60">
+          <section className="my-6 flex flex-col justify-between gap-4 border-b border-slate-200/60 pb-4 md:flex-row md:items-end">
             <div>
-              <span className="text-xs font-bold text-[#934a33] uppercase tracking-wider">Tài khoản • Nguyễn Minh Anh</span>
-              <h1 className="text-2xl sm:text-3xl font-bold text-[#013758] tracking-tight mt-1">Chuyến đi của tôi</h1>
-              <p className="text-xs sm:text-sm text-slate-600 mt-1 max-w-2xl">
-                Quản lý các đặt phòng, theo dõi lịch trình lưu trú và kiểm tra voucher điện tử tức thì với dịch vụ hỗ trợ độc quyền StayReco Protect.
+              <span className="text-xs font-bold uppercase tracking-wider text-[#934a33]">
+                Tài khoản • {user?.name ?? 'Khách hàng'}
+              </span>
+              <h1 className="mt-1 text-2xl font-bold tracking-tight text-[#013758] sm:text-3xl">
+                Chuyến đi của tôi
+              </h1>
+              <p className="mt-1 max-w-2xl text-xs text-slate-600 sm:text-sm">
+                Quản lý đặt phòng, theo dõi lịch trình lưu trú và mở voucher điện tử khi cần check-in.
               </p>
             </div>
 
-            <div className="flex items-center gap-3 bg-white p-3 rounded-xl shadow-xs border border-slate-200/80 shrink-0">
-              <div className="size-10 rounded-lg bg-[#EAF0F5] text-[#013758] flex items-center justify-center">
+            <div className="flex shrink-0 items-center gap-3 rounded-xl border border-slate-200/80 bg-white p-3 shadow-xs">
+              <div className="flex size-10 items-center justify-center rounded-lg bg-[#EAF0F5] text-[#013758]">
                 <Award className="size-5" />
               </div>
               <div className="text-xs">
-                <span className="text-slate-400 block">Điểm tích lũy</span>
+                <span className="block text-slate-400">Điểm tích lũy</span>
                 <span className="font-bold text-[#202B36]">1.420 điểm (Hạng Bạc)</span>
               </div>
             </div>
           </section>
 
-          {/* MAIN GRID */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-            
-            {/* LEFT COLUMN (8 cols) */}
-            <div className="lg:col-span-8 space-y-6">
-              
-              {/* SEARCH & TABS CARD */}
-              <Card className="bg-white p-4 sm:p-5 rounded-xl shadow-xs border border-slate-200/80 space-y-4">
+          <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-12">
+            <div className="space-y-6 lg:col-span-8">
+              <Card className="space-y-4 rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs sm:p-5">
                 <div className="relative w-full">
-                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-slate-400" />
+                  <Search className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
                   <input
                     type="text"
                     value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Tìm theo mã đơn (ví dụ: SR-261020-0842) hoặc tên khách sạn..."
-                    className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-[#f1f3f9] text-xs sm:text-sm text-[#202B36] placeholder:text-slate-400 outline-none focus:bg-white focus:ring-2 focus:ring-[#013758] transition-all"
+                    onChange={(event) => {
+                      setSearchQuery(event.target.value);
+                      setPage(1);
+                    }}
+                    placeholder="Tìm theo mã đơn (ví dụ: SR-261020-0842)…"
+                    className="w-full rounded-lg bg-[#f1f3f9] py-2.5 pl-10 pr-4 text-xs text-[#202B36] outline-none transition-all placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-[#013758] sm:text-sm"
                   />
                 </div>
 
                 <div className="flex items-center gap-2 overflow-x-auto pb-1">
-                  {[
-                    { id: 'all', label: 'Tất cả chuyến đi', count: 5 },
-                    { id: 'upcoming', label: 'Sắp tới', count: 1 },
-                    { id: 'pending', label: 'Chờ thanh toán', count: 1 },
-                    { id: 'completed', label: 'Đã hoàn tất', count: 3 },
-                    { id: 'cancelled', label: 'Đã hủy', count: 1 },
-                  ].map((tab) => (
+                  {STATUS_TABS.map((tab) => (
                     <button
                       key={tab.id}
-                      onClick={() => setActiveTab(tab.id as BookingTab)}
-                      className={`px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 shrink-0 ${
+                      onClick={() => {
+                        setActiveTab(tab.id);
+                        setPage(1);
+                      }}
+                      className={`shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-xs font-semibold transition-all ${
                         activeTab === tab.id
                           ? 'bg-[#234e70] text-white shadow-xs'
                           : 'bg-white text-slate-600 hover:bg-slate-100 hover:text-[#202B36]'
                       }`}
                     >
-                      <span>{tab.label}</span>
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                        activeTab === tab.id ? 'bg-white/20 text-white' : 'bg-[#f1f3f9] text-slate-500'
-                      }`}>
-                        {tab.count}
-                      </span>
+                      {tab.label}
                     </button>
                   ))}
                 </div>
               </Card>
 
-              {/* BOOKINGS LIST */}
+              {error && (
+                <Alert variant="destructive" className="bg-red-50 p-4">
+                  <AlertTitle>Không tải được chuyến đi</AlertTitle>
+                  <AlertDescription className="mt-1 flex flex-col items-start gap-3">
+                    <span>{getApiErrorMessage(error, 'Vui lòng thử lại sau.')}</span>
+                    <Button size="sm" variant="outline" onClick={() => void refetch()}>
+                      Thử lại
+                    </Button>
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {isLoading && (
+                <div className="space-y-4">
+                  {[0, 1].map((item) => (
+                    <Skeleton key={item} className="h-56 w-full rounded-xl" />
+                  ))}
+                </div>
+              )}
+
+              {!isLoading && !error && bookings.length === 0 && (
+                <Card className="rounded-xl border border-slate-200/80 bg-white p-10 text-center shadow-xs">
+                  <Calendar className="mx-auto size-9 text-slate-400" />
+                  <p className="mt-3 text-sm font-semibold text-[#202B36]">Chưa có chuyến đi nào</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {searchQuery ? 'Không tìm thấy đơn khớp mã đã nhập.' : 'Đặt phòng đầu tiên của bạn ngay hôm nay.'}
+                  </p>
+                  <Link href="/search">
+                    <Button className="mt-4 bg-[#013758] text-white">Tìm chỗ nghỉ</Button>
+                  </Link>
+                </Card>
+              )}
+
               <div className="space-y-4">
-                {filteredBookings.map((item) => (
-                  <Card key={item.id} className="bg-white rounded-xl shadow-xs overflow-hidden border border-slate-200/80 hover:shadow-md transition-all">
-                    
-                    {/* Header bar */}
-                    <div className="bg-[#EAF0F5]/60 px-5 py-3 flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/60 text-xs">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-bold text-[#013758]">Mã đặt phòng: {item.id}</span>
-                        <span className="text-slate-400">•</span>
-                        <span className="text-slate-500">Đặt ngày {item.dateCreated}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {item.status === 'upcoming' && (
-                          <>
-                            <Badge className="bg-[#EDF4EE] text-[#35624A] hover:bg-[#EDF4EE] border-none font-semibold text-[11px] gap-1">
-                              <CheckCircle2 className="size-3" /> {item.statusLabel}
-                            </Badge>
-                            <Badge className="bg-[#EAF0F5] text-[#013758] hover:bg-[#EAF0F5] border-none font-semibold text-[11px]">
-                              {item.paymentLabel}
-                            </Badge>
-                          </>
-                        )}
-                        {item.status === 'pending' && (
-                          <Badge className="bg-[#FBF2E3] text-[#865D23] hover:bg-[#FBF2E3] border-none font-semibold text-[11px] gap-1">
-                            <Clock className="size-3" /> {item.statusLabel}
+                {bookings.map((booking) => {
+                  const tab = tabForStatus(booking.status);
+                  const isUpcoming = tab === 'upcoming';
+                  const isPending = booking.status === 'PENDING';
+                  return (
+                    <Card
+                      key={booking.id}
+                      className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs transition-all hover:shadow-md"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/60 bg-[#EAF0F5]/60 px-5 py-3 text-xs">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-bold text-[#013758]">Mã đặt phòng: {booking.code}</span>
+                          <span className="text-slate-400">•</span>
+                          <span className="text-slate-500">
+                            Đặt ngày {formatDate(booking.createdAt.slice(0, 10))}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge className="gap-1 border-none bg-slate-100 text-[11px] font-semibold text-slate-700">
+                            {isPending ? <Clock className="size-3" /> : <CheckCircle2 className="size-3" />}
+                            {BOOKING_STATUS[booking.status]}
                           </Badge>
-                        )}
-                        {item.status === 'completed' && (
-                          <Badge className="bg-slate-100 text-slate-700 hover:bg-slate-100 border-none font-semibold text-[11px] gap-1">
-                            <CheckCircle2 className="size-3" /> {item.statusLabel}
+                          <Badge className="border-none bg-[#EAF0F5] text-[11px] font-semibold text-[#013758]">
+                            {PAYMENT_STATUS[booking.paymentStatus]}
                           </Badge>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Card Content */}
-                    <div className="p-5 flex flex-col md:flex-row gap-5">
-                      <div className="relative w-full md:w-52 h-40 md:h-auto rounded-lg overflow-hidden shrink-0 bg-slate-100">
-                        <Image
-                          src={item.hotelImage}
-                          alt={item.hotelName}
-                          fill
-                          className="object-cover"
-                        />
-                        <span className="absolute bottom-2 left-2 bg-white/90 px-2 py-0.5 rounded text-[10px] font-semibold text-[#202B36] shadow-xs">
-                          {item.floorInfo}
-                        </span>
+                        </div>
                       </div>
 
-                      <div className="flex flex-col justify-between flex-1 min-w-0 space-y-3">
-                        <div className="space-y-1.5">
-                          <div className="flex items-center gap-2 text-xs">
-                            <span className="font-bold text-[#934a33] uppercase">{item.category}</span>
-                            <span className="text-slate-400">•</span>
-                            <span className="text-slate-500 truncate flex items-center gap-1">
-                              <MapPin className="size-3 text-slate-400" /> {item.address}
-                            </span>
-                          </div>
-
-                          <h3 className="text-lg font-bold text-[#202B36] tracking-tight">{item.hotelName}</h3>
-                          <p className="text-xs text-slate-600">
-                            <strong>{item.roomType}</strong> • {item.bedType} • {item.guests}
-                          </p>
-
-                          <div className="p-2.5 bg-[#f1f3f9] rounded-lg text-xs flex items-center justify-between text-[#202B36]">
-                            <div className="flex items-center gap-1.5">
-                              <Calendar className="size-4 text-[#013758]" />
-                              <span><strong>Nhận:</strong> {item.checkIn}</span>
-                            </div>
-                            <span>→</span>
-                            <div>
-                              <span><strong>Trả:</strong> {item.checkOut}</span>
-                              <span className="text-slate-500 ml-1">({item.nights} đêm)</span>
-                            </div>
-                          </div>
+                      <div className="flex flex-col gap-5 p-5 md:flex-row">
+                        <div className="relative h-40 w-full shrink-0 overflow-hidden rounded-lg bg-slate-100 md:h-auto md:w-52">
+                          <Image
+                            src={booking.hotel.coverImageUrl ?? FALLBACK_IMAGE}
+                            alt={booking.hotel.name}
+                            fill
+                            className="object-cover"
+                          />
+                          <span className="absolute bottom-2 left-2 rounded bg-white/90 px-2 py-0.5 text-[10px] font-semibold text-[#202B36] shadow-xs">
+                            {booking.rooms} phòng
+                          </span>
                         </div>
 
-                        {/* Footer Price & Buttons */}
-                        <div className="flex flex-col sm:flex-row items-start sm:items-end justify-between gap-3 pt-2">
-                          <div>
-                            <span className="text-xl font-bold text-[#013758] block">{item.finalPrice}</span>
-                            <span className="text-[11px] text-slate-400">Đã bao gồm thuế & phí dịch vụ</span>
+                        <div className="flex min-w-0 flex-1 flex-col justify-between gap-3">
+                          <div className="space-y-1.5">
+                            <span className="flex items-center gap-1 truncate text-xs text-slate-500">
+                              <MapPin className="size-3 text-slate-400" /> {booking.hotel.city}
+                            </span>
+                            <h3 className="text-lg font-bold tracking-tight text-[#202B36]">
+                              {booking.hotel.name}
+                            </h3>
+                            <p className="text-xs text-slate-600">
+                              <strong>{booking.roomType.name}</strong> • {booking.guests} khách
+                            </p>
+
+                            <div className="flex items-center justify-between rounded-lg bg-[#f1f3f9] p-2.5 text-xs text-[#202B36]">
+                              <div className="flex items-center gap-1.5">
+                                <Calendar className="size-4 text-[#013758]" />
+                                <span>
+                                  <strong>Nhận:</strong> {formatDate(booking.checkIn)}
+                                </span>
+                              </div>
+                              <span>→</span>
+                              <div>
+                                <span>
+                                  <strong>Trả:</strong> {formatDate(booking.checkOut)}
+                                </span>
+                                <span className="ml-1 text-slate-500">({booking.nights} đêm)</span>
+                              </div>
+                            </div>
                           </div>
 
-                          <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap">
-                            {item.status === 'upcoming' && (
-                              <>
-                                <Link href="/booking/confirmation">
-                                  <Button className="h-9 px-4 bg-[#013758] hover:bg-[#193B56] text-white text-xs font-bold gap-1.5 shadow-xs">
-                                    <QrCode className="size-4" />
-                                    <span>Xem voucher & Check-in</span>
-                                  </Button>
-                                </Link>
-                                <Link href={`/account/bookings/${item.id}`}>
-                                  <Button variant="outline" className="h-9 px-3 text-xs font-semibold border-slate-300">
-                                    Chi tiết
-                                  </Button>
-                                </Link>
-                              </>
-                            )}
+                          <div className="flex flex-col items-start justify-between gap-3 pt-2 sm:flex-row sm:items-end">
+                            <div>
+                              <span className="block text-xl font-bold text-[#013758]">
+                                {formatMoney(booking.totalAmount)}
+                              </span>
+                              <span className="text-[11px] text-slate-400">Đã bao gồm thuế &amp; phí dịch vụ</span>
+                            </div>
 
-                            {item.status === 'pending' && (
-                              <Link href="/booking/payment">
-                                <Button className="h-9 px-4 bg-[#013758] hover:bg-[#193B56] text-white text-xs font-bold gap-1.5 shadow-xs">
-                                  <span>Thanh toán ngay</span>
+                            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+                              {isPending ? (
+                                <Link href={`/booking/payment?id=${booking.id}`}>
+                                  <Button className="h-9 gap-1.5 bg-[#013758] px-4 text-xs font-bold text-white hover:bg-[#193B56]">
+                                    Thanh toán ngay
+                                  </Button>
+                                </Link>
+                              ) : (
+                                <>
+                                  {isUpcoming && (
+                                    <Link href={`/booking/confirmation?id=${booking.id}`}>
+                                      <Button className="h-9 gap-1.5 bg-[#013758] px-4 text-xs font-bold text-white hover:bg-[#193B56]">
+                                        <QrCode className="size-4" />
+                                        <span>Xem voucher</span>
+                                      </Button>
+                                    </Link>
+                                  )}
+                                  {booking.status === 'COMPLETED' && (
+                                    <Link href={`/account/bookings/${booking.id}/review`}>
+                                      <Button
+                                        variant="outline"
+                                        className="h-9 gap-1.5 border-[#934a33] px-3 text-xs font-semibold text-[#934a33] hover:bg-[#F5EBE5]"
+                                      >
+                                        <Star className="size-3.5 fill-[#934a33]" />
+                                        <span>Viết đánh giá</span>
+                                      </Button>
+                                    </Link>
+                                  )}
+                                </>
+                              )}
+                              <Link href={`/account/bookings/${booking.id}`}>
+                                <Button
+                                  variant="outline"
+                                  className="h-9 border-slate-300 px-3 text-xs font-semibold"
+                                >
+                                  Chi tiết
                                 </Button>
                               </Link>
-                            )}
-
-                            {item.status === 'completed' && (
-                              <>
-                                <Button variant="outline" className="h-9 px-3 text-xs font-semibold border-[#934a33] text-[#934a33] hover:bg-[#F5EBE5] gap-1.5">
-                                  <Star className="size-3.5 fill-[#934a33]" />
-                                  <span>Viết đánh giá (+50 điểm)</span>
-                                </Button>
-                                <Link href="/booking">
-                                  <Button variant="ghost" className="h-9 px-3 text-xs font-semibold text-slate-600 hover:text-[#013758] gap-1">
-                                    <RefreshCcw className="size-3.5" />
-                                    <span>Đặt lại</span>
-                                  </Button>
-                                </Link>
-                              </>
-                            )}
+                            </div>
                           </div>
                         </div>
-
                       </div>
-                    </div>
-
-                  </Card>
-                ))}
+                    </Card>
+                  );
+                })}
               </div>
 
-            </div>
-
-            {/* RIGHT COLUMN: Sidebar (4 cols sticky) */}
-            <div className="lg:col-span-4 lg:sticky lg:top-24 space-y-6">
-              
-              <Card className="bg-white rounded-xl p-5 shadow-xs border border-slate-200/80 space-y-3">
-                <div className="flex items-center gap-3">
-                  <div className="size-10 rounded-lg bg-[#EDF4EE] text-[#35624A] flex items-center justify-center">
-                    <ShieldCheck className="size-6" />
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-bold text-[#202B36]">StayReco Protect</h4>
-                    <span className="text-xs text-[#35624A] font-semibold">Bảo vệ quyền lợi 100%</span>
-                  </div>
-                </div>
-                <p className="text-xs text-slate-600 leading-relaxed">
-                  Mọi đặt phòng đều được bảo vệ toàn diện: Miễn phí hỗ trợ dời ngày khi có lý do chính đáng, xác nhận phòng tức thì, và đường dây nóng ưu tiên.
-                </p>
+              {meta && meta.totalPages > 1 && (
                 <div className="pt-2">
-                  <Button variant="outline" className="w-full h-10 border-slate-300 text-xs font-bold text-[#013758] gap-2">
-                    <Headset className="size-4" />
-                    <span>Gọi tổng đài hỗ trợ: 1900 8899</span>
-                  </Button>
+                  <Pagination currentPage={meta.page} totalPages={meta.totalPages} onPageChange={setPage} />
+                </div>
+              )}
+            </div>
+
+            <aside className="space-y-6 lg:sticky lg:top-24 lg:col-span-4">
+              <Card className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-xs">
+                <h3 className="flex items-center gap-2 text-sm font-bold text-[#202B36]">
+                  <ShieldCheck className="size-4 text-[#35624A]" /> StayReco Protect
+                </h3>
+                <p className="mt-2 text-xs leading-relaxed text-slate-500">
+                  Hỗ trợ 24/7, hoàn tiền theo chính sách hủy của khách sạn và voucher điện tử xác thực.
+                </p>
+                <div className="mt-4 space-y-2 border-t border-slate-100 pt-3 text-xs text-slate-600">
+                  <p className="flex items-center gap-2">
+                    <CheckCircle2 className="size-3.5 text-[#35624A]" /> Thanh toán an toàn qua SePay
+                  </p>
+                  <p className="flex items-center gap-2">
+                    <CheckCircle2 className="size-3.5 text-[#35624A]" /> Xác nhận tự động trong vài giây
+                  </p>
+                  <p className="flex items-center gap-2">
+                    <CheckCircle2 className="size-3.5 text-[#35624A]" /> Voucher QR chống làm giả
+                  </p>
                 </div>
               </Card>
 
-              {/* Guidelines */}
-              <Card className="bg-white rounded-xl p-5 shadow-xs border border-slate-200/80 space-y-3">
-                <h4 className="text-sm font-bold text-[#202B36]">Lưu ý nhận phòng (Check-in)</h4>
-                <ul className="space-y-2.5 text-xs text-slate-600">
-                  <li className="flex items-start gap-2">
-                    <span className="text-[#934a33] font-bold">•</span>
-                    <span>Xuất trình CCCD / Hộ chiếu bản gốc của người đại diện đặt phòng tại quầy lễ tân.</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-[#934a33] font-bold">•</span>
-                    <span>Sử dụng mã QR Voucher điện tử trên ứng dụng StayReco để thủ tục nhanh gọn dưới 2 phút.</span>
-                  </li>
-                </ul>
+              <Card className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-xs">
+                <h3 className="flex items-center gap-2 text-sm font-bold text-[#202B36]">
+                  <Headset className="size-4 text-[#934a33]" /> Cần hỗ trợ?
+                </h3>
+                <p className="mt-2 text-xs text-slate-500">
+                  Liên hệ StayReco nếu bạn cần thay đổi thông tin khách hoặc hủy đặt phòng.
+                </p>
+                <div className="mt-3 flex items-center gap-2 rounded-lg bg-[#F5EBE5] p-3 text-xs text-[#783520]">
+                  <AlertCircle className="size-4 shrink-0" />
+                  <span>Hotline 1900 6868 · 8:00 – 22:00</span>
+                </div>
               </Card>
-
-            </div>
-
+            </aside>
           </div>
-
         </div>
       </main>
 
