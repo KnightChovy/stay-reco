@@ -406,6 +406,8 @@ model AuditLog {
   admin             Admin?           @relation(fields: [adminId], references: [adminId])
   platformManager   PlatformManager? @relation(fields: [platformManagerId], references: [platformManagerId])
 
+  // The history of one entity in order (booking timeline, change-request queue).
+  @@index([entityType, entityId, createdAt])
   @@map("audit_log")
 }
 
