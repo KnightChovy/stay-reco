@@ -53,7 +53,7 @@ export class NotificationsService {
     });
   }
 
-  /** Newest first; `unread=true` keeps only the unread ones, `false` or nothing lists all. */
+  /** Newest first; `unread=true` keeps only the unread ones (`false` or nothing lists all); `type` keeps those kinds. */
   async list(
     accountId: string,
     query: NotificationListQuery,
@@ -61,6 +61,7 @@ export class NotificationsService {
     const where = {
       userAccountId: accountId,
       ...(query.unread && { isRead: false }),
+      ...(query.type && { type: { in: query.type } }),
     } satisfies Prisma.NotificationWhereInput;
     const [rows, total] = await Promise.all([
       this.prisma.notification.findMany({
