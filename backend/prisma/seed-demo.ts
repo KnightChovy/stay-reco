@@ -15,6 +15,7 @@ import {
 } from '../src/common/http/calendar-date';
 import { FieldCipher } from '../src/common/crypto/field-cipher';
 import {
+  type BookingStatus,
   Prisma,
   type PrismaClient,
   StaffPermission,
@@ -24,6 +25,7 @@ import { AuditAction } from '../src/modules/audit/audit.service';
 import { newBookingCode } from '../src/modules/bookings/booking-code';
 import { recordBookingEvent } from '../src/modules/bookings/booking-history';
 import { cancellationAmounts } from '../src/modules/bookings/cancellation';
+import { commissionOf } from '../src/modules/bookings/commission';
 import {
   cancellationPolicyOf,
   cancellationRowsSelect,
@@ -31,12 +33,17 @@ import {
   toCancellationRows,
 } from '../src/modules/hotels/hotel.mapper';
 import { basePriceRow, basePriceWhere } from '../src/modules/rooms/room.mapper';
+import { byRoomNumber } from '../src/modules/rooms/rooms.service';
 import {
   DEFAULT_CHECK_IN_TIME,
+  DEFAULT_CHECK_OUT_TIME,
   freeCancellationUntil,
 } from '../src/modules/stays/offer';
 import { toSnapshotRows } from '../src/modules/verification/verification.mapper';
-import { WalletLedger } from '../src/modules/wallets/wallet-ledger';
+import {
+  PLATFORM_WALLET_ID,
+  WalletLedger,
+} from '../src/modules/wallets/wallet-ledger';
 
 /**
  * Demo data for the search and booking work and for FE integration: three ACTIVE hotels in Đà Nẵng, Hà Nội and
@@ -1423,6 +1430,8 @@ const HISTORY_PAST_DAYS = 150;
 const HISTORY_AHEAD_DAYS = 45;
 /** The demo hotels' rooms exist from this many days ago, before the oldest history booking. */
 const ROOMS_SINCE_DAYS = 180;
+/** Share of past stays whose guest never arrived. */
+const NO_SHOW_SHARE = 0.03;
 
 /** Guests of the history bookings, apart from customer@stayreco.local so its trips stay readable. */
 const HISTORY_GUESTS: [email: string, fullName: string, phone: string][] = [
@@ -1514,12 +1523,23 @@ async function seedDashboardHistory(
     ? 0
     : await createHistory(prisma, guests, today, now);
 
-  await alignDemoLedger(prisma, hotelNames, [
+  const customerEmails = [
     DEMO_CUSTOMER.email,
     ...HISTORY_GUESTS.map(([email]) => email),
-  ]);
+  ];
+  const operations = await runDemoOperations(
+    prisma,
+    hotelNames,
+    customerEmails,
+    now,
+  );
+  await alignDemoLedger(prisma, hotelNames, customerEmails);
   console.log(
     `Dashboard history: +${created} bookings in ${HISTORY_HOTELS.length} hotels, check-ins ${addDays(today, -HISTORY_PAST_DAYS)} to ${addDays(today, HISTORY_AHEAD_DAYS)}`,
+  );
+  console.log(
+    `Hotel operations: ${operations.checkedIn} checked in, ${operations.closed} checked out or no-show, ` +
+      `${operations.commissions} commissions, ${operations.settlements} settlements`,
   );
 }
 
@@ -1530,6 +1550,8 @@ async function createHistory(
   now: Date,
 ): Promise<number> {
   const random = randomOf(20261028);
+  // Its own sequence, so adding no-shows did not change the rest of the history.
+  const noShows = randomOf(20261030);
   const from = addDays(today, -HISTORY_PAST_DAYS);
   const to = addDays(today, HISTORY_AHEAD_DAYS);
   const ledger = new WalletLedger();
@@ -1656,15 +1678,17 @@ async function createHistory(
             checkInTime ?? DEFAULT_CHECK_IN_TIME,
           );
           const cancelBefore = Math.min(now.getTime(), checkInAt.getTime());
-          // Stays that ended before today are completed; today's departures and guests in house stay confirmed,
-          // as there is no check-out yet.
+          // Stays that ended before today are completed, a few never arrived; guests in house and today's departures
+          // are checked in by runDemoOperations, from the confirmed bookings.
           const past = checkOut < today;
           const cancelled =
             random() < (past ? 0.07 : 0.06) &&
             cancelBefore - paidAt.getTime() > HOUR_MS;
 
-          let status: 'COMPLETED' | 'CONFIRMED' | 'CANCELLED' = past
-            ? 'COMPLETED'
+          let status: 'COMPLETED' | 'NO_SHOW' | 'CONFIRMED' | 'CANCELLED' = past
+            ? noShows() < NO_SHOW_SHARE
+              ? 'NO_SHOW'
+              : 'COMPLETED'
             : 'CONFIRMED';
           let paymentStatus: 'PAID' | 'REFUNDED' | 'PARTIALLY_REFUNDED' =
             'PAID';
@@ -1830,9 +1854,10 @@ async function createHistory(
 
 /**
  * The ledger rows of the demo bookings are dated at the payment or the refund approval (the ledger stamps them with
- * the seed time), then the running `balance_after` and the balances of the demo wallets are recomputed. Until
- * check-out moves money from pending to available, a hotel wallet holds everything in pending and a customer wallet
- * in available; wallets with other kinds of rows are left alone.
+ * the seed time), then the running `balance_after` and the balances of the demo wallets and of the platform wallet are
+ * recomputed from their rows (money-rules §5): a hotel wallet's rows move its pending balance, except the available
+ * leg of a settlement; customer and platform wallets only have an available balance. Wallets with payouts, top-ups
+ * or adjustments are left alone.
  */
 async function alignDemoLedger(
   prisma: PrismaClient,
@@ -1855,10 +1880,10 @@ async function alignDemoLedger(
     SELECT w.wallet_id FROM wallet w
     LEFT JOIN hotel h ON h.hotel_id = w.hotel_id
     LEFT JOIN user_account u ON u.user_account_id = w.customer_id
-    WHERE (h.name = ANY(${hotelNames}) OR u.email = ANY(${customerEmails}))
+    WHERE (h.name = ANY(${hotelNames}) OR u.email = ANY(${customerEmails}) OR w.wallet_id = ${PLATFORM_WALLET_ID}::uuid)
       AND NOT EXISTS (
         SELECT 1 FROM wallet_transaction x
-        WHERE x.wallet_id = w.wallet_id AND x.type NOT IN ('BOOKING_PAYMENT', 'REFUND')
+        WHERE x.wallet_id = w.wallet_id AND x.type IN ('PAYOUT', 'TOPUP', 'ADJUSTMENT')
       )`;
   const ids = wallets.map((w) => w.wallet_id);
   if (!ids.length) return;
@@ -1871,9 +1896,324 @@ async function alignDemoLedger(
     ) s
     WHERE wt.wallet_transaction_id = s.wallet_transaction_id`;
   await prisma.$executeRaw`
-    UPDATE wallet w SET
-      balance_pending = CASE WHEN w.owner_type = 'HOTEL' THEN t.total ELSE w.balance_pending END,
-      balance_available = CASE WHEN w.owner_type = 'CUSTOMER' THEN t.total ELSE w.balance_available END
-    FROM (SELECT wallet_id, sum(amount) AS total FROM wallet_transaction GROUP BY wallet_id) t
+    UPDATE wallet w SET balance_pending = t.pending, balance_available = t.available
+    FROM (
+      SELECT x.wallet_id,
+        coalesce(sum(x.amount) FILTER (WHERE x.pending), 0) AS pending,
+        coalesce(sum(x.amount) FILTER (WHERE NOT x.pending), 0) AS available
+      FROM (
+        SELECT wt.wallet_id, wt.amount,
+          ow.owner_type = 'HOTEL'
+            AND NOT (wt.type = 'SETTLEMENT' AND wt.idempotency_key LIKE '%:available') AS pending
+        FROM wallet_transaction wt JOIN wallet ow ON ow.wallet_id = wt.wallet_id
+      ) x
+      GROUP BY x.wallet_id
+    ) t
     WHERE t.wallet_id = w.wallet_id AND w.wallet_id = ANY(${ids}::uuid[])`;
+}
+
+const operationsSelect = {
+  bookingId: true,
+  status: true,
+  checkInDate: true,
+  checkOutDate: true,
+  arrivalTime: true,
+  totalAmount: true,
+  commissionRate: true,
+  cancelledAt: true,
+  invoice: {
+    select: { invoiceNumber: true, paymentStatus: true, paidAt: true },
+  },
+  roomType: {
+    select: {
+      hotel: {
+        select: {
+          hotelPartnerId: true,
+          checkInTime: true,
+          checkOutTime: true,
+        },
+      },
+    },
+  },
+  roomCalendars: {
+    select: { room: { select: { roomId: true, roomNumber: true } } },
+  },
+  walletTransactions: {
+    select: { walletId: true, type: true, amount: true, createdAt: true },
+  },
+} satisfies Prisma.BookingSelect;
+
+/**
+ * What the front desk and the jobs would have done to the demo bookings by now (hotel operations): confirmed stays
+ * that have started are checked in (rooms OCCUPIED), finished ones checked out (a few never arrived), each with its
+ * history, commission and, after the holding period, settlement; cancelled bookings that left the hotel a fee are
+ * settled too. Runs on every seed, so a database seeded earlier and the days passed since are brought up to date;
+ * each step only touches the bookings that still need it, and only bookings of the demo customers.
+ */
+async function runDemoOperations(
+  prisma: PrismaClient,
+  hotelNames: string[],
+  customerEmails: string[],
+  now: Date,
+) {
+  const today = todayInVietnam(now);
+  const holdMs = Number(process.env.WALLET_HOLD_DAYS || 1) * DAY_MS;
+  const rows = await prisma.booking.findMany({
+    where: {
+      roomType: { hotel: { name: { in: hotelNames } } },
+      customer: { userAccount: { email: { in: customerEmails } } },
+      status: {
+        in: ['CONFIRMED', 'CHECKED_IN', 'COMPLETED', 'NO_SHOW', 'CANCELLED'],
+      },
+    },
+    select: operationsSelect,
+  });
+  const recorded = await prisma.auditLog.findMany({
+    where: {
+      entityType: 'booking',
+      entityId: { in: rows.map((b) => b.bookingId) },
+      action: {
+        in: [
+          AuditAction.BOOKING_CHECKED_IN,
+          AuditAction.BOOKING_CHECKED_OUT,
+          AuditAction.BOOKING_NO_SHOW,
+        ],
+      },
+    },
+    select: { entityId: true, action: true },
+  });
+  const has = new Set(recorded.map((r) => `${r.entityId}|${r.action}`));
+
+  const statuses = new Map<
+    string,
+    { from: BookingStatus; to: 'CHECKED_IN' | 'COMPLETED' | 'NO_SHOW' }
+  >();
+  const events: Prisma.AuditLogCreateManyInput[] = [];
+  const entries: Prisma.WalletTransactionCreateManyInput[] = [];
+  const counts = { checkedIn: 0, closed: 0, commissions: 0, settlements: 0 };
+
+  for (const b of rows) {
+    const checkIn = toCalendarDate(b.checkInDate);
+    const checkOut = toCalendarDate(b.checkOutDate);
+    const hotel = b.roomType.hotel;
+    const paid = b.invoice?.paymentStatus === 'PAID';
+    let status = b.status;
+
+    // A confirmed stay that has started: checked in, or over (a few never arrived; the job marks no-shows).
+    if (status === 'CONFIRMED' && paid && checkIn < today) {
+      status =
+        checkOut >= today
+          ? 'CHECKED_IN'
+          : parseInt(b.bookingId.slice(0, 8), 16) % 100 < NO_SHOW_SHARE * 100
+            ? 'NO_SHOW'
+            : 'COMPLETED';
+    }
+    if (status === 'CHECKED_IN' && checkOut < today) status = 'COMPLETED';
+    if (status !== b.status) {
+      statuses.set(b.bookingId, {
+        from: b.status,
+        to: status as 'CHECKED_IN' | 'COMPLETED' | 'NO_SHOW',
+      });
+    }
+
+    const actor = { hotelPartnerId: hotel.hotelPartnerId };
+    const event = (
+      action: AuditAction,
+      at: Date,
+      value: Record<string, unknown>,
+      by: object = actor,
+    ) => {
+      if (has.has(`${b.bookingId}|${action}`)) return;
+      events.push({
+        action,
+        ...by,
+        entityType: 'booking',
+        entityId: b.bookingId,
+        newValue: JSON.stringify(value),
+        createdAt: at,
+      });
+    };
+
+    // Check-in at the arrival time (or the hotel's check-in time), never before the payment.
+    if (status === 'CHECKED_IN' || status === 'COMPLETED') {
+      const rooms = [
+        ...new Map(
+          b.roomCalendars.map((c) => [
+            c.room.roomId,
+            { id: c.room.roomId, roomNumber: c.room.roomNumber },
+          ]),
+        ).values(),
+      ].sort((x, y) => byRoomNumber(x.roomNumber, y.roomNumber));
+      const arrival = vietnamDateTime(
+        checkIn,
+        fromTime(b.arrivalTime) ??
+          fromTime(hotel.checkInTime) ??
+          DEFAULT_CHECK_IN_TIME,
+      );
+      const afterPayment = (b.invoice?.paidAt?.getTime() ?? 0) + HOUR_MS / 2;
+      if (!has.has(`${b.bookingId}|${AuditAction.BOOKING_CHECKED_IN}`)) {
+        counts.checkedIn++;
+      }
+      event(
+        AuditAction.BOOKING_CHECKED_IN,
+        new Date(Math.max(arrival.getTime(), afterPayment)),
+        { rooms },
+      );
+    }
+
+    // Check-out at 11:00, a no-show at the check-out time; both charge the commission then.
+    const closedAt =
+      status === 'COMPLETED'
+        ? vietnamDateTime(checkOut, '11:00')
+        : status === 'NO_SHOW'
+          ? vietnamDateTime(
+              checkOut,
+              fromTime(hotel.checkOutTime) ?? DEFAULT_CHECK_OUT_TIME,
+            )
+          : null;
+    const payment = b.walletTransactions.find(
+      (t) => t.type === 'BOOKING_PAYMENT',
+    );
+    let commissionAt = b.walletTransactions.find(
+      (t) => t.type === 'COMMISSION',
+    )?.createdAt;
+    if (closedAt && payment) {
+      const commission = commissionOf(b.totalAmount, b.commissionRate);
+      const action =
+        status === 'COMPLETED'
+          ? AuditAction.BOOKING_CHECKED_OUT
+          : AuditAction.BOOKING_NO_SHOW;
+      if (!has.has(`${b.bookingId}|${action}`)) counts.closed++;
+      event(
+        action,
+        closedAt,
+        { commission: commission.toNumber(), releasedNights: [] },
+        status === 'COMPLETED' ? actor : {},
+      );
+      if (!commissionAt) {
+        const code = b.invoice!.invoiceNumber;
+        entries.push(
+          {
+            walletId: payment.walletId,
+            bookingId: b.bookingId,
+            type: 'COMMISSION',
+            amount: commission.negated(),
+            balanceAfter: 0,
+            idempotencyKey: `commission:${b.bookingId}:hotel`,
+            description: `Commission on ${code}`,
+            createdAt: closedAt,
+          },
+          {
+            walletId: PLATFORM_WALLET_ID,
+            bookingId: b.bookingId,
+            type: 'COMMISSION',
+            amount: commission,
+            balanceAfter: 0,
+            idempotencyKey: `commission:${b.bookingId}:platform`,
+            description: `Commission on ${code}`,
+            createdAt: closedAt,
+          },
+        );
+        commissionAt = closedAt;
+        counts.commissions++;
+      }
+    }
+
+    // Settlement after the holding period: from the commission, or from a cancellation that left the hotel money.
+    const settledFrom =
+      status === 'CANCELLED'
+        ? b.invoice?.paymentStatus === 'PAID' ||
+          b.invoice?.paymentStatus === 'PARTIALLY_REFUNDED'
+          ? b.cancelledAt
+          : null
+        : commissionAt;
+    const settleAt = settledFrom && new Date(settledFrom.getTime() + holdMs);
+    const settled = b.walletTransactions.some((t) => t.type === 'SETTLEMENT');
+    if (payment && settleAt && settleAt <= now && !settled) {
+      // What the booking left in the hotel wallet: payment, refunds, and the commission written above if any.
+      const hotelRows = [
+        ...b.walletTransactions,
+        ...entries.filter((e) => e.bookingId === b.bookingId),
+      ].filter((t) => t.walletId === payment.walletId);
+      const net = hotelRows.reduce(
+        (sum, t) => sum.plus(t.amount as Prisma.Decimal),
+        new Prisma.Decimal(0),
+      );
+      if (net.gt(0)) {
+        const description = `Settlement of ${b.invoice!.invoiceNumber}`;
+        entries.push(
+          {
+            walletId: payment.walletId,
+            bookingId: b.bookingId,
+            type: 'SETTLEMENT',
+            amount: net.negated(),
+            balanceAfter: 0,
+            idempotencyKey: `settlement:${b.bookingId}:pending`,
+            description,
+            createdAt: settleAt,
+          },
+          {
+            walletId: payment.walletId,
+            bookingId: b.bookingId,
+            type: 'SETTLEMENT',
+            amount: net,
+            balanceAfter: 0,
+            idempotencyKey: `settlement:${b.bookingId}:available`,
+            description,
+            createdAt: settleAt,
+          },
+        );
+        counts.settlements++;
+      }
+    }
+  }
+
+  await prisma.$transaction(
+    async (tx) => {
+      // Only from the status read above: a booking the running server changed meanwhile (the no-show job, the front
+      // desk) keeps the server's status, and gets none of the rows written for it here.
+      const changed = new Set<string>();
+      const moves = new Map<string, string[]>();
+      for (const [id, { from, to }] of statuses) {
+        moves.set(`${from}>${to}`, [...(moves.get(`${from}>${to}`) ?? []), id]);
+      }
+      for (const [move, ids] of moves) {
+        const [from, to] = move.split('>') as [BookingStatus, BookingStatus];
+        const updated = await tx.booking.updateManyAndReturn({
+          where: { bookingId: { in: ids }, status: from },
+          data: { status: to },
+          select: { bookingId: true },
+        });
+        for (const u of updated) changed.add(u.bookingId);
+      }
+      const skipped = (row: {
+        entityId?: string | null;
+        bookingId?: string | null;
+      }) => {
+        const id = row.entityId ?? row.bookingId;
+        return !!id && statuses.has(id) && !changed.has(id);
+      };
+      const newEvents = events.filter((e) => !skipped(e));
+      const newEntries = entries.filter((e) => !skipped(e));
+      if (newEvents.length) await tx.auditLog.createMany({ data: newEvents });
+      // The server's jobs may have written the same commission or settlement meanwhile: same key, same amount.
+      if (newEntries.length) {
+        await tx.walletTransaction.createMany({
+          data: newEntries,
+          skipDuplicates: true,
+        });
+      }
+      // Rooms with a guest in house are OCCUPIED; those whose guest has left are free again (locked rooms untouched).
+      await tx.$executeRaw`
+        UPDATE room r SET status = CASE WHEN EXISTS (
+          SELECT 1 FROM room_calendars c JOIN booking b ON b.booking_id = c.booking_id
+          WHERE c.room_id = r.room_id AND b.status = 'CHECKED_IN'
+        ) THEN 'OCCUPIED'::room_status ELSE 'AVAILABLE'::room_status END
+        FROM room_type rt JOIN hotel h ON h.hotel_id = rt.hotel_id
+        WHERE rt.room_type_id = r.room_type_id AND h.name = ANY(${hotelNames})
+          AND r.status IN ('AVAILABLE', 'OCCUPIED')`;
+    },
+    { timeout: 120_000 },
+  );
+  return counts;
 }
