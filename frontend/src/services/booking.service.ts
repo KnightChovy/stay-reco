@@ -50,3 +50,9 @@ export async function cancelBooking(bookingId: string, input: CancelBookingInput
   const { data } = await api.post<APIResponse<Booking>>(`/bookings/${bookingId}/cancel`, input);
   return data.data;
 }
+
+/** Development only: confirms a PENDING booking without a bank transfer (`PAYMENT_SIMULATOR=true`). */
+export async function simulatePayment(bookingId: string) {
+  const { data } = await api.post<APIResponse<Booking>>(`/dev/bookings/${bookingId}/simulate-payment`);
+  return data.data;
+}

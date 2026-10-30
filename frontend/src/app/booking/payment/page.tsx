@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   Clock,
   Copy,
+  FlaskConical,
   CreditCard,
   Loader2,
   Lock,
@@ -24,7 +25,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { getApiErrorMessage } from '@/lib/api-error';
-import { useBooking } from '@/features/booking/api/booking-queries';
+import { useBooking, useSimulatePayment } from '@/features/booking/api/booking-queries';
 import { formatDate, formatDateTime, formatMoney } from '@/features/stays/lib/format';
 
 const FALLBACK_IMAGE =
@@ -53,9 +54,11 @@ function PaymentContent() {
   const bookingId = searchParams.get('id') ?? undefined;
   const bookingQuery = useBooking(bookingId, { poll: true });
   const booking = bookingQuery.data;
+  const simulatePayment = useSimulatePayment();
 
   const [now, setNow] = useState(() => Date.now());
   const [copied, setCopied] = useState<string | null>(null);
+  const [devError, setDevError] = useState<string | null>(null);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1_000);
@@ -268,6 +271,34 @@ function PaymentContent() {
                 {remaining <= 0 && (
                   <div className="flex items-center gap-2 rounded-lg bg-amber-50 p-3 text-xs font-semibold text-amber-800">
                     <RefreshCw className="size-4 animate-spin" /> Đang kiểm tra trạng thái thanh toán…
+                  </div>
+                )}
+
+                {process.env.NODE_ENV !== 'production' && booking.status === 'PENDING' && (
+                  <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-3">
+                    <p className="mb-2 text-[11px] font-semibold text-slate-500">
+                      Chế độ dev · mô phỏng SePay (không cần chuyển khoản thật)
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() =>
+                        simulatePayment.mutate(booking.id, {
+                          onError: (error) =>
+                            setDevError(getApiErrorMessage(error, 'Chưa bật PAYMENT_SIMULATOR ở backend.')),
+                        })
+                      }
+                      disabled={simulatePayment.isPending}
+                      className="h-9 gap-1.5 border-slate-300 text-xs font-semibold"
+                    >
+                      {simulatePayment.isPending ? (
+                        <Loader2 className="size-3.5 animate-spin" />
+                      ) : (
+                        <FlaskConical className="size-3.5" />
+                      )}
+                      Giả lập thanh toán
+                    </Button>
+                    {devError && <p className="mt-2 text-[11px] text-red-600">{devError}</p>}
                   </div>
                 )}
               </>

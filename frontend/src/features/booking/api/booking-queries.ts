@@ -74,6 +74,18 @@ export function useCancellationQuote(bookingId: string | undefined, enabled = tr
   });
 }
 
+/** Development only: the payment page can confirm a PENDING booking without a real transfer. */
+export function useSimulatePayment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (bookingId: string) => bookingService.simulatePayment(bookingId),
+    onSuccess: (booking) => {
+      queryClient.setQueryData(bookingKeys.detail(booking.id), booking);
+      void queryClient.invalidateQueries({ queryKey: [...bookingKeys.all, "my-trips"] });
+    },
+  });
+}
+
 export function useCancelBooking() {
   const queryClient = useQueryClient();
   return useMutation({
