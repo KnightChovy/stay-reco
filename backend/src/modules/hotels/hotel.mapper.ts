@@ -5,6 +5,8 @@ import {
   type Hotel,
   type HotelImage,
   type HotelSummary,
+  type LateCheckoutPolicy,
+  type LateCheckoutPolicyInput,
   type UpdateHotelInput,
 } from '@stayreco/shared';
 import type {
@@ -65,6 +67,56 @@ export const toCancellationRows = (policy: CancellationPolicyInput) => [
   },
 ];
 
+/** The late check-out policy (decision L1): four more `hotel_properties` rows; none means no fee. */
+export const LATE_CHECKOUT_KEYS = {
+  graceMinutes: 'late_checkout_grace_minutes',
+  cutoffTime: 'late_checkout_cutoff_time',
+  beforeCutoffPercent: 'late_checkout_before_cutoff_percent',
+  afterCutoffPercent: 'late_checkout_after_cutoff_percent',
+} as const;
+
+export function lateCheckoutPolicyOf(
+  rows: PropertyRow[],
+): LateCheckoutPolicy | null {
+  const value = (key: string) =>
+    rows.find((r) => r.propertyKey === key)?.propertyValue;
+  const grace = value(LATE_CHECKOUT_KEYS.graceMinutes);
+  const cutoff = value(LATE_CHECKOUT_KEYS.cutoffTime);
+  const before = value(LATE_CHECKOUT_KEYS.beforeCutoffPercent);
+  const after = value(LATE_CHECKOUT_KEYS.afterCutoffPercent);
+  if (
+    grace === undefined ||
+    cutoff === undefined ||
+    before === undefined ||
+    after === undefined
+  ) {
+    return null;
+  }
+  return {
+    graceMinutes: Number(grace),
+    cutoffTime: cutoff,
+    beforeCutoffPercent: Number(before),
+    afterCutoffPercent: Number(after),
+  };
+}
+
+/** Select for the rows `lateCheckoutPolicyOf` reads. */
+export const lateCheckoutRowsSelect = {
+  where: {
+    verificationRequestId: null,
+    propertyKey: { in: Object.values(LATE_CHECKOUT_KEYS) },
+  },
+  select: { propertyKey: true, propertyValue: true },
+} satisfies Prisma.Hotel$hotelPropertiesArgs;
+
+export const toLateCheckoutRows = (policy: LateCheckoutPolicyInput) =>
+  (Object.keys(LATE_CHECKOUT_KEYS) as (keyof typeof LATE_CHECKOUT_KEYS)[]).map(
+    (field) => ({
+      propertyKey: LATE_CHECKOUT_KEYS[field],
+      propertyValue: String(policy[field]),
+    }),
+  );
+
 export const hotelInclude = {
   hotelAmenities: {
     include: { amenity: true },
@@ -77,6 +129,7 @@ export const hotelInclude = {
       OR: [
         { propertyKey: { startsWith: POLICY_PREFIX } },
         { propertyKey: { in: Object.values(CANCELLATION_KEYS) } },
+        { propertyKey: { in: Object.values(LATE_CHECKOUT_KEYS) } },
       ],
     },
     orderBy: { propertyKey: 'asc' },
@@ -164,6 +217,7 @@ export function toHotel(h: HotelWithDetails): Hotel {
       ? { totalRooms: config.totalRooms, basePrice: toNumber(config.basePrice) }
       : null,
     cancellationPolicy: cancellationPolicyOf(h.hotelProperties),
+    lateCheckoutPolicy: lateCheckoutPolicyOf(h.hotelProperties),
     createdAt: h.createdAt.toISOString(),
   };
 }

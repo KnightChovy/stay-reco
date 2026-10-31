@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpStatus,
   Param,
@@ -28,6 +29,7 @@ import {
   CreateHotelDto,
   HotelAmenitiesDto,
   HotelPoliciesDto,
+  LateCheckoutPolicyDto,
   RoomConfigDto,
   UpdateHotelDto,
 } from './dto/hotel.dto';
@@ -117,6 +119,33 @@ export class HotelsController {
     @Body() dto: CancellationPolicyDto,
   ) {
     return this.hotels.setCancellationPolicy(hotelId, dto);
+  }
+
+  @ApiOperation({
+    summary: 'Set the hotel late check-out policy',
+    description:
+      'Decisions L1–L3. Free for `graceMinutes` after the check-out time (12:00 when not set); then, on the check-out date, `beforeCutoffPercent` of the last night price (fixed at booking) × rooms until `cutoffTime` and `afterCutoffPercent` from it; each later day adds `afterCutoffPercent`. Rounded half up to whole dong and paid at the front desk, outside StayReco (no wallet, no commission). The policy in force at check-out applies.',
+  })
+  @HotelAccessRequired('owner')
+  @ApiData(hotelResponseSchema)
+  @Patch('hotels/:hotelId/late-checkout-policy')
+  setLateCheckoutPolicy(
+    @Param('hotelId') hotelId: string,
+    @Body() dto: LateCheckoutPolicyDto,
+  ) {
+    return this.hotels.setLateCheckoutPolicy(hotelId, dto);
+  }
+
+  @ApiOperation({
+    summary: 'Remove the hotel late check-out policy',
+    description:
+      'Checking out late costs nothing again (`lateCheckoutPolicy: null`, the default).',
+  })
+  @HotelAccessRequired('owner')
+  @ApiData(hotelResponseSchema)
+  @Delete('hotels/:hotelId/late-checkout-policy')
+  clearLateCheckoutPolicy(@Param('hotelId') hotelId: string) {
+    return this.hotels.clearLateCheckoutPolicy(hotelId);
   }
 
   @ApiOperation({

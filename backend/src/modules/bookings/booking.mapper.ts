@@ -96,7 +96,7 @@ export function toBooking(
   history: BookingHistory,
   assignedRooms: StayRoom[],
 ): Booking {
-  const { cancelRequest, rejection, changeRequest } = history;
+  const { cancelRequest, rejection, changeRequest, lateCheckout } = history;
   const invoice = b.invoice!;
   const summary = toBookingSummary(b);
   const totalAmount = summary.totalAmount;
@@ -152,6 +152,7 @@ export function toBooking(
       decidedAt: changeRequest.decidedAt?.toISOString() ?? null,
       reason: changeRequest.reason,
     },
+    lateCheckout,
     timeline: timeline.map((t) => ({ at: t.at.toISOString(), event: t.event })),
   };
 }

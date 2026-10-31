@@ -8,10 +8,14 @@ import {
 import type { Env } from '../../config/env';
 import type { NotificationType, Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
-import { fromTime } from '../hotels/hotel.mapper';
+import {
+  fromTime,
+  lateCheckoutPolicyOf,
+  lateCheckoutRowsSelect,
+} from '../hotels/hotel.mapper';
 import { type MailMessage, MailService } from '../mail/mail.service';
 import { NotificationsService } from '../notifications/notifications.service';
-import { DEFAULT_CHECK_IN_TIME } from '../stays/offer';
+import { DEFAULT_CHECK_IN_TIME, DEFAULT_CHECK_OUT_TIME } from '../stays/offer';
 import { type GuestChanges, loadBookingHistory } from './booking-history';
 
 const detailsSelect = {
@@ -37,6 +41,8 @@ const detailsSelect = {
         select: {
           name: true,
           checkInTime: true,
+          checkOutTime: true,
+          hotelProperties: lateCheckoutRowsSelect,
           hotelPartnerId: true,
           hotelPartner: {
             select: { userAccount: { select: { email: true } } },
@@ -107,6 +113,7 @@ export class BookingMailer {
         ...stay(b),
         `Đã thanh toán: ${money(b.totalAmount)}`,
         policy,
+        ...lateCheckoutLine(b),
         '',
         `Xem đơn và voucher nhận phòng: ${this.customerLink(b)}`,
         '',
@@ -460,6 +467,18 @@ function stay(b: Details) {
     `Loại phòng: ${b.roomType.name} × ${b.numRooms} phòng`,
     `Nhận phòng: ${day(checkIn)} – Trả phòng: ${day(checkOut)} (${daysBetween(checkIn, checkOut)} đêm)`,
     `Số khách: ${b.numGuests ?? b.numRooms}`,
+  ];
+}
+
+/** The hotel's late check-out policy in one line (L7), or nothing when checking out late is free. */
+function lateCheckoutLine(b: Details) {
+  const policy = lateCheckoutPolicyOf(b.roomType.hotel.hotelProperties);
+  if (!policy) return [];
+  const checkOut =
+    fromTime(b.roomType.hotel.checkOutTime) ?? DEFAULT_CHECK_OUT_TIME;
+  return [
+    `Trả phòng sau ${checkOut}: miễn phí ${policy.graceMinutes} phút, sau đó ${policy.beforeCutoffPercent}% giá đêm cuối ` +
+      `trước ${policy.cutoffTime} và ${policy.afterCutoffPercent}% từ ${policy.cutoffTime}; thanh toán tại khách sạn.`,
   ];
 }
 
