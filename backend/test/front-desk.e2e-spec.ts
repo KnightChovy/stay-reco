@@ -858,6 +858,11 @@ describe('Hotel operations: front desk, settlement, change requests (e2e)', () =
   describe('POST /bookings/:id/check-out', () => {
     it('completes the stay, sends the rooms to cleaning and charges the commission once', async () => {
       const h = await hotel();
+      // Checking out on the check-out date is never late with a 23:59 check-out time, whatever hour the test runs.
+      await t.prisma.hotel.update({
+        where: { hotelId: h.hotelId },
+        data: { checkOutTime: new Date('1970-01-01T23:59:00.000Z') },
+      });
       const me = await t.signIn('CUSTOMER', 'guest@mail.test');
       const booking = await paidBooking(me.token, h.roomTypeId, { rooms: 2 });
       await checkIn(h.token, booking.id).expect(200);
