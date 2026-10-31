@@ -6,6 +6,7 @@ import { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/app.setup';
 import { UserRole } from '../src/generated/prisma/client';
+import { BookingMailer } from '../src/modules/bookings/booking-mailer';
 import { MailMessage, MailService } from '../src/modules/mail/mail.service';
 import { StorageService } from '../src/modules/storage/storage.service';
 import { PLATFORM_WALLET_ID } from '../src/modules/wallets/wallet-ledger';
@@ -85,6 +86,8 @@ export async function createTestApp() {
 
   /** Removes every account and what hangs off it (hotels, rooms, sessions...). */
   const reset = async () => {
+    // Emails and notifications of the previous test still being written would hit the accounts removed below.
+    await app.get(BookingMailer).idle();
     outbox.length = 0;
     storage.clear();
     await prisma.$executeRawUnsafe(

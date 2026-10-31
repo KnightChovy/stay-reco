@@ -9,6 +9,8 @@ import type {
   Booking,
   BookingLookupQuery,
   CheckInInput,
+  CheckOutInput,
+  CheckOutQuote,
   RoomOption,
   Room,
   RoomOptions,
@@ -30,8 +32,15 @@ import {
 import type { Env } from '../../config/env';
 import type { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { toNumber } from '../../common/http/decimal';
 import { AuditAction } from '../audit/audit.service';
+import {
+  fromTime,
+  lateCheckoutPolicyOf,
+  lateCheckoutRowsSelect,
+} from '../hotels/hotel.mapper';
 import { toRoom } from '../rooms/room.mapper';
+import { DEFAULT_CHECK_OUT_TIME } from '../stays/offer';
 import { byRoomNumber } from '../rooms/rooms.service';
 import { WalletLedger } from '../wallets/wallet-ledger';
 import {
@@ -50,6 +59,7 @@ import {
 import type { NightlyPrices } from './booking.mapper';
 import { BookingsService } from './bookings.service';
 import { chargeCommission } from './commission';
+import { lateCheckout } from './late-checkout';
 import { NoShowService } from './no-show.service';
 import { verifyVoucher } from './voucher-token';
 
@@ -74,8 +84,18 @@ const stayRowSelect = {
   checkInDate: true,
   checkOutDate: true,
   nightlyPrices: true,
-  invoice: { select: { paymentStatus: true } },
-  roomType: { select: { hotelId: true } },
+  invoice: { select: { paymentStatus: true, totalAmount: true } },
+  roomType: {
+    select: {
+      hotelId: true,
+      hotel: {
+        select: {
+          checkOutTime: true,
+          hotelProperties: lateCheckoutRowsSelect,
+        },
+      },
+    },
+  },
 } satisfies Prisma.BookingSelect;
 
 type StayRow = Prisma.BookingGetPayload<{ select: typeof stayRowSelect }>;
@@ -254,18 +274,62 @@ export class FrontDeskService {
     return this.bookings.findOne(user, bookingId);
   }
 
+  /** What checking out now means, for the check-out screen (UC39, L6): nights released, delay, late check-out fee. */
+  async checkOutQuote(
+    user: AuthUser,
+    bookingId: string,
+  ): Promise<CheckOutQuote> {
+    const booking = await this.findForFrontDesk(user, bookingId);
+    assertCheckedIn(booking);
+    const late = lateCheckoutOf(booking);
+    const released = remainingNights(booking);
+    return {
+      scheduledAt: late.scheduledAt.toISOString(),
+      early: released.length > 0,
+      releasedNights: released,
+      minutesLate: late.minutesLate,
+      lateFee: late.fee && {
+        amount: toNumber(late.fee.amount),
+        percent: late.fee.percent,
+        nightPrice: toNumber(late.fee.nightPrice),
+      },
+      amountPaid: toNumber(booking.invoice!.totalAmount),
+    };
+  }
+
   /**
    * Only CHECKED_IN, early or late (O9). The booking becomes COMPLETED, the nights from today on are released
-   * without refund, the rooms become CLEANING and the commission is charged (O6). The conditional status change makes
-   * two check-outs at once charge it once.
+   * without refund, the rooms become CLEANING and the commission is charged (O6). A late check-out fee is computed
+   * now and recorded, lowered when staff send `lateFee` (L4–L6); it is paid at the desk, so no wallet moves. The
+   * conditional status change makes two check-outs at once charge the commission once.
    */
-  async checkOut(user: AuthUser, bookingId: string): Promise<Booking> {
+  async checkOut(
+    user: AuthUser,
+    bookingId: string,
+    input: CheckOutInput = {},
+  ): Promise<Booking> {
     const booking = await this.findForFrontDesk(user, bookingId);
-    if (booking.status !== 'CHECKED_IN') {
-      throw bookingStatusConflict(
-        `A ${booking.status} booking cannot be checked out`,
-      );
+    assertCheckedIn(booking);
+    const now = new Date();
+    const late = lateCheckoutOf(booking, now);
+    const computedFee = late.fee ? toNumber(late.fee.amount) : 0;
+    if (input.lateFee && input.lateFee.amount > computedFee) {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'Validation failed',
+        details: [
+          { field: 'lateFee.amount', message: `at most ${computedFee}` },
+        ],
+      });
     }
+    const lateFee = late.late
+      ? {
+          minutesLate: late.minutesLate,
+          computedFee,
+          fee: input.lateFee?.amount ?? computedFee,
+          reason: input.lateFee?.reason ?? null,
+        }
+      : null;
 
     await this.prisma.$transaction(async (tx) => {
       await lockRoomType(tx, booking.roomTypeId);
@@ -292,8 +356,12 @@ export class FrontDeskService {
         action: AuditAction.BOOKING_CHECKED_OUT,
         bookingId,
         actor: hotelActor(user),
-        at: new Date(),
-        value: { commission: commission.toNumber(), releasedNights: released },
+        at: now,
+        value: {
+          commission: commission.toNumber(),
+          releasedNights: released,
+          ...(lateFee && { lateFee }),
+        },
       });
     });
     return this.bookings.findOne(user, bookingId);
@@ -446,6 +514,30 @@ function remainingNights(booking: StayRow, today = todayInVietnam()) {
     nights.push(d);
   }
   return nights;
+}
+
+function assertCheckedIn(booking: StayRow) {
+  if (booking.status !== 'CHECKED_IN') {
+    throw bookingStatusConflict(
+      `A ${booking.status} booking cannot be checked out`,
+    );
+  }
+}
+
+/** The delay and the fee of checking out `now`, under the hotel's current late check-out policy (L1–L3). */
+function lateCheckoutOf(booking: StayRow, now = new Date()) {
+  const nights = booking.nightlyPrices as NightlyPrices;
+  const hotel = booking.roomType.hotel;
+  return lateCheckout(
+    {
+      checkOut: toCalendarDate(booking.checkOutDate),
+      checkOutTime: fromTime(hotel.checkOutTime) ?? DEFAULT_CHECK_OUT_TIME,
+      lastNightPrice: nights[nights.length - 1].price,
+      rooms: booking.numRooms,
+    },
+    lateCheckoutPolicyOf(hotel.hotelProperties),
+    now,
+  );
 }
 
 /** CONFIRMED and PAID; a waiting refund request is for the owner to decide first (O2, O4). */

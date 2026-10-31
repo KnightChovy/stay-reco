@@ -56,6 +56,14 @@ export interface GuestChanges {
   specialRequests?: string | null;
 }
 
+/** The late check-out fee kept with the check-out event; paid at the front desk (money-rules §5.5). */
+export interface LateCheckoutRecord {
+  minutesLate: number;
+  computedFee: number;
+  fee: number;
+  reason: string | null;
+}
+
 /** The latest change request of a booking (UC25, UC43). */
 export interface ChangeRequest {
   status: 'PENDING' | 'ACCEPTED' | 'REJECTED';
@@ -72,6 +80,8 @@ export interface BookingHistory {
   rejection: { reason: string; at: Date } | null;
   /** The rooms assigned at check-in, null before it. */
   checkedInRooms: StayRoom[] | null;
+  /** Recorded at check-out when the guest left after the check-out time and its grace (L4–L6). */
+  lateCheckout: LateCheckoutRecord | null;
   changeRequest: ChangeRequest | null;
   /** Timeline entries, oldest first. */
   events: { at: Date; event: string }[];
@@ -133,6 +143,7 @@ export async function loadBookingHistory(
   let cancelRequest: CancelRequest | null = null;
   let rejection: BookingHistory['rejection'] = null;
   let checkedInRooms: StayRoom[] | null = null;
+  let lateCheckout: LateCheckoutRecord | null = null;
   // Not narrowed to null: the loop below reads it after earlier rows set it.
   let changeRequest = null as ChangeRequest | null;
   for (const row of rows) {
@@ -148,6 +159,8 @@ export async function loadBookingHistory(
       rejection = { reason: String(value.reason), at: row.createdAt };
     } else if (action === AuditAction.BOOKING_CHECKED_IN) {
       checkedInRooms = value.rooms as StayRoom[];
+    } else if (action === AuditAction.BOOKING_CHECKED_OUT && value.lateFee) {
+      lateCheckout = value.lateFee as LateCheckoutRecord;
     } else if (action === AuditAction.BOOKING_CHANGE_REQUESTED) {
       changeRequest = {
         status: 'PENDING',
@@ -181,6 +194,7 @@ export async function loadBookingHistory(
     cancelRequest,
     rejection,
     checkedInRooms,
+    lateCheckout,
     changeRequest,
     events: rows.map((r) => ({
       at: r.createdAt,

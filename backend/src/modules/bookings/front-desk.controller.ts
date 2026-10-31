@@ -11,6 +11,7 @@ import {
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
   bookingResponseSchema,
+  checkOutQuoteResponseSchema,
   roomOptionsResponseSchema,
   roomResponseSchema,
 } from '@stayreco/shared';
@@ -30,7 +31,11 @@ import {
   ApiErrors,
   ApiHotelAccess,
 } from '../../common/swagger/api-docs.decorators';
-import { BookingLookupQueryDto, CheckInDto } from './dto/booking.dto';
+import {
+  BookingLookupQueryDto,
+  CheckInDto,
+  CheckOutDto,
+} from './dto/booking.dto';
 import { FrontDeskService } from './front-desk.service';
 
 const FRONT_DESK_ACCESS =
@@ -129,9 +134,27 @@ export class FrontDeskController {
   }
 
   @ApiOperation({
+    summary: 'What checking out now means',
+    description:
+      'UC39, decisions L2–L6, for the check-out screen. `scheduledAt` (the check-out date at the hotel check-out time), `early` and `releasedNights` (leaving before the check-out date, no refund), `minutesLate`, `lateFee` under the hotel late check-out policy (null within the grace period or without a policy; paid at the front desk), `amountPaid`. Only a `CHECKED_IN` booking.',
+  })
+  @ApiHotelAccess('member', ErrorCode.BOOKING_NOT_FOUND)
+  @ApiAccess(FRONT_DESK_ACCESS)
+  @ApiData(checkOutQuoteResponseSchema)
+  @ApiErrors(
+    ErrorCode.FORBIDDEN,
+    ErrorCode.PARTNER_SUSPENDED,
+    ErrorCode.BOOKING_STATUS_CONFLICT,
+  )
+  @Get('bookings/:id/check-out-quote')
+  checkOutQuote(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.frontDesk.checkOutQuote(user, id);
+  }
+
+  @ApiOperation({
     summary: 'Check the guest out',
     description:
-      'UC39. Only a `CHECKED_IN` booking, early or late (O9). The booking becomes `COMPLETED` and its rooms `CLEANING`. Leaving before the check-out date releases the nights from today on, without refund. The platform commission is charged now; the hotel\x27s money becomes available after the holding period (money-rules §5.4).',
+      'UC39. Only a `CHECKED_IN` booking, early or late (O9). The booking becomes `COMPLETED` and its rooms `CLEANING`. Leaving before the check-out date releases the nights from today on, without refund. The platform commission is charged now; the hotel\x27s money becomes available after the holding period (money-rules §5.4). A late check-out fee is computed again now and recorded in `lateCheckout`; it is paid at the front desk, not through StayReco (L5). `lateFee: { amount, reason }` lowers it, never above the computed fee (`VALIDATION_ERROR` on `lateFee.amount`).',
   })
   @ApiHotelAccess('member', ErrorCode.BOOKING_NOT_FOUND)
   @ApiAccess(FRONT_DESK_ACCESS)
@@ -143,8 +166,12 @@ export class FrontDeskController {
   )
   @Post('bookings/:id/check-out')
   @HttpCode(HttpStatus.OK)
-  checkOut(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    return this.frontDesk.checkOut(user, id);
+  checkOut(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body() dto: CheckOutDto,
+  ) {
+    return this.frontDesk.checkOut(user, id, dto);
   }
 
   @ApiOperation({

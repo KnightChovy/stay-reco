@@ -8,6 +8,7 @@ import type {
   CreateHotelInput,
   Hotel,
   HotelSummary,
+  LateCheckoutPolicyInput,
   RoomConfigInput,
   UpdateHotelInput,
 } from '@stayreco/shared';
@@ -20,8 +21,10 @@ import {
   CANCELLATION_KEYS,
   hotelInclude,
   hotelSummarySelect,
+  LATE_CHECKOUT_KEYS,
   POLICY_PREFIX,
   toCancellationRows,
+  toLateCheckoutRows,
   toHotel,
   toHotelData,
   toHotelSummary,
@@ -148,6 +151,36 @@ export class HotelsService {
       }),
     ]);
     return this.findOne(hotelId);
+  }
+
+  /** Replaces the late check-out policy; it applies to every check-out from now on (L1, L3). */
+  async setLateCheckoutPolicy(
+    hotelId: string,
+    policy: LateCheckoutPolicyInput,
+  ): Promise<Hotel> {
+    await this.prisma.$transaction([
+      this.deleteLateCheckoutRows(hotelId),
+      this.prisma.hotelProperties.createMany({
+        data: toLateCheckoutRows(policy).map((row) => ({ ...row, hotelId })),
+      }),
+    ]);
+    return this.findOne(hotelId);
+  }
+
+  /** No policy: checking out late costs nothing. */
+  async clearLateCheckoutPolicy(hotelId: string): Promise<Hotel> {
+    await this.deleteLateCheckoutRows(hotelId);
+    return this.findOne(hotelId);
+  }
+
+  private deleteLateCheckoutRows(hotelId: string) {
+    return this.prisma.hotelProperties.deleteMany({
+      where: {
+        hotelId,
+        verificationRequestId: null,
+        propertyKey: { in: Object.values(LATE_CHECKOUT_KEYS) },
+      },
+    });
   }
 
   /**

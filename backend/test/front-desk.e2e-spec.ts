@@ -169,8 +169,12 @@ describe('Hotel operations: front desk, settlement, change requests (e2e)', () =
   const checkIn = (token: string, id: string, body: object = {}) =>
     t.api().post(`/api/v1/bookings/${id}/check-in`).set(auth(token)).send(body);
 
-  const checkOut = (token: string, id: string) =>
-    t.api().post(`/api/v1/bookings/${id}/check-out`).set(auth(token));
+  const checkOut = (token: string, id: string, body: object = {}) =>
+    t
+      .api()
+      .post(`/api/v1/bookings/${id}/check-out`)
+      .set(auth(token))
+      .send(body);
 
   /** The booking's wallet movements in order: type, amount, idempotency key. */
   const ledger = async (bookingId: string) => {
@@ -704,9 +708,161 @@ describe('Hotel operations: front desk, settlement, change requests (e2e)', () =
     });
   });
 
+  describe('late check-out fee', () => {
+    const policy = {
+      graceMinutes: 30,
+      cutoffTime: '00:00', // always passed: the fee does not depend on the hour the test runs
+      beforeCutoffPercent: 50,
+      afterCutoffPercent: 100,
+    };
+    const setPolicy = (token: string, hotelId: string, body: object) =>
+      t
+        .api()
+        .patch(`/api/v1/hotels/${hotelId}/late-checkout-policy`)
+        .set(auth(token))
+        .send(body);
+    const quote = (token: string, id: string) =>
+      t.api().get(`/api/v1/bookings/${id}/check-out-quote`).set(auth(token));
+
+    it('is set by the owner, shown on the hotel page and in the confirmation email', async () => {
+      const h = await hotel();
+      const desk = await t.signInStaff(h.hotelId, 'desk@hotel.test', [
+        'FRONT_DESK',
+      ]);
+      await setPolicy(desk.token, h.hotelId, policy).expect(403);
+      const bad = await setPolicy(h.token, h.hotelId, {
+        ...policy,
+        beforeCutoffPercent: 80,
+        afterCutoffPercent: 60,
+      }).expect(400);
+      expect(bad.body.details[0].field).toBe('afterCutoffPercent');
+
+      const set = await setPolicy(h.token, h.hotelId, policy).expect(200);
+      expect(set.body.data.lateCheckoutPolicy).toEqual(policy);
+      const page = await t
+        .api()
+        .get(`/api/v1/hotels/${h.hotelId}/listing`)
+        .expect(200);
+      expect(page.body.data.hotel.lateCheckoutPolicy).toEqual(policy);
+
+      const me = await t.signIn('CUSTOMER', 'guest@mail.test');
+      t.outbox.length = 0;
+      await paidBooking(me.token, h.roomTypeId);
+      await t.app.get(BookingMailer).idle();
+      expect(t.outbox[0].text).toContain(
+        'Trả phòng sau 12:00: miễn phí 30 phút, sau đó 50% giá đêm cuối trước 00:00 và 100% từ 00:00; thanh toán tại khách sạn.',
+      );
+
+      const cleared = await t
+        .api()
+        .delete(`/api/v1/hotels/${h.hotelId}/late-checkout-policy`)
+        .set(auth(h.token))
+        .expect(200);
+      expect(cleared.body.data.lateCheckoutPolicy).toBeNull();
+    });
+
+    it('quotes the fee and records it at check-out, lowered only with a reason', async () => {
+      const h = await hotel();
+      await setPolicy(h.token, h.hotelId, policy).expect(200);
+      const me = await t.signIn('CUSTOMER', 'guest@mail.test');
+      const booking = await paidBooking(me.token, h.roomTypeId, { rooms: 2 });
+      await checkIn(h.token, booking.id).expect(200);
+      await shift(booking.id, 3); // the check-out date was yesterday
+
+      const desk = await t.signInStaff(h.hotelId, 'desk@hotel.test', [
+        'FRONT_DESK',
+      ]);
+      const q = await quote(desk.token, booking.id).expect(200);
+      // One day after the check-out date (100%) + the rate of now (100%), of 1,000,000 × 2 rooms.
+      expect(q.body.data).toMatchObject({
+        scheduledAt: new Date(`${day(-1)}T12:00:00+07:00`).toISOString(),
+        early: false,
+        releasedNights: [],
+        lateFee: { amount: 4000000, percent: 200, nightPrice: 2000000 },
+        amountPaid: 4000000,
+      });
+      expect(q.body.data.minutesLate).toBeGreaterThan(12 * 60);
+
+      const raised = await checkOut(desk.token, booking.id, {
+        lateFee: { amount: 4000001, reason: 'Phụ thu' },
+      }).expect(400);
+      expect(raised.body.details).toEqual([
+        { field: 'lateFee.amount', message: 'at most 4000000' },
+      ]);
+      await checkOut(desk.token, booking.id, {
+        lateFee: { amount: 1000000 },
+      }).expect(400);
+
+      const res = await checkOut(desk.token, booking.id, {
+        lateFee: { amount: 1000000, reason: 'Khách quen, giảm phí' },
+      }).expect(200);
+      expect(res.body.data.lateCheckout).toEqual({
+        minutesLate: expect.any(Number),
+        computedFee: 4000000,
+        fee: 1000000,
+        reason: 'Khách quen, giảm phí',
+      });
+      // Paid at the desk: the wallets only see the payment and the commission.
+      expect((await ledger(booking.id)).map(([type]) => type)).toEqual([
+        'BOOKING_PAYMENT',
+        'COMMISSION',
+        'COMMISSION',
+      ]);
+      const seen = await t
+        .api()
+        .get(`/api/v1/bookings/${booking.id}`)
+        .set(auth(me.token))
+        .expect(200);
+      expect(seen.body.data.lateCheckout.fee).toBe(1000000);
+    });
+
+    it('charges nothing on time or without a policy, and only quotes a stay in house', async () => {
+      const h = await hotel();
+      const me = await t.signIn('CUSTOMER', 'guest@mail.test');
+      // Leaving before the check-out date: not late, nights released.
+      const early = await paidBooking(me.token, h.roomTypeId);
+      const late = await paidBooking(me.token, h.roomTypeId);
+      await setPolicy(h.token, h.hotelId, policy).expect(200);
+      await quote(h.token, early.id).expect(409);
+      await checkIn(h.token, early.id).expect(200);
+      const q = await quote(h.token, early.id).expect(200);
+      expect(q.body.data).toMatchObject({
+        early: true,
+        releasedNights: [day(0), day(1)],
+        minutesLate: 0,
+        lateFee: null,
+      });
+      const left = await checkOut(h.token, early.id).expect(200);
+      expect(left.body.data.lateCheckout).toBeNull();
+
+      // Late without a policy: the delay is kept, the fee is 0.
+      await t
+        .api()
+        .delete(`/api/v1/hotels/${h.hotelId}/late-checkout-policy`)
+        .set(auth(h.token))
+        .expect(200);
+      await checkIn(h.token, late.id).expect(200);
+      await shift(late.id, 3);
+      expect(
+        (await quote(h.token, late.id).expect(200)).body.data.lateFee,
+      ).toBeNull();
+      const res = await checkOut(h.token, late.id).expect(200);
+      expect(res.body.data.lateCheckout).toMatchObject({
+        computedFee: 0,
+        fee: 0,
+        reason: null,
+      });
+    });
+  });
+
   describe('POST /bookings/:id/check-out', () => {
     it('completes the stay, sends the rooms to cleaning and charges the commission once', async () => {
       const h = await hotel();
+      // Checking out on the check-out date is never late with a 23:59 check-out time, whatever hour the test runs.
+      await t.prisma.hotel.update({
+        where: { hotelId: h.hotelId },
+        data: { checkOutTime: new Date('1970-01-01T23:59:00.000Z') },
+      });
       const me = await t.signIn('CUSTOMER', 'guest@mail.test');
       const booking = await paidBooking(me.token, h.roomTypeId, { rooms: 2 });
       await checkIn(h.token, booking.id).expect(200);
