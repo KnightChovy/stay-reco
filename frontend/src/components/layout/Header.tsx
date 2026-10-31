@@ -36,6 +36,7 @@ import {
 } from 'lucide-react';
 import { roleDashboardPaths, useAuthStore } from '@/lib/auth-store';
 import { useUnreadNotificationCount } from '@/features/notifications/api/notification-queries';
+import { NotificationBell } from '@/features/notifications/components/NotificationBell';
 
 const navigation = [
   { href: '/', label: 'Khám phá' },
@@ -228,20 +229,7 @@ export default function Header() {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {isAuthenticated && user?.role === 'customer' ? (
-            <Link
-              href="/account/notifications"
-              className="relative inline-flex size-10 items-center justify-center rounded-full text-primary transition-colors hover:bg-muted focus-visible:outline-none"
-              aria-label={unreadCount > 0 ? `Thông báo, ${unreadCount} chưa đọc` : 'Thông báo'}
-            >
-              <Bell className="size-5" aria-hidden="true" />
-              {unreadCount > 0 && (
-                <span className="absolute -right-0.5 -top-0.5 inline-flex min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-4 text-white">
-                  {unreadCount > 99 ? '99+' : unreadCount}
-                </span>
-              )}
-            </Link>
-          ) : null}
+          {isAuthenticated && user?.role === 'customer' ? <NotificationBell /> : null}
 
           {isAuthenticated ? (
             <DropdownMenu modal={false}>

@@ -16,15 +16,9 @@ import {
   AlertCircle,
   ArrowRight,
   Bell,
-  Calendar,
   Check,
   CheckCheck,
   Clock,
-  CreditCard,
-  Gift,
-  Info,
-  ShieldAlert,
-  Star,
 } from 'lucide-react';
 import type { NotificationType } from '@stayreco/shared';
 import { getApiErrorMessage } from '@/lib/api-error';
@@ -34,6 +28,12 @@ import {
   useNotifications,
   useUnreadNotificationCount,
 } from '@/features/notifications/api/notification-queries';
+import {
+  NOTIFICATION_TYPE_ICON as TYPE_ICON,
+  NOTIFICATION_TYPE_LABEL as TYPE_LABEL,
+  NOTIFICATION_TYPE_TONE as TYPE_TONE,
+  notificationTimeAgo as timeAgo,
+} from '@/features/notifications/lib/presentation';
 
 type FilterId = 'all' | 'booking' | 'promo' | 'system';
 
@@ -43,49 +43,6 @@ const FILTERS: { id: FilterId; label: string; types?: NotificationType[] }[] = [
   { id: 'promo', label: 'Ưu đãi & Voucher', types: ['PROMOTION'] },
   { id: 'system', label: 'Bảo mật & Hệ thống', types: ['REVIEW', 'ALERT', 'SYSTEM'] },
 ];
-
-const TYPE_ICON: Record<NotificationType, typeof Bell> = {
-  BOOKING: Calendar,
-  PAYMENT: CreditCard,
-  PROMOTION: Gift,
-  REVIEW: Star,
-  ALERT: ShieldAlert,
-  SYSTEM: Info,
-};
-
-const TYPE_TONE: Record<NotificationType, string> = {
-  BOOKING: 'text-primary bg-primary/10',
-  PAYMENT: 'text-emerald-600 bg-emerald-50',
-  PROMOTION: 'text-amber-500 bg-amber-50',
-  REVIEW: 'text-violet-600 bg-violet-50',
-  ALERT: 'text-red-500 bg-red-50',
-  SYSTEM: 'text-slate-500 bg-slate-100',
-};
-
-const TYPE_LABEL: Record<NotificationType, string> = {
-  BOOKING: 'Đặt phòng',
-  PAYMENT: 'Thanh toán',
-  PROMOTION: 'Ưu đãi',
-  REVIEW: 'Đánh giá',
-  ALERT: 'Cảnh báo',
-  SYSTEM: 'Hệ thống',
-};
-
-function timeAgo(iso: string) {
-  const diff = Date.now() - new Date(iso).getTime();
-  const minutes = Math.max(0, Math.floor(diff / 60_000));
-  if (minutes < 1) return 'Vừa xong';
-  if (minutes < 60) return `${minutes} phút trước`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} giờ trước`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days} ngày trước`;
-  return new Date(iso).toLocaleDateString('vi-VN', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  });
-}
 
 export default function NotificationsPage() {
   const [filter, setFilter] = useState<FilterId>('all');
