@@ -64,20 +64,49 @@ describe('In-app notifications (e2e)', () => {
       (unread.body.data as { title: string }[]).map((n) => n.title),
     ).toEqual(['Thông báo 3', 'Thông báo 2', 'Thông báo 1']);
 
+    // A tab per kind: the type filter, repeatable, combined with unread.
+    await t.prisma.notification.create({
+      data: {
+        userAccountId: me.id,
+        type: 'PAYMENT',
+        title: 'Hoàn tiền',
+        message: 'Đã hoàn tiền',
+      },
+    });
+    const bookings = await t
+      .api()
+      .get('/api/v1/me/notifications?type=BOOKING&type=PAYMENT&unread=true')
+      .set(auth(me.token))
+      .expect(200);
+    expect(bookings.body.meta.total).toBe(4);
+    const payments = await t
+      .api()
+      .get('/api/v1/me/notifications?type=PAYMENT')
+      .set(auth(me.token))
+      .expect(200);
+    expect(
+      (payments.body.data as { title: string }[]).map((n) => n.title),
+    ).toEqual(['Hoàn tiền']);
+    await t
+      .api()
+      .get('/api/v1/me/notifications?type=PROMO')
+      .set(auth(me.token))
+      .expect(400);
+
     // `false` is no filter, not "read only".
     const all = await t
       .api()
       .get('/api/v1/me/notifications?unread=false')
       .set(auth(me.token))
       .expect(200);
-    expect(all.body.meta.total).toBe(4);
+    expect(all.body.meta.total).toBe(5);
 
     const count = await t
       .api()
       .get('/api/v1/me/notifications/unread-count')
       .set(auth(me.token))
       .expect(200);
-    expect(count.body.data).toEqual({ count: 3 });
+    expect(count.body.data).toEqual({ count: 4 });
   });
 
   it('marks one or all as read, only for the recipient', async () => {

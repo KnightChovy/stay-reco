@@ -136,12 +136,12 @@ Changing dates, room type or guests is not offered: cancel and book again (BR-09
 
 | Method | Path | Access | Query | Response |
 |---|---|---|---|---|
-| GET | `/me/notifications` | signed in | `?unread=true&page=&pageSize=` (`notificationListQuerySchema`) | `Notification[]` + `meta` |
+| GET | `/me/notifications` | signed in | `?unread=true&type=&page=&pageSize=` (`notificationListQuerySchema`) | `Notification[]` + `meta` |
 | GET | `/me/notifications/unread-count` | signed in | | `{ count }` |
 | POST | `/me/notifications/:id/read` | the recipient | | `Notification` |
 | POST | `/me/notifications/read-all` | signed in | | `{ updated }` |
 
-- Newest first. `unread=true` keeps only the unread ones; `unread=false` or no value lists all. `link` is the app path to open (`/account/bookings/<id>`, `/staff/bookings/<id>`, `/partner/bookings`); `null` when there is nothing to open.
+- Newest first. `unread=true` keeps only the unread ones; `unread=false` or no value lists all. `type` may be repeated and keeps those kinds (`BOOKING`, `PAYMENT`, `PROMOTION`, `REVIEW`, `ALERT`, `SYSTEM`): for the FE tabs, "Đặt phòng" = `type=BOOKING&type=PAYMENT`; promotions and system notifications come with later phases. An unknown type returns `400 VALIDATION_ERROR`. `link` is the app path to open (`/account/bookings/<id>`, `/staff/bookings/<id>`, `/partner/bookings`); `null` when there is nothing to open.
 - Written for the same person as each booking email, at the same moment (after the change, in the background): `title` is the email subject, `message` its first paragraph. `type` is `PAYMENT` for refund requests and decisions, `BOOKING` for the rest (confirmation, cancellation, change requests). The customer's link opens the booking, a staff member's the staff booking page, the owner's the partner bookings list.
 - Someone else's notification returns `404 NOTIFICATION_NOT_FOUND`. Marking a read notification again is fine (no error).
 
