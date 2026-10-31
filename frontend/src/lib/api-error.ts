@@ -30,10 +30,16 @@ const errorMessages: Record<string, string> = {
   VERIFICATION_PENDING: "Khách sạn đã có hồ sơ đang chờ thẩm định.",
   VERIFICATION_DOCUMENTS_MISSING: "Còn thiếu tài liệu bắt buộc (giấy phép kinh doanh, PCCC, an ninh trật tự).",
   VERIFICATION_NOT_FOUND: "Không tìm thấy hồ sơ hoặc tài liệu.",
+  VERIFICATION_ALREADY_DECIDED: "Hồ sơ đã được một quản lý khác xử lý. Hồ sơ đã được tải lại.",
   UPLOAD_INVALID_FILE: "Tệp không hợp lệ: sai định dạng, quá 10 MB hoặc bị hỏng.",
   UPLOAD_UNAVAILABLE: "Tải tệp tạm thời không khả dụng. Vui lòng thử lại sau.",
   IMAGE_NOT_FOUND: "Không tìm thấy ảnh. Danh sách đã được tải lại.",
   IMAGE_LIMIT_REACHED: "Đã đạt tối đa 30 ảnh. Hãy xoá bớt ảnh trước khi thêm.",
+  PRICING_RULE_NOT_FOUND: "Không tìm thấy luật giá. Danh sách đã được tải lại.",
+  AVAILABILITY_BELOW_BOOKED: "Một số ngày không còn đủ phòng trống để mở bán số lượng này.",
+  BOOKING_NOT_FOUND: "Không tìm thấy booking. Danh sách đã được tải lại.",
+  BOOKING_STATUS_CONFLICT: "Trạng thái booking đã thay đổi. Danh sách đã được tải lại.",
+  REFUND_STATUS_CONFLICT: "Yêu cầu hoàn tiền đã được xử lý. Danh sách đã được tải lại.",
 };
 
 /** Custom messages written in the shared zod schemas (packages/shared/src/schemas), also returned in `details`. */
@@ -51,7 +57,39 @@ const schemaMessages: Record<string, string> = {
   "ID number must be 8-12 letters or digits": "Gồm 8–12 chữ in hoa hoặc chữ số.",
   "account number must be 6-20 digits": "Số tài khoản gồm 6–20 chữ số.",
   "each document must be a different file": "Mỗi tài liệu phải là một tệp khác nhau.",
+  "the new price must be greater than 0": "Giá mới phải lớn hơn 0.",
+  "an adjustment of 0 changes nothing": "Mức điều chỉnh phải khác 0.",
+  "percent must be between -90 and 300": "Phần trăm phải trong khoảng −90 đến 300.",
+  "validFrom and validTo must be sent together": "Nhập đủ ngày bắt đầu và ngày kết thúc.",
+  "validTo must not be before validFrom": "Ngày kết thúc không được trước ngày bắt đầu.",
+  "a rule covers at most 366 days": "Một luật giá áp dụng tối đa 366 ngày.",
+  "a SEASON rule needs validFrom and validTo": "Luật theo mùa cần ngày bắt đầu và ngày kết thúc.",
+  "an EARLY_BIRD rule needs minDaysBefore": "Luật đặt sớm cần số ngày đặt trước tối thiểu.",
+  "a LAST_MINUTE rule needs maxDaysBefore": "Luật phút chót cần số ngày đặt trước tối đa.",
+  "only for EARLY_BIRD rules": "Chỉ dùng cho luật đặt sớm.",
+  "only for LAST_MINUTE rules": "Chỉ dùng cho luật phút chót.",
+  "to must not be before from": "Ngày kết thúc không được trước ngày bắt đầu.",
+  "at most 62 days per request": "Tối đa 62 ngày mỗi lần.",
+  "checkInTo must not be before checkInFrom": "Ngày kết thúc không được trước ngày bắt đầu.",
 };
+
+/** Backend messages that carry a value, so they cannot be keys of `schemaMessages`. */
+const patternMessages: Array<[RegExp, (match: RegExpMatchArray) => string]> = [
+  [
+    /^the price would be 0 or less \(base price ([\d.]+)\)$/,
+    (match) =>
+      `Giá mỗi đêm sẽ bằng 0 hoặc âm (giá cơ bản ${new Intl.NumberFormat("vi-VN").format(Number(match[1]))} ₫).`,
+  ],
+];
+
+function translateMessage(message: string): string {
+  if (schemaMessages[message]) return schemaMessages[message];
+  for (const [pattern, format] of patternMessages) {
+    const match = message.match(pattern);
+    if (match) return format(match);
+  }
+  return message;
+}
 
 function getErrorBody(error: unknown): Partial<APIError> | undefined {
   return (error as AxiosError<APIError> | undefined)?.response?.data;
@@ -74,7 +112,12 @@ export function getApiErrorMessage(error: unknown, fallback = "Đã có lỗi x�
 /** `details` of a 400 VALIDATION_ERROR, keyed by field path. */
 export function getApiFieldErrors(error: unknown): FieldErrors {
   const details = getErrorBody(error)?.details ?? [];
-  return Object.fromEntries(details.map((detail) => [detail.field, schemaMessages[detail.message] ?? detail.message]));
+  return Object.fromEntries(details.map((detail) => [detail.field, translateMessage(detail.message)]));
+}
+
+/** Every `details` entry as sent; for errors that list several items under one field (AVAILABILITY_BELOW_BOOKED). */
+export function getApiErrorDetails(error: unknown) {
+  return getErrorBody(error)?.details ?? [];
 }
 
 function describeIssue(issue: z.core.$ZodIssue): string {
@@ -94,7 +137,9 @@ function describeIssue(issue: z.core.$ZodIssue): string {
       // Issues drop `input` by default; zod's own message still says what was received.
       return issue.message.endsWith("received undefined") ? "Trường này là bắt buộc." : "Giá trị không hợp lệ.";
     case "invalid_format":
-      return issue.format === "email" ? "Email không hợp lệ." : "Định dạng không hợp lệ.";
+      if (issue.format === "email") return "Email không hợp lệ.";
+      if (issue.format === "date") return "Ngày không hợp lệ.";
+      return "Định dạng không hợp lệ.";
     case "invalid_value":
       return "Giá trị không hợp lệ.";
     default:

@@ -2,8 +2,12 @@ import { format } from "date-fns";
 import { vi } from "date-fns/locale";
 import type {
   AccountStatus,
+  BookingStatus,
+  DayOfWeek,
   DocumentType,
   HotelStatus,
+  PaymentStatus,
+  PriceAdjustmentType,
   RoomStatus,
   StaffPermission,
   VerificationRequestType,
@@ -83,4 +87,64 @@ export function formatMoney(amount: number | null | undefined) {
 /** ISO string → "dd/MM/yyyy HH:mm" in the viewer's time zone (Asia/Ho_Chi_Minh for the target users). */
 export function formatDateTime(iso: string | null | undefined) {
   return iso ? format(new Date(iso), "dd/MM/yyyy HH:mm", { locale: vi }) : "—";
+}
+
+export const bookingStatusLabels: Record<BookingStatus, Labelled> = {
+  PENDING: { label: "Chờ thanh toán", tone: "warning" },
+  CONFIRMED: { label: "Đã xác nhận", tone: "success" },
+  CHECKED_IN: { label: "Đang lưu trú", tone: "info" },
+  COMPLETED: { label: "Hoàn tất", tone: "muted" },
+  CANCELLED: { label: "Đã huỷ", tone: "danger" },
+  NO_SHOW: { label: "Không đến", tone: "danger" },
+  EXPIRED: { label: "Hết hạn giữ chỗ", tone: "muted" },
+};
+
+export const paymentStatusLabels: Record<PaymentStatus, Labelled> = {
+  UNPAID: { label: "Chưa thanh toán", tone: "warning" },
+  PAID: { label: "Đã thanh toán", tone: "success" },
+  REFUND_PENDING: { label: "Chờ hoàn tiền", tone: "warning" },
+  PARTIALLY_REFUNDED: { label: "Hoàn một phần", tone: "info" },
+  REFUNDED: { label: "Đã hoàn tiền", tone: "muted" },
+  FAILED: { label: "Thanh toán thất bại", tone: "danger" },
+};
+
+/** Events of `Booking.timeline` (docs/api/customer.md). */
+export const bookingEventLabels: Record<string, string> = {
+  CREATED: "Tạo booking",
+  PAID: "Thanh toán thành công",
+  EXPIRED: "Hết hạn giữ chỗ",
+  CANCEL_REQUESTED: "Khách yêu cầu huỷ",
+  REFUND_FORWARDED: "Nhân viên chuyển yêu cầu hoàn tiền",
+  REFUND_APPROVED: "Duyệt hoàn tiền",
+  REFUND_REJECTED: "Từ chối hoàn tiền",
+  CANCELLED: "Đã huỷ",
+};
+
+export const pricingRuleTypeLabels: Record<"SEASON" | "EARLY_BIRD" | "LAST_MINUTE", { label: string; description: string }> = {
+  SEASON: { label: "Theo mùa / dịp", description: "Áp dụng cho các đêm trong khoảng ngày (lễ, Tết, cao điểm)." },
+  EARLY_BIRD: { label: "Đặt sớm", description: "Khách đặt trước ngày nhận phòng ít nhất N ngày." },
+  LAST_MINUTE: { label: "Phút chót", description: "Khách đặt trong vòng N ngày trước ngày nhận phòng." },
+};
+
+export const adjustmentTypeLabels: Record<PriceAdjustmentType, string> = {
+  SET_PRICE: "Đặt giá cố định",
+  AMOUNT: "Cộng / trừ số tiền",
+  PERCENT: "Cộng / trừ phần trăm",
+};
+
+export const dayOfWeekLabels: Record<DayOfWeek, string> = {
+  MON: "Thứ 2",
+  TUE: "Thứ 3",
+  WED: "Thứ 4",
+  THU: "Thứ 5",
+  FRI: "Thứ 6",
+  SAT: "Thứ 7",
+  SUN: "Chủ nhật",
+};
+
+/** "YYYY-MM-DD" (a calendar date, no time zone) → "dd/MM/yyyy". */
+export function formatDate(date: string | null | undefined) {
+  if (!date) return "—";
+  const [year, month, day] = date.split("-");
+  return `${day}/${month}/${year}`;
 }

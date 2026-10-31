@@ -71,6 +71,22 @@ export type CancellationPolicy = z.infer<typeof cancellationPolicyResponseSchema
 
 const hhmm = z.string().describe('"HH:mm"');
 
+export const lateCheckoutPolicyResponseSchema = z
+  .object({
+    graceMinutes: z.number().int().describe('Free minutes after the check-out time.'),
+    cutoffTime: hhmm.describe('Until this time on the check-out date the lower rate applies.'),
+    beforeCutoffPercent: z.number().int().describe('Percent of the last night price per room, before the cutoff.'),
+    afterCutoffPercent: z
+      .number()
+      .int()
+      .describe('Percent of the last night price per room from the cutoff, and again for each later day.'),
+  })
+  .register(responseSchemas, {
+    id: 'LateCheckoutPolicy',
+    description: 'Late check-out fee, collected at the front desk (decisions L1–L3).',
+  });
+export type LateCheckoutPolicy = z.infer<typeof lateCheckoutPolicyResponseSchema>;
+
 export const hotelResponseSchema = z
   .object({
     id: z.uuid(),
@@ -100,6 +116,9 @@ export const hotelResponseSchema = z
     cancellationPolicy: cancellationPolicyResponseSchema.describe(
       'Fixed on each booking when it is made (BR-07); the default applies until the partner sets one.',
     ),
+    lateCheckoutPolicy: lateCheckoutPolicyResponseSchema
+      .nullable()
+      .describe('null: checking out late costs nothing. The current policy applies at check-out.'),
     createdAt: isoDateTime(),
   })
   .register(responseSchemas, { id: 'Hotel' });

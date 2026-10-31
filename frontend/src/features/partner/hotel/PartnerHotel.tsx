@@ -6,7 +6,13 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Building2, Plus } from "lucide-react";
 import type { Hotel } from "@stayreco/shared";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useHotel } from "../api/partner-queries";
 import {
@@ -21,6 +27,7 @@ import {
 } from "../components";
 import { formatDateTime, hotelStatusLabels } from "../lib/labels";
 import { HotelAmenitiesForm } from "./HotelAmenitiesForm";
+import { CancellationPolicyForm } from "./CancellationPolicyForm";
 import { HotelImagesManager } from "./HotelImagesManager";
 import { HotelInfoForm } from "./HotelInfoForm";
 import { HotelPoliciesForm } from "./HotelPoliciesForm";
@@ -31,6 +38,7 @@ const tabs = [
   { value: "info", label: "Thông tin chung" },
   { value: "amenities", label: "Tiện ích" },
   { value: "policies", label: "Chính sách" },
+  { value: "cancellation", label: "Huỷ phòng" },
   { value: "room-config", label: "Cấu hình phòng" },
   { value: "images", label: "Hình ảnh" },
 ] as const;
@@ -41,12 +49,20 @@ function isHotelTab(value: string | null): value is HotelTab {
 }
 
 export default function PartnerHotel() {
-  const { hotels, hotel: summary, isLoading, error, refetch, canEdit, isSuspended } = usePartnerHotel();
+  const {
+    hotels,
+    hotel: summary,
+    isLoading,
+    error,
+    refetch,
+    canEdit,
+    isSuspended,
+  } = usePartnerHotel();
   const [createOpen, setCreateOpen] = useState(false);
   const hotelQuery = useHotel(summary?.id);
 
   const createAction = canEdit && (
-    <Button onClick={() => setCreateOpen(true)}>
+    <Button className={"cursor-pointer"} onClick={() => setCreateOpen(true)}>
       <Plus />
       Thêm khách sạn
     </Button>
@@ -75,7 +91,10 @@ export default function PartnerHotel() {
       ) : hotelQuery.isLoading ? (
         <LoadingPanel rows={5} />
       ) : hotelQuery.error || !hotelQuery.data ? (
-        <ErrorPanel error={hotelQuery.error} onRetry={() => void hotelQuery.refetch()} />
+        <ErrorPanel
+          error={hotelQuery.error}
+          onRetry={() => void hotelQuery.refetch()}
+        />
       ) : (
         <HotelDetail key={hotelQuery.data.id} hotel={hotelQuery.data} />
       )}
@@ -85,7 +104,8 @@ export default function PartnerHotel() {
           <DialogHeader>
             <DialogTitle>Tạo khách sạn mới</DialogTitle>
             <DialogDescription>
-              Khách sạn được lưu ở trạng thái bản nháp; bạn có thể bổ sung thông tin trước khi gửi xác minh.
+              Khách sạn được lưu ở trạng thái bản nháp; bạn có thể bổ sung thông
+              tin trước khi gửi xác minh.
             </DialogDescription>
           </DialogHeader>
           {createOpen && <HotelInfoForm onSaved={() => setCreateOpen(false)} />}
@@ -116,7 +136,9 @@ function HotelDetail({ hotel }: { hotel: Hotel }) {
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <h2 className="text-lg font-bold text-primary">{hotel.name}</h2>
           <StatusBadge tone={status.tone}>{status.label}</StatusBadge>
-          <span className="text-xs text-muted-foreground">Tạo lúc {formatDateTime(hotel.createdAt)}</span>
+          <span className="text-xs text-muted-foreground">
+            Tạo lúc {formatDateTime(hotel.createdAt)}
+          </span>
         </div>
         <Tabs value={tab} onValueChange={(value) => setTab(value as HotelTab)}>
           <div className="overflow-x-auto pb-1">
@@ -136,6 +158,9 @@ function HotelDetail({ hotel }: { hotel: Hotel }) {
           </TabsContent>
           <TabsContent value="policies" className="pt-4">
             <HotelPoliciesForm hotel={hotel} />
+          </TabsContent>
+          <TabsContent value="cancellation" className="pt-4">
+            <CancellationPolicyForm hotel={hotel} />
           </TabsContent>
           <TabsContent value="room-config" className="pt-4">
             <RoomConfigForm hotel={hotel} />
@@ -158,7 +183,8 @@ function HotelAside({ hotel }: { hotel: Hotel }) {
         <PartnerPanel className="bg-primary p-5 text-primary-foreground">
           <h2 className="font-bold">Sẵn sàng mở bán?</h2>
           <p className="mt-2 text-sm text-primary-foreground/75">
-            Khách sạn chỉ hiển thị với khách sau khi StayReco duyệt hồ sơ xác minh.
+            Khách sạn chỉ hiển thị với khách sau khi StayReco duyệt hồ sơ xác
+            minh.
           </p>
           <Link
             href="/partner/verification"

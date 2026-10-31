@@ -22,6 +22,16 @@ export const partnerKeys = {
   staff: (hotelId: string) => [...partnerKeys.all, "staff", hotelId] as const,
   verifications: (hotelId: string) => [...partnerKeys.all, "verifications", hotelId] as const,
   verification: (requestId: string) => [...partnerKeys.all, "verification", requestId] as const,
+  pricingRules: (hotelId: string) => [...partnerKeys.all, "pricing-rules", hotelId] as const,
+  pricePreview: (roomTypeId: string, date: string, bookedOn: string) =>
+    [...partnerKeys.all, "price-preview", roomTypeId, date, bookedOn] as const,
+  availabilityOf: (hotelId: string) => [...partnerKeys.all, "availability", hotelId] as const,
+  availability: (hotelId: string, from: string, to: string) =>
+    [...partnerKeys.availabilityOf(hotelId), from, to] as const,
+  bookingsOf: (hotelId: string) => [...partnerKeys.all, "bookings", hotelId] as const,
+  bookings: (hotelId: string, params: partnerService.HotelBookingsParams) =>
+    [...partnerKeys.bookingsOf(hotelId), params] as const,
+  booking: (bookingId: string) => [...partnerKeys.all, "booking", bookingId] as const,
 };
 
 const catalogKeys = {
@@ -90,6 +100,54 @@ export function useVerificationRequest(requestId: string | undefined) {
     queryKey: partnerKeys.verification(requestId ?? ""),
     queryFn: () => partnerService.getVerificationRequest(requestId!),
     enabled: !!requestId,
+  });
+}
+
+export function usePricingRules(hotelId: string | undefined) {
+  return useQuery({
+    queryKey: partnerKeys.pricingRules(hotelId ?? ""),
+    queryFn: () => partnerService.getPricingRules(hotelId!),
+    enabled: !!hotelId,
+  });
+}
+
+export function usePricePreview(roomTypeId: string | undefined, date: string, bookedOn: string) {
+  return useQuery({
+    queryKey: partnerKeys.pricePreview(roomTypeId ?? "", date, bookedOn),
+    queryFn: () => partnerService.getPricePreview(roomTypeId!, { date, bookedOn }),
+    enabled: !!roomTypeId && !!date && !!bookedOn,
+  });
+}
+
+export function useAvailability(hotelId: string | undefined, from: string, to: string) {
+  return useQuery({
+    queryKey: partnerKeys.availability(hotelId ?? "", from, to),
+    queryFn: () => partnerService.getAvailability(hotelId!, { from, to }),
+    enabled: !!hotelId,
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useHotelBookings(hotelId: string | undefined, params: partnerService.HotelBookingsParams) {
+  return useQuery({
+    queryKey: partnerKeys.bookings(hotelId ?? "", params),
+    queryFn: () => partnerService.getHotelBookings(hotelId!, params),
+    enabled: !!hotelId,
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** Number of refund requests waiting for the partner (sidebar badge, dashboard, bookings tab). */
+export function useRefundQueueCount(hotelId: string | undefined) {
+  const query = useHotelBookings(hotelId, { paymentStatus: ["REFUND_PENDING"], page: 1, pageSize: 1 });
+  return { ...query, count: query.data?.meta.total ?? 0 };
+}
+
+export function useBooking(bookingId: string | undefined) {
+  return useQuery({
+    queryKey: partnerKeys.booking(bookingId ?? ""),
+    queryFn: () => partnerService.getBooking(bookingId!),
+    enabled: !!bookingId,
   });
 }
 

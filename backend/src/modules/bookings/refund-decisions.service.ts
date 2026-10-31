@@ -2,10 +2,6 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
-  Logger,
-  NotFoundException,
-  OnApplicationBootstrap,
-  OnModuleDestroy,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type {
@@ -15,6 +11,7 @@ import type {
 } from '@stayreco/shared';
 import type { AuthUser } from '../../common/decorators/current-user.decorator';
 import { ErrorCode } from '../../common/errors/error-code';
+import { PeriodicJob } from '../../common/jobs/periodic-job';
 import {
   toCalendarDate,
   vietnamDateTime,
@@ -31,17 +28,16 @@ import { AuditAction } from '../audit/audit.service';
 import { fromTime } from '../hotels/hotel.mapper';
 import { DEFAULT_CHECK_IN_TIME } from '../stays/offer';
 import { WalletLedger } from '../wallets/wallet-ledger';
-import { loadBookingHistory, recordBookingEvent } from './booking-history';
+import { bookingNotFound } from './booking-access';
+import {
+  closePendingChange,
+  loadBookingHistory,
+  recordBookingEvent,
+} from './booking-history';
 import { BookingMailer } from './booking-mailer';
 import { BookingsService } from './bookings.service';
 
 const EVERY_MINUTE = 60_000;
-
-const bookingNotFound = () =>
-  new NotFoundException({
-    code: ErrorCode.BOOKING_NOT_FOUND,
-    message: 'Booking not found',
-  });
 
 const notPending = () =>
   new ConflictException({
@@ -59,33 +55,21 @@ type Decider = { role: 'HOTEL_PARTNER'; accountId: string } | null;
  * partner and the automatic approval racing each other apply once.
  */
 @Injectable()
-export class RefundDecisionsService
-  implements OnApplicationBootstrap, OnModuleDestroy
-{
-  private readonly logger = new Logger('RefundDecisions');
-  private timer?: NodeJS.Timeout;
-
+export class RefundDecisionsService extends PeriodicJob {
   constructor(
     private readonly prisma: PrismaService,
     private readonly access: HotelAccessService,
     private readonly ledger: WalletLedger,
     private readonly bookings: BookingsService,
     private readonly mailer: BookingMailer,
-    private readonly config: ConfigService<Env, true>,
-  ) {}
-
-  /** Tests call `approveDue` themselves instead of waiting for the timer. */
-  onApplicationBootstrap() {
-    if (this.config.get('NODE_ENV', { infer: true }) === 'test') return;
-    this.timer = setInterval(() => {
-      this.approveDue().catch((err: unknown) =>
-        this.logger.error(`Automatic refund approval failed: ${String(err)}`),
-      );
-    }, EVERY_MINUTE);
+    config: ConfigService<Env, true>,
+  ) {
+    super('RefundDecisions', EVERY_MINUTE, config);
   }
 
-  onModuleDestroy() {
-    clearInterval(this.timer);
+  /** Tests call `approveDue` themselves instead of waiting for the timer. */
+  protected run() {
+    return this.approveDue();
   }
 
   /** Staff with REFUND only: the owner decides directly. Written to the history; the partner reads it there. */
@@ -238,6 +222,7 @@ export class RefundDecisionsService
       },
     });
     await tx.roomCalendars.deleteMany({ where: { bookingId } });
+    await closePendingChange(tx, bookingId, now);
 
     const code = booking.invoice!.invoiceNumber;
     const hotelWallet = await this.ledger.hotelWallet(

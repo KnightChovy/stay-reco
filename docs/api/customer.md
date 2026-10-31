@@ -1,7 +1,7 @@
 # API: Customer (`CUSTOMER`)
 
 > FE screens: home page, `search`, `hotels/[id]`, `hotels/[id]/rooms/[roomId]`, `booking/*`, `account/bookings/*`.
-> **Status: Agreed** (phase 2, being built). Business rules behind these endpoints (prices, holds, payment, cancellation, refunds): [money-rules.md](../money-rules.md) and [phases/phase-2-search-booking.md](../phases/phase-2-search-booking.md).
+> **Status: Agreed** (phase 2, backend built; becomes `Integrated` once FE uses it). Business rules behind these endpoints (prices, holds, payment, cancellation, refunds): [money-rules.md](../money-rules.md) and [phases/phase-2-search-booking.md](../phases/phase-2-search-booking.md).
 
 ## Available now
 
@@ -49,7 +49,7 @@ Stay parameters used by several endpoints (`stayQuerySchema`):
 | Method | Path | Access | Body / Query | Response |
 |---|---|---|---|---|
 | POST | `/bookings` | CUSTOMER | `createBookingSchema` | `Booking` (201), `PENDING`, with `payment` |
-| GET | `/bookings/:id` | the customer who booked; the hotel owner; staff with `BOOKING` or `REFUND` | | `Booking` |
+| GET | `/bookings/:id` | the customer who booked; the hotel owner; staff with `BOOKING`, `REFUND` or `FRONT_DESK` | | `Booking` |
 | GET | `/me/bookings` | CUSTOMER | `?tab=&search=&page=&pageSize=` (`myBookingsQuerySchema`) | `BookingSummary[]` + `meta` |
 | GET | `/bookings/:id/cancellation-quote` | the customer who booked | | `CancellationQuote` |
 | POST | `/bookings/:id/cancel` | the customer who booked | `{ reason }` (`cancelBookingSchema`) | `Booking` |
@@ -103,9 +103,47 @@ The booking becomes `CONFIRMED` only when SePay reports a transfer with this con
 3. The fee and refund shown by the quote are fixed when the customer confirms: the hotel approves exactly that amount, even if the deadline passes while it waits. After the cancel, `Booking.cancelReason` holds the reason, `Booking.refund` the request (`{ status, amount }`, `status` being the invoice status), and `timeline` gains `CANCEL_REQUESTED` (and `CANCELLED` once cancelled).
 4. Only a `CONFIRMED` booking without a pending refund can be cancelled. A `CHECKED_IN` booking returns `409 CANCELLATION_NOT_ALLOWED` (BR-09); any other status, or a refund already pending, returns `409 BOOKING_STATUS_CONFLICT`.
 
-Changing dates, room type or guests is not offered: cancel and book again (BR-09). Changing the guest name, phone, arrival time or special requests comes in phase 3 (UC25).
+Changing dates, room type or guests is not offered: cancel and book again (BR-09). Changing the guest name, phone, arrival time or special requests: see [Change requests](#change-requests-phase-3).
 
 **Voucher** (`GET /bookings/:id/voucher`, UC23, for the customer who booked): booking code, hotel, room type, dates, guests, amount paid, and `qrToken`, a token signed by the server (not the bare booking code) that the FE renders as a QR code. It is the booking code followed by a signature (`SR-261022-0842.<signature>`) checked by the hotel at check-in, so an edited code is refused. Only for `CONFIRMED` / `CHECKED_IN` bookings; any other status, a cancelled booking included, returns `409 BOOKING_STATUS_CONFLICT` (show "no longer valid").
+
+**During and after the stay** (phase 3). The hotel checks the guest in (`CHECKED_IN`, `Booking.assignedRooms` shows the room numbers), then out (`COMPLETED`). A guest who never arrives becomes `NO_SHOW`: the hotel keeps the payment (BR-20). Leaving early is not refunded (BR-09). The timeline gains `CHECKED_IN`, `COMPLETED` or `NO_SHOW`. Leaving after the check-out time may cost a late check-out fee under the hotel's policy (`HotelListing.hotel.lateCheckoutPolicy`, shown on the hotel page; `null`: no fee). It is paid at the front desk, not through StayReco, and `Booking.lateCheckout` shows it after check-out: `{ minutesLate, computedFee, fee, reason }`.
+
+## Change requests (phase 3)
+
+*(Draft)* UC25, decision O11 in [phase-3-operations.md](../phases/phase-3-operations.md). The hotel side is in [staff.md](./staff.md#change-requests-phase-3).
+
+| Method | Path | Access | Body | Response |
+|---|---|---|---|---|
+| POST | `/bookings/:id/change-request` | the customer who booked | `changeRequestSchema` | `Booking` |
+
+```jsonc
+{ "guestName": "Trần Văn B",       // optional, max 100
+  "contactPhone": "0905999888",    // optional, phone rule
+  "arrivalTime": "20:00",          // optional "HH:mm"; null clears it
+  "specialRequests": null }        // optional, max 500; null clears it
+```
+
+- At least one field. Fields equal to the booking are dropped from the request; when none is left the answer is `400 VALIDATION_ERROR` (`details`: each field sent, "same as the booking"). An empty `specialRequests` counts as none. Dates, room type and guests cannot change (BR-09): cancel and book again.
+- Only a `CONFIRMED` booking (`409 BOOKING_STATUS_CONFLICT` otherwise), not while a refund request waits (`409 REFUND_DECISION_PENDING`), one waiting request at a time (`409 CHANGE_REQUEST_PENDING`).
+- A request still waiting when the booking is cancelled, checked in or marked no-show is closed automatically: `changeRequest.status` becomes `REJECTED` with a fixed reason, and the timeline shows `CHANGE_REJECTED` just before the status change.
+- The hotel (staff with `BOOKING`, the owner) is emailed and notified; it accepts (the booking takes the new values) or rejects with a reason. The customer is emailed and notified either way.
+- `Booking.changeRequest` shows the latest request: `{ status: "PENDING" | "ACCEPTED" | "REJECTED", changes: { … }, requestedAt, decidedAt, reason }`. The timeline gains `CHANGE_REQUESTED`, then `CHANGE_ACCEPTED` or `CHANGE_REJECTED`.
+
+## Notifications (phase 3)
+
+*(Draft)* Every signed-in role (customers, partners, staff). Decision O12: each booking, refund or change-request email also creates an in-app notification.
+
+| Method | Path | Access | Query | Response |
+|---|---|---|---|---|
+| GET | `/me/notifications` | signed in | `?unread=true&type=&page=&pageSize=` (`notificationListQuerySchema`) | `Notification[]` + `meta` |
+| GET | `/me/notifications/unread-count` | signed in | | `{ count }` |
+| POST | `/me/notifications/:id/read` | the recipient | | `Notification` |
+| POST | `/me/notifications/read-all` | signed in | | `{ updated }` |
+
+- Newest first. `unread=true` keeps only the unread ones; `unread=false` or no value lists all. `type` may be repeated and keeps those kinds (`BOOKING`, `PAYMENT`, `PROMOTION`, `REVIEW`, `ALERT`, `SYSTEM`): for the FE tabs, "Đặt phòng" = `type=BOOKING&type=PAYMENT`; promotions and system notifications come with later phases. An unknown type returns `400 VALIDATION_ERROR`. `link` is the app path to open (`/account/bookings/<id>`, `/staff/bookings/<id>`, `/partner/bookings`); `null` when there is nothing to open.
+- Written for the same person as each booking email, at the same moment (after the change, in the background): `title` is the email subject, `message` its first paragraph. `type` is `PAYMENT` for refund requests and decisions, `BOOKING` for the rest (confirmation, cancellation, change requests). The customer's link opens the booking, a staff member's the staff booking page, the owner's the partner bookings list.
+- Someone else's notification returns `404 NOTIFICATION_NOT_FOUND`. Marking a read notification again is fine (no error).
 
 ## Types
 
@@ -153,8 +191,21 @@ Changing dates, room type or guests is not offered: cancel and book again (BR-09
   "refund": null,                         // { "status": "REFUND_PENDING" | "REFUNDED" | …, "amount": 1800000 }
   "refundRejection": null,                // { "reason": "…", "at": "…" } when the hotel rejected the latest request
   "cancelReason": null, "cancelledAt": null,
+  "assignedRooms": [ { "id": "uuid", "roomNumber": "501" } ],   // phase 3: rooms of the stay; [] for the customer before check-in
+  "changeRequest": null,                  // phase 3: { "status": "PENDING", "changes": { "arrivalTime": "20:00" },
+                                          //   "requestedAt": "…", "decidedAt": null, "reason": null }
   "timeline": [ { "at": "…", "event": "CREATED" }, { "at": "…", "event": "PAID" } ] }
-// timeline events: CREATED, PAID, EXPIRED, CANCEL_REQUESTED, REFUND_FORWARDED, REFUND_APPROVED, REFUND_REJECTED, CANCELLED
+// timeline events: CREATED, PAID, EXPIRED, CANCEL_REQUESTED, REFUND_FORWARDED, REFUND_APPROVED, REFUND_REJECTED, CANCELLED,
+//   CHECKED_IN, COMPLETED, NO_SHOW, CHANGE_REQUESTED, CHANGE_ACCEPTED, CHANGE_REJECTED (phase 3)
+
+// RoomOptions (phase 3, staff)
+{ "held": [ { "id": "uuid", "roomNumber": "501", "status": "AVAILABLE" } ],
+  "available": [ { "id": "uuid", "roomNumber": "502", "status": "AVAILABLE" } ] }
+
+// Notification (phase 3)
+{ "id": "uuid", "type": "BOOKING", "title": "Xác nhận đặt phòng SR-261022-0842",
+  "message": "…", "link": "/account/bookings/uuid", "isRead": false, "createdAt": "…" }
+// type: BOOKING · PAYMENT · REVIEW · PROMOTION · ALERT · SYSTEM
 
 // CancellationQuote
 { "freeUntil": "…", "feePercent": 50, "paid": 3600000, "fee": 1800000, "refund": 1800000,

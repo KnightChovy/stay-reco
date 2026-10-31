@@ -1,9 +1,11 @@
 import { z } from 'zod';
-import { BookingStatus, DayOfWeek, PaymentStatus, PriceAdjustmentType, PriceRuleType } from '../enums';
+import { BookingStatus, DayOfWeek, PaymentStatus, PriceAdjustmentType, PriceRuleType, RoomStatus } from '../enums';
+import { CHANGE_REQUEST_STATUSES } from '../schemas/booking';
 import {
   amenityResponseSchema,
   cancellationPolicyResponseSchema,
   hotelImageResponseSchema,
+  lateCheckoutPolicyResponseSchema,
   roomTypeImageResponseSchema,
 } from './hotel';
 import { isoDateTime, responseSchemas } from './registry';
@@ -137,6 +139,7 @@ export const hotelListingResponseSchema = z
       images: z.array(hotelImageResponseSchema),
       policies: z.record(z.string(), z.string()),
       cancellationPolicy: cancellationPolicyResponseSchema,
+      lateCheckoutPolicy: lateCheckoutPolicyResponseSchema.nullable().describe('null: no late check-out fee.'),
     }),
     roomTypes: z.array(roomTypeListingResponseSchema),
   })
@@ -205,10 +208,81 @@ export const bookingResponseSchema = bookingSummaryResponseSchema
       .describe('Set when the hotel rejected the latest refund request; the booking stays CONFIRMED.'),
     cancelReason: z.string().nullable(),
     cancelledAt: isoDateTime().nullable(),
+    assignedRooms: z
+      .array(z.object({ id: z.uuid(), roomNumber: z.string() }))
+      .describe(
+        'Rooms of the stay: held at booking, replaced by the rooms assigned at check-in. Empty for the customer before check-in.',
+      ),
+    changeRequest: z
+      .object({
+        status: z.enum(CHANGE_REQUEST_STATUSES),
+        changes: z.object({
+          guestName: z.string().optional(),
+          contactPhone: z.string().optional(),
+          arrivalTime: z.string().nullable().optional(),
+          specialRequests: z.string().nullable().optional(),
+        }),
+        requestedAt: isoDateTime(),
+        decidedAt: isoDateTime().nullable(),
+        reason: z.string().nullable().describe('Set when the hotel rejected the request.'),
+      })
+      .nullable()
+      .describe('The latest request to change guest details (UC25), null when there was none.'),
+    lateCheckout: z
+      .object({
+        minutesLate: z.number().int().describe('After the check-out time of the check-out date.'),
+        computedFee: z.number().describe('Under the hotel policy at check-out; 0 when it has none.'),
+        fee: z.number().describe('Charged at the front desk; below computedFee when staff lowered it.'),
+        reason: z.string().nullable().describe('Why staff lowered the fee.'),
+      })
+      .nullable()
+      .describe(
+        'Set when the guest checked out after the check-out time and its grace period. The fee is collected at the front desk, not through StayReco (decision L5).',
+      ),
     timeline: z.array(z.object({ at: isoDateTime(), event: z.string() })),
   })
   .register(responseSchemas, { id: 'Booking' });
 export type Booking = z.infer<typeof bookingResponseSchema>;
+
+export const roomOptionResponseSchema = z
+  .object({ id: z.uuid(), roomNumber: z.string(), status: z.enum(RoomStatus) })
+  .register(responseSchemas, { id: 'RoomOption' });
+export type RoomOption = z.infer<typeof roomOptionResponseSchema>;
+
+export const roomOptionsResponseSchema = z
+  .object({
+    held: z.array(roomOptionResponseSchema).describe('Rooms the booking holds now.'),
+    available: z
+      .array(roomOptionResponseSchema)
+      .describe('Other rooms of the booked type, AVAILABLE and free on every remaining night.'),
+  })
+  .register(responseSchemas, { id: 'RoomOptions', description: 'Rooms to assign at check-in (UC38, BR-10).' });
+export type RoomOptions = z.infer<typeof roomOptionsResponseSchema>;
+
+export const checkOutQuoteResponseSchema = z
+  .object({
+    scheduledAt: isoDateTime().describe('The check-out date at the hotel check-out time (12:00 when not set).'),
+    early: z.boolean().describe('Leaving before the check-out date: the nights from today on are released, no refund.'),
+    releasedNights: z.array(calendarDate()).describe('Nights released by checking out now.'),
+    minutesLate: z.number().int().describe('After `scheduledAt`; 0 when not late.'),
+    lateFee: z
+      .object({
+        amount: z.number().describe('Whole dong, to collect at the front desk.'),
+        percent: z
+          .number()
+          .int()
+          .describe('Of the night price: the rate of the departure time, plus the full rate for each later day.'),
+        nightPrice: z.number().describe('Last night price × rooms, fixed at booking.'),
+      })
+      .nullable()
+      .describe('null: within the grace period, not late, or the hotel has no late check-out policy.'),
+    amountPaid: z.number(),
+  })
+  .register(responseSchemas, {
+    id: 'CheckOutQuote',
+    description: 'What checking out now means (UC39, decisions L2–L6); the fee is computed again at check-out.',
+  });
+export type CheckOutQuote = z.infer<typeof checkOutQuoteResponseSchema>;
 
 export const bookingVoucherResponseSchema = z
   .object({

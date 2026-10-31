@@ -27,6 +27,14 @@ const TAGS: [name: string, description: string][] = [
     'Bookings with a 15-minute hold, payment details and the booking page. Guide: docs/api/customer.md#bookings',
   ],
   [
+    'front-desk',
+    'Booking lookup, room assignment and check-in by the front desk. Guide: docs/api/staff.md#front-desk-phase-3',
+  ],
+  [
+    'notifications',
+    'In-app notifications of the signed-in account, next to the booking emails. Guide: docs/api/customer.md#notifications-phase-3',
+  ],
+  [
     'payments',
     'SePay webhook (called by SePay) and the development payment simulator. Rules: docs/money-rules.md',
   ],
@@ -41,6 +49,10 @@ const TAGS: [name: string, description: string][] = [
   [
     'verification',
     'Hotel verification: partner submissions and the platform manager review. Guides: docs/api/partner.md, docs/api/manager.md',
+  ],
+  [
+    'dashboard',
+    'Partner dashboard: action items, today, KPIs with the previous period, chart series, occupancy forecast. Guide: docs/api/partner-dashboard.md',
   ],
 ];
 

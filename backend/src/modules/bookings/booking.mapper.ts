@@ -4,7 +4,7 @@ import { toCalendarDate } from '../../common/http/calendar-date';
 import { toNumber } from '../../common/http/decimal';
 import type { Prisma } from '../../generated/prisma/client';
 import { fromTime } from '../hotels/hotel.mapper';
-import type { BookingHistory } from './booking-history';
+import type { BookingHistory, StayRoom } from './booking-history';
 
 /** What a booking card needs (my trips, the hotel's booking list). */
 export const bookingSummaryInclude = {
@@ -94,8 +94,9 @@ export function toBooking(
   b: BookingWithDetails,
   paymentDetails: PaymentDetails,
   history: BookingHistory,
+  assignedRooms: StayRoom[],
 ): Booking {
-  const { cancelRequest, rejection } = history;
+  const { cancelRequest, rejection, changeRequest, lateCheckout } = history;
   const invoice = b.invoice!;
   const summary = toBookingSummary(b);
   const totalAmount = summary.totalAmount;
@@ -103,8 +104,11 @@ export function toBooking(
     b.status === 'PENDING' ? (b.roomCalendars[0]?.holdExpiresAt ?? null) : null;
 
   const timeline = [{ at: b.createdAt, event: 'CREATED' }];
-  if (invoice.paidAt) timeline.push({ at: invoice.paidAt, event: 'PAID' });
-  if (b.status === 'EXPIRED')
+  // Bookings paid or expired before those events were recorded (O15) show them from their columns.
+  const recorded = new Set(history.events.map((e) => e.event));
+  if (invoice.paidAt && !recorded.has('PAID'))
+    timeline.push({ at: invoice.paidAt, event: 'PAID' });
+  if (b.status === 'EXPIRED' && !recorded.has('EXPIRED'))
     timeline.push({ at: b.updatedAt, event: 'EXPIRED' });
   timeline.push(...history.events);
   if (b.cancelledAt) timeline.push({ at: b.cancelledAt, event: 'CANCELLED' });
@@ -140,6 +144,15 @@ export function toBooking(
         : null,
     cancelReason: cancelRequest?.reason ?? null,
     cancelledAt: b.cancelledAt?.toISOString() ?? null,
+    assignedRooms,
+    changeRequest: changeRequest && {
+      status: changeRequest.status,
+      changes: changeRequest.changes,
+      requestedAt: changeRequest.requestedAt.toISOString(),
+      decidedAt: changeRequest.decidedAt?.toISOString() ?? null,
+      reason: changeRequest.reason,
+    },
+    lateCheckout,
     timeline: timeline.map((t) => ({ at: t.at.toISOString(), event: t.event })),
   };
 }

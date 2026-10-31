@@ -188,6 +188,7 @@ export class StaysService {
         images: details.images,
         policies: details.policies,
         cancellationPolicy: details.cancellationPolicy,
+        lateCheckoutPolicy: details.lateCheckoutPolicy,
       },
       roomTypes: hotel.roomTypes.map((rt) =>
         toRoomTypeListing(rt, offers?.get(rt.roomTypeId) ?? null),

@@ -222,6 +222,7 @@ enum WalletTxnType {
   REFUND
   TOPUP
   ADJUSTMENT
+  SETTLEMENT
 
   @@map("wallet_txn_type")
 }
@@ -405,6 +406,8 @@ model AuditLog {
   admin             Admin?           @relation(fields: [adminId], references: [adminId])
   platformManager   PlatformManager? @relation(fields: [platformManagerId], references: [platformManagerId])
 
+  // The history of one entity in order (booking timeline, change-request queue).
+  @@index([entityType, entityId, createdAt])
   @@map("audit_log")
 }
 
@@ -465,6 +468,10 @@ model Booking {
   conversations      Conversation[]
   aiFunctionCalls    AiFunctionCall[]
 
+  // Hotel-scoped reads reach bookings through the room type: by stay date (bookings list, arrivals, dashboard
+  // figures) and by booking date (bookings created in a period).
+  @@index([roomTypeId, checkInDate])
+  @@index([roomTypeId, createdAt])
   @@map("booking")
 }
 
@@ -860,10 +867,12 @@ model Notification {
   title          String?          @db.VarChar(255)
   message        String
   type           NotificationType
+  link           String?          @db.VarChar(500)
   isRead         Boolean          @default(false) @map("is_read")
   createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
   userAccount    UserAccount      @relation(fields: [userAccountId], references: [userAccountId])
 
+  @@index([userAccountId, createdAt(sort: Desc)])
   @@map("notification")
 }
 
@@ -1285,5 +1294,7 @@ model WalletTransaction {
   booking             Booking?         @relation(fields: [bookingId], references: [bookingId])
   platformManager     PlatformManager? @relation(fields: [platformManagerId], references: [platformManagerId])
 
+  // A wallet's ledger over a period (dashboard cash figures, statements).
+  @@index([walletId, createdAt])
   @@map("wallet_transaction")
 }

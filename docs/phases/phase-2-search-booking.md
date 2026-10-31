@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Phase status | 🟡 In progress |
+| Phase status | 🟡 BE done, FE integrating |
 | API status | `Agreed` |
 | Agreed on | 2026-10-23 |
 | BE owners | Khiêm, Phúc |
@@ -101,7 +101,8 @@ room_calendars:  (free) ──hold──► HELD ──paid──► BOOKED ─�
 - No code, an unknown code, a different amount or another account → `audit_log` `SEPAY_TRANSFER_UNMATCHED`; a transfer for a booking that is no longer `PENDING` (expired, already paid) → `SEPAY_TRANSFER_LATE`, to refund by hand. One audit row per SePay transaction. Every call with a valid key is answered `{ success: true, data: { outcome } }`, so SePay does not resend it.
 - Checked against SePay's documentation (docs.sepay.vn, "Tích hợp WebHooks", 2026-10-25): SePay counts a call as delivered only with HTTP 200/201, a body containing `{"success": true}` and an answer within 30 seconds; otherwise it resends up to 7 times over at most 5 hours (Fibonacci intervals), always with the same `id`. The handler therefore sends the confirmation email in the background, and SMTP connections time out after about 10 seconds.
 - The body is read leniently (text fields may be null or numbers, `id` a number or a string, `transferType` in any case), because SePay's test notifications and some banks differ from the documented example. A body that still does not fit is refused with `400 VALIDATION_ERROR`, the failing fields are written to the server log, and the raw payload is kept in `audit_log` (`SEPAY_TRANSFER_UNMATCHED`, reason `INVALID_PAYLOAD`); SePay's resends then succeed once a fix is deployed.
-- Local development needs a public URL for the webhook (ngrok).
+- Local development needs a public URL for the webhook (ngrok), or the dev payment simulator (P16).
+- Verified on staging (Render, 2026-10-25): the webhook is registered in the SePay dashboard for the platform's ACB account; SePay's test notification was answered 200 and a real 5,000 ₫ transfer without a booking code reached the webhook and was logged `NO_BOOKING_CODE`, so the API key and account settings are right. Still to do: a real booking paid with its booking code (expect `Booking SR-… paid (SePay …)` in the log, booking `CONFIRMED`, invoice `PAID`). Booking emails on staging wait for the paid Render plan (the free plan blocks SMTP).
 
 ## Limits (locked for this phase)
 
@@ -141,15 +142,17 @@ room_calendars:  (free) ──hold──► HELD ──paid──► BOOKED ─�
 
 - [x] No overbooking when 2 people book the last room at the same time (e2e test)
 - [x] Price engine unit tests: overlapping rules, priority, weekday, early-bird / last-minute boundaries, rounding
-- [ ] SePay webhook tests: match, duplicate, wrong amount, unknown code, late after expiry, wrong API key
+- [x] SePay webhook tests: match, duplicate, wrong amount, unknown code, late after expiry, wrong API key
 - [x] Refund flow tests: zero refund, approve, reject, auto-approval only for requests made before check-in time, wallet rows idempotent
-- [ ] Booking works end to end on web and mobile with a real transfer
+- [ ] Booking works end to end on web and mobile with a real transfer (backend side verified on staging, see "SePay integration"; waits for FE integration and a real booking paid with its booking code)
 - [ ] The phase's [api/](../api/README.md) pages match the code, API status `Integrated`
 
 ## Changelog
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-10-27 | BE | Backend scope done; Definition of Done updated (SePay webhook tests ticked; end-to-end booking waits for FE integration and a real booking transfer) |
+| 2026-10-26 | BE | Demo seed: customer `customer@stayreco.local` with one booking per state, pricing rules and hotel cancellation policies for FE work (see getting-started) |
 | 2026-10-26 | BE | Review follow-ups: refund queue filter for owner and REFUND staff only, booking emails greet the booking account, booking creation retried on a booking code clash, emails in flight finish before the database disconnects at shutdown |
 | 2026-10-25 | BE | SePay webhook checked against SePay's documentation: lenient payload, refused payloads logged and kept, booking emails sent in the background (30-second answer limit), SMTP timeouts shortened |
 | 2026-10-25 | BE | SePay webhook built: API key check, dash-tolerant booking code, unmatched and late transfers in `audit_log`; new error code `INVALID_API_KEY` |

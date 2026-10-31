@@ -8,6 +8,7 @@ import type { HotelAccess } from '../../common/hotel-access/hotel-access.service
 import type { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { assertCanSeeBookings } from './booking-access';
+import { pendingChangeRequests } from './booking-history';
 import { bookingSummaryInclude, toBookingSummary } from './booking.mapper';
 
 const ORDER: Record<
@@ -19,7 +20,10 @@ const ORDER: Record<
   'created-desc': [{ createdAt: 'desc' }],
 };
 
-/** The bookings of one hotel, read-only (UC57); the refund queue is the `REFUND_PENDING` filter. */
+/**
+ * The bookings of one hotel, read-only (UC57); the refund queue is the `REFUND_PENDING` filter, the change-request
+ * queue `changeRequest=PENDING`.
+ */
 @Injectable()
 export class HotelBookingsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -42,8 +46,15 @@ export class HotelBookingsService {
       });
     }
     const search = query.search && escapeLike(query.search);
+    // The change-request queue: waiting requests live in audit_log, not on the booking row.
+    const pendingChanges =
+      query.changeRequest &&
+      (await pendingChangeRequests(this.prisma, access.hotelId));
     const where = {
       roomType: { hotelId: access.hotelId },
+      bookingId: pendingChanges
+        ? { in: pendingChanges.map((r) => r.bookingId) }
+        : undefined,
       status: query.status && { in: query.status },
       invoice: query.paymentStatus && {
         paymentStatus: { in: query.paymentStatus },

@@ -267,6 +267,11 @@ describe('Bookings with a hold (e2e)', () => {
         (expired.body.data.timeline as { event: string }[]).map((e) => e.event),
       ).toEqual(['CREATED', 'EXPIRED']);
       expect(await t.prisma.roomCalendars.count()).toBe(0);
+      expect(
+        await t.prisma.auditLog.count({
+          where: { entityId: id, action: 'BOOKING_EXPIRED' },
+        }),
+      ).toBe(1);
     });
 
     it('releases a stale hold of the room type before a new booking', async () => {
@@ -288,7 +293,7 @@ describe('Bookings with a hold (e2e)', () => {
   });
 
   describe('GET /bookings/:id', () => {
-    it('is visible to the customer, the owner and staff with BOOKING or REFUND only', async () => {
+    it('is visible to the customer, the owner and staff with BOOKING, REFUND or FRONT_DESK only', async () => {
       const h = await hotel();
       const other = await hotel();
       const customer = await t.signIn('CUSTOMER', 'guest@mail.test');
@@ -302,10 +307,14 @@ describe('Bookings with a hold (e2e)', () => {
       const refund = await t.signInStaff(h.hotelId, 'refund@hotel.test', [
         'REFUND',
       ]);
-      for (const token of [customer.token, h.token, refund.token]) {
+      const care = await t.signInStaff(h.hotelId, 'care@hotel.test', [
+        'CUSTOMER_CARE',
+      ]);
+      const allowed = [customer.token, h.token, refund.token, front.token];
+      for (const token of allowed) {
         await t.api().get(url).set(auth(token)).expect(200);
       }
-      await t.api().get(url).set(auth(front.token)).expect(403);
+      await t.api().get(url).set(auth(care.token)).expect(403);
       for (const token of [stranger.token, other.token]) {
         const hidden = await t.api().get(url).set(auth(token)).expect(404);
         expect(hidden.body.code).toBe('BOOKING_NOT_FOUND');

@@ -99,6 +99,28 @@ export const ErrorCode = {
   /** Deciding a refund that is not pending. */
   REFUND_STATUS_CONFLICT: 'REFUND_STATUS_CONFLICT',
 
+  // Front desk and change requests
+  /** The voucher QR token was edited or is not a StayReco voucher (MSG20). */
+  VOUCHER_INVALID: 'VOUCHER_INVALID',
+  /** Check-in before the check-in date, or on / after the check-out date. */
+  CHECK_IN_NOT_OPEN: 'CHECK_IN_NOT_OPEN',
+  /** Check-in or no-show while a refund request waits for the hotel. */
+  REFUND_DECISION_PENDING: 'REFUND_DECISION_PENDING',
+  /** A chosen room is of another room type, not AVAILABLE, or taken on a remaining night (BR-10). */
+  ROOM_NOT_ASSIGNABLE: 'ROOM_NOT_ASSIGNABLE',
+  /** Marking a no-show before the day after the check-in date. */
+  NO_SHOW_NOT_ALLOWED: 'NO_SHOW_NOT_ALLOWED',
+  /** Marking a room cleaned when it is not CLEANING. */
+  ROOM_STATUS_CONFLICT: 'ROOM_STATUS_CONFLICT',
+  /** The booking already has a change request waiting. */
+  CHANGE_REQUEST_PENDING: 'CHANGE_REQUEST_PENDING',
+  /** Accepting or rejecting when no change request is waiting. */
+  CHANGE_REQUEST_STATUS_CONFLICT: 'CHANGE_REQUEST_STATUS_CONFLICT',
+
+  // Notifications
+  /** Notification does not exist or belongs to someone else. */
+  NOTIFICATION_NOT_FOUND: 'NOTIFICATION_NOT_FOUND',
+
   // Payments
   /** A webhook call (SePay) with a missing or wrong API key; nothing is processed. Not a client error to refresh. */
   INVALID_API_KEY: 'INVALID_API_KEY',

@@ -49,11 +49,11 @@ export class HotelBookingsController {
   @ApiOperation({
     summary: "List the hotel's bookings",
     description:
-      'Read-only (UC57). `status` and `paymentStatus` may be repeated; `?paymentStatus=REFUND_PENDING` is the refund queue. `search` matches the booking code or the guest name. `sort`: `check-in-asc` (default), `check-in-desc`, `created-desc`.',
+      'Read-only (UC57). `status` and `paymentStatus` may be repeated; `?paymentStatus=REFUND_PENDING` is the refund queue, `?changeRequest=PENDING` the confirmed bookings with a change request waiting. `search` matches the booking code or the guest name. `sort`: `check-in-asc` (default), `check-in-desc`, `created-desc`.',
   })
   @HotelAccessRequired('member')
   @ApiAccess(
-    'The owner (also while suspended) or staff with `BOOKING` or `REFUND`; other staff get `FORBIDDEN`.',
+    'The owner (also while suspended) or staff with `BOOKING`, `REFUND` or `FRONT_DESK`; other staff get `FORBIDDEN`.',
   )
   @ApiPage(bookingSummaryResponseSchema)
   @Get('hotels/:hotelId/bookings')

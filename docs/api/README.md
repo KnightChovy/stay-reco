@@ -6,9 +6,10 @@ Each endpoint is described **once**, on the page of the role that uses it most; 
 |---|---|---|
 | [auth.md](./auth.md) | Every role | Sign-up, sign-in, OTP, refresh, sessions, passwords, invitations |
 | [partner.md](./partner.md) | Partner (`HOTEL_PARTNER`) | Catalog, hotels, images, room types, rooms, staff, verification requests |
-| [staff.md](./staff.md) | Hotel staff (`HOTEL_STAFF`) | What staff can read; the 5 permission groups |
+| [staff.md](./staff.md) | Hotel staff (`HOTEL_STAFF`) | What staff can read, front desk (check-in, check-out, no-show, rooms), change requests; the 5 permission groups |
 | [manager.md](./manager.md) | Platform manager (`PLATFORM_MANAGER`) | Verification queue, decisions, re-verification |
-| [customer.md](./customer.md) | Customer (`CUSTOMER`) | Search, booking (in progress) |
+| [customer.md](./customer.md) | Customer (`CUSTOMER`) | Search, booking, cancellation, change requests, notifications (every role) |
+| [partner-dashboard.md](./partner-dashboard.md) | Partner, hotel staff | Dashboard: action items, today, KPIs, chart, occupancy forecast (draft) |
 
 How to read each endpoint table:
 

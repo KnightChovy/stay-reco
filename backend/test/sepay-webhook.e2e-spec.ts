@@ -182,6 +182,15 @@ describe('SePay webhook (e2e)', () => {
         where: { type: 'BOOKING_PAYMENT' },
       }),
     ).toBe(1);
+    // The status change is in the audit log once, at the payment time, by the system.
+    const confirmed = await t.prisma.auditLog.findMany({
+      where: { entityId: booking.id, action: 'BOOKING_CONFIRMED' },
+    });
+    expect(confirmed).toHaveLength(1);
+    expect(confirmed[0]).toMatchObject({
+      customerId: null,
+      createdAt: new Date('2026-10-25T07:02:37.000Z'),
+    });
   });
 
   it('uses the code SePay recognised when the content has none', async () => {

@@ -16,7 +16,7 @@ These endpoints are described in full in [partner.md](./partner.md); staff can c
 
 Staff **cannot** edit the hotel, rooms, room types or staff, and cannot read verification requests: those return `403 FORBIDDEN`. Resources of another hotel return the 404 of that resource (`HOTEL_NOT_FOUND`, `ROOM_TYPE_NOT_FOUND`…).
 
-## Coming in phase 2
+## Bookings and refunds (phase 2)
 
 Described in [partner.md](./partner.md); staff access depends on their permission groups.
 
@@ -24,14 +24,50 @@ Described in [partner.md](./partner.md); staff access depends on their permissio
 |---|---|---|
 | GET | `/hotels/:hotelId/pricing-rules`, `/room-types/:id/price-preview` | any staff member (read-only) |
 | GET | `/hotels/:hotelId/availability` | any staff member (read-only) |
-| GET | `/hotels/:hotelId/bookings`, `/bookings/:id` | `BOOKING` or `REFUND` |
+| GET | `/hotels/:hotelId/bookings`, `/bookings/:id` | `BOOKING`, `REFUND` or `FRONT_DESK` |
 | POST | `/bookings/:id/forward-refund` | `REFUND`: check a refund request against the policy and forward it to the partner with a note |
 
-The partner approves or rejects refunds (slide "08. Cancellation And Refund"). Processing bookings (confirm, check-in, check-out) comes in phase 3.
+The partner approves or rejects refunds (slide "08. Cancellation And Refund"). New bookings are confirmed automatically when they are paid: staff do not confirm or reject them (phase 3, decision O1).
+
+## Front desk (phase 3)
+
+*(Draft)* Decisions O2–O9 and L1–L8 in [phase-3-operations.md](../phases/phase-3-operations.md). The owner can do everything below too (not while suspended).
+
+| Method | Path | Access | Body / query | Response |
+|---|---|---|---|---|
+| GET | `/hotels/:hotelId/bookings/lookup` | `FRONT_DESK` or `BOOKING` | `?code=SR-…` or `?qrToken=…` (`bookingLookupQuerySchema`) | `Booking` |
+| GET | `/bookings/:id/room-options` | `FRONT_DESK` | | `RoomOptions` |
+| POST | `/bookings/:id/check-in` | `FRONT_DESK` | `{ roomIds? }` (`checkInSchema`) | `Booking` |
+| GET | `/bookings/:id/check-out-quote` | `FRONT_DESK` | | `CheckOutQuote` |
+| POST | `/bookings/:id/check-out` | `FRONT_DESK` | `{ lateFee?: { amount, reason } }` (`checkOutSchema`) | `Booking` |
+| POST | `/bookings/:id/no-show` | `FRONT_DESK` | | `Booking` |
+| POST | `/rooms/:id/clean` | `FRONT_DESK` | | `Room` |
+
+- **Lookup** (UC37): the code typed at the desk (dashes optional) or the token read from the voucher QR. The QR token is checked against the server signature; a bad token returns `400 VOUCHER_INVALID` (MSG20). A booking of another hotel returns `404 BOOKING_NOT_FOUND`. Any status is returned; the screen decides what it allows.
+- **Room options** (UC38): only a booking check-in accepts now, with the same errors (`409 BOOKING_STATUS_CONFLICT`, `REFUND_DECISION_PENDING`, `CHECK_IN_NOT_OPEN`). `held` = the rooms the booking holds on the remaining nights, with their status; `available` = other rooms of the same room type that are `AVAILABLE` and free on every remaining night (from today, or from the check-in date if it is ahead, to the night before check-out).
+- **Check-in** (UC36): only a `CONFIRMED` booking whose invoice is `PAID`, from the check-in date until the day before the check-out date (otherwise `409 CHECK_IN_NOT_OPEN`). A waiting refund request returns `409 REFUND_DECISION_PENDING`: the owner decides it first. `roomIds` (exactly `rooms` ids, all different; another count returns `400 VALIDATION_ERROR`) picks the rooms; without it the held rooms are used, unless they change during the stay (the booking then needs `roomIds`, `409 ROOM_NOT_ASSIGNABLE`). Nights already past stay where they were (late check-in). Every chosen room must be of the booked room type, `AVAILABLE` and free on the remaining nights, otherwise `409 ROOM_NOT_ASSIGNABLE` (BR-10). The booking becomes `CHECKED_IN`, its remaining nights move to the chosen rooms, the rooms become `OCCUPIED`, and `Booking.assignedRooms` lists them.
+- **Check-out quote** (UC39): what checking out now means, for the check-out screen. `scheduledAt` (check-out date at the hotel check-out time), `early` and `releasedNights` (leaving before the check-out date), `minutesLate`, `lateFee` `{ amount, percent, nightPrice }` under the hotel's late check-out policy ([partner.md](./partner.md#late-check-out-fee-phase-3); `null` within the grace period or without a policy), `amountPaid`. Only `CHECKED_IN` (`409 BOOKING_STATUS_CONFLICT`).
+- **Check-out** (UC39): only `CHECKED_IN`. The booking becomes `COMPLETED` and its rooms `CLEANING`. Leaving before the check-out date releases the nights from today on, without refund (O9). The commission is recorded now and the hotel's money becomes available after the holding period ([money-rules.md](../money-rules.md)).
+- **Late check-out fee** (L4–L6): computed again at check-out (it may have grown since the quote) and **collected at the front desk**, outside StayReco's wallets. Without `lateFee` the computed fee is recorded. `lateFee: { amount, reason }` lowers it, never above the computed fee (`400 VALIDATION_ERROR`, field `lateFee.amount`, "at most …"); the reason is required. `Booking.lateCheckout` then shows `{ minutesLate, computedFee, fee, reason }`, and the history keeps it.
+- **No-show**: only `CONFIRMED`, from the day after the check-in date (otherwise `409 NO_SHOW_NOT_ALLOWED`), not while a refund request is waiting (`409 REFUND_DECISION_PENDING`). The booking becomes `NO_SHOW`, the nights from today on are released, the hotel keeps the money and the commission is recorded. A job (every 5 minutes) does the same for paid bookings still `CONFIRMED` at the hotel's check-out time (12:00 when not set) on the check-out date; a booking whose refund request is still waiting is left to the owner, and the job marks it once the request is rejected.
+- **Room cleaned**: `CLEANING` → `AVAILABLE`; another status returns `409 ROOM_STATUS_CONFLICT`.
+- Wrong status for an action: `409 BOOKING_STATUS_CONFLICT`. Staff without the group: `403 FORBIDDEN`.
+
+## Change requests (phase 3)
+
+*(Draft)* UC43, decision O11. The customer side is in [customer.md](./customer.md#change-requests-phase-3).
+
+| Method | Path | Access | Body | Response |
+|---|---|---|---|---|
+| POST | `/bookings/:id/accept-change` | `BOOKING`, owner | | `Booking` |
+| POST | `/bookings/:id/reject-change` | `BOOKING`, owner | `{ reason }` (`rejectChangeSchema`) | `Booking` |
+
+- Accept applies the requested values to the booking, only while it is still `CONFIRMED` (`409 BOOKING_STATUS_CONFLICT` otherwise) and no refund request waits (`409 REFUND_DECISION_PENDING`: decide the refund first); reject keeps it as it was and sends `reason` to the customer. A request still waiting when the booking is cancelled, checked in or marked no-show is closed by the system (rejected with a fixed reason), so it leaves the queue on its own. Both email and notify the customer. Staff without `BOOKING` get `403 FORBIDDEN`, a suspended owner `403 PARTNER_SUSPENDED`.
+- No waiting request: `409 CHANGE_REQUEST_STATUS_CONFLICT`. Waiting requests are counted by the dashboard action item `CHANGE_REQUESTS_PENDING` and filtered with `GET /hotels/:hotelId/bookings?changeRequest=PENDING`.
 
 ## Permission groups
 
-The partner gives each staff member some of the 5 groups (`StaffPermission`): `BOOKING`, `FRONT_DESK`, `CUSTOMER_CARE`, `REFUND`, `MARKETING`. They unlock the operational features of later phases (bookings, check-in/out, refunds, inbox, marketing); those endpoints will state which group they need. A change applies from the next request.
+The partner gives each staff member some of the 5 groups (`StaffPermission`): `BOOKING`, `FRONT_DESK`, `CUSTOMER_CARE`, `REFUND`, `MARKETING`. They unlock the operational features: `BOOKING` the bookings list and change requests, `FRONT_DESK` check-in, check-out, no-show and cleaned rooms, `REFUND` refund requests; `CUSTOMER_CARE` (inbox) and `MARKETING` come with the AI assistant. A change applies from the next request.
 
 ## Account
 
