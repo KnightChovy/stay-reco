@@ -1,128 +1,130 @@
 'use client';
 
-import React, { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import AppBreadcrumb from '@/components/common/breadcrumb/AppBreadcrumb';
 import AccountSubNav from '@/features/account/AccountSubNav';
+import Pagination from '@/components/common/pagination/Pagination';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
+  AlertCircle,
+  ArrowRight,
   Bell,
-  CheckCircle2,
   Calendar,
-  Gift,
-  ShieldAlert,
-  Info,
-  ChevronRight,
-  Trash2,
+  Check,
   CheckCheck,
   Clock,
-  Sparkles,
-  ArrowRight
+  CreditCard,
+  Gift,
+  Info,
+  ShieldAlert,
+  Star,
 } from 'lucide-react';
+import type { NotificationType } from '@stayreco/shared';
+import { getApiErrorMessage } from '@/lib/api-error';
+import {
+  useMarkAllNotificationsRead,
+  useMarkNotificationRead,
+  useNotifications,
+  useUnreadNotificationCount,
+} from '@/features/notifications/api/notification-queries';
 
-type NotifFilter = 'all' | 'booking' | 'promo' | 'security';
+type FilterId = 'all' | 'booking' | 'promo' | 'system';
 
-interface NotificationItem {
-  id: string;
-  type: NotifFilter;
-  title: string;
-  message: string;
-  timestamp: string;
-  isUnread: boolean;
-  linkText?: string;
-  linkHref?: string;
+const FILTERS: { id: FilterId; label: string; types?: NotificationType[] }[] = [
+  { id: 'all', label: 'Tất cả' },
+  { id: 'booking', label: 'Đặt phòng', types: ['BOOKING', 'PAYMENT'] },
+  { id: 'promo', label: 'Ưu đãi & Voucher', types: ['PROMOTION'] },
+  { id: 'system', label: 'Bảo mật & Hệ thống', types: ['REVIEW', 'ALERT', 'SYSTEM'] },
+];
+
+const TYPE_ICON: Record<NotificationType, typeof Bell> = {
+  BOOKING: Calendar,
+  PAYMENT: CreditCard,
+  PROMOTION: Gift,
+  REVIEW: Star,
+  ALERT: ShieldAlert,
+  SYSTEM: Info,
+};
+
+const TYPE_TONE: Record<NotificationType, string> = {
+  BOOKING: 'text-primary bg-primary/10',
+  PAYMENT: 'text-emerald-600 bg-emerald-50',
+  PROMOTION: 'text-amber-500 bg-amber-50',
+  REVIEW: 'text-violet-600 bg-violet-50',
+  ALERT: 'text-red-500 bg-red-50',
+  SYSTEM: 'text-slate-500 bg-slate-100',
+};
+
+const TYPE_LABEL: Record<NotificationType, string> = {
+  BOOKING: 'Đặt phòng',
+  PAYMENT: 'Thanh toán',
+  PROMOTION: 'Ưu đãi',
+  REVIEW: 'Đánh giá',
+  ALERT: 'Cảnh báo',
+  SYSTEM: 'Hệ thống',
+};
+
+function timeAgo(iso: string) {
+  const diff = Date.now() - new Date(iso).getTime();
+  const minutes = Math.max(0, Math.floor(diff / 60_000));
+  if (minutes < 1) return 'Vừa xong';
+  if (minutes < 60) return `${minutes} phút trước`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} giờ trước`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days} ngày trước`;
+  return new Date(iso).toLocaleDateString('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
 }
 
 export default function NotificationsPage() {
-  const [activeFilter, setActiveFilter] = useState<NotifFilter>('all');
-  const [notifications, setNotifications] = useState<NotificationItem[]>([
-    {
-      id: '1',
-      type: 'booking',
-      title: 'Đặt phòng thành công #SR-261020-0842',
-      message: 'Yêu cầu đặt phòng tại An Nhiên Riverside Hotel đã được xác nhận. Mã QR E-Voucher đã sẵn sàng.',
-      timestamp: '10 phút trước',
-      isUnread: true,
-      linkText: 'Xem chi tiết đơn',
-      linkHref: '/account/bookings/SR-261020-0842',
-    },
-    {
-      id: '2',
-      type: 'promo',
-      title: 'Tặng bạn Voucher 15% mùa Thu Đà Lạt',
-      message: 'Mã ưu đãi STAYAUTUMN15 đã được thêm vào ví voucher của bạn. Áp dụng cho resort Đà Lạt trước 30/11.',
-      timestamp: '2 giờ trước',
-      isUnread: true,
-      linkText: 'Dùng voucher ngay',
-      linkHref: '/account/rewards',
-    },
-    {
-      id: '3',
-      type: 'security',
-      title: 'Cảnh báo đăng nhập từ thiết bị mới',
-      message: 'Tài khoản vừa được đăng nhập trên Chrome macOS tại Đà Nẵng (IP: 118.69.192.83).',
-      timestamp: '1 ngày trước',
-      isUnread: false,
-      linkText: 'Kiểm tra bảo mật',
-      linkHref: '/account/security',
-    },
-    {
-      id: '4',
-      type: 'booking',
-      title: 'Nhắc nhở nhận phòng ngày 20/10/2026',
-      message: 'Chuyến đi Đà Nẵng của bạn sẽ bắt đầu sau 6 ngày nữa. Hãy kiểm tra thời tiết & gọi xe đưa đón.',
-      timestamp: '2 ngày trước',
-      isUnread: false,
-      linkText: 'Xem hành trình',
-      linkHref: '/account/bookings/SR-261020-0842',
-    },
-    {
-      id: '5',
-      type: 'promo',
-      title: 'Thưởng +100 điểm StayMiles từ đánh giá',
-      message: 'Đánh giá của bạn về Mộc Nhiên Eco Lodge đã được duyệt thành công.',
-      timestamp: '5 ngày trước',
-      isUnread: false,
-      linkText: 'Xem ví điểm thưởng',
-      linkHref: '/account/rewards',
-    },
-  ]);
+  const [filter, setFilter] = useState<FilterId>('all');
+  const [unreadOnly, setUnreadOnly] = useState(false);
+  const [page, setPage] = useState(1);
 
-  const markAllRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, isUnread: false })));
-  };
-
-  const filteredNotifs = notifications.filter(
-    (n) => activeFilter === 'all' || n.type === activeFilter
+  const activeFilter = FILTERS.find((item) => item.id === filter) ?? FILTERS[0];
+  const params = useMemo(
+    () => ({
+      type: activeFilter.types,
+      unread: unreadOnly || undefined,
+      page,
+      pageSize: 8,
+    }),
+    [activeFilter.types, unreadOnly, page],
   );
 
-  const unreadCount = notifications.filter((n) => n.isUnread).length;
+  const notificationsQuery = useNotifications(params);
+  const unreadCountQuery = useUnreadNotificationCount();
+  const markAllRead = useMarkAllNotificationsRead();
+  const markRead = useMarkNotificationRead();
 
-  const getNotifIcon = (type: NotifFilter) => {
-    switch (type) {
-      case 'booking':
-        return <Calendar className="size-5 text-primary" />;
-      case 'promo':
-        return <Gift className="size-5 text-amber-500" />;
-      case 'security':
-        return <ShieldAlert className="size-5 text-red-500" />;
-      default:
-        return <Info className="size-5 text-slate-500" />;
-    }
+  const notifications = notificationsQuery.data?.notifications ?? [];
+  const meta = notificationsQuery.data?.meta;
+  const unreadCount = unreadCountQuery.data ?? 0;
+
+  const changeFilter = (id: FilterId) => {
+    setFilter(id);
+    setPage(1);
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-background font-sans antialiased text-foreground">
+    <div className="flex min-h-screen flex-col bg-background font-sans text-foreground antialiased">
       <Header />
 
-      <main className="flex-1 w-full bg-[#f7f9ff]">
+      <main className="w-full flex-1 bg-[#f7f9ff]">
         <AccountSubNav activeTab="notifications" />
 
-        <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+        <div className="mx-auto max-w-4xl space-y-8 px-4 py-8 sm:px-6 lg:px-8">
           <AppBreadcrumb
             items={[
               { label: 'Trang chủ', href: '/' },
@@ -131,103 +133,173 @@ export default function NotificationsPage() {
             ]}
           />
 
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
             <div>
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+              <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
                 Trung tâm thông báo
               </h1>
-              <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-                Cập nhật thông tin đơn đặt phòng, ưu đãi voucher và cảnh báo an toàn tài khoản.
+              <p className="mt-1 text-xs text-muted-foreground sm:text-sm">
+                Cập nhật đơn đặt phòng, thanh toán, hoàn tiền và các thay đổi từ khách sạn.
               </p>
             </div>
 
             {unreadCount > 0 && (
               <Button
                 variant="outline"
-                onClick={markAllRead}
-                className="h-9 px-4 text-xs font-semibold gap-1.5 shrink-0"
+                onClick={() => markAllRead.mutate()}
+                disabled={markAllRead.isPending}
+                className="h-9 shrink-0 gap-1.5 px-4 text-xs font-semibold"
               >
-                <CheckCheck className="size-4 text-emerald-600" /> Đánh dấu tất cả đã đọc ({unreadCount})
+                <CheckCheck className="size-4 text-emerald-600" />
+                Đánh dấu tất cả đã đọc ({unreadCount})
               </Button>
             )}
           </div>
 
-          <Card className="p-6 bg-white border border-border shadow-xs rounded-2xl space-y-6">
-            {/* Filter Tabs */}
-            <div className="flex items-center gap-2 overflow-x-auto pb-2 border-b border-border no-scrollbar">
-              {[
-                { id: 'all', label: 'Tất cả' },
-                { id: 'booking', label: 'Đặt phòng' },
-                { id: 'promo', label: 'Ưu đãi & Voucher' },
-                { id: 'security', label: 'Bảo mật & Hệ thống' },
-              ].map((filter) => (
-                <button
-                  key={filter.id}
-                  type="button"
-                  onClick={() => setActiveFilter(filter.id as NotifFilter)}
-                  className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${
-                    activeFilter === filter.id
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-slate-100 text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  {filter.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Notifications List */}
-            <div className="space-y-3">
-              {filteredNotifs.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground space-y-2">
-                  <Bell className="size-10 mx-auto text-slate-300" />
-                  <p className="text-sm font-semibold">Không có thông báo nào trong mục này</p>
-                </div>
-              ) : (
-                filteredNotifs.map((item) => (
-                  <div
+          <Card className="space-y-5 rounded-2xl border border-border bg-white p-6 shadow-xs">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+                {FILTERS.map((item) => (
+                  <button
                     key={item.id}
-                    className={`p-4 rounded-xl border transition-all flex items-start gap-4 ${
-                      item.isUnread
-                        ? 'bg-primary/5 border-primary/20 shadow-2xs'
-                        : 'bg-white border-border hover:bg-slate-50'
+                    type="button"
+                    onClick={() => changeFilter(item.id)}
+                    className={`whitespace-nowrap rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-colors ${
+                      filter === item.id
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-slate-100 text-muted-foreground hover:text-foreground'
                     }`}
                   >
-                    <div className="p-2.5 rounded-xl bg-white border border-border shadow-2xs shrink-0 mt-0.5">
-                      {getNotifIcon(item.type)}
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setUnreadOnly((value) => !value);
+                  setPage(1);
+                }}
+                className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                  unreadOnly
+                    ? 'border-primary bg-primary/5 text-primary'
+                    : 'border-border text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <span className={`size-2 rounded-full ${unreadOnly ? 'bg-primary' : 'bg-slate-300'}`} />
+                Chỉ chưa đọc
+              </button>
+            </div>
+
+            {notificationsQuery.error && (
+              <Alert variant="destructive" className="bg-red-50 p-4">
+                <AlertTitle>Không tải được thông báo</AlertTitle>
+                <AlertDescription className="mt-1 flex flex-col items-start gap-3">
+                  <span>{getApiErrorMessage(notificationsQuery.error, 'Vui lòng thử lại sau.')}</span>
+                  <Button size="sm" variant="outline" onClick={() => void notificationsQuery.refetch()}>
+                    Thử lại
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {notificationsQuery.isLoading && (
+              <div className="space-y-3">
+                {[0, 1, 2].map((item) => (
+                  <Skeleton key={item} className="h-24 w-full rounded-xl" />
+                ))}
+              </div>
+            )}
+
+            {!notificationsQuery.isLoading && !notificationsQuery.error && notifications.length === 0 && (
+              <div className="space-y-2 py-12 text-center text-muted-foreground">
+                <Bell className="mx-auto size-10 text-slate-300" />
+                <p className="text-sm font-semibold">Không có thông báo nào</p>
+                <p className="text-xs">
+                  {unreadOnly ? 'Bạn đã đọc hết thông báo trong mục này.' : 'Thông báo mới sẽ xuất hiện ở đây.'}
+                </p>
+              </div>
+            )}
+
+            <div className="space-y-3">
+              {notifications.map((notification) => {
+                const Icon = TYPE_ICON[notification.type];
+                return (
+                  <article
+                    key={notification.id}
+                    className={`flex items-start gap-4 rounded-xl border p-4 transition-all ${
+                      notification.isRead
+                        ? 'border-border bg-white hover:bg-slate-50'
+                        : 'border-primary/20 bg-primary/5 shadow-2xs'
+                    }`}
+                  >
+                    <div
+                      className={`mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-xl border border-border bg-white shadow-2xs ${TYPE_TONE[notification.type]}`}
+                    >
+                      <Icon className="size-5" />
                     </div>
 
-                    <div className="flex-1 space-y-1">
-                      <div className="flex items-center justify-between gap-2 flex-wrap">
-                        <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
-                          {item.title}
-                          {item.isUnread && (
-                            <span className="size-2 rounded-full bg-secondary inline-block" />
-                          )}
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <h3 className="flex items-center gap-2 text-sm font-bold text-foreground">
+                          {notification.title ?? TYPE_LABEL[notification.type]}
+                          {!notification.isRead && <span className="inline-block size-2 rounded-full bg-secondary" />}
                         </h3>
-                        <span className="text-[11px] text-muted-foreground flex items-center gap-1">
-                          <Clock className="size-3" /> {item.timestamp}
+                        <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                          <Clock className="size-3" /> {timeAgo(notification.createdAt)}
                         </span>
                       </div>
 
-                      <p className="text-xs text-muted-foreground leading-relaxed">{item.message}</p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="outline" className="border-border text-[10px] font-semibold text-muted-foreground">
+                          {TYPE_LABEL[notification.type]}
+                        </Badge>
+                      </div>
 
-                      {item.linkText && item.linkHref && (
-                        <div className="pt-2">
+                      <p className="text-xs leading-relaxed text-muted-foreground">{notification.message}</p>
+
+                      <div className="flex flex-wrap items-center gap-3 pt-1">
+                        {notification.link && (
                           <Link
-                            href={item.linkHref}
+                            href={notification.link}
+                            onClick={() => {
+                              if (!notification.isRead) markRead.mutate(notification.id);
+                            }}
                             className="inline-flex items-center gap-1 text-xs font-bold text-primary hover:underline"
                           >
-                            <span>{item.linkText}</span>
-                            <ArrowRight className="size-3.5" />
+                            Xem chi tiết <ArrowRight className="size-3.5" />
                           </Link>
-                        </div>
-                      )}
+                        )}
+
+                        {!notification.isRead && (
+                          <button
+                            type="button"
+                            onClick={() => markRead.mutate(notification.id)}
+                            disabled={markRead.isPending}
+                            className="inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-emerald-600"
+                          >
+                            <Check className="size-3.5" /> Đánh dấu đã đọc
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))
-              )}
+                  </article>
+                );
+              })}
             </div>
+
+            {meta && meta.totalPages > 1 && (
+              <div className="border-t border-border pt-4">
+                <Pagination currentPage={meta.page} totalPages={meta.totalPages} onPageChange={setPage} />
+              </div>
+            )}
+
+            {notificationsQuery.isFetching && !notificationsQuery.isLoading && (
+              <p className="flex items-center justify-center gap-1.5 text-[11px] text-muted-foreground">
+                <AlertCircle className="size-3.5" /> Đang cập nhật…
+              </p>
+            )}
           </Card>
         </div>
       </main>

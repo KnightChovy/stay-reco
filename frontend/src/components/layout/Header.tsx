@@ -35,6 +35,7 @@ import {
   X
 } from 'lucide-react';
 import { roleDashboardPaths, useAuthStore } from '@/lib/auth-store';
+import { useUnreadNotificationCount } from '@/features/notifications/api/notification-queries';
 
 const navigation = [
   { href: '/', label: 'Khám phá' },
@@ -80,6 +81,8 @@ export default function Header() {
   const hasHydrated = useAuthStore((state) => state.hasHydrated);
   const logout = useAuthStore((state) => state.logout);
   const isAuthenticated = hasHydrated && Boolean(user);
+  const unreadNotifications = useUnreadNotificationCount(user?.role === 'customer');
+  const unreadCount = unreadNotifications.data ?? 0;
 
   const languageLabel = language === 'vi' ? 'VI' : 'ENG';
   const userName = user?.name ?? 'Khách hàng StayReco';
@@ -225,6 +228,21 @@ export default function Header() {
             </DropdownMenuContent>
           </DropdownMenu>
 
+          {isAuthenticated && user?.role === 'customer' ? (
+            <Link
+              href="/account/notifications"
+              className="relative inline-flex size-10 items-center justify-center rounded-full text-primary transition-colors hover:bg-muted focus-visible:outline-none"
+              aria-label={unreadCount > 0 ? `Thông báo, ${unreadCount} chưa đọc` : 'Thông báo'}
+            >
+              <Bell className="size-5" aria-hidden="true" />
+              {unreadCount > 0 && (
+                <span className="absolute -right-0.5 -top-0.5 inline-flex min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-4 text-white">
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
+            </Link>
+          ) : null}
+
           {isAuthenticated ? (
             <DropdownMenu modal={false}>
               <DropdownMenuTrigger
@@ -270,6 +288,11 @@ export default function Header() {
                 >
                   <Bell className="size-4 text-primary" aria-hidden="true" />
                   Thông báo
+                  {user?.role === 'customer' && unreadCount > 0 && (
+                    <span className="ml-auto inline-flex min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-4 text-white">
+                      {unreadCount > 99 ? '99+' : unreadCount}
+                    </span>
+                  )}
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   render={<Link href="/account/preferences" />}
