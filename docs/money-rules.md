@@ -20,6 +20,7 @@ Sources: the SRS business rules (Report 3, section 5.1, BR-01 to BR-29), the pre
 | Commission | Rate at booking time, default 8%, admin can set 8–15% | BR-13 |
 | Hotel share on payment | The **full** amount goes to the hotel wallet's pending balance; the commission is taken at check-out | BR-22, team decision |
 | Platform revenue | Kept in the **platform wallet**; the sum of all wallets reconciles with the platform's bank account | Team decision |
+| Late check-out fee | Set by each hotel (none by default); a percent of the last night's price; paid at the front desk, outside StayReco's wallets and commission | Team decision (L1–L8) |
 
 ## 2. Room prices
 
@@ -103,7 +104,7 @@ There is **no** payment-transaction table and no refund-request table.
 | Partner approves the refund | `CANCELLED` | `REFUNDED` or `PARTIALLY_REFUNDED` | hotel wallet debited, customer wallet credited (rooms released) |
 | Partner rejects the refund | stays `CONFIRMED` | back to `PAID` | none |
 | Staff check the guest in | `CHECKED_IN` | unchanged | none |
-| Staff check the guest out (also early) | `COMPLETED` | unchanged | commission as a pair: hotel wallet **pending** −commission, **platform wallet available** +commission (BR-13); leaving early refunds nothing (BR-09) |
+| Staff check the guest out (also early) | `COMPLETED` | unchanged | commission as a pair: hotel wallet **pending** −commission, **platform wallet available** +commission (BR-13); leaving early refunds nothing (BR-09); a late check-out fee is only recorded, paid at the front desk (§5.5) |
 | Guest never arrives (staff from the day after check-in, or the job at the check-out time) | `NO_SHOW` | unchanged | the hotel keeps the payment (BR-20); commission as at check-out |
 | Holding period over (`WALLET_HOLD_DAYS` after check-out / no-show, or after a cancellation that left the hotel a fee; default 1 day) | unchanged | unchanged | settlement as a pair on the hotel wallet: pending −net, available +net, net = payment − commission − refund (BR-22) |
 
@@ -125,6 +126,23 @@ StayReco's own money is tracked like a party of its own, so revenue is managed p
 - **Settlement** (BR-22): `WALLET_HOLD_DAYS` after the check-out or no-show (default 1 day, an env setting until the admin screen exists), a job moves the hotel's net amount (payment − commission) from pending to available as a pair of `SETTLEMENT` transactions (keys `settlement:<bookingId>:pending` and `settlement:<bookingId>:available`). The total balance does not change; only the available part grows.
 - A **cancelled** booking that left the hotel money (the whole payment with nothing to refund, or the fee of a partial refund) is settled the same way, `WALLET_HOLD_DAYS` after the cancellation, with no commission: net = payment − refund. Example: 5,000,000 ₫ paid, 30% fee, refund 3,500,000 ₫ approved → 1,500,000 ₫ becomes available one day after the approval. A full refund leaves nothing to settle.
 - A partner withdraws at most the available balance, only to the declared beneficiary account, with one pending request per hotel at a time; platform managers process it within 2 working days (BR-22). Not built yet (phase 6).
+
+### 5.5 Late check-out fee (collected at the hotel)
+
+A guest who checks out after the hotel's check-out time may owe a **late check-out fee** (decisions L1–L8 in the hotel operations phase file):
+
+- Each hotel sets its own policy, or none: **no policy = no fee** (the default). Settings: free minutes after the check-out time (`graceMinutes`, 0–240), a cutoff time on the check-out date (`cutoffTime`), and two whole percents of the night price, before and from the cutoff (`beforeCutoffPercent` ≤ `afterCutoffPercent`, 0–100).
+- **Fee** = price of the booking's **last night** (fixed at booking) × **number of rooms** × percent, rounded half up to whole dong. The percent is that of the departure time: nothing within the grace period, `beforeCutoffPercent` until the cutoff, `afterCutoffPercent` from it. A guest who leaves on a later day pays `afterCutoffPercent` for **each day after the check-out date**, plus the percent of the departure time.
+- The policy **in force at check-out** applies, not the one at booking time: unlike the cancellation policy (BR-07), the fee pays for a service used at the hotel.
+- Front-desk staff may **lower or waive** the fee, never raise it, and must give a reason. The computed fee, the fee charged and the reason are kept in the booking history.
+- The fee is **paid at the front desk** (cash, card or a transfer to the hotel). It never goes through StayReco: **no wallet transaction, no commission**, and it is not part of the booking total, the hotel's revenue in StayReco or the platform revenue.
+
+Example. Last night 1,200,000 ₫, one room, check-out time 12:00, 30 minutes free, cutoff 18:00, 50% / 100%.
+
+- Leaves at 12:20: free.
+- Leaves at 15:00: 600,000 ₫.
+- Leaves at 19:00: 1,200,000 ₫.
+- Leaves the next day at 10:00: 1,200,000 + 600,000 = 1,800,000 ₫.
 
 ## 6. Cancellation policy
 
@@ -191,6 +209,7 @@ Per BR-20, only when: the booking was already refunded or the request is a dupli
 - UC27 (phase 3): bookings are confirmed automatically on payment; staff do not confirm or reject them.
 - BR-13 (phase 3): commission is also charged on no-shows, not only completed stays.
 - BR-22 (phase 3): holding period of 1 day after check-out (`WALLET_HOLD_DAYS`) until the admin setting exists; the cancellation fee a hotel keeps is settled 1 day after the cancellation.
+- UC39 / BR-09 (phase 3): a late check-out fee set by each hotel, computed by StayReco and paid at the front desk (§5.5); staff may lower it with a reason.
 
 ## 9. Not built yet, or still open
 
@@ -214,3 +233,4 @@ Per BR-20, only when: the booking was already refunded or the request is a dupli
 | 2026-10-23 | Wallets: the full amount goes to the hotel on payment (commission at check-out); a platform wallet holds StayReco's revenue; a transfer counts while the booking is still `PENDING` |
 | 2026-10-29 | Hotel operations: commission at check-out and on no-shows (whole dong, a hotel / platform pair); the hotel keeps a no-show's payment; early check-out is not refunded; settlement of the net amount from pending to available `WALLET_HOLD_DAYS` (default 1 day) after check-out or no-show, as `SETTLEMENT` transactions |
 | 2026-10-29 | Settlement also covers cancelled bookings: the money the hotel keeps as the fee becomes available `WALLET_HOLD_DAYS` after the cancellation, with no commission |
+| 2026-10-31 | Late check-out fee (§5.5): hotel policy (grace, cutoff, two percents of the last night's price), the policy at check-out applies, staff may lower it with a reason, paid at the front desk outside the wallets and commission |

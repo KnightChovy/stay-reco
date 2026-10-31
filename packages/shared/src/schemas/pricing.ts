@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { DayOfWeek, PriceAdjustmentType } from '../enums';
-import { dateSchema, daysBetween, hasAtMost2Decimals, isCalendarDate } from './common';
+import { dateSchema, daysBetween, hasAtMost2Decimals, isCalendarDate, timeSchema } from './common';
 
 /** Limits agreed for pricing rules and the availability calendar (booking phase file, "Limits"). */
 export const PRICING_LIMITS = {
@@ -171,3 +171,32 @@ export type CancellationPolicyInput = z.infer<typeof cancellationPolicySchema>;
 
 /** Applies until the partner sets a policy (decision P14). */
 export const DEFAULT_CANCELLATION_POLICY: CancellationPolicyInput = { freeCancellationDays: 1, feePercent: 100 };
+
+// ── Late check-out fee ──────────────────────────────────────
+
+/**
+ * Fee for a guest who checks out after the hotel's check-out time (decisions L1–L3): free for `graceMinutes`; then, on
+ * the check-out date, `beforeCutoffPercent` of the last night's price until `cutoffTime` and `afterCutoffPercent` from
+ * it; every later day adds `afterCutoffPercent`. Multiplied by the booking's rooms, rounded half up to whole dong,
+ * collected at the front desk (outside the wallets). The hotel's current policy applies; without one there is no fee.
+ */
+export const lateCheckoutPolicySchema = z
+  .strictObject({
+    graceMinutes: z.number().int().min(0).max(240),
+    cutoffTime: timeSchema,
+    beforeCutoffPercent: z.number().int().min(0).max(100),
+    afterCutoffPercent: z.number().int().min(0).max(100),
+  })
+  .refine((v) => v.beforeCutoffPercent <= v.afterCutoffPercent, {
+    path: ['afterCutoffPercent'],
+    message: 'afterCutoffPercent must not be below beforeCutoffPercent',
+  });
+export type LateCheckoutPolicyInput = z.infer<typeof lateCheckoutPolicySchema>;
+
+/** What the policy form proposes; nothing applies until the partner saves a policy (L2). */
+export const SUGGESTED_LATE_CHECKOUT_POLICY: LateCheckoutPolicyInput = {
+  graceMinutes: 30,
+  cutoffTime: '18:00',
+  beforeCutoffPercent: 50,
+  afterCutoffPercent: 100,
+};

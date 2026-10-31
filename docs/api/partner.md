@@ -207,6 +207,21 @@ UC63, SRS 3.11.7: rooms on sale per room type and day.
 - `Hotel` gains `cancellationPolicy: { freeCancellationDays, feePercent }`. Until the partner sets it, the default applies: `{ freeCancellationDays: 1, feePercent: 100 }` (free until the check-in time the day before, then non-refundable). The free-text `policies.cancellation` stays for display.
 - The policy is fixed on each booking when it is made (BR-07): changing it never affects existing bookings.
 
+## Late check-out fee (phase 3)
+
+Decisions L1–L8 in [phase-3-operations.md](../phases/phase-3-operations.md). The fee is **collected at the front desk** (cash, card, transfer to the hotel): StayReco computes and records it, no wallet moves and no commission is charged ([money-rules.md](../money-rules.md)).
+
+| Method | Path | Access | Body | Response |
+|---|---|---|---|---|
+| PATCH | `/hotels/:hotelId/late-checkout-policy` | owner | `{ graceMinutes, cutoffTime, beforeCutoffPercent, afterCutoffPercent }` (`lateCheckoutPolicySchema`) | `Hotel` |
+| DELETE | `/hotels/:hotelId/late-checkout-policy` | owner | | `Hotel` |
+
+- `graceMinutes` 0–240: free time after the check-out time (12:00 when the hotel has none). `cutoffTime` `"HH:mm"`. `beforeCutoffPercent`, `afterCutoffPercent` 0–100, whole numbers, the second not below the first.
+- The fee, for a guest checking out after the check-out time + grace: the **last night's price** fixed at booking × **rooms** × the percent: `beforeCutoffPercent` before `cutoffTime` on the check-out date, `afterCutoffPercent` from it; a guest leaving a later day pays `afterCutoffPercent` for each day after the check-out date plus the rate of the departure time. Rounded half up to whole dong.
+- Example: last night 1,200,000 ₫, 1 room, check-out 12:00, grace 30 min, cutoff 18:00, 50% / 100%. Leaving at 12:20: free. At 15:00: 600,000 ₫. At 19:00: 1,200,000 ₫. The next day at 10:00: 1,200,000 + 600,000 = 1,800,000 ₫.
+- `Hotel.lateCheckoutPolicy` shows it; `null` (the default, and after `DELETE`) means no fee. The policy in force **at check-out** applies, not the one at booking time: the fee pays for a service used at the hotel. The hotel page shows it to customers (`HotelListing.hotel.lateCheckoutPolicy`) and the booking confirmation email mentions it.
+- The form may start from `SUGGESTED_LATE_CHECKOUT_POLICY` (30 min, 18:00, 50%, 100%).
+
 ## Bookings of a hotel (phase 2)
 
 UC57: the partner sees the bookings of the selected hotel, read-only.

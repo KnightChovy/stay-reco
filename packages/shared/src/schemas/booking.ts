@@ -216,6 +216,20 @@ export const checkInSchema = z.strictObject({
 });
 export type CheckInInput = z.infer<typeof checkInSchema>;
 
+/**
+ * `POST /bookings/:id/check-out` (UC39, decisions L4–L6): without `lateFee` the fee computed under the hotel policy is
+ * recorded; `lateFee` lowers it (never above the computed fee), always with a reason.
+ */
+export const checkOutSchema = z.strictObject({
+  lateFee: z
+    .strictObject({
+      amount: z.number().int().min(0),
+      reason: z.string().trim().min(1).max(BOOKING_LIMITS.refundNoteMax),
+    })
+    .optional(),
+});
+export type CheckOutInput = z.infer<typeof checkOutSchema>;
+
 // ── Change requests (UC25, UC43) ────────────────────────────
 
 export const CHANGE_REQUEST_STATUSES = ['PENDING', 'ACCEPTED', 'REJECTED'] as const;

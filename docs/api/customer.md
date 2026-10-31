@@ -107,7 +107,7 @@ Changing dates, room type or guests is not offered: cancel and book again (BR-09
 
 **Voucher** (`GET /bookings/:id/voucher`, UC23, for the customer who booked): booking code, hotel, room type, dates, guests, amount paid, and `qrToken`, a token signed by the server (not the bare booking code) that the FE renders as a QR code. It is the booking code followed by a signature (`SR-261022-0842.<signature>`) checked by the hotel at check-in, so an edited code is refused. Only for `CONFIRMED` / `CHECKED_IN` bookings; any other status, a cancelled booking included, returns `409 BOOKING_STATUS_CONFLICT` (show "no longer valid").
 
-**During and after the stay** (phase 3). The hotel checks the guest in (`CHECKED_IN`, `Booking.assignedRooms` shows the room numbers), then out (`COMPLETED`). A guest who never arrives becomes `NO_SHOW`: the hotel keeps the payment (BR-20). Leaving early is not refunded (BR-09). The timeline gains `CHECKED_IN`, `COMPLETED` or `NO_SHOW`.
+**During and after the stay** (phase 3). The hotel checks the guest in (`CHECKED_IN`, `Booking.assignedRooms` shows the room numbers), then out (`COMPLETED`). A guest who never arrives becomes `NO_SHOW`: the hotel keeps the payment (BR-20). Leaving early is not refunded (BR-09). The timeline gains `CHECKED_IN`, `COMPLETED` or `NO_SHOW`. Leaving after the check-out time may cost a late check-out fee under the hotel's policy (`HotelListing.hotel.lateCheckoutPolicy`, shown on the hotel page; `null`: no fee). It is paid at the front desk, not through StayReco, and `Booking.lateCheckout` shows it after check-out: `{ minutesLate, computedFee, fee, reason }`.
 
 ## Change requests (phase 3)
 
