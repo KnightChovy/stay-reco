@@ -65,6 +65,7 @@ const IOS: Partial<Record<IconName, SFSymbol>> = {
   mic: 'mic',
   add: 'plus',
   qr_code_2: 'qrcode',
+  cancel: 'xmark.circle',
   download: 'arrow.down.circle',
   content_copy: 'doc.on.doc',
   credit_card: 'creditcard',
