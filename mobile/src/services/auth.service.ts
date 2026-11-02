@@ -2,6 +2,7 @@ import type {
   Account,
   APIResponse,
   AuthResult,
+  ChangePasswordInput,
   EmailInput,
   LoginInput,
   RegisterCustomerInput,
@@ -44,4 +45,9 @@ export const getMe = async (): Promise<APIResponse<Account>> => {
 
 export const logout = async (): Promise<void> => {
   await apiService.post("/auth/logout");
+};
+
+/** Giữ phiên trên máy này, đăng xuất các thiết bị khác. */
+export const changePassword = async (payload: ChangePasswordInput): Promise<void> => {
+  await apiService.post("/auth/change-password", payload);
 };

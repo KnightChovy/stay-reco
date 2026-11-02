@@ -25,13 +25,14 @@ const tastes: { label: string; icon: IconName }[] = [
   { label: '1.5tr - 3.0tr / đêm', icon: 'payments' },
 ];
 
-const menu: { title: string; desc: string; icon: IconName; bg: string; fg: string }[] = [
+const menu: { title: string; desc: string; icon: IconName; bg: string; fg: string; href?: '/notifications' | '/account/password' }[] = [
   {
     title: 'Mật khẩu & Bảo mật tài khoản',
-    desc: 'Đổi mật khẩu, 2FA & Thiết bị đăng nhập',
+    desc: 'Đổi mật khẩu & đăng xuất các thiết bị khác',
     icon: 'security',
     bg: colors.secondaryFixed,
     fg: colors.secondary,
+    href: '/account/password',
   },
   {
     title: 'Voucher & Điểm thưởng',
@@ -42,10 +43,11 @@ const menu: { title: string; desc: string; icon: IconName; bg: string; fg: strin
   },
   {
     title: 'Trung tâm thông báo',
-    desc: '3 thông báo đặt phòng & ưu đãi mới',
+    desc: 'Đặt phòng, thanh toán & hoàn tiền',
     icon: 'notifications_active',
     bg: colors.tertiaryFixed,
     fg: colors.tertiaryContainer,
+    href: '/notifications',
   },
 ];
 
@@ -238,7 +240,12 @@ export default function AccountScreen() {
 
         <View style={[styles.card, styles.menu]}>
           {menu.map((m, i) => (
-            <Pressable key={m.title} style={[styles.menuItem, i > 0 && styles.menuDivider]}>
+            <Pressable
+              key={m.title}
+              accessibilityRole="button"
+              onPress={m.href ? () => router.push(m.href!) : undefined}
+              style={[styles.menuItem, i > 0 && styles.menuDivider]}
+            >
               <View style={[styles.menuIcon, { backgroundColor: m.bg }]}>
                 <Icon name={m.icon} size={20} color={m.fg} />
               </View>

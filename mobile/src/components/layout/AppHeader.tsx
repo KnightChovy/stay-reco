@@ -2,9 +2,12 @@ import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useQuery } from '@tanstack/react-query';
 import { Icon } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
 import { colors, radius } from '@/constants/theme';
+import { getUnreadCount } from '@/services/notifications.service';
+import { useAuthStore } from '@/stores/auth.store';
 
 export function BrandMark({ size = 40 }: { size?: number }) {
   return (
@@ -17,6 +20,10 @@ export function BrandMark({ size = 40 }: { size?: number }) {
 // Header thương hiệu dùng cho các tab chính (logo, tiền tệ, thông báo, tài khoản).
 export function AppHeader({ subtitle = 'BOUTIQUE TRAVEL' }: { subtitle?: string }) {
   const insets = useSafeAreaInsets();
+  const account = useAuthStore((s) => s.account);
+  // shortcut: chỉ tải lại khi mở lại màn/app (staleTime mặc định), thêm push hoặc refetchInterval nếu cần thời gian thực.
+  const unread = useQuery({ queryKey: ['notifications', 'unread-count'], queryFn: getUnreadCount, enabled: !!account });
+  const unreadCount = account ? (unread.data?.count ?? 0) : 0;
   return (
     <View style={[styles.bar, { paddingTop: insets.top + 8 }]}>
       <View style={styles.row}>
@@ -36,9 +43,13 @@ export function AppHeader({ subtitle = 'BOUTIQUE TRAVEL' }: { subtitle?: string 
             VND · VI
           </Text>
         </View>
-        <Pressable accessibilityLabel="Thông báo" style={styles.iconBtn}>
+        <Pressable
+          accessibilityLabel={unreadCount ? `Thông báo, ${unreadCount} chưa đọc` : 'Thông báo'}
+          onPress={() => router.push('/notifications')}
+          style={styles.iconBtn}
+        >
           <Icon name="notifications" color={colors.primary} />
-          <View style={styles.dot} />
+          {unreadCount > 0 && <View style={styles.dot} />}
         </Pressable>
         <Pressable
           accessibilityLabel="Tài khoản"
