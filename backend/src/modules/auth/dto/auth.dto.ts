@@ -9,6 +9,7 @@ import {
   registerCustomerSchema,
   registerPartnerSchema,
   resetPasswordSchema,
+  updateProfileSchema,
   verifyEmailSchema,
 } from '@stayreco/shared';
 import { zodDto } from '../../../common/pipes/validation';
@@ -26,3 +27,4 @@ export class ChangePasswordDto extends zodDto(changePasswordSchema) {}
 export class InviteAccountDto extends zodDto(inviteAccountSchema) {}
 export class InviteStaffDto extends zodDto(inviteStaffSchema) {}
 export class AcceptInvitationDto extends zodDto(acceptInvitationSchema) {}
+export class UpdateProfileDto extends zodDto(updateProfileSchema) {}

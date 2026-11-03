@@ -35,9 +35,34 @@
 
 FE pages needed for the emails: the OTP screen (for example `/verify-email?email=`), `/reset-password?token=`, `/accept-invitation?token=` ([api-guide.md §2.5](../api-guide.md#25-fe-pages-for-emails)).
 
+## My profile
+
+*(Draft)* Every signed-in role edits its own profile (web `account/profile`, mobile `account/profile`, the partner and staff profile pages).
+
+| Method | Path | Access | Body (schema) | Response |
+|---|---|---|---|---|
+| PATCH | `/me/profile` | signed in | `{ fullName?, phone?, companyName?, dateOfBirth?, gender?, nationality? }` (`updateProfileSchema`) | `Account` |
+| POST | `/me/avatar` | signed in | multipart, field `file`: JPEG, PNG or WebP, at most 10 MB | `Account` (200) with the new `avatarUrl` |
+| DELETE | `/me/avatar` | signed in | | 204 |
+
+- `PATCH /me/profile`: send only the fields to change; `null` clears a field. At least one field is required.
+
+  | Field | Roles | Rule |
+  |---|---|---|
+  | `fullName` | all | 1–100 characters, cannot be cleared |
+  | `phone` | all | `0901234567` or `+84901234567` (9–15 digits). A partner cannot clear it: it is also the partner's contact phone, and both change together |
+  | `companyName` | HOTEL_PARTNER | 1–200 characters, shown as `profile.partnerName` |
+  | `dateOfBirth` | CUSTOMER | `YYYY-MM-DD`, from 1900-01-01 to today |
+  | `gender` | CUSTOMER | `MALE` \| `FEMALE` \| `OTHER` |
+  | `nationality` | CUSTOMER | 1–100 characters |
+
+- A field that belongs to another role (for example `companyName` from a customer), or a partner sending `phone: null`, returns `400 VALIDATION_ERROR` with that field in `details`. Email, role and staff `position` are not changed here.
+- Avatar: the type is read from the file itself (same rules as hotel images, [api-guide.md](../api-guide.md)); a wrong type or a file that is too large returns `400 UPLOAD_INVALID_FILE`, and storage being down returns `503 UPLOAD_UNAVAILABLE`. A new upload replaces the old avatar, and the old file is deleted. `DELETE /me/avatar` also answers 204 when there is no avatar.
+- Each change is written to the audit log (`PROFILE_UPDATED`) with the names of the changed fields, not their values.
+
 ## Types
 
-`AuthResult` = `{ account: Account, accessToken, expiresIn }` (mobile also gets `refreshToken`). The types `Account`, `RegisterResult`, `AuthResult`, `RefreshResult`, `SessionInfo`, `InvitationResult`, `PartnerProfile`, `StaffProfile` come from `@stayreco/shared`.
+`AuthResult` = `{ account: Account, accessToken, expiresIn }` (mobile also gets `refreshToken`). The types `Account`, `RegisterResult`, `AuthResult`, `RefreshResult`, `SessionInfo`, `InvitationResult`, `PartnerProfile`, `StaffProfile`, `CustomerProfile` come from `@stayreco/shared`.
 
 ```jsonc
 // Account
@@ -53,13 +78,14 @@ FE pages needed for the emails: the OTP screen (for example `/verify-email?email
   "emailVerifiedAt": "2026-10-14T03:00:00.000Z",
   "lastLoginAt": "2026-10-14T03:00:00.000Z",
   "createdAt": "2026-10-14T03:00:00.000Z",
-  // Role-specific, null for CUSTOMER / ADMIN / PLATFORM_MANAGER:
+  // Role-specific, null for ADMIN / PLATFORM_MANAGER:
   //   HOTEL_PARTNER: { "partnerName": "Hotel Co", "status": "PENDING" }
   //   HOTEL_STAFF:   { "hotelId": "uuid", "position": "Lễ tân" }
-  "profile": null
+  //   CUSTOMER:      { "dateOfBirth": "1995-04-30", "gender": "FEMALE", "nationality": "Việt Nam" } (each may be null)
+  "profile": { "dateOfBirth": null, "gender": null, "nationality": null }
 }
 ```
 
 ## Common error codes
 
-`AUTH_INVALID_CREDENTIALS`, `AUTH_ACCOUNT_LOCKED`, `AUTH_ACCOUNT_SUSPENDED`, `AUTH_ACCOUNT_DEACTIVATED`, `AUTH_EMAIL_NOT_VERIFIED`, `AUTH_OTP_INVALID`, `AUTH_OTP_EXPIRED`, `AUTH_EMAIL_TAKEN`, `AUTH_WRONG_PASSWORD`, `AUTH_TOKEN_INVALID`, `AUTH_REFRESH_TOKEN_INVALID`, `AUTH_INVITATION_ACCEPTED`, `AUTH_SESSION_NOT_FOUND`. Meanings and handling: [api-guide.md §4.3](../api-guide.md#43-error-codes). Refresh the token only on `401` with `UNAUTHENTICATED`.
+`AUTH_INVALID_CREDENTIALS`, `AUTH_ACCOUNT_LOCKED`, `AUTH_ACCOUNT_SUSPENDED`, `AUTH_ACCOUNT_DEACTIVATED`, `AUTH_EMAIL_NOT_VERIFIED`, `AUTH_OTP_INVALID`, `AUTH_OTP_EXPIRED`, `AUTH_EMAIL_TAKEN`, `AUTH_WRONG_PASSWORD`, `AUTH_TOKEN_INVALID`, `AUTH_REFRESH_TOKEN_INVALID`, `AUTH_INVITATION_ACCEPTED`, `AUTH_SESSION_NOT_FOUND`; for the avatar `UPLOAD_INVALID_FILE`, `UPLOAD_UNAVAILABLE`. Meanings and handling: [api-guide.md §4.3](../api-guide.md#43-error-codes). Refresh the token only on `401` with `UNAUTHENTICATED`.

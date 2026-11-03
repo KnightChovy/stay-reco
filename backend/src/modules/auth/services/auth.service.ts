@@ -13,6 +13,7 @@ import { RequestMeta } from '../../../common/decorators/request-meta.decorator';
 import { ErrorCode } from '../../../common/errors/error-code';
 import { HotelAccessService } from '../../../common/hotel-access/hotel-access.service';
 import { Serialized } from '../../../common/http/api-response';
+import { toCalendarDate } from '../../../common/http/calendar-date';
 import { Env } from '../../../config/env';
 import {
   AccountStatus,
@@ -54,6 +55,7 @@ const accountSelect = {
   createdAt: true,
   hotelPartner: { select: { partnerName: true, status: true } },
   hotelStaff: { select: { hotelId: true, position: true } },
+  customer: { select: { dateOfBirth: true, gender: true, nationality: true } },
 } satisfies Prisma.UserAccountSelect;
 
 // Same code and message for wrong password, unknown email and inactive account (no account enumeration).
@@ -89,8 +91,18 @@ function toAccountResponse(a: AccountWithProfiles) {
     emailVerifiedAt: a.emailVerifiedAt,
     lastLoginAt: a.lastLoginAt,
     createdAt: a.createdAt,
-    // Role-specific data; customers, admins and platform managers have none yet.
-    profile: a.hotelPartner ?? a.hotelStaff ?? null,
+    // Role-specific data; admins and platform managers have none.
+    profile:
+      a.hotelPartner ??
+      a.hotelStaff ??
+      (a.customer
+        ? {
+            ...a.customer,
+            dateOfBirth: a.customer.dateOfBirth
+              ? toCalendarDate(a.customer.dateOfBirth)
+              : null,
+          }
+        : null),
   };
 }
 

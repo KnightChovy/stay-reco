@@ -32,6 +32,9 @@ export abstract class StorageService {
   /** Short-lived download link for a private file. */
   abstract signedUrl(storageKey: string, expiresInSeconds: number): string;
 
+  /** The `storageKey` of an image from its `url`, for rows that keep only the URL; null for a URL issued elsewhere. */
+  abstract imageKeyFromUrl(url: string): string | null;
+
   /** Best effort: a file left behind must not fail the request, so failures are only logged. */
   abstract deleteImage(storageKey: string): Promise<void>;
   abstract deletePrivate(storageKey: string): Promise<void>;
@@ -47,6 +50,9 @@ export class UnconfiguredStorageService extends StorageService {
   }
   signedUrl(): never {
     throw unavailable();
+  }
+  imageKeyFromUrl(): null {
+    return null;
   }
   deleteImage(): Promise<void> {
     return Promise.resolve();
@@ -68,9 +74,11 @@ export interface CloudinaryOptions {
  */
 export class CloudinaryStorageService extends StorageService {
   private readonly logger = new Logger('Storage');
+  private readonly imageUrlPrefix: string;
 
   constructor({ cloudName, apiKey, apiSecret }: CloudinaryOptions) {
     super();
+    this.imageUrlPrefix = `https://res.cloudinary.com/${cloudName}/image/upload/`;
     cloudinary.config({
       cloud_name: cloudName,
       api_key: apiKey,
@@ -100,6 +108,14 @@ export class CloudinaryStorageService extends StorageService {
         expires_at: Math.floor(Date.now() / 1000) + expiresInSeconds,
       },
     );
+  }
+
+  /** `secure_url` is `<prefix>v<version>/<public_id>.<format>`. */
+  imageKeyFromUrl(url: string) {
+    if (!url.startsWith(this.imageUrlPrefix)) return null;
+    const path = url.slice(this.imageUrlPrefix.length).replace(/^v\d+\//, '');
+    const dot = path.lastIndexOf('.');
+    return dot > 0 ? path.slice(0, dot) : null;
   }
 
   deleteImage(storageKey: string) {

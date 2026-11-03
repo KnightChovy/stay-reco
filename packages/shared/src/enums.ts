@@ -156,3 +156,11 @@ export const DayOfWeek = {
   SUN: 'SUN',
 } as const;
 export type DayOfWeek = (typeof DayOfWeek)[keyof typeof DayOfWeek];
+
+/** Customer profile (`customer.gender`). */
+export const Gender = {
+  MALE: 'MALE',
+  FEMALE: 'FEMALE',
+  OTHER: 'OTHER',
+} as const;
+export type Gender = (typeof Gender)[keyof typeof Gender];

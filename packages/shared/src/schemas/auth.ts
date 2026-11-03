@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { Gender } from '../enums';
+import { dateSchema, isCalendarDate } from './common';
 
 export const emailSchema = z.string().trim().toLowerCase().max(254).pipe(z.email());
 
@@ -12,6 +14,12 @@ export const passwordSchema = z
 const fullNameSchema = z.string().trim().min(1).max(100);
 const tokenSchema = z.string().min(1);
 
+/** Phone of an account (`user_account.phone`, a partner's contact phone), e.g. 0901234567 or +84901234567. */
+export const accountPhoneSchema = z
+  .string()
+  .trim()
+  .regex(/^\+?\d{9,15}$/, 'phone must be a valid phone number');
+
 export const registerCustomerSchema = z.strictObject({
   email: emailSchema,
   password: passwordSchema,
@@ -21,8 +29,8 @@ export type RegisterCustomerInput = z.infer<typeof registerCustomerSchema>;
 
 export const registerPartnerSchema = registerCustomerSchema.extend({
   companyName: z.string().trim().max(200).optional(),
-  /** Contact phone of the partner, e.g. 0901234567 or +84901234567. */
-  phone: z.string().trim().regex(/^\+?\d{9,15}$/, 'phone must be a valid phone number'),
+  /** Contact phone of the partner. */
+  phone: accountPhoneSchema,
 });
 export type RegisterPartnerInput = z.infer<typeof registerPartnerSchema>;
 
@@ -83,3 +91,31 @@ export const acceptInvitationSchema = z.strictObject({
   password: passwordSchema,
 });
 export type AcceptInvitationInput = z.infer<typeof acceptInvitationSchema>;
+
+/** Earliest accepted date of birth. */
+const MIN_DATE_OF_BIRTH = '1900-01-01';
+
+/**
+ * `PATCH /me/profile`. Every field is optional, at least one is required, and `null` clears a field.
+ * `fullName` and `phone` are for every role; `companyName` only for HOTEL_PARTNER; `dateOfBirth`, `gender` and
+ * `nationality` only for CUSTOMER. A field of another role returns VALIDATION_ERROR.
+ */
+export const updateProfileSchema = z
+  .strictObject({
+    fullName: fullNameSchema.optional(),
+    /** A partner cannot clear it: it is also the partner's contact phone. */
+    phone: accountPhoneSchema.nullable().optional(),
+    /** Shown as the partner name. */
+    companyName: z.string().trim().min(1).max(200).optional(),
+    dateOfBirth: dateSchema
+      .refine(
+        (v) => !isCalendarDate(v) || (v >= MIN_DATE_OF_BIRTH && Date.parse(v) <= Date.now()),
+        `dateOfBirth must be between ${MIN_DATE_OF_BIRTH} and today`,
+      )
+      .nullable()
+      .optional(),
+    gender: z.enum(Gender).nullable().optional(),
+    nationality: z.string().trim().min(1).max(100).nullable().optional(),
+  })
+  .refine((v) => Object.keys(v).length > 0, 'at least one field is required');
+export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
