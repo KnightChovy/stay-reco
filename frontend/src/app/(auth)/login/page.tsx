@@ -6,7 +6,6 @@ import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
-import { AuthSocialActions } from '@/features/auth/AuthSocialActions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -78,8 +77,6 @@ function LoginPageContent() {
                   Đăng nhập để khám phá các ưu đãi độc quyền và quản lý chuyến đi của bạn.
                 </p>
               </div>
-
-              <AuthSocialActions dividerLabel="hoặc đăng nhập bằng Email" />
 
               {/* Login Form */}
               <form onSubmit={handleSubmit} className="space-y-4">
