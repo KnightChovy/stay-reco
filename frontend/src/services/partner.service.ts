@@ -1,5 +1,6 @@
 import { api } from "@/lib/axios";
 import type {
+  ActionItemList,
   Amenity,
   AvailabilityDay,
   AvailabilityQuery,
@@ -18,10 +19,14 @@ import type {
   CreateRoomTypeInput,
   Hotel,
   HotelImage,
+  HotelStatsOverview,
+  HotelStatsSeries,
   HotelSummary,
+  HotelTodayStats,
   InvitationResult,
   InviteStaffInput,
   LockRoomInput,
+  OccupancyForecast,
   Room,
   RoomConfigInput,
   RoomListQuery,
@@ -29,6 +34,7 @@ import type {
   RoomTypeImage,
   StaffMember,
   StaffPermission,
+  StatsGranularity,
   SubmitVerificationInput,
   UpdateHotelImageInput,
   UpdateHotelInput,
@@ -41,14 +47,10 @@ import type {
 } from "@stayreco/shared";
 import type { APIResponse, PageMeta } from "@/types/response.type";
 
-/**
- * Hotel partner endpoints (docs/api/partner.md). Every function returns the `data` of the envelope; list endpoints
- * with pagination also return `meta`.
- */
-
-// Multipart: overriding the instance's JSON content type lets axios send the FormData as-is (the browser adds the
-// boundary). Uploads of up to 10 MB need more time than the default timeout.
-const multipart = { headers: { "Content-Type": "multipart/form-data" }, timeout: 60_000 };
+const multipart = {
+  headers: { "Content-Type": "multipart/form-data" },
+  timeout: 60_000,
+};
 
 function fileForm(file: File, fields: Record<string, string | undefined> = {}) {
   const form = new FormData();
@@ -89,24 +91,39 @@ export async function getHotel(hotelId: string) {
 }
 
 export async function updateHotel(hotelId: string, input: UpdateHotelInput) {
-  const { data } = await api.patch<APIResponse<Hotel>>(`/hotels/${hotelId}`, input);
+  const { data } = await api.patch<APIResponse<Hotel>>(
+    `/hotels/${hotelId}`,
+    input,
+  );
   return data.data;
 }
 
 /** Replaces the whole amenity list. */
 export async function setHotelAmenities(hotelId: string, amenityIds: string[]) {
-  const { data } = await api.put<APIResponse<Hotel>>(`/hotels/${hotelId}/amenities`, { amenityIds });
+  const { data } = await api.put<APIResponse<Hotel>>(
+    `/hotels/${hotelId}/amenities`,
+    { amenityIds },
+  );
   return data.data;
 }
 
 /** Replaces every policy; keys not sent are removed. */
-export async function setHotelPolicies(hotelId: string, policies: Record<string, string>) {
-  const { data } = await api.put<APIResponse<Hotel>>(`/hotels/${hotelId}/policies`, { policies });
+export async function setHotelPolicies(
+  hotelId: string,
+  policies: Record<string, string>,
+) {
+  const { data } = await api.put<APIResponse<Hotel>>(
+    `/hotels/${hotelId}/policies`,
+    { policies },
+  );
   return data.data;
 }
 
 export async function setRoomConfig(hotelId: string, input: RoomConfigInput) {
-  const { data } = await api.put<APIResponse<Hotel>>(`/hotels/${hotelId}/room-config`, input);
+  const { data } = await api.put<APIResponse<Hotel>>(
+    `/hotels/${hotelId}/room-config`,
+    input,
+  );
   return data.data;
 }
 
@@ -119,12 +136,22 @@ export async function uploadHotelImage(
     caption: options.caption || undefined,
     isCover: options.isCover ? "true" : undefined,
   });
-  const { data } = await api.post<APIResponse<HotelImage>>(`/hotels/${hotelId}/images`, form, multipart);
+  const { data } = await api.post<APIResponse<HotelImage>>(
+    `/hotels/${hotelId}/images`,
+    form,
+    multipart,
+  );
   return data.data;
 }
 
-export async function updateHotelImage(imageId: string, input: UpdateHotelImageInput) {
-  const { data } = await api.patch<APIResponse<HotelImage>>(`/hotel-images/${imageId}`, input);
+export async function updateHotelImage(
+  imageId: string,
+  input: UpdateHotelImageInput,
+) {
+  const { data } = await api.patch<APIResponse<HotelImage>>(
+    `/hotel-images/${imageId}`,
+    input,
+  );
   return data.data;
 }
 
@@ -135,17 +162,31 @@ export async function deleteHotelImage(imageId: string) {
 // ── Room types ──────────────────────────────────────────────
 
 export async function getRoomTypes(hotelId: string) {
-  const { data } = await api.get<APIResponse<RoomType[]>>(`/hotels/${hotelId}/room-types`);
+  const { data } = await api.get<APIResponse<RoomType[]>>(
+    `/hotels/${hotelId}/room-types`,
+  );
   return data.data;
 }
 
-export async function createRoomType(hotelId: string, input: CreateRoomTypeInput) {
-  const { data } = await api.post<APIResponse<RoomType>>(`/hotels/${hotelId}/room-types`, input);
+export async function createRoomType(
+  hotelId: string,
+  input: CreateRoomTypeInput,
+) {
+  const { data } = await api.post<APIResponse<RoomType>>(
+    `/hotels/${hotelId}/room-types`,
+    input,
+  );
   return data.data;
 }
 
-export async function updateRoomType(roomTypeId: string, input: UpdateRoomTypeInput) {
-  const { data } = await api.patch<APIResponse<RoomType>>(`/room-types/${roomTypeId}`, input);
+export async function updateRoomType(
+  roomTypeId: string,
+  input: UpdateRoomTypeInput,
+) {
+  const { data } = await api.patch<APIResponse<RoomType>>(
+    `/room-types/${roomTypeId}`,
+    input,
+  );
   return data.data;
 }
 
@@ -153,14 +194,28 @@ export async function deleteRoomType(roomTypeId: string) {
   await api.delete(`/room-types/${roomTypeId}`);
 }
 
-export async function uploadRoomTypeImage(roomTypeId: string, file: File, caption?: string) {
+export async function uploadRoomTypeImage(
+  roomTypeId: string,
+  file: File,
+  caption?: string,
+) {
   const form = fileForm(file, { caption: caption || undefined });
-  const { data } = await api.post<APIResponse<RoomTypeImage>>(`/room-types/${roomTypeId}/images`, form, multipart);
+  const { data } = await api.post<APIResponse<RoomTypeImage>>(
+    `/room-types/${roomTypeId}/images`,
+    form,
+    multipart,
+  );
   return data.data;
 }
 
-export async function updateRoomTypeImage(imageId: string, input: UpdateRoomTypeImageInput) {
-  const { data } = await api.patch<APIResponse<RoomTypeImage>>(`/room-type-images/${imageId}`, input);
+export async function updateRoomTypeImage(
+  imageId: string,
+  input: UpdateRoomTypeImageInput,
+) {
+  const { data } = await api.patch<APIResponse<RoomTypeImage>>(
+    `/room-type-images/${imageId}`,
+    input,
+  );
   return data.data;
 }
 
@@ -173,22 +228,34 @@ export async function deleteRoomTypeImage(imageId: string) {
 export type RoomListParams = Partial<RoomListQuery>;
 
 export async function getRooms(hotelId: string, params: RoomListParams) {
-  const { data } = await api.get<APIResponse<Room[]>>(`/hotels/${hotelId}/rooms`, { params });
+  const { data } = await api.get<APIResponse<Room[]>>(
+    `/hotels/${hotelId}/rooms`,
+    { params },
+  );
   return { rooms: data.data, meta: data.meta as PageMeta };
 }
 
 export async function createRoom(hotelId: string, input: CreateRoomInput) {
-  const { data } = await api.post<APIResponse<Room>>(`/hotels/${hotelId}/rooms`, input);
+  const { data } = await api.post<APIResponse<Room>>(
+    `/hotels/${hotelId}/rooms`,
+    input,
+  );
   return data.data;
 }
 
 export async function updateRoom(roomId: string, input: UpdateRoomInput) {
-  const { data } = await api.patch<APIResponse<Room>>(`/rooms/${roomId}`, input);
+  const { data } = await api.patch<APIResponse<Room>>(
+    `/rooms/${roomId}`,
+    input,
+  );
   return data.data;
 }
 
 export async function lockRoom(roomId: string, input: LockRoomInput) {
-  const { data } = await api.post<APIResponse<Room>>(`/rooms/${roomId}/lock`, input);
+  const { data } = await api.post<APIResponse<Room>>(
+    `/rooms/${roomId}/lock`,
+    input,
+  );
   return data.data;
 }
 
@@ -200,28 +267,43 @@ export async function unlockRoom(roomId: string) {
 // ── Staff ───────────────────────────────────────────────────
 
 export async function getHotelStaff(hotelId: string) {
-  const { data } = await api.get<APIResponse<StaffMember[]>>(`/hotels/${hotelId}/staff`);
+  const { data } = await api.get<APIResponse<StaffMember[]>>(
+    `/hotels/${hotelId}/staff`,
+  );
   return data.data;
 }
 
 export async function inviteStaff(input: InviteStaffInput) {
-  const { data } = await api.post<APIResponse<InvitationResult>>("/auth/invitations/staff", input);
+  const { data } = await api.post<APIResponse<InvitationResult>>(
+    "/auth/invitations/staff",
+    input,
+  );
   return data.data;
 }
 
 /** Replaces the whole list; an empty list makes the staff member read-only. */
-export async function setStaffPermissions(staffId: string, permissions: StaffPermission[]) {
-  const { data } = await api.patch<APIResponse<StaffMember>>(`/hotel-staff/${staffId}/permissions`, { permissions });
+export async function setStaffPermissions(
+  staffId: string,
+  permissions: StaffPermission[],
+) {
+  const { data } = await api.patch<APIResponse<StaffMember>>(
+    `/hotel-staff/${staffId}/permissions`,
+    { permissions },
+  );
   return data.data;
 }
 
 export async function deactivateStaff(staffId: string) {
-  const { data } = await api.post<APIResponse<StaffMember>>(`/hotel-staff/${staffId}/deactivate`);
+  const { data } = await api.post<APIResponse<StaffMember>>(
+    `/hotel-staff/${staffId}/deactivate`,
+  );
   return data.data;
 }
 
 export async function activateStaff(staffId: string) {
-  const { data } = await api.post<APIResponse<StaffMember>>(`/hotel-staff/${staffId}/activate`);
+  const { data } = await api.post<APIResponse<StaffMember>>(
+    `/hotel-staff/${staffId}/activate`,
+  );
   return data.data;
 }
 
@@ -241,7 +323,10 @@ export async function uploadVerificationDocument(file: File) {
   return data.data;
 }
 
-export async function submitVerification(hotelId: string, input: SubmitVerificationInput) {
+export async function submitVerification(
+  hotelId: string,
+  input: SubmitVerificationInput,
+) {
   const { data } = await api.post<APIResponse<VerificationRequest>>(
     `/hotels/${hotelId}/verification-requests`,
     input,
@@ -251,27 +336,39 @@ export async function submitVerification(hotelId: string, input: SubmitVerificat
 
 /** Newest first; account and ID numbers are masked. */
 export async function getVerificationRequests(hotelId: string) {
-  const { data } = await api.get<APIResponse<VerificationRequest[]>>(`/hotels/${hotelId}/verification-requests`);
+  const { data } = await api.get<APIResponse<VerificationRequest[]>>(
+    `/hotels/${hotelId}/verification-requests`,
+  );
   return data.data;
 }
 
 /** Full request: unlike the history, account and ID numbers are not masked. */
 export async function getVerificationRequest(requestId: string) {
-  const { data } = await api.get<APIResponse<VerificationRequest>>(`/verification-requests/${requestId}`);
+  const { data } = await api.get<APIResponse<VerificationRequest>>(
+    `/verification-requests/${requestId}`,
+  );
   return data.data;
 }
 
 /** A signed link valid for 5 minutes; ask for a new one every time. */
 export async function getVerificationDocumentLink(documentId: string) {
-  const { data } = await api.get<APIResponse<VerificationFileLink>>(`/verification-documents/${documentId}/file`);
+  const { data } = await api.get<APIResponse<VerificationFileLink>>(
+    `/verification-documents/${documentId}/file`,
+  );
   return data.data;
 }
 
 // ── Cancellation policy ─────────────────────────────────────
 
 /** Fixed on each booking when it is made: a change never affects existing bookings. */
-export async function setCancellationPolicy(hotelId: string, input: CancellationPolicyInput) {
-  const { data } = await api.patch<APIResponse<Hotel>>(`/hotels/${hotelId}/cancellation-policy`, input);
+export async function setCancellationPolicy(
+  hotelId: string,
+  input: CancellationPolicyInput,
+) {
+  const { data } = await api.patch<APIResponse<Hotel>>(
+    `/hotels/${hotelId}/cancellation-policy`,
+    input,
+  );
   return data.data;
 }
 
@@ -279,19 +376,34 @@ export async function setCancellationPolicy(hotelId: string, input: Cancellation
 
 /** Highest priority first. */
 export async function getPricingRules(hotelId: string, roomTypeId?: string) {
-  const { data } = await api.get<APIResponse<PricingRule[]>>(`/hotels/${hotelId}/pricing-rules`, {
-    params: { roomTypeId },
-  });
+  const { data } = await api.get<APIResponse<PricingRule[]>>(
+    `/hotels/${hotelId}/pricing-rules`,
+    {
+      params: { roomTypeId },
+    },
+  );
   return data.data;
 }
 
-export async function createPricingRule(hotelId: string, input: CreatePricingRuleInput) {
-  const { data } = await api.post<APIResponse<PricingRule>>(`/hotels/${hotelId}/pricing-rules`, input);
+export async function createPricingRule(
+  hotelId: string,
+  input: CreatePricingRuleInput,
+) {
+  const { data } = await api.post<APIResponse<PricingRule>>(
+    `/hotels/${hotelId}/pricing-rules`,
+    input,
+  );
   return data.data;
 }
 
-export async function updatePricingRule(ruleId: string, input: UpdatePricingRuleInput) {
-  const { data } = await api.patch<APIResponse<PricingRule>>(`/pricing-rules/${ruleId}`, input);
+export async function updatePricingRule(
+  ruleId: string,
+  input: UpdatePricingRuleInput,
+) {
+  const { data } = await api.patch<APIResponse<PricingRule>>(
+    `/pricing-rules/${ruleId}`,
+    input,
+  );
   return data.data;
 }
 
@@ -300,22 +412,40 @@ export async function deletePricingRule(ruleId: string) {
 }
 
 /** Price of one night; `date` is treated as the check-in date and `bookedOn` defaults to today. */
-export async function getPricePreview(roomTypeId: string, params: { date: string; bookedOn?: string }) {
-  const { data } = await api.get<APIResponse<PricePreview>>(`/room-types/${roomTypeId}/price-preview`, { params });
+export async function getPricePreview(
+  roomTypeId: string,
+  params: { date: string; bookedOn?: string },
+) {
+  const { data } = await api.get<APIResponse<PricePreview>>(
+    `/room-types/${roomTypeId}/price-preview`,
+    { params },
+  );
   return data.data;
 }
 
 // ── Availability calendar ──────────────────────────────────
 
 /** One entry per room type and date; at most 62 days per request. */
-export async function getAvailability(hotelId: string, params: AvailabilityQuery) {
-  const { data } = await api.get<APIResponse<AvailabilityDay[]>>(`/hotels/${hotelId}/availability`, { params });
+export async function getAvailability(
+  hotelId: string,
+  params: AvailabilityQuery,
+) {
+  const { data } = await api.get<APIResponse<AvailabilityDay[]>>(
+    `/hotels/${hotelId}/availability`,
+    { params },
+  );
   return data.data;
 }
 
 /** Keeps `onSale` rooms sellable on each day of the range; booked and held nights are never touched. */
-export async function updateAvailability(hotelId: string, input: UpdateAvailabilityInput) {
-  const { data } = await api.patch<APIResponse<AvailabilityDay[]>>(`/hotels/${hotelId}/availability`, input);
+export async function updateAvailability(
+  hotelId: string,
+  input: UpdateAvailabilityInput,
+) {
+  const { data } = await api.patch<APIResponse<AvailabilityDay[]>>(
+    `/hotels/${hotelId}/availability`,
+    input,
+  );
   return data.data;
 }
 
@@ -323,28 +453,100 @@ export async function updateAvailability(hotelId: string, input: UpdateAvailabil
 
 export type HotelBookingsParams = Partial<HotelBookingsQuery>;
 
-export async function getHotelBookings(hotelId: string, params: HotelBookingsParams) {
-  const { data } = await api.get<APIResponse<BookingSummary[]>>(`/hotels/${hotelId}/bookings`, {
-    params,
-    // Repeated filters are sent as `status=a&status=b`, not `status[]=` (api-guide §5).
-    paramsSerializer: { indexes: null },
-  });
+export async function getHotelBookings(
+  hotelId: string,
+  params: HotelBookingsParams,
+) {
+  const { data } = await api.get<APIResponse<BookingSummary[]>>(
+    `/hotels/${hotelId}/bookings`,
+    {
+      params,
+      // Repeated filters are sent as `status=a&status=b`, not `status[]=` (api-guide §5).
+      paramsSerializer: { indexes: null },
+    },
+  );
   return { bookings: data.data, meta: data.meta as PageMeta };
 }
 
 export async function getBooking(bookingId: string) {
-  const { data } = await api.get<APIResponse<Booking>>(`/bookings/${bookingId}`);
+  const { data } = await api.get<APIResponse<Booking>>(
+    `/bookings/${bookingId}`,
+  );
   return data.data;
 }
 
 /** The booking becomes CANCELLED and the refund moves to the customer's wallet. Allowed while suspended. */
 export async function approveRefund(bookingId: string) {
-  const { data } = await api.post<APIResponse<Booking>>(`/bookings/${bookingId}/approve-refund`);
+  const { data } = await api.post<APIResponse<Booking>>(
+    `/bookings/${bookingId}/approve-refund`,
+  );
   return data.data;
 }
 
 /** Only for the BR-20 reasons; the reason is emailed to the customer. */
 export async function rejectRefund(bookingId: string, reason: string) {
-  const { data } = await api.post<APIResponse<Booking>>(`/bookings/${bookingId}/reject-refund`, { reason });
+  const { data } = await api.post<APIResponse<Booking>>(
+    `/bookings/${bookingId}/reject-refund`,
+    { reason },
+  );
+  return data.data;
+}
+
+// ── Dashboard (docs/api/partner-dashboard.md) ───────────────
+
+/** `from` and `to` together, or neither for the month to date. */
+export type StatsRangeParams = { from?: string; to?: string };
+export type StatsSeriesParams = StatsRangeParams & {
+  granularity?: StatsGranularity;
+};
+
+/** At most one item per type; staff only get the types of their permission groups. */
+export async function getActionItems(hotelId: string) {
+  const { data } = await api.get<APIResponse<ActionItemList>>(
+    `/hotels/${hotelId}/action-items`,
+  );
+  return data.data;
+}
+
+export async function getTodayStats(hotelId: string, arrivalsLimit?: number) {
+  const { data } = await api.get<APIResponse<HotelTodayStats>>(
+    `/hotels/${hotelId}/stats/today`,
+    {
+      params: { arrivalsLimit },
+    },
+  );
+  return data.data;
+}
+
+export async function getStatsOverview(
+  hotelId: string,
+  params: StatsRangeParams,
+) {
+  const { data } = await api.get<APIResponse<HotelStatsOverview>>(
+    `/hotels/${hotelId}/stats/overview`,
+    { params },
+  );
+  return data.data;
+}
+
+/** Owner only. Without `granularity`: `day` up to 31 days, `week` up to 92, otherwise `month`. */
+export async function getStatsSeries(
+  hotelId: string,
+  params: StatsSeriesParams,
+) {
+  const { data } = await api.get<APIResponse<HotelStatsSeries>>(
+    `/hotels/${hotelId}/stats/series`,
+    { params },
+  );
+  return data.data;
+}
+
+export async function getOccupancyForecast(hotelId: string, days?: number) {
+  const { data } = await api.get<APIResponse<OccupancyForecast>>(
+    `/hotels/${hotelId}/stats/occupancy-forecast`,
+    {
+      params: { days },
+    },
+  );
   return data.data;
 }
