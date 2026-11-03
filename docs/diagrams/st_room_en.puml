@@ -1,25 +1,28 @@
 @startuml
+' State machine of room.status (Report 4, Figure 21). States show the label of the figure and the value stored in the code.
 skinparam dpi 180
 skinparam shadowing false
 skinparam defaultFontName Helvetica
 skinparam defaultFontSize 13
 skinparam state {
-  BackgroundColor #F5F5F5
+  BackgroundColor #FFFFFF
   BorderColor #333333
-  FontStyle bold
 }
 skinparam ArrowColor #333333
 hide empty description
-
-title room.status
-[*] --> AVAILABLE : partner adds the room
-AVAILABLE --> MAINTENANCE : put under maintenance
-MAINTENANCE --> AVAILABLE : maintenance finished
-AVAILABLE --> OCCUPIED : guest checks in to this room
-OCCUPIED --> CLEANING : guest checks out
-CLEANING --> AVAILABLE : staff marks the room cleaned
-CLEANING --> MAINTENANCE : put under maintenance
+state "Room available\n(AVAILABLE)" as AVAILABLE
+state "Under maintenance\n(MAINTENANCE)" as MAINTENANCE
+state "Room occupied\n(OCCUPIED)" as OCCUPIED
+state "Room being cleaned\n(CLEANING)" as CLEANING
+[*] --> AVAILABLE : Partner adds the room
+AVAILABLE --> MAINTENANCE : [Put under maintenance]
+MAINTENANCE --> AVAILABLE : [Maintenance finished]
+AVAILABLE --> OCCUPIED : [Guest checks in]
+OCCUPIED --> CLEANING : [Guest checks out]
+CLEANING --> AVAILABLE : [Staff marks the\nroom cleaned]
+CLEANING --> MAINTENANCE : [Put under maintenance]
+MAINTENANCE -[dashed]-> [*] : [Partner removes\nthe room] (planned)
 legend bottom
-An OCCUPIED room cannot be put under maintenance.
+Dashed arrow: planned, not implemented yet.
 endlegend
 @enduml

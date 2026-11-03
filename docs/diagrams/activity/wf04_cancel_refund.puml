@@ -1,28 +1,108 @@
 @startuml
-' WF-04 Cancellation and refund
-' Owner: Phan Tan Phat
-' Template: replace the placeholder steps with the real flow. Keep one swimlane per actor,
-' show only business steps (no internal processing), and end with the business result and entity states.
-skinparam dpi 180
+' WF-04 Cancellation and refund (Report 4, Figure 15). Owner: Phan Tan Phat.
+' Same steps as wf04_cancel_refund.drawio (connectors A and B are the "cancel again" loop and the fee settlement).
+skinparam dpi 90
 skinparam defaultFontName Helvetica
 skinparam shadowing false
 title WF-04 Cancellation and refund
+
 |Customer|
 start
-:Customer asks to cancel a booking;
-|StayReco|
-:TODO first system step;
-if (TODO business check?) then (yes)
-  :TODO next step;
-else (no)
-  :TODO exception path;
-  stop
-endif
-|Hotel Staff|
-:TODO step by Hotel Staff;
-|Hotel Partner|
-:TODO step by Hotel Partner;
-|StayReco|
-:TODO business result\n(entity: OLD_STATE -> NEW_STATE);
+repeat
+  |Customer|
+  :Open booking details, choose "Cancel booking";
+  |System (Backend)|
+  :Get cancellation quote\nGET /bookings/:id/cancellation-quote\nCheck: booking CONFIRMED, invoice PAID;
+  if (Cancellable?) then (No)
+    |Customer|
+    :Show error (already checked in /\nrefund already pending /\nbooking no longer active);
+    stop
+  else (Yes)
+  endif
+  |System (Backend)|
+  :Calculate fee and refund
+  * Before the free-cancel deadline: fee = 0
+  * After it: fee = fee % x amount paid
+  * Fee rounded half up to 2 decimals
+  * Refund = amount paid - fee;
+  |Customer|
+  :Review the cancellation fee and refund amount;
+  :Enter cancellation reason;
+  if (Confirm cancellation?) then (No (keep booking))
+    stop
+  else (Yes)
+  endif
+  |System (Backend)|
+  :Submit cancellation\nPOST /bookings/:id/cancel\nRe-check and recalculate amounts;
+  if (Still cancellable?) then (No)
+    |Customer|
+    :Show error (already checked in /\nrefund already pending /\nbooking no longer active);
+    stop
+  else (Yes)
+  endif
+  |System (Backend)|
+  if (Refund amount?) then (refund = 0)
+    :Booking -> CANCELLED\nRelease the nights for sale; hotel keeps\nthe full amount as fee\nRecord history, email;
+    fork
+      :1 day after the cancellation (WALLET_HOLD_DAYS);
+      :Settle the kept fee: hotel wallet pending -> available\n(SETTLEMENT), no commission; hourly job;
+      end
+    fork again
+      |Customer|
+      :Receive the result email (cancelled /\nrefund credited to the StayReco wallet);
+      end
+    end fork
+  else (refund > 0)
+    |System (Backend)|
+    :Invoice -> REFUND_PENDING\nBooking stays CONFIRMED, rooms held; record history\nEmail the customer and the hotel (owner, REFUND staff);
+    note right
+      While a refund is pending, check-in is refused
+      (REFUND_DECISION_PENDING): the owner decides first.
+    end note
+    if (Who handles it?) then (staff)
+      |Hotel Staff|
+      :Review the request, forward it to the owner with a note\nPOST /bookings/:id/forward-refund\n(REFUND permission, emails owner);
+    else (owner)
+    endif
+    |Hotel Owner (Partner)|
+    :Review the refund request (Refunds tab);
+    note right
+      Interruptible region: when the check-in time is reached,
+      a request still pending and made before that time is
+      approved automatically by the every-minute job.
+      Suspended hotel: can still approve, cannot reject.
+    end note
+    if (Decision?) then (approve, or check-in time reached\nwith no decision yet)
+      |System (Backend)|
+      :Refund (manual or automatic approval)
+      POST /bookings/:id/approve-refund / every-minute job
+      * Booking -> CANCELLED, release the nights
+      * Hotel wallet (pending): - refund
+      * Customer wallet (available): + refund
+      * Invoice -> REFUNDED / PARTIALLY_REFUNDED
+      * Record history, email customer
+      * Auto-approval: owner is emailed too;
+      fork
+        if (Fee kept?) then (yes)
+          :1 day after the cancellation (WALLET_HOLD_DAYS);
+          :Settle the kept fee: hotel wallet pending -> available\n(SETTLEMENT), no commission; hourly job;
+        else (no)
+        endif
+        end
+      fork again
+        |Customer|
+        :Receive the result email (cancelled /\nrefund credited to the StayReco wallet);
+        end
+      end fork
+    else (reject)
+      |Hotel Owner (Partner)|
+      :Choose a rejection reason (BR-20);
+      |System (Backend)|
+      :Reject refund\nPOST /bookings/:id/reject-refund\nInvoice -> PAID, booking stays CONFIRMED;\nemail the reason;
+      |Customer|
+      :Receive the rejection email\n(reason shown on the booking);
+    endif
+  endif
+repeat while (Customer's choice?) is (cancel again) not (keep booking)
 stop
 @enduml
