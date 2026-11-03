@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { AccountStatus, PartnerStatus, Role } from '../enums';
+import { AccountStatus, Gender, PartnerStatus, Role } from '../enums';
 import { isoDateTime, responseSchemas } from './registry';
 
 /**
@@ -29,6 +29,18 @@ export const staffProfileResponseSchema = z
   });
 export type StaffProfile = z.infer<typeof staffProfileResponseSchema>;
 
+export const customerProfileResponseSchema = z
+  .object({
+    dateOfBirth: z.iso.date().nullable(),
+    gender: z.enum(Gender).nullable(),
+    nationality: z.string().nullable(),
+  })
+  .register(responseSchemas, {
+    id: 'CustomerProfile',
+    description: '`profile` of a CUSTOMER account, set with `PATCH /me/profile`.',
+  });
+export type CustomerProfile = z.infer<typeof customerProfileResponseSchema>;
+
 export const accountResponseSchema = z
   .object({
     id: z.uuid(),
@@ -43,9 +55,9 @@ export const accountResponseSchema = z
     lastLoginAt: isoDateTime().nullable(),
     createdAt: isoDateTime(),
     profile: z
-      .union([partnerProfileResponseSchema, staffProfileResponseSchema])
+      .union([partnerProfileResponseSchema, staffProfileResponseSchema, customerProfileResponseSchema])
       .nullable()
-      .describe('Role-specific data; null for CUSTOMER, ADMIN and PLATFORM_MANAGER.'),
+      .describe('Role-specific data; null for ADMIN and PLATFORM_MANAGER.'),
   })
   .register(responseSchemas, {
     id: 'Account',
