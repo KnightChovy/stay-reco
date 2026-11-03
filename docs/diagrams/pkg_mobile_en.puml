@@ -1,0 +1,43 @@
+@startuml
+skinparam dpi 180
+skinparam shadowing false
+skinparam defaultFontName Helvetica
+skinparam defaultFontSize 13
+skinparam ArrowColor #333333
+skinparam componentStyle rectangle
+skinparam rectangle {
+  BorderColor #333333
+}
+skinparam package {
+  BorderColor #555555
+}
+title Mobile application package diagram
+package "mobile/src" {
+  package "app (Expo Router)" as APP {
+    rectangle "(tabs)\nhome · search · trips · assistant · account" as A1
+    rectangle "(auth)\nlogin · register · forgot-password" as A2
+    rectangle "hotels · booking · confirmation\naccount · notifications" as A3
+    rectangle "staff\n(tabs) · bookings · check-in · check-out\nrefunds · alerts · chat · marketing" as A4
+  }
+  package "features\nauth · booking · staff" as FEAT
+  package "components\nui · common · layout" as COMP
+  package "services\nApiService · auth · stays · bookings\nnotifications · staff" as SRV
+  package "stores (zustand)\nauth.store" as ST
+  package "provider\nReact Query" as PROV
+  package "constants · lib" as CL
+}
+rectangle "@stayreco/shared" as SH #FFFDE7
+rectangle "Backend API" as API #E8F5E9
+rectangle "expo-secure-store" as SEC
+APP ..> FEAT
+APP ..> COMP
+APP ..> PROV
+FEAT ..> COMP
+FEAT ..> SRV
+APP ..> ST
+ST ..> SRV
+ST ..> SEC
+SRV ..> API : HTTPS
+SRV ..> SH
+COMP ..> CL
+@enduml

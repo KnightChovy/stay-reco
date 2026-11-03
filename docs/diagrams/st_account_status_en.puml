@@ -1,0 +1,28 @@
+@startuml
+skinparam dpi 180
+skinparam shadowing false
+skinparam defaultFontName Helvetica
+skinparam defaultFontSize 13
+skinparam state {
+  BackgroundColor #F5F5F5
+  BorderColor #333333
+  FontStyle bold
+}
+skinparam ArrowColor #333333
+hide empty description
+
+title user_account.status
+[*] --> PENDING_VERIFICATION : customer or partner registers
+[*] --> INVITED : staff or platform manager invited
+PENDING_VERIFICATION --> ACTIVE : enters the correct email code
+INVITED --> ACTIVE : accepts the invitation and sets a password
+ACTIVE --> DEACTIVATED : partner deactivates a staff account
+DEACTIVATED --> ACTIVE : partner reactivates the staff account
+ACTIVE -[dashed]-> SUSPENDED : admin suspends the account (planned)
+SUSPENDED -[dashed]-> ACTIVE : admin lifts the suspension (planned)
+ACTIVE -[dashed]-> DELETED : account deleted (planned)
+legend bottom
+The 15-minute lock after 5 wrong passwords is not a status: the account stays ACTIVE.
+Dashed arrow: planned, not implemented yet.
+endlegend
+@enduml

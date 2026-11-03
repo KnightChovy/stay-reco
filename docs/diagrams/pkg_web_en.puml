@@ -1,0 +1,50 @@
+@startuml
+skinparam dpi 180
+skinparam shadowing false
+skinparam defaultFontName Helvetica
+skinparam defaultFontSize 13
+skinparam ArrowColor #333333
+skinparam componentStyle rectangle
+skinparam rectangle {
+  BorderColor #333333
+}
+skinparam package {
+  BorderColor #555555
+}
+title Web application package diagram
+package "frontend/src" {
+  package "app (App Router)" as APP {
+    rectangle "(landing-page)\nhome · blog · assistant · recommendations" as A1
+    rectangle "(auth)\nlogin · register · verify-email · reset" as A2
+    rectangle "search · hotels · booking" as A3
+    rectangle "(actors)\naccount · partner · staff · manager · admin" as A4
+  }
+  package "features" as FEAT {
+    rectangle "auth · booking · stays · account" as F1
+    rectangle "partner · staff · manager · admin" as F2
+  }
+  package "components" as COMP {
+    rectangle "ui (shadcn)" as CU
+    rectangle "common · layout" as CC
+  }
+  package "services" as SRV
+  package "stores (zustand)" as ST
+  package "lib\naxios · api-error · utils" as LIB
+  package "provider\nReact Query" as PROV
+  package "hooks · types" as HT
+}
+rectangle "@stayreco/shared" as SH #FFFDE7
+rectangle "Backend API" as API #E8F5E9
+APP ..> FEAT
+APP ..> COMP
+FEAT ..> COMP
+FEAT ..> SRV
+FEAT ..> ST
+SRV ..> LIB
+ST ..> SRV
+APP ..> PROV
+FEAT ..> HT
+LIB ..> API : HTTPS
+SRV ..> SH
+FEAT ..> SH
+@enduml

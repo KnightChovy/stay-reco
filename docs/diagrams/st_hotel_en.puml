@@ -1,0 +1,27 @@
+@startuml
+skinparam dpi 180
+skinparam shadowing false
+skinparam defaultFontName Helvetica
+skinparam defaultFontSize 13
+skinparam state {
+  BackgroundColor #F5F5F5
+  BorderColor #333333
+  FontStyle bold
+}
+skinparam ArrowColor #333333
+hide empty description
+
+title hotel.status
+[*] --> DRAFT : partner adds a hotel
+DRAFT --> PENDING_VERIFICATION : partner submits the first verification
+PENDING_VERIFICATION --> ACTIVE : manager approves
+PENDING_VERIFICATION --> DRAFT : manager rejects or asks for changes
+ACTIVE -[dashed]-> SUSPENDED : manager suspends after a violation (planned)
+SUSPENDED -[dashed]-> ACTIVE : suspension lifted (planned)
+ACTIVE -[dashed]-> INACTIVE : partner stops selling (planned)
+INACTIVE -[dashed]-> ACTIVE : partner reopens (planned)
+legend bottom
+An ACTIVE hotel stays ACTIVE while an update or re-verification request is reviewed.
+Dashed arrow: planned, not implemented yet.
+endlegend
+@enduml

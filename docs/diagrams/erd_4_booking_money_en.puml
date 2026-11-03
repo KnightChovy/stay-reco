@@ -1,0 +1,190 @@
+@startuml
+skinparam dpi 180
+skinparam shadowing false
+skinparam linetype ortho
+skinparam defaultFontName Helvetica
+skinparam defaultFontSize 12
+skinparam entity {
+  BackgroundColor #FFFFFF
+  BorderColor #333333
+  FontStyle bold
+}
+skinparam ArrowColor #333333
+hide circle
+hide methods
+
+title Booking, payment and wallets
+
+entity "booking" as booking {
+  * booking_id : uuid <<PK>>
+  --
+  * customer_id : uuid <<FK>>
+  * room_type_id : uuid <<FK>>
+  hotel_staff_id : uuid <<FK>>
+  voucher_id : uuid <<FK, U>>
+  promotion_id : uuid <<FK>>
+  loyalty_program_id : uuid <<FK>>
+  recommendation_id : uuid <<FK>>
+  * check_in_date : date
+  * check_out_date : date
+  num_guests : int
+  * num_rooms : int
+  * nightly_prices : json
+  * total_amount : decimal
+  * currency : string
+  * status : BookingStatus
+  special_requests : string
+  * guest_name : string
+  * contact_phone : string
+  arrival_time : time
+  free_cancel_until : datetime
+  * cancel_fee_percent : decimal
+  * commission_rate : decimal
+  cancelled_at : datetime
+  * created_at : datetime
+  * updated_at : datetime
+}
+entity "invoice" as invoice {
+  * invoice_id : uuid <<PK>>
+  --
+  * booking_id : uuid <<FK, U>>
+  * invoice_number : string <<U>>
+  * subtotal : decimal
+  * tax_amount : decimal
+  * discount_amount : decimal
+  * total_amount : decimal
+  * currency : string
+  * payment_method : PaymentMethod
+  * payment_status : PaymentStatus
+  vnpay_txn_ref : string
+  paid_at : datetime
+  * created_at : datetime
+}
+entity "wallet" as wallet {
+  * wallet_id : uuid <<PK>>
+  --
+  * owner_type : WalletOwnerType
+  customer_id : uuid <<FK, U>>
+  hotel_id : uuid <<FK, U>>
+  * balance_available : decimal
+  * balance_pending : decimal
+  * balance_reserved : decimal
+  * currency : string
+  * updated_at : datetime
+}
+entity "wallet_transaction" as wallet_transaction {
+  * wallet_transaction_id : uuid <<PK>>
+  --
+  * wallet_id : uuid <<FK>>
+  booking_id : uuid <<FK>>
+  platform_manager_id : uuid <<FK>>
+  * type : WalletTxnType
+  * amount : decimal
+  * balance_after : decimal
+  description : string
+  * idempotency_key : string <<U>>
+  * created_at : datetime
+}
+entity "promotion" as promotion {
+  * promotion_id : uuid <<PK>>
+  --
+  hotel_id : uuid <<FK>>
+  * name : string
+  description : string
+  * discount_type : DiscountType
+  * discount_value : decimal
+  min_booking_amount : decimal
+  max_uses : int
+  * current_uses : int
+  valid_from : date
+  valid_to : date
+  * is_active : boolean
+  * created_at : datetime
+}
+entity "voucher" as voucher {
+  * voucher_id : uuid <<PK>>
+  --
+  * promotion_id : uuid <<FK>>
+  * customer_id : uuid <<FK>>
+  * code : string <<U>>
+  * discount_type : DiscountType
+  * discount_value : decimal
+  max_discount : decimal
+  used_at : datetime
+  expires_at : datetime
+  * created_at : datetime
+}
+entity "loyalty_program" as loyalty_program {
+  * loyalty_program_id : uuid <<PK>>
+  --
+  * hotel_id : uuid <<FK>>
+  * name : string
+  * points_per_currency : decimal
+  * is_active : boolean
+  * created_at : datetime
+}
+entity "loyalty_account" as loyalty_account {
+  * loyalty_account_id : uuid <<PK>>
+  --
+  * customer_id : uuid <<FK>>
+  * loyalty_program_id : uuid <<FK>>
+  * points_balance : int
+  tier : LoyaltyTier
+  * joined_at : datetime
+  * updated_at : datetime
+}
+entity "review" as review {
+  * review_id : uuid <<PK>>
+  --
+  * customer_id : uuid <<FK>>
+  * hotel_id : uuid <<FK>>
+  * booking_id : uuid <<FK, U>>
+  * overall_rating : decimal
+  title : string
+  * content : string
+  * is_visible : boolean
+  * created_at : datetime
+  * updated_at : datetime
+}
+entity "customer" as customer #EEEEEE {
+  * customer_id : uuid <<PK, FK>>
+}
+entity "hotel" as hotel #EEEEEE {
+  * hotel_id : uuid <<PK>>
+}
+entity "hotel_staff" as hotel_staff #EEEEEE {
+  * hotel_staff_id : uuid <<PK, FK>>
+}
+entity "platform_manager" as platform_manager #EEEEEE {
+  * platform_manager_id : uuid <<PK, FK>>
+}
+entity "recommendation" as recommendation #EEEEEE {
+  * recommendation_id : uuid <<PK>>
+}
+entity "room_type" as room_type #EEEEEE {
+  * room_type_id : uuid <<PK>>
+}
+
+booking |o--o{ wallet_transaction
+booking ||--|| invoice
+booking ||--|| review
+customer |o--o| wallet
+customer ||--o{ booking
+customer ||--o{ loyalty_account
+customer ||--o{ review
+customer ||--o{ voucher
+hotel |o--o{ promotion
+hotel |o--o| wallet
+hotel ||--o{ loyalty_program
+hotel ||--o{ review
+hotel_staff |o--o{ booking
+loyalty_program |o--o{ booking
+loyalty_program ||--o{ loyalty_account
+platform_manager |o--o{ wallet_transaction
+promotion |o--o{ booking
+promotion ||--o{ voucher
+recommendation |o--o{ booking
+room_type ||--o{ booking
+voucher |o--o| booking
+wallet ||--o{ wallet_transaction
+@enduml

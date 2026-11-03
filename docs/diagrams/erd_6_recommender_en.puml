@@ -1,0 +1,122 @@
+@startuml
+skinparam dpi 180
+skinparam shadowing false
+skinparam linetype ortho
+skinparam defaultFontName Helvetica
+skinparam defaultFontSize 12
+skinparam entity {
+  BackgroundColor #FFFFFF
+  BorderColor #333333
+  FontStyle bold
+}
+skinparam ArrowColor #333333
+hide circle
+hide methods
+
+title Recommender
+
+entity "customer_preference" as customer_preference {
+  * customer_preference_id : uuid <<PK>>
+  --
+  * customer_id : uuid <<FK>>
+  * preference_key : string
+  * preference_value : string
+  * updated_at : datetime
+}
+entity "user_interaction" as user_interaction {
+  * user_interaction_id : uuid <<PK>>
+  --
+  customer_id : uuid <<FK>>
+  hotel_id : uuid <<FK>>
+  * interaction_type : InteractionType
+  duration_seconds : int
+  * created_at : datetime
+}
+entity "user_item_rating" as user_item_rating {
+  * user_item_rating_id : uuid <<PK>>
+  --
+  * customer_id : uuid <<FK>>
+  * hotel_id : uuid <<FK>>
+  * rating_criterion_id : uuid <<FK>>
+  review_id : uuid <<FK>>
+  * score : decimal
+  * created_at : datetime
+}
+entity "rating_criterion" as rating_criterion {
+  * rating_criterion_id : uuid <<PK>>
+  --
+  * name : string
+  description : string
+  * weight : decimal
+}
+entity "rating_prediction" as rating_prediction {
+  * rating_prediction_id : uuid <<PK>>
+  --
+  * customer_id : uuid <<FK>>
+  * hotel_id : uuid <<FK>>
+  * model_run_id : uuid <<FK>>
+  * rating_criterion_id : uuid <<FK>>
+  * predicted_score : decimal
+  confidence : decimal
+  * created_at : datetime
+}
+entity "recommendation" as recommendation {
+  * recommendation_id : uuid <<PK>>
+  --
+  customer_id : uuid <<FK>>
+  hotel_id : uuid <<FK>>
+  * model_run_id : uuid <<FK>>
+  room_type_id : uuid <<FK>>
+  * score : decimal
+  rank : int
+  reason : string
+  * created_at : datetime
+}
+entity "model_run" as model_run {
+  * model_run_id : uuid <<PK>>
+  --
+  * algorithm : string
+  * version : string
+  rmse : decimal
+  mae : decimal
+  k : int
+  relevance_threshold : decimal
+  precision_at_k : decimal
+  recall_at_k : decimal
+  ndcg_at_k : decimal
+  coldstart_coverage : decimal
+  hyperparameters : json
+  train_cutoff_at : datetime
+  * status : ModelRunStatus
+  * started_at : datetime
+  finished_at : datetime
+}
+entity "customer" as customer #EEEEEE {
+  * customer_id : uuid <<PK, FK>>
+}
+entity "hotel" as hotel #EEEEEE {
+  * hotel_id : uuid <<PK>>
+}
+entity "review" as review #EEEEEE {
+  * review_id : uuid <<PK>>
+}
+entity "room_type" as room_type #EEEEEE {
+  * room_type_id : uuid <<PK>>
+}
+
+customer |o--o{ recommendation
+customer |o--o{ user_interaction
+customer ||--o{ customer_preference
+customer ||--o{ rating_prediction
+customer ||--o{ user_item_rating
+hotel |o--o{ recommendation
+hotel |o--o{ user_interaction
+hotel ||--o{ rating_prediction
+hotel ||--o{ user_item_rating
+model_run ||--o{ rating_prediction
+model_run ||--o{ recommendation
+rating_criterion ||--o{ rating_prediction
+rating_criterion ||--o{ user_item_rating
+review |o--o{ user_item_rating
+room_type |o--o{ recommendation
+@enduml

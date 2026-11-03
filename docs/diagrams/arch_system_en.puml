@@ -1,0 +1,54 @@
+@startuml
+skinparam dpi 180
+skinparam shadowing false
+skinparam defaultFontName Helvetica
+skinparam defaultFontSize 13
+skinparam ArrowColor #333333
+skinparam componentStyle rectangle
+skinparam rectangle {
+  BorderColor #333333
+}
+skinparam package {
+  BorderColor #555555
+}
+title StayReco system architecture
+left to right direction
+actor "Guest, Customer, Hotel Partner,\nHotel Staff, Platform Manager, Admin" as U1
+actor "Customer, Hotel Staff" as U2
+cloud "Vercel · staging" {
+  rectangle "Web application\nNext.js 16 · React 19" as WEB #E3F2FD
+}
+rectangle "Mobile application\nExpo 57 · React Native 0.86" as MOB #E3F2FD
+rectangle "@stayreco/shared\nzod schemas, enums, error codes" as SH #FFFDE7
+cloud "Render (Singapore) · staging" {
+  rectangle "Backend API\nNestJS 11 · REST /api/v1" as API #E8F5E9
+  rectangle "Background jobs (in process)\nhold expiry · automatic refund approval" as JOB #E8F5E9
+  database "PostgreSQL 16\npgvector · pgcrypto" as DB #E8F5E9
+}
+rectangle "External services" {
+  rectangle "SePay\nVietQR · bank webhook" as SEPAY #FFF3E0
+  rectangle "Platform bank account (ACB)" as BANK #FFF3E0
+  rectangle "Gmail SMTP\n(Nodemailer)" as SMTP #FFF3E0
+  rectangle "Cloudinary\nimages, verification documents" as CLD #FFF3E0
+  rectangle "OpenAI API (planned)\nassistant, embeddings, content" as OAI #F5F5F5
+  rectangle "Firebase Cloud Messaging (planned)\npush notifications" as FCM #F5F5F5
+}
+rectangle "GitHub\nrepository · GitHub Actions CI" as GH #EDE7F6
+U1 --> WEB
+U2 --> MOB
+WEB --> API : HTTPS · JSON · JWT
+MOB --> API : HTTPS · JSON · JWT
+API --> DB : Prisma 7 · SQL over TLS
+JOB --> DB
+SH ..> WEB : build-time dependency
+SH ..> MOB
+SH ..> API
+BANK --> SEPAY : customer bank transfer
+SEPAY --> API : webhook: incoming transfer\n(Authorization: Apikey)
+WEB ..> SEPAY : VietQR image URL
+API --> SMTP : verification codes,\nbooking and refund emails
+API --> CLD : upload and signed URLs
+API ..> OAI : prompts and embeddings
+API ..> FCM : push messages
+GH --> API : auto-deploy from main
+@enduml

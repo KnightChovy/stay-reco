@@ -1,0 +1,28 @@
+@startuml
+' WF-05 AI-assisted blog post
+' Owner: Ngo Minh Tan
+' Template: replace the placeholder steps with the real flow. Keep one swimlane per actor,
+' show only business steps (no internal processing), and end with the business result and entity states.
+skinparam dpi 180
+skinparam defaultFontName Helvetica
+skinparam shadowing false
+title WF-05 AI-assisted blog post
+|Hotel Staff|
+start
+:Staff starts a new blog post;
+|AI Service|
+:TODO first system step;
+if (TODO business check?) then (yes)
+  :TODO next step;
+else (no)
+  :TODO exception path;
+  stop
+endif
+|Hotel Partner|
+:TODO step by Hotel Partner (reviews and approves or rejects the post);
+|StayReco|
+:TODO step by StayReco;
+|AI Service|
+:TODO business result\n(entity: OLD_STATE -> NEW_STATE);
+stop
+@enduml

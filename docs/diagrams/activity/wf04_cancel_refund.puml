@@ -1,0 +1,28 @@
+@startuml
+' WF-04 Cancellation and refund
+' Owner: Phan Tan Phat
+' Template: replace the placeholder steps with the real flow. Keep one swimlane per actor,
+' show only business steps (no internal processing), and end with the business result and entity states.
+skinparam dpi 180
+skinparam defaultFontName Helvetica
+skinparam shadowing false
+title WF-04 Cancellation and refund
+|Customer|
+start
+:Customer asks to cancel a booking;
+|StayReco|
+:TODO first system step;
+if (TODO business check?) then (yes)
+  :TODO next step;
+else (no)
+  :TODO exception path;
+  stop
+endif
+|Hotel Staff|
+:TODO step by Hotel Staff;
+|Hotel Partner|
+:TODO step by Hotel Partner;
+|StayReco|
+:TODO business result\n(entity: OLD_STATE -> NEW_STATE);
+stop
+@enduml
