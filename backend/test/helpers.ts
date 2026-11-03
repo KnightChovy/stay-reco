@@ -35,6 +35,10 @@ export class FakeStorage extends StorageService {
   signedUrl(storageKey: string, expiresInSeconds: number) {
     return `https://signed.test/${storageKey}?expires=${expiresInSeconds}`;
   }
+  imageKeyFromUrl(url: string) {
+    const match = /^https:\/\/cdn\.test\/(.+)\.png$/.exec(url);
+    return match ? match[1] : null;
+  }
   deleteImage(storageKey: string) {
     this.deleted.push(storageKey);
     return Promise.resolve();

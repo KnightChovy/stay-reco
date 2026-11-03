@@ -187,7 +187,7 @@ describe('Auth (e2e)', () => {
         role: 'CUSTOMER',
         status: 'PENDING_VERIFICATION',
         emailVerified: false,
-        profile: null,
+        profile: { dateOfBirth: null, gender: null, nationality: null },
       });
       expect(body.account).not.toHaveProperty('passwordHash');
       expect(outbox).toHaveLength(1);

@@ -129,6 +129,28 @@ function TripCard({ booking }: { booking: BookingSummary }) {
             onPress={() => router.push({ pathname: '/confirmation', params: { id: booking.id } })}
           />
         )}
+        {booking.paymentStatus === 'REFUND_PENDING' ? (
+          <Text variant="caption" color={colors.onSurfaceVariant} center>
+            Đã gửi yêu cầu hủy, đang chờ khách sạn duyệt hoàn tiền.
+          </Text>
+        ) : (
+          booking.status === 'CONFIRMED' && (
+            <>
+              <Button
+                label="Đổi thông tin khách"
+                leadingIcon="edit_note"
+                variant="ghost"
+                onPress={() => router.push({ pathname: '/booking/change', params: { id: booking.id } })}
+              />
+              <Button
+                label="Hủy đặt phòng"
+                leadingIcon="cancel"
+                variant="ghost"
+                onPress={() => router.push({ pathname: '/booking/cancel', params: { id: booking.id } })}
+              />
+            </>
+          )
+        )}
       </View>
     </View>
   );

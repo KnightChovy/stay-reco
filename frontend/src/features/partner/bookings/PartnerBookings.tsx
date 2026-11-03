@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Eye, Search } from "lucide-react";
 import {
   BookingStatus,
@@ -70,7 +71,9 @@ export default function PartnerBookings() {
 }
 
 function BookingsWorkspace({ hotelId }: { hotelId: string }) {
-  const [tab, setTab] = useState<BookingTab>("all");
+  // `?tab=refunds` opens the refund queue (link of the dashboard's action items).
+  const searchParams = useSearchParams();
+  const [tab, setTab] = useState<BookingTab>(searchParams.get("tab") === "refunds" ? "refunds" : "all");
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
   const [paymentStatus, setPaymentStatus] = useState("");

@@ -15,6 +15,8 @@ export enum AuditAction {
   PASSWORD_CHANGED = 'PASSWORD_CHANGED',
   PASSWORD_RESET = 'PASSWORD_RESET',
   EMAIL_VERIFIED = 'EMAIL_VERIFIED',
+  /** The account changed its own profile or avatar; `new_value` lists the changed fields, not their values. */
+  PROFILE_UPDATED = 'PROFILE_UPDATED',
   ACCOUNT_INVITED = 'ACCOUNT_INVITED',
   INVITATION_ACCEPTED = 'INVITATION_ACCEPTED',
   ROOM_LOCKED = 'ROOM_LOCKED',
