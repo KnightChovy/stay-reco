@@ -107,6 +107,7 @@ entity "notification" as notification {
   * message : string
   * type : NotificationType
   * is_read : boolean
+  link : string
   * created_at : datetime
 }
 entity "hotel" as hotel #EEEEEE {

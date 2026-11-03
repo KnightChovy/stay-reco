@@ -1,30 +1,36 @@
 @startuml
+' State machine of booking.status (Report 4, Figure 23). States show the label of the figure and the value stored in the code.
 skinparam dpi 180
 skinparam shadowing false
 skinparam defaultFontName Helvetica
 skinparam defaultFontSize 13
 skinparam state {
-  BackgroundColor #F5F5F5
+  BackgroundColor #FFFFFF
   BorderColor #333333
-  FontStyle bold
 }
 skinparam ArrowColor #333333
 hide empty description
-
-title booking.status
-[*] --> PENDING : customer books, rooms held
-PENDING --> CONFIRMED : SePay transfer matches code and amount
-PENDING --> EXPIRED : not paid within 15 minutes
-CONFIRMED --> CANCELLED : customer cancels with no refund, or the refund is approved
-CONFIRMED --> CHECKED_IN : staff checks the guest in (paid, no refund waiting)
-CONFIRMED --> NO_SHOW : staff marks no-show, or the system at the check-out time
-CHECKED_IN --> COMPLETED : staff checks the guest out (early or late)
+state "Awaiting payment\n(rooms held 15 min)\n(PENDING)" as PENDING
+state "Hold expired\n(EXPIRED)" as EXPIRED
+state "Booking confirmed\n(CONFIRMED)" as CONFIRMED
+state "Guest checked in\n(CHECKED_IN)" as CHECKED_IN
+state "Guest checked out\n(COMPLETED)" as COMPLETED
+state "No-show\n(NO_SHOW)" as NO_SHOW
+state "Booking cancelled\n(CANCELLED)" as CANCELLED
+[*] --> PENDING : Booking placed
+PENDING --> EXPIRED : [Not paid within 15 min]
+PENDING --> CONFIRMED : [Payment received] /\ninvoice paid, notification\nand email sent
+CONFIRMED --> CONFIRMED : [Guest cancels, refund due] /\ninvoice REFUND_PENDING;\n[Owner rejects refund] / invoice PAID
+CONFIRMED --> CANCELLED : [Guest cancels, no refund due]\nor [Owner approves the refund,\nor auto-approved at check-in time]
+CONFIRMED --> CHECKED_IN : [Guest arrives] /\nstaff check the guest in
+CHECKED_IN --> COMPLETED : [Guest leaves] /\nstaff check the guest out
+CONFIRMED --> NO_SHOW : [Guest does not arrive] /\nstaff, or the system at the check-out time
 EXPIRED --> [*]
 CANCELLED --> [*]
 COMPLETED --> [*]
 NO_SHOW --> [*]
 legend bottom
-A cancellation with a refund keeps the booking CONFIRMED until the partner decides (see invoice.payment_status).
-There is no automatic check-out: an overdue guest stays CHECKED_IN.
+While the refund waits (invoice REFUND_PENDING, Figure 24) the booking stays CONFIRMED and check-in is refused.
+There is no automatic check-out.
 endlegend
 @enduml

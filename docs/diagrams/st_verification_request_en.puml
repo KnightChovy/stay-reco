@@ -1,27 +1,29 @@
 @startuml
+' State machine of hotel_verification_request.status (Report 4, Figure 20). States show the label of the figure and the value stored in the code.
 skinparam dpi 180
 skinparam shadowing false
 skinparam defaultFontName Helvetica
 skinparam defaultFontSize 13
 skinparam state {
-  BackgroundColor #F5F5F5
+  BackgroundColor #FFFFFF
   BorderColor #333333
-  FontStyle bold
 }
 skinparam ArrowColor #333333
 hide empty description
-
-title hotel_verification_request.status
-[*] --> PENDING : partner submits (INITIAL or UPDATE)
-[*] --> NEEDS_REVISION : manager asks an active hotel to verify again (RENEWAL)
-PENDING --> APPROVED : manager approves
-PENDING --> REJECTED : manager rejects with a reason
-PENDING --> NEEDS_REVISION : manager asks for changes
+state "Waiting for review\n(PENDING)" as PENDING
+state "Request approved\n(APPROVED)" as APPROVED
+state "Request rejected\n(REJECTED)" as REJECTED
+state "Revision needed\n(NEEDS_REVISION)" as NEEDS_REVISION
+state origin <<choice>>
+state decision <<choice>>
+[*] --> origin
+origin --> PENDING : [Partner submits\nINITIAL or UPDATE]
+origin --> NEEDS_REVISION : [Manager asks an active hotel\nto verify again (RENEWAL)]
+PENDING --> decision
+decision --> APPROVED : [Manager approves]
+decision --> REJECTED : [Manager rejects\nwith a reason]
+decision --> NEEDS_REVISION : [Manager asks for changes]
 APPROVED --> [*]
 REJECTED --> [*]
 NEEDS_REVISION --> [*]
-legend bottom
-A request is never reopened: after REJECTED or NEEDS_REVISION the partner submits a new request.
-Dashed arrow: planned, not implemented yet.
-endlegend
 @enduml
