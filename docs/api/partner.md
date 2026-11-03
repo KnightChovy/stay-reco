@@ -252,6 +252,22 @@ Slide "08. Cancellation And Refund": when a customer cancels a paid booking with
 - A request made **before** the hotel's check-in time on the check-in date and still undecided at that time is approved automatically; a request made after it waits for the partner.
 - Deciding a booking that is not `REFUND_PENDING` returns `409 REFUND_STATUS_CONFLICT`. A suspended partner can still approve (money goes back to the customer) but not reject.
 
+## Wallet
+
+*(Draft)* The revenue page (`/partner/revenue`). Money rules behind each movement: [money-rules.md §5](../money-rules.md#5-money-flow-and-wallets).
+
+| Method | Path | Access | Query | Response |
+|---|---|---|---|---|
+| GET | `/hotels/:hotelId/wallet/transactions` | owner (also while suspended) | `?type=&from=&to=&page=&pageSize=` (`walletTransactionListQuerySchema`) | `WalletTransaction[]` + `meta` |
+| GET | `/hotels/:hotelId/beneficiary` | owner (also while suspended) | | `HotelBeneficiary` |
+
+- **Transactions**: the hotel wallet's ledger, newest first. `type` may be repeated (`BOOKING_PAYMENT`, `COMMISSION`, `REFUND`, `SETTLEMENT`, `PAYOUT`, `ADJUSTMENT`); `from` / `to` are Vietnam dates (`YYYY-MM-DD`), each optional and inclusive. `to` before `from`, an unknown type or an impossible date returns `400 VALIDATION_ERROR`. A hotel with no money movement yet has an empty list.
+  - `amount` is signed: a payment is +, commission and refunds are −. A `SETTLEMENT` is a pair of rows with the same time: pending − and available + of the same amount (the stay's net money becomes usable after the holding period).
+  - `balanceAfter` is the wallet's available + pending balance right after the movement. The current balances (available, pending, reserved) are in `GET /hotels/:hotelId/stats/overview` → `wallet` ([partner-dashboard.md](./partner-dashboard.md)).
+  - `booking` gives the booking id and code for movements of a booking, `null` otherwise.
+- **Beneficiary**: the bank account the hotel is paid out to, taken from the most recently approved verification request, the account number masked (`****6789`). `account` is `null` until a request is approved. `updatePending: true` means a newer request (possibly with another account) waits for review; until it is approved, payouts still go to `account`. A manager's re-verification request has no account and does not count.
+- Staff never see the wallet: they get `403 FORBIDDEN`; another partner gets `404 HOTEL_NOT_FOUND`.
+
 ## Types
 
 TypeScript types are in `@stayreco/shared` (`responses/hotel.ts`). Money is a number (at most 2 decimals), dates are ISO strings.
@@ -298,6 +314,15 @@ TypeScript types are in `@stayreco/shared` (`responses/hotel.ts`). Money is a nu
 
 // VerificationFileLink
 { "url": "https://api.cloudinary.com/…&signature=…", "expiresAt": "2026-10-20T16:05:00.000Z" }
+
+// WalletTransaction (responses/wallet.ts)
+{ "id": "uuid", "type": "COMMISSION", "amount": -80000, "balanceAfter": 920000,
+  "description": "Commission on SR-261010-0001", "booking": { "id": "uuid", "code": "SR-261010-0001" },
+  "createdAt": "2026-10-11T05:00:00.000Z" }
+
+// HotelBeneficiary (responses/wallet.ts)
+{ "account": { "bankName": "Vietcombank", "accountNumber": "****6789", "accountHolder": "CONG TY AN NHIEN" },
+  "verifiedAt": "2026-10-20T08:00:00.000Z", "updatePending": false }
 ```
 
 ## Common error codes

@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
+  hotelBeneficiaryResponseSchema,
   submitVerificationSchema,
   verificationDecisionSchema,
   verificationFileLinkResponseSchema,
@@ -83,6 +84,18 @@ export class VerificationController {
   @Get('hotels/:hotelId/verification-requests')
   history(@Param('hotelId') hotelId: string) {
     return this.verification.history(hotelId);
+  }
+
+  @HotelAccessRequired('owner-view')
+  @ApiOperation({
+    summary: 'The bank account the hotel is paid out to',
+    description:
+      'From the most recently approved verification request, masked (`****1234`). `account` is null until a request is approved; `updatePending` tells that a newer request with another account waits for review.',
+  })
+  @ApiData(hotelBeneficiaryResponseSchema)
+  @Get('hotels/:hotelId/beneficiary')
+  beneficiary(@Param('hotelId') hotelId: string) {
+    return this.verification.beneficiary(hotelId);
   }
 
   @ApiOperation({ summary: 'Get a verification request in full' })
