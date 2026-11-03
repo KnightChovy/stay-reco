@@ -1,0 +1,71 @@
+@startuml
+skinparam dpi 180
+skinparam shadowing false
+skinparam defaultFontName Helvetica
+skinparam defaultFontSize 13
+skinparam ArrowColor #333333
+skinparam componentStyle rectangle
+skinparam rectangle {
+  BorderColor #333333
+}
+skinparam package {
+  BorderColor #555555
+}
+title Back-end package diagram
+package "backend/src" {
+  rectangle "main.ts\napp.module.ts" as MAIN
+  rectangle "config" as CFG
+  package "common" as COMMON {
+    rectangle "guards · decorators\nfilters · interceptors · pipes" as C1
+    rectangle "errors · swagger · http\ncrypto · db · upload · jobs" as C2
+    rectangle "hotel-access" as C3
+  }
+  package "prisma" as PR {
+    rectangle "PrismaService" as PS
+    rectangle "generated client" as GC
+  }
+  package "modules" as MOD {
+    rectangle "auth" as M_AUTH
+    rectangle "verification" as M_VER
+    rectangle "hotels" as M_HOT
+    rectangle "rooms" as M_ROOM
+    rectangle "catalog" as M_CAT
+    rectangle "pricing" as M_PRICE
+    rectangle "availability" as M_AV
+    rectangle "stays" as M_STAY
+    rectangle "bookings" as M_BOOK
+    rectangle "payments" as M_PAY
+    rectangle "wallets" as M_WAL
+    rectangle "staff" as M_STAFF
+    rectangle "stats" as M_STATS
+    rectangle "notifications" as M_NOTIF
+    rectangle "audit" as M_AUD
+    rectangle "mail" as M_MAIL
+    rectangle "storage" as M_STOR
+  }
+}
+rectangle "@stayreco/shared" as SH #FFFDE7
+MAIN ..> MOD
+MAIN ..> COMMON
+MAIN ..> CFG
+MOD ..> COMMON
+MOD ..> PR
+M_STAY ..> M_PRICE
+M_STAY ..> M_AV
+M_BOOK ..> M_PRICE
+M_BOOK ..> M_AV
+M_BOOK ..> M_WAL
+M_PAY ..> M_BOOK
+M_PAY ..> M_WAL
+M_BOOK ..> M_NOTIF
+M_BOOK ..> M_MAIL
+M_STATS ..> M_BOOK
+M_STATS ..> M_HOT
+M_AUTH ..> M_MAIL
+M_VER ..> M_STOR
+M_VER ..> M_MAIL
+M_HOT ..> M_STOR
+M_ROOM ..> M_STOR
+MOD ..> M_AUD
+MOD ..> SH
+@enduml

@@ -1,0 +1,27 @@
+@startuml
+skinparam dpi 180
+skinparam shadowing false
+skinparam defaultFontName Helvetica
+skinparam defaultFontSize 13
+skinparam state {
+  BackgroundColor #F5F5F5
+  BorderColor #333333
+  FontStyle bold
+}
+skinparam ArrowColor #333333
+hide empty description
+
+title room_calendars (one room, one night)
+[*] --> AVAILABLE
+AVAILABLE --> HELD : customer books (15-minute hold)
+HELD --> BOOKED : payment confirmed
+HELD --> AVAILABLE : hold expired
+BOOKED --> AVAILABLE : cancelled, refund approved, early check-out or no-show (nights from today)
+BOOKED --> BOOKED : check-in moves the remaining nights to another room of the type
+AVAILABLE --> BLOCKED : partner closes the night
+BLOCKED --> AVAILABLE : partner reopens the night
+legend bottom
+AVAILABLE is the absence of a row (or an AVAILABLE row); releasing a night deletes its row.
+Nights already passed stay BOOKED as the history of the stay.
+endlegend
+@enduml

@@ -1,0 +1,27 @@
+@startuml
+skinparam dpi 180
+skinparam shadowing false
+skinparam defaultFontName Helvetica
+skinparam defaultFontSize 13
+skinparam state {
+  BackgroundColor #F5F5F5
+  BorderColor #333333
+  FontStyle bold
+}
+skinparam ArrowColor #333333
+hide empty description
+
+title hotel_verification_request.status
+[*] --> PENDING : partner submits (INITIAL or UPDATE)
+[*] --> NEEDS_REVISION : manager asks an active hotel to verify again (RENEWAL)
+PENDING --> APPROVED : manager approves
+PENDING --> REJECTED : manager rejects with a reason
+PENDING --> NEEDS_REVISION : manager asks for changes
+APPROVED --> [*]
+REJECTED --> [*]
+NEEDS_REVISION --> [*]
+legend bottom
+A request is never reopened: after REJECTED or NEEDS_REVISION the partner submits a new request.
+Dashed arrow: planned, not implemented yet.
+endlegend
+@enduml

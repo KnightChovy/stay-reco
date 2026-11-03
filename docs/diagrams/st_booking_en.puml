@@ -1,0 +1,30 @@
+@startuml
+skinparam dpi 180
+skinparam shadowing false
+skinparam defaultFontName Helvetica
+skinparam defaultFontSize 13
+skinparam state {
+  BackgroundColor #F5F5F5
+  BorderColor #333333
+  FontStyle bold
+}
+skinparam ArrowColor #333333
+hide empty description
+
+title booking.status
+[*] --> PENDING : customer books, rooms held
+PENDING --> CONFIRMED : SePay transfer matches code and amount
+PENDING --> EXPIRED : not paid within 15 minutes
+CONFIRMED --> CANCELLED : customer cancels with no refund, or the refund is approved
+CONFIRMED --> CHECKED_IN : staff checks the guest in (paid, no refund waiting)
+CONFIRMED --> NO_SHOW : staff marks no-show, or the system at the check-out time
+CHECKED_IN --> COMPLETED : staff checks the guest out (early or late)
+EXPIRED --> [*]
+CANCELLED --> [*]
+COMPLETED --> [*]
+NO_SHOW --> [*]
+legend bottom
+A cancellation with a refund keeps the booking CONFIRMED until the partner decides (see invoice.payment_status).
+There is no automatic check-out: an overdue guest stays CHECKED_IN.
+endlegend
+@enduml

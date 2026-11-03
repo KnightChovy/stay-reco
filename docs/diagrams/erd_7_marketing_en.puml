@@ -1,0 +1,74 @@
+@startuml
+skinparam dpi 180
+skinparam shadowing false
+skinparam linetype ortho
+skinparam defaultFontName Helvetica
+skinparam defaultFontSize 12
+skinparam entity {
+  BackgroundColor #FFFFFF
+  BorderColor #333333
+  FontStyle bold
+}
+skinparam ArrowColor #333333
+hide circle
+hide methods
+
+title Marketing content
+
+entity "marketing_content" as marketing_content {
+  * marketing_content_id : uuid <<PK>>
+  --
+  * hotel_id : uuid <<FK>>
+  hotel_staff_id : uuid <<FK>>
+  title : string
+  * body : string
+  media_url : string
+  * content_type : ContentType
+  * status : ContentStatus
+  * created_at : datetime
+}
+entity "content_schedule" as content_schedule {
+  * content_schedule_id : uuid <<PK>>
+  --
+  * marketing_content_id : uuid <<FK>>
+  * social_account_id : uuid <<FK>>
+  scheduled_at : datetime
+  published_at : datetime
+  * status : ScheduleStatus
+}
+entity "content_metric" as content_metric {
+  * content_metric_id : uuid <<PK>>
+  --
+  * content_schedule_id : uuid <<FK>>
+  * platform : SocialPlatform
+  * views : int
+  * likes : int
+  * shares : int
+  * comments : int
+  * recorded_at : datetime
+}
+entity "social_account" as social_account {
+  * social_account_id : uuid <<PK>>
+  --
+  * hotel_id : uuid <<FK>>
+  * platform : SocialPlatform
+  * account_name : string
+  access_token : string
+  refresh_token : string
+  expires_at : datetime
+  * created_at : datetime
+}
+entity "hotel" as hotel #EEEEEE {
+  * hotel_id : uuid <<PK>>
+}
+entity "hotel_staff" as hotel_staff #EEEEEE {
+  * hotel_staff_id : uuid <<PK, FK>>
+}
+
+content_schedule ||--o{ content_metric
+hotel ||--o{ marketing_content
+hotel ||--o{ social_account
+hotel_staff |o--o{ marketing_content
+marketing_content ||--o{ content_schedule
+social_account ||--o{ content_schedule
+@enduml

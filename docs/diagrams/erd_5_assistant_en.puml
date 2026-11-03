@@ -1,0 +1,120 @@
+@startuml
+skinparam dpi 180
+skinparam shadowing false
+skinparam linetype ortho
+skinparam defaultFontName Helvetica
+skinparam defaultFontSize 12
+skinparam entity {
+  BackgroundColor #FFFFFF
+  BorderColor #333333
+  FontStyle bold
+}
+skinparam ArrowColor #333333
+hide circle
+hide methods
+
+title AI assistant and knowledge base
+
+entity "conversation" as conversation {
+  * conversation_id : uuid <<PK>>
+  --
+  customer_id : uuid <<FK>>
+  hotel_staff_id : uuid <<FK>>
+  booking_id : uuid <<FK>>
+  hotel_id : uuid <<FK>>
+  * channel : ConversationChannel
+  * status : ConversationStatus
+  * created_at : datetime
+  * updated_at : datetime
+}
+entity "message" as message {
+  * message_id : uuid <<PK>>
+  --
+  * conversation_id : uuid <<FK>>
+  * role : MessageRole
+  * content : string
+  metadata : json
+  * created_at : datetime
+}
+entity "ai_function_call" as ai_function_call {
+  * ai_function_call_id : uuid <<PK>>
+  --
+  * message_id : uuid <<FK>>
+  booking_id : uuid <<FK>>
+  * function_name : string
+  arguments : json
+  result : json
+  duration_ms : int
+  * created_at : datetime
+}
+entity "ai_config" as ai_config {
+  * ai_config_id : uuid <<PK>>
+  --
+  admin_id : uuid <<FK>>
+  hotel_partner_id : uuid <<FK>>
+  * config_key : string
+  * config_value : string
+  description : string
+  * is_active : boolean
+  * created_at : datetime
+  * updated_at : datetime
+}
+entity "knowledge_category" as knowledge_category {
+  * knowledge_category_id : uuid <<PK>>
+  --
+  * name : string
+  description : string
+  sort_order : int
+}
+entity "knowledge_article" as knowledge_article {
+  * knowledge_article_id : uuid <<PK>>
+  --
+  * knowledge_category_id : uuid <<FK>>
+  hotel_id : uuid <<FK>>
+  title : string
+  * content : string
+  * is_published : boolean
+  * created_at : datetime
+  * updated_at : datetime
+}
+entity "content_embedding" as content_embedding {
+  * content_embedding_id : uuid <<PK>>
+  --
+  knowledge_article_id : uuid <<FK>>
+  chunk_index : int
+  * chunk_text : string
+  embedding : vector
+  * created_at : datetime
+}
+entity "admin" as admin #EEEEEE {
+  * admin_id : uuid <<PK, FK>>
+}
+entity "booking" as booking #EEEEEE {
+  * booking_id : uuid <<PK>>
+}
+entity "customer" as customer #EEEEEE {
+  * customer_id : uuid <<PK, FK>>
+}
+entity "hotel" as hotel #EEEEEE {
+  * hotel_id : uuid <<PK>>
+}
+entity "hotel_partner" as hotel_partner #EEEEEE {
+  * hotel_partner_id : uuid <<PK, FK>>
+}
+entity "hotel_staff" as hotel_staff #EEEEEE {
+  * hotel_staff_id : uuid <<PK, FK>>
+}
+
+admin |o--o{ ai_config
+booking |o--o{ ai_function_call
+booking |o--o{ conversation
+conversation ||--o{ message
+customer |o--o{ conversation
+hotel |o--o{ conversation
+hotel |o--o{ knowledge_article
+hotel_partner |o--o{ ai_config
+hotel_staff |o--o{ conversation
+knowledge_article |o--o{ content_embedding
+knowledge_category ||--o{ knowledge_article
+message ||--o{ ai_function_call
+@enduml

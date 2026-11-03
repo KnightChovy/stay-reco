@@ -1,0 +1,126 @@
+@startuml
+skinparam dpi 180
+skinparam shadowing false
+skinparam linetype ortho
+skinparam defaultFontName Helvetica
+skinparam defaultFontSize 12
+skinparam entity {
+  BackgroundColor #FFFFFF
+  BorderColor #333333
+  FontStyle bold
+}
+skinparam ArrowColor #333333
+hide circle
+hide methods
+
+title Accounts and access
+
+entity "user_account" as user_account {
+  * user_account_id : uuid <<PK>>
+  --
+  * email : string <<U>>
+  password_hash : string
+  * full_name : string
+  phone : string
+  avatar_url : string
+  * role : UserRole
+  * status : AccountStatus
+  email_verified_at : datetime
+  * failed_login_count : int
+  locked_until : datetime
+  last_login_at : datetime
+  * created_at : datetime
+  * updated_at : datetime
+}
+entity "customer" as customer {
+  * customer_id : uuid <<PK, FK>>
+  --
+  date_of_birth : date
+  gender : Gender
+  nationality : string
+}
+entity "hotel_partner" as hotel_partner {
+  * hotel_partner_id : uuid <<PK, FK>>
+  --
+  * partner_name : string
+  * contact_email : string
+  * contact_phone : string
+  business_license : string
+  * commission_rate : decimal
+  * status : PartnerStatus
+  * created_at : datetime
+  * updated_at : datetime
+}
+entity "hotel_staff" as hotel_staff {
+  * hotel_staff_id : uuid <<PK, FK>>
+  --
+  * hotel_id : uuid <<FK>>
+  * position : string
+  * permissions : StaffPermission
+}
+entity "admin" as admin {
+  * admin_id : uuid <<PK, FK>>
+  --
+}
+entity "platform_manager" as platform_manager {
+  * platform_manager_id : uuid <<PK, FK>>
+  --
+  department : string
+  permissions : string
+  * created_at : datetime
+}
+entity "auth_session" as auth_session {
+  * auth_session_id : uuid <<PK>>
+  --
+  * user_account_id : uuid <<FK>>
+  user_agent : string
+  ip_address : string
+  * expires_at : datetime
+  revoked_at : datetime
+  * last_used_at : datetime
+  * created_at : datetime
+}
+entity "refresh_token" as refresh_token {
+  * refresh_token_id : uuid <<PK>>
+  --
+  * auth_session_id : uuid <<FK>>
+  * token_hash : string <<U>>
+  used_at : datetime
+  * created_at : datetime
+}
+entity "verification_token" as verification_token {
+  * verification_token_id : uuid <<PK>>
+  --
+  * user_account_id : uuid <<FK>>
+  * type : VerificationTokenType
+  * token_hash : string <<U>>
+  * expires_at : datetime
+  used_at : datetime
+  * attempt_count : int
+  * created_at : datetime
+}
+entity "notification" as notification {
+  * notification_id : uuid <<PK>>
+  --
+  * user_account_id : uuid <<FK>>
+  title : string
+  * message : string
+  * type : NotificationType
+  * is_read : boolean
+  * created_at : datetime
+}
+entity "hotel" as hotel #EEEEEE {
+  * hotel_id : uuid <<PK>>
+}
+
+auth_session ||--o{ refresh_token
+hotel ||--o{ hotel_staff
+user_account ||--o{ auth_session
+user_account ||--o{ notification
+user_account ||--o{ verification_token
+user_account ||--|| admin
+user_account ||--|| customer
+user_account ||--|| hotel_partner
+user_account ||--|| hotel_staff
+user_account ||--|| platform_manager
+@enduml
