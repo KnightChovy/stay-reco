@@ -1,71 +1,141 @@
 @startuml
-skinparam dpi 180
+' Backend Package Diagram (Report 4, Figure 2). Generated from the imports of the code: an arrow means
+' "the tail package imports the head package".
+skinparam dpi 150
 skinparam shadowing false
 skinparam defaultFontName Helvetica
 skinparam defaultFontSize 13
 skinparam ArrowColor #333333
-skinparam componentStyle rectangle
-skinparam rectangle {
-  BorderColor #333333
-}
+skinparam packageStyle folder
 skinparam package {
-  BorderColor #555555
+  BorderColor #333333
+  BackgroundColor #FFFFFF
 }
-title Back-end package diagram
-package "backend/src" {
-  rectangle "main.ts\napp.module.ts" as MAIN
-  rectangle "config" as CFG
-  package "common" as COMMON {
-    rectangle "guards · decorators\nfilters · interceptors · pipes" as C1
-    rectangle "errors · swagger · http\ncrypto · db · upload · jobs" as C2
-    rectangle "hotel-access" as C3
+title Backend Package Diagram
+package "app" as APP {
+}
+package "modules" as MODULES {
+  package "audit" as M_audit {
   }
-  package "prisma" as PR {
-    rectangle "PrismaService" as PS
-    rectangle "generated client" as GC
+  package "auth" as M_auth {
   }
-  package "modules" as MOD {
-    rectangle "auth" as M_AUTH
-    rectangle "verification" as M_VER
-    rectangle "hotels" as M_HOT
-    rectangle "rooms" as M_ROOM
-    rectangle "catalog" as M_CAT
-    rectangle "pricing" as M_PRICE
-    rectangle "availability" as M_AV
-    rectangle "stays" as M_STAY
-    rectangle "bookings" as M_BOOK
-    rectangle "payments" as M_PAY
-    rectangle "wallets" as M_WAL
-    rectangle "staff" as M_STAFF
-    rectangle "stats" as M_STATS
-    rectangle "notifications" as M_NOTIF
-    rectangle "audit" as M_AUD
-    rectangle "mail" as M_MAIL
-    rectangle "storage" as M_STOR
+  package "availability" as M_availability {
+  }
+  package "bookings" as M_bookings {
+  }
+  package "catalog" as M_catalog {
+  }
+  package "hotels" as M_hotels {
+  }
+  package "mail" as M_mail {
+  }
+  package "notifications" as M_notifications {
+  }
+  package "payments" as M_payments {
+  }
+  package "pricing" as M_pricing {
+  }
+  package "rooms" as M_rooms {
+  }
+  package "staff" as M_staff {
+  }
+  package "stats" as M_stats {
+  }
+  package "stays" as M_stays {
+  }
+  package "storage" as M_storage {
+  }
+  package "verification" as M_verification {
+  }
+  package "wallets" as M_wallets {
   }
 }
-rectangle "@stayreco/shared" as SH #FFFDE7
-MAIN ..> MOD
-MAIN ..> COMMON
-MAIN ..> CFG
-MOD ..> COMMON
-MOD ..> PR
-M_STAY ..> M_PRICE
-M_STAY ..> M_AV
-M_BOOK ..> M_PRICE
-M_BOOK ..> M_AV
-M_BOOK ..> M_WAL
-M_PAY ..> M_BOOK
-M_PAY ..> M_WAL
-M_BOOK ..> M_NOTIF
-M_BOOK ..> M_MAIL
-M_STATS ..> M_BOOK
-M_STATS ..> M_HOT
-M_AUTH ..> M_MAIL
-M_VER ..> M_STOR
-M_VER ..> M_MAIL
-M_HOT ..> M_STOR
-M_ROOM ..> M_STOR
-MOD ..> M_AUD
-MOD ..> SH
+package "common" as COMMON {
+  package "crypto" as C_crypto {
+  }
+  package "db" as C_db {
+  }
+  package "decorators" as C_decorators {
+  }
+  package "errors" as C_errors {
+  }
+  package "filters" as C_filters {
+  }
+  package "guards" as C_guards {
+  }
+  package "hotel-access" as C_hotel_access {
+  }
+  package "http" as C_http {
+  }
+  package "interceptors" as C_interceptors {
+  }
+  package "jobs" as C_jobs {
+  }
+  package "pipes" as C_pipes {
+  }
+  package "swagger" as C_swagger {
+  }
+  package "upload" as C_upload {
+  }
+}
+package "prisma" as PRISMA {
+}
+package "generated/prisma" as GENERATED #F5F5F5 {
+}
+package "config" as CONFIG {
+}
+package "@stayreco/shared" as SHARED {
+}
+APP ..> COMMON
+APP ..> CONFIG
+APP ..> MODULES
+APP ..> PRISMA
+COMMON ..> CONFIG
+COMMON ..> GENERATED
+COMMON ..> PRISMA
+COMMON ..> SHARED
+MODULES ..> COMMON
+MODULES ..> CONFIG
+MODULES ..> GENERATED
+MODULES ..> PRISMA
+MODULES ..> SHARED
+M_auth ..> APP
+M_auth ..> M_audit
+M_auth ..> M_mail
+M_auth ..> M_storage
+M_availability ..> M_rooms
+M_bookings ..> M_audit
+M_bookings ..> M_availability
+M_bookings ..> M_hotels
+M_bookings ..> M_mail
+M_bookings ..> M_notifications
+M_bookings ..> M_pricing
+M_bookings ..> M_rooms
+M_bookings ..> M_stays
+M_bookings ..> M_wallets
+M_hotels ..> M_catalog
+M_hotels ..> M_storage
+M_payments ..> M_audit
+M_payments ..> M_bookings
+M_payments ..> M_wallets
+M_pricing ..> M_rooms
+M_rooms ..> M_audit
+M_rooms ..> M_catalog
+M_rooms ..> M_storage
+M_staff ..> M_audit
+M_stats ..> M_bookings
+M_stats ..> M_hotels
+M_stats ..> M_stays
+M_stays ..> M_availability
+M_stays ..> M_hotels
+M_stays ..> M_pricing
+M_stays ..> M_rooms
+M_verification ..> M_audit
+M_verification ..> M_mail
+M_verification ..> M_storage
+PRISMA ..> CONFIG
+PRISMA ..> GENERATED
+legend bottom right
+  - - -> : <<import>> (tail package imports head package)
+endlegend
 @enduml

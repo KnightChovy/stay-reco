@@ -1,26 +1,73 @@
 @startuml
-' WF-03 Check-in, check-out and review
-' Owner: Nguyen Binh Khiem
-' Template: replace the placeholder steps with the real flow. Keep one swimlane per actor,
-' show only business steps (no internal processing), and end with the business result and entity states.
-skinparam dpi 180
+' WF-03 Check-in, check-out and review (Report 4, Figure 14). Owner: Nguyen Binh Khiem.
+' Same steps as wf03_checkin_checkout_review.drawio; grey steps are planned.
+skinparam dpi 140
 skinparam defaultFontName Helvetica
 skinparam shadowing false
 title WF-03 Check-in, check-out and review
+
 |Customer|
 start
-:Guest arrives at the hotel;
-|Hotel Staff|
-:TODO first system step;
-if (TODO business check?) then (yes)
-  :TODO next step;
-else (no)
-  :TODO exception path;
-  stop
+if (Guest comes during the stay dates?) then (No)
+  |StayReco System|
+  :Mark NO_SHOW: staff from the day after check-in,\nor the job at the check-out time\nBooking [CONFIRMED -> NO_SHOW]\nRelease the nights from today; hotel keeps\nthe payment, commission charged;
+  end
+else (Yes)
 endif
-|StayReco|
-:TODO step by StayReco;
-|Hotel Staff|
-:TODO business result\n(entity: OLD_STATE -> NEW_STATE);
+|Customer|
+:Show the QR voucher or give the booking code;
+|Hotel Staff (front desk)|
+:Scan the QR voucher or type the booking code;
+|StayReco System|
+if (Booking of this hotel found?) then (No)
+  |Hotel Staff (front desk)|
+  :Show VOUCHER_INVALID / BOOKING_NOT_FOUND;
+  end
+else (Yes)
+endif
+|StayReco System|
+if (CONFIRMED and PAID, no refund waiting,\ntoday in the stay dates?) then (No)
+  |Hotel Staff (front desk)|
+  :Refuse check-in: CHECK_IN_NOT_OPEN,\nREFUND_DECISION_PENDING,\nBOOKING_STATUS_CONFLICT;
+  end
+else (Yes)
+endif
+|StayReco System|
+:List the held rooms and the other\nAVAILABLE rooms of the room type;
+repeat
+  |Hotel Staff (front desk)|
+  :Keep the held rooms or choose other rooms;
+  |StayReco System|
+repeat while (Rooms still free and AVAILABLE?) is (No: ROOM_NOT_ASSIGNABLE,\nchoose again) not (Yes)
+:Move the remaining nights to the rooms\nBooking [CONFIRMED -> CHECKED_IN]\nRoom [AVAILABLE -> OCCUPIED]\nClose a waiting change request;
+|Customer|
+:Stay at the hotel;
+:Come to the desk to leave (early, on time or late);
+|Hotel Staff (front desk)|
+:Open the check-out of the booking;
+|StayReco System|
+:Quote: nights released if early, minutes late,\nlate fee from the hotel policy;
+if (Late fee due?) then (Yes)
+  |Hotel Staff (front desk)|
+  :Collect the fee at the desk\n(may lower it with a reason, never raise it);
+else (No)
+endif
+|Hotel Staff (front desk)|
+:Confirm the check-out;
+|StayReco System|
+:Booking [CHECKED_IN -> COMPLETED]\nRelease the remaining nights (no refund)\nRoom [OCCUPIED -> CLEANING]\nCharge the commission (hotel pending - / platform +);
+fork
+  |Hotel Staff (front desk)|
+  :Clean the room and mark it cleaned\n[CLEANING -> AVAILABLE];
+fork again
+  |StayReco System|
+  :Hourly job, 1 day after check-out: hotel net\npending -> available (SETTLEMENT);
+fork again
+  |Customer|
+  #F5F5F5:Write one review for the completed stay (planned);
+  |StayReco System|
+  #F5F5F5:Publish the review, add loyalty points;\na bad review alerts the hotel (planned);
+end fork
+|Hotel Staff (front desk)|
 stop
 @enduml

@@ -1,27 +1,32 @@
 @startuml
+' State machine of hotel.status (Report 4, Figure 19). States show the label of the figure and the value stored in the code.
 skinparam dpi 180
 skinparam shadowing false
 skinparam defaultFontName Helvetica
 skinparam defaultFontSize 13
 skinparam state {
-  BackgroundColor #F5F5F5
+  BackgroundColor #FFFFFF
   BorderColor #333333
-  FontStyle bold
 }
 skinparam ArrowColor #333333
 hide empty description
-
-title hotel.status
-[*] --> DRAFT : partner adds a hotel
-DRAFT --> PENDING_VERIFICATION : partner submits the first verification
-PENDING_VERIFICATION --> ACTIVE : manager approves
-PENDING_VERIFICATION --> DRAFT : manager rejects or asks for changes
-ACTIVE -[dashed]-> SUSPENDED : manager suspends after a violation (planned)
-SUSPENDED -[dashed]-> ACTIVE : suspension lifted (planned)
-ACTIVE -[dashed]-> INACTIVE : partner stops selling (planned)
-INACTIVE -[dashed]-> ACTIVE : partner reopens (planned)
+state "Hotel drafted\n(DRAFT)" as DRAFT
+state "Waiting for verification\n(PENDING_VERIFICATION)" as PENDING_VERIFICATION
+state "Hotel active\n(ACTIVE)" as ACTIVE
+state "Hotel suspended\n(SUSPENDED)" as SUSPENDED
+state "Hotel inactive\n(INACTIVE)" as INACTIVE
+state review <<choice>>
+[*] --> DRAFT : Partner adds a hotel
+DRAFT --> PENDING_VERIFICATION : [Partner submits the first verification]
+PENDING_VERIFICATION --> review
+review --> DRAFT : [Manager rejects or\nasks for changes]
+review --> ACTIVE : [Manager approves,\npartner not suspended]
+ACTIVE -[dashed]-> SUSPENDED : [Manager suspends after\na violation] (planned)
+SUSPENDED -[dashed]-> ACTIVE : [Suspension lifted] (planned)
+ACTIVE -[dashed]-> INACTIVE : [Partner stops selling] (planned)
+INACTIVE -[dashed]-> ACTIVE : [Partner reopens] (planned)
+INACTIVE -[dashed]-> [*] : [Hotel closed for good] (planned)
 legend bottom
-An ACTIVE hotel stays ACTIVE while an update or re-verification request is reviewed.
 Dashed arrow: planned, not implemented yet.
 endlegend
 @enduml

@@ -1,50 +1,62 @@
 @startuml
-skinparam dpi 180
+' Frontend Package Diagram (Report 4, Figure 3). Generated from the imports of the code: an arrow means
+' "the tail package imports the head package".
+skinparam dpi 150
 skinparam shadowing false
 skinparam defaultFontName Helvetica
 skinparam defaultFontSize 13
 skinparam ArrowColor #333333
-skinparam componentStyle rectangle
-skinparam rectangle {
-  BorderColor #333333
-}
+skinparam packageStyle folder
 skinparam package {
-  BorderColor #555555
+  BorderColor #333333
+  BackgroundColor #FFFFFF
 }
-title Web application package diagram
-package "frontend/src" {
-  package "app (App Router)" as APP {
-    rectangle "(landing-page)\nhome · blog · assistant · recommendations" as A1
-    rectangle "(auth)\nlogin · register · verify-email · reset" as A2
-    rectangle "search · hotels · booking" as A3
-    rectangle "(actors)\naccount · partner · staff · manager · admin" as A4
-  }
-  package "features" as FEAT {
-    rectangle "auth · booking · stays · account" as F1
-    rectangle "partner · staff · manager · admin" as F2
-  }
-  package "components" as COMP {
-    rectangle "ui (shadcn)" as CU
-    rectangle "common · layout" as CC
-  }
-  package "services" as SRV
-  package "stores (zustand)" as ST
-  package "lib\naxios · api-error · utils" as LIB
-  package "provider\nReact Query" as PROV
-  package "hooks · types" as HT
+title Frontend Package Diagram
+package "@stayreco/shared" as _stayreco_shared {
 }
-rectangle "@stayreco/shared" as SH #FFFDE7
-rectangle "Backend API" as API #E8F5E9
-APP ..> FEAT
-APP ..> COMP
-FEAT ..> COMP
-FEAT ..> SRV
-FEAT ..> ST
-SRV ..> LIB
-ST ..> SRV
-APP ..> PROV
-FEAT ..> HT
-LIB ..> API : HTTPS
-SRV ..> SH
-FEAT ..> SH
+package "app" as app {
+}
+package "components" as components {
+}
+package "features" as features {
+}
+package "hooks" as hooks {
+}
+package "lib" as lib {
+}
+package "provider" as provider {
+}
+package "services" as services {
+}
+package "stores" as stores {
+}
+package "types" as types {
+}
+app ..> _stayreco_shared
+app ..> components
+app ..> features
+app ..> hooks
+app ..> lib
+app ..> provider
+app ..> services
+components ..> features
+components ..> hooks
+components ..> lib
+features ..> _stayreco_shared
+features ..> components
+features ..> hooks
+features ..> lib
+features ..> services
+lib ..> _stayreco_shared
+lib ..> stores
+lib ..> types
+services ..> _stayreco_shared
+services ..> lib
+services ..> types
+stores ..> _stayreco_shared
+stores ..> services
+types ..> _stayreco_shared
+legend bottom right
+  - - -> : <<import>> (tail package imports head package)
+endlegend
 @enduml

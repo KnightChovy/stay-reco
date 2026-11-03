@@ -1,28 +1,46 @@
 @startuml
-' WF-05 AI-assisted blog post
-' Owner: Ngo Minh Tan
-' Template: replace the placeholder steps with the real flow. Keep one swimlane per actor,
-' show only business steps (no internal processing), and end with the business result and entity states.
-skinparam dpi 180
+' WF-05 AI-assisted blog post (Report 4, Figure 16). Owner: Ngo Minh Tan. Planned (phase 5).
+' Same steps as wf05_ai_blog.drawio.
+skinparam dpi 160
 skinparam defaultFontName Helvetica
 skinparam shadowing false
 title WF-05 AI-assisted blog post
-|Hotel Staff|
+
+|Hotel Staff (Marketing)|
 start
-:Staff starts a new blog post;
-|AI Service|
-:TODO first system step;
-if (TODO business check?) then (yes)
-  :TODO next step;
-else (no)
-  :TODO exception path;
-  stop
+:Open the blog editor;
+if (Use AI assistance?) then (Yes)
+  :Enter topic, keywords and target audience;
+  |AI Service|
+  if (AI service available?) then (Yes)
+    :Load the hotel brand settings\n(ai_config: tone, keywords, banned words);
+    repeat
+      :Generate 3 content options;
+    backward :Filter or regenerate;
+    repeat while (Violates guardrails?) is (Yes) not (No)
+    |Hotel Staff (Marketing)|
+    :Select one option and edit;
+  else (No (MSG24))
+    |Hotel Staff (Marketing)|
+    :Write the content manually;
+  endif
+else (No)
+  :Write the content manually;
 endif
-|Hotel Partner|
-:TODO step by Hotel Partner (reviews and approves or rejects the post);
-|StayReco|
-:TODO step by StayReco;
-|AI Service|
-:TODO business result\n(entity: OLD_STATE -> NEW_STATE);
+repeat
+  |Hotel Staff (Marketing)|
+  :Save draft [DRAFT];
+  :Submit for review [PENDING_APPROVAL];
+  |Hotel Partner (Owner)|
+  :Review the pending post;
+backward :Reject with feedback [REJECTED]\nStaff read the feedback and revise\n[REJECTED -> DRAFT];
+repeat while (Approve?) is (No) not (Yes)
+:Approve [APPROVED];
+if (Publish now or schedule?) then (schedule)
+  :Set the publishing time [SCHEDULED];
+  :At the scheduled time;
+else (now)
+endif
+:Publish the post on the hotel blog [PUBLISHED];
 stop
 @enduml

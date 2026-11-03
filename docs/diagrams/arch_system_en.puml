@@ -19,6 +19,7 @@ rectangle "Third-party services" as TP {
   rectangle "LLM Provider\n(planned)" as LLM
   rectangle "Maps / Geocoding\n(planned)" as MAPS
   rectangle "Social Media\n(planned)" as SOC
+  rectangle "Cloudinary\n(image and document storage)" as CLD
 }
 
 rectangle "StayReco System" as SYS {
@@ -28,6 +29,7 @@ rectangle "StayReco System" as SYS {
   }
   rectangle "Backend" as BE {
     rectangle "StayReco Service" as SVC
+    rectangle "Recommendation Service\noffline batch training (planned)" as REC
   }
   rectangle "Data Layer" as DL {
     database "Database Primary" as DB
@@ -40,6 +42,8 @@ MOB --> SVC : HTTPS Request
 SVC ..> MOB : HTTPS Response
 SVC --> DB : Query / Save Data
 DB ..> SVC : Data Response
+REC --> DB : Read interaction data /\nSave recommendation results
+DB ..> REC : Data Response
 SVC --> TP : HTTPS Request
 TP ..> SVC : HTTPS Response
 @enduml
