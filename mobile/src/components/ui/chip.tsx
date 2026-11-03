@@ -10,6 +10,8 @@ const tones = {
   neutral: { bg: colors.surfaceContainer, fg: colors.onSurfaceVariant },
   selected: { bg: colors.primaryContainer, fg: colors.onPrimary },
   outline: { bg: colors.surfaceContainerLowest, fg: colors.onSurfaceVariant },
+  warning: { bg: '#fff0d9', fg: '#7a4600' },
+  danger: { bg: colors.errorContainer, fg: '#8c0009' },
 };
 
 type Props = {
