@@ -1,0 +1,29 @@
+@startuml
+skinparam dpi 180
+skinparam shadowing false
+skinparam defaultFontName Helvetica
+skinparam defaultFontSize 13
+skinparam state {
+  BackgroundColor #F5F5F5
+  BorderColor #333333
+  FontStyle bold
+}
+skinparam ArrowColor #333333
+hide empty description
+
+title invoice.payment_status
+[*] --> UNPAID : booking created
+UNPAID --> PAID : SePay webhook confirms the transfer
+UNPAID --> FAILED : hold expired
+PAID --> REFUND_PENDING : customer cancels with a refund
+REFUND_PENDING --> PAID : partner rejects the refund
+REFUND_PENDING --> REFUNDED : approved, full refund
+REFUND_PENDING --> PARTIALLY_REFUNDED : approved, refund after the fee
+FAILED --> [*]
+REFUNDED --> [*]
+PARTIALLY_REFUNDED --> [*]
+legend bottom
+A request made before the check-in time and still undecided at that time is approved automatically.
+Dashed arrow: planned, not implemented yet.
+endlegend
+@enduml

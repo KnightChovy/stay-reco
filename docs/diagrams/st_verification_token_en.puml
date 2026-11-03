@@ -1,0 +1,28 @@
+@startuml
+skinparam dpi 180
+skinparam shadowing false
+skinparam defaultFontName Helvetica
+skinparam defaultFontSize 13
+skinparam state {
+  BackgroundColor #F5F5F5
+  BorderColor #333333
+  FontStyle bold
+}
+skinparam ArrowColor #333333
+hide empty description
+
+title verification_token
+[*] --> ISSUED : code or link sent
+ISSUED --> USED : correct code entered / link opened
+ISSUED --> EXPIRED : 10 min (code), 30 min (reset), 72 h (invitation)
+ISSUED --> CANCELLED : 5th wrong code
+ISSUED --> REPLACED : a new code or link is sent
+USED --> [*]
+EXPIRED --> [*]
+CANCELLED --> [*]
+REPLACED --> [*]
+legend bottom
+States are derived from used_at, expires_at and attempt_count; the table has no status column.
+Dashed arrow: planned, not implemented yet.
+endlegend
+@enduml

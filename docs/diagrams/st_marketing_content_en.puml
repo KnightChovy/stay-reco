@@ -1,0 +1,28 @@
+@startuml
+skinparam dpi 180
+skinparam shadowing false
+skinparam defaultFontName Helvetica
+skinparam defaultFontSize 13
+skinparam state {
+  BackgroundColor #F5F5F5
+  BorderColor #333333
+  FontStyle bold
+}
+skinparam ArrowColor #333333
+hide empty description
+
+title marketing_content.status (planned)
+[*] -[dashed]-> DRAFT : staff creates with AI
+DRAFT -[dashed]-> PENDING_APPROVAL : staff submits for review
+PENDING_APPROVAL -[dashed]-> APPROVED : partner approves
+PENDING_APPROVAL -[dashed]-> REJECTED : partner rejects with feedback
+REJECTED -[dashed]-> DRAFT : staff edits
+APPROVED -[dashed]-> SCHEDULED : publishing time set
+APPROVED -[dashed]-> PUBLISHED : published now
+SCHEDULED -[dashed]-> PUBLISHED : scheduled time reached
+PUBLISHED -[dashed]-> [*]
+legend bottom
+The Hotel Partner approves each post before it is published.
+Dashed arrow: planned, not implemented yet.
+endlegend
+@enduml

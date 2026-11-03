@@ -1,0 +1,28 @@
+@startuml
+' WF-02 Search, book and pay (with AI recommendation)
+' Owner: Nguyen Kim Thien Ngan (with Dinh Hoang Phuc, Ngo Minh Tan for the recommendation part)
+' Template: replace the placeholder steps with the real flow. Keep one swimlane per actor,
+' show only business steps (no internal processing), and end with the business result and entity states.
+skinparam dpi 180
+skinparam defaultFontName Helvetica
+skinparam shadowing false
+title WF-02 Search, book and pay (with AI recommendation)
+|Customer|
+start
+:Customer searches for a stay;
+|StayReco|
+:TODO first system step;
+if (TODO business check?) then (yes)
+  :TODO next step;
+else (no)
+  :TODO exception path;
+  stop
+endif
+|AI Recommender|
+:TODO step by AI Recommender;
+|SePay|
+:TODO step by SePay;
+|StayReco|
+:TODO business result\n(entity: OLD_STATE -> NEW_STATE);
+stop
+@enduml

@@ -1,0 +1,25 @@
+@startuml
+skinparam dpi 180
+skinparam shadowing false
+skinparam defaultFontName Helvetica
+skinparam defaultFontSize 13
+skinparam state {
+  BackgroundColor #F5F5F5
+  BorderColor #333333
+  FontStyle bold
+}
+skinparam ArrowColor #333333
+hide empty description
+
+title room.status
+[*] --> AVAILABLE : partner adds the room
+AVAILABLE --> MAINTENANCE : put under maintenance
+MAINTENANCE --> AVAILABLE : maintenance finished
+AVAILABLE --> OCCUPIED : guest checks in to this room
+OCCUPIED --> CLEANING : guest checks out
+CLEANING --> AVAILABLE : staff marks the room cleaned
+CLEANING --> MAINTENANCE : put under maintenance
+legend bottom
+An OCCUPIED room cannot be put under maintenance.
+endlegend
+@enduml

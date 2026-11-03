@@ -1,0 +1,26 @@
+@startuml
+' WF-01 Partner onboarding and hotel verification
+' Owner: Dinh Hoang Phuc
+' Template: replace the placeholder steps with the real flow. Keep one swimlane per actor,
+' show only business steps (no internal processing), and end with the business result and entity states.
+skinparam dpi 180
+skinparam defaultFontName Helvetica
+skinparam shadowing false
+title WF-01 Partner onboarding and hotel verification
+|Hotel Partner|
+start
+:Partner registers;
+|StayReco|
+:TODO first system step;
+if (TODO business check?) then (yes)
+  :TODO next step;
+else (no)
+  :TODO exception path;
+  stop
+endif
+|Platform Manager|
+:TODO step by Platform Manager;
+|StayReco|
+:TODO business result\n(entity: OLD_STATE -> NEW_STATE);
+stop
+@enduml
