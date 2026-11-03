@@ -32,6 +32,17 @@ export const partnerKeys = {
   bookings: (hotelId: string, params: partnerService.HotelBookingsParams) =>
     [...partnerKeys.bookingsOf(hotelId), params] as const,
   booking: (bookingId: string) => [...partnerKeys.all, "booking", bookingId] as const,
+  /** Every dashboard figure of a hotel, so the refresh button can refetch them together. */
+  statsOf: (hotelId: string) => [...partnerKeys.all, "stats", hotelId] as const,
+  actionItems: (hotelId: string) => [...partnerKeys.statsOf(hotelId), "action-items"] as const,
+  todayStats: (hotelId: string, arrivalsLimit?: number) =>
+    [...partnerKeys.statsOf(hotelId), "today", arrivalsLimit] as const,
+  statsOverview: (hotelId: string, params: partnerService.StatsRangeParams) =>
+    [...partnerKeys.statsOf(hotelId), "overview", params] as const,
+  statsSeries: (hotelId: string, params: partnerService.StatsSeriesParams) =>
+    [...partnerKeys.statsOf(hotelId), "series", params] as const,
+  occupancyForecast: (hotelId: string, days?: number) =>
+    [...partnerKeys.statsOf(hotelId), "occupancy-forecast", days] as const,
 };
 
 const catalogKeys = {
@@ -148,6 +159,49 @@ export function useBooking(bookingId: string | undefined) {
     queryKey: partnerKeys.booking(bookingId ?? ""),
     queryFn: () => partnerService.getBooking(bookingId!),
     enabled: !!bookingId,
+  });
+}
+
+export function useActionItems(hotelId: string | undefined) {
+  return useQuery({
+    queryKey: partnerKeys.actionItems(hotelId ?? ""),
+    queryFn: () => partnerService.getActionItems(hotelId!),
+    enabled: !!hotelId,
+  });
+}
+
+export function useTodayStats(hotelId: string | undefined, arrivalsLimit?: number) {
+  return useQuery({
+    queryKey: partnerKeys.todayStats(hotelId ?? "", arrivalsLimit),
+    queryFn: () => partnerService.getTodayStats(hotelId!, arrivalsLimit),
+    enabled: !!hotelId,
+  });
+}
+
+/** `params` undefined while the picked period is invalid: nothing is sent (the API would answer VALIDATION_ERROR). */
+export function useStatsOverview(hotelId: string | undefined, params: partnerService.StatsRangeParams | undefined) {
+  return useQuery({
+    queryKey: partnerKeys.statsOverview(hotelId ?? "", params ?? {}),
+    queryFn: () => partnerService.getStatsOverview(hotelId!, params!),
+    enabled: !!hotelId && !!params,
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useStatsSeries(hotelId: string | undefined, params: partnerService.StatsSeriesParams | undefined) {
+  return useQuery({
+    queryKey: partnerKeys.statsSeries(hotelId ?? "", params ?? {}),
+    queryFn: () => partnerService.getStatsSeries(hotelId!, params!),
+    enabled: !!hotelId && !!params,
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useOccupancyForecast(hotelId: string | undefined, days?: number) {
+  return useQuery({
+    queryKey: partnerKeys.occupancyForecast(hotelId ?? "", days),
+    queryFn: () => partnerService.getOccupancyForecast(hotelId!, days),
+    enabled: !!hotelId,
   });
 }
 
