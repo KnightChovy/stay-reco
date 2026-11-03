@@ -14,6 +14,8 @@ export const staffKeys = {
   availability: (hotelId: string, params: AvailabilityQuery) =>
     [...staffKeys.all, "availability", hotelId, params] as const,
   booking: (bookingId: string) => [...staffKeys.all, "booking", bookingId] as const,
+  hotelBookings: (hotelId: string, params: staffService.HotelBookingsParams) =>
+    [...staffKeys.all, "hotel-bookings", hotelId, params] as const,
   lookup: (hotelId: string, query: { code?: string; qrToken?: string }) =>
     [...staffKeys.all, "lookup", hotelId, query] as const,
   roomOptions: (bookingId: string) => [...staffKeys.all, "room-options", bookingId] as const,
@@ -146,4 +148,65 @@ export function useCleanRoom() {
       void queryClient.invalidateQueries({ queryKey: [...staffKeys.all, "booking"] });
     },
   });
+}
+
+
+/** UC57: the hotel's bookings (filters/pagination); `paymentStatus: ["REFUND_PENDING"]` is the refund queue. */
+export function useHotelBookings(hotelId: string | undefined, params: staffService.HotelBookingsParams) {
+  return useQuery({
+    queryKey: staffKeys.hotelBookings(hotelId ?? "", params),
+    queryFn: () => staffService.getHotelBookings(hotelId!, params),
+    enabled: !!hotelId,
+    placeholderData: keepPreviousData,
+    refetchOnWindowFocus: true,
+  });
+}
+
+function useBookingAction<TVariables, TResult>(
+  fn: (variables: TVariables) => Promise<TResult>,
+  bookingIdOf: (variables: TVariables) => string,
+) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: staffKeys.booking(bookingIdOf(variables)) });
+      queryClient.invalidateQueries({ queryKey: [...staffKeys.all, "lookup"] });
+      queryClient.invalidateQueries({ queryKey: [...staffKeys.all, "hotel-bookings"] });
+    },
+  });
+}
+
+/** Decisions O4/O5: mark a paid, confirmed guest as a no-show. */
+export function useNoShow() {
+  return useBookingAction(
+    (bookingId: string) => staffService.markNoShow(bookingId),
+    (bookingId) => bookingId,
+  );
+}
+
+/** UC43: accept the waiting guest-detail change request. */
+export function useAcceptChange() {
+  return useBookingAction(
+    (bookingId: string) => staffService.acceptBookingChange(bookingId),
+    (bookingId) => bookingId,
+  );
+}
+
+/** UC43: reject the waiting change request with a reason. */
+export function useRejectChange() {
+  return useBookingAction(
+    ({ bookingId, reason }: { bookingId: string; reason: string }) =>
+      staffService.rejectBookingChange(bookingId, { reason }),
+    ({ bookingId }) => bookingId,
+  );
+}
+
+/** Staff with REFUND forward the request to the partner with a note. */
+export function useForwardRefund() {
+  return useBookingAction(
+    ({ bookingId, note }: { bookingId: string; note: string }) =>
+      staffService.forwardRefund(bookingId, { note }),
+    ({ bookingId }) => bookingId,
+  );
 }
