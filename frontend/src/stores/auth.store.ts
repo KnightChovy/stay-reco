@@ -49,15 +49,6 @@ export const roleDashboardPaths: Record<UserRole, string> = {
   admin: '/admin/dashboard',
 };
 
-const demoRoles = ['customer', 'partner', 'staff', 'manager', 'admin'] as const;
-
-function getDemoCredentials(role: UserRole) {
-  return { email: `${role}@gmail.com`, password: `${role}${123}`, role };
-}
-
-export const demoAccounts: ReadonlyArray<ReturnType<typeof getDemoCredentials>> =
-  demoRoles.map(getDemoCredentials);
-
 export function mapBackendRoleToFrontend(role: string): UserRole {
   switch (role) {
     case 'HOTEL_PARTNER':
