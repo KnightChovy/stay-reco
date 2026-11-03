@@ -40,6 +40,13 @@ const errorMessages: Record<string, string> = {
   BOOKING_NOT_FOUND: "Không tìm thấy booking. Danh sách đã được tải lại.",
   BOOKING_STATUS_CONFLICT: "Trạng thái booking đã thay đổi. Danh sách đã được tải lại.",
   REFUND_STATUS_CONFLICT: "Yêu cầu hoàn tiền đã được xử lý. Danh sách đã được tải lại.",
+  CHECK_IN_NOT_OPEN: "Chưa đến thời gian check-in của đơn này (từ ngày nhận phòng đến trước ngày trả phòng).",
+  CHECK_OUT_NOT_ALLOWED: "Đơn này chưa ở trạng thái có thể check-out.",
+  REFUND_DECISION_PENDING: "Đơn đang chờ xử lý yêu cầu hoàn tiền. Hãy xử lý hoàn tiền trước.",
+  ROOM_NOT_ASSIGNABLE: "Phòng đã chọn không còn trống hoặc không đúng hạng phòng. Vui lòng chọn lại.",
+  NO_SHOW_NOT_ALLOWED: "Chỉ có thể đánh dấu khách không đến sau ngày nhận phòng.",
+  VOUCHER_INVALID: "Mã QR voucher không hợp lệ hoặc đã bị chỉnh sửa.",
+  ROOM_STATUS_CONFLICT: "Trạng thái phòng đã thay đổi. Danh sách đã được tải lại.",
 };
 
 /** Custom messages written in the shared zod schemas (packages/shared/src/schemas), also returned in `details`. */
