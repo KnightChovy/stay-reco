@@ -1,0 +1,58 @@
+import { StyleSheet, View } from 'react-native';
+import { Chip } from '@/components/ui/chip';
+import { Text } from '@/components/ui/text';
+import { colors } from '@/constants/theme';
+import { aiRecommendation, marketingKpis as k, topPosts } from '@/features/staff/data';
+import { Banner, Card, Grid, Section, StaffScreen, Stat, accent } from '@/features/staff/ui';
+import { formatVnd } from '@/lib/stay';
+
+export default function StaffMarketingAnalyticsScreen() {
+  return (
+    <StaffScreen title="Hiệu quả tiếp thị">
+      <Grid>
+        <Stat icon="payments" label="Doanh thu từ Marketing" value={`${k.revenue / 1e6} tr`} unit="₫" foot="Tháng 10/2026" />
+        <Stat icon="receipt_long" label="Lượt đặt phòng từ Camp" value={`${k.bookings}`} unit="booking" foot="Tăng trưởng" tint="#2e7d55" />
+        <Stat icon="bar_chart" label="Tỷ lệ chuyển đổi (CVR)" value={k.cvr} unit="" foot={`${k.clicks} Clicks`} tint={colors.primaryContainer} />
+        <Stat icon="auto_awesome" label="Chỉ số ROI trung bình" value={k.roi} unit="ROI" foot="Trên 3 kênh" tint={accent} />
+      </Grid>
+      <Banner icon="auto_awesome" tone="clay" title="AI Recommendation" text={aiRecommendation} />
+
+      <Section title="Bài viết chuyển đổi cao nhất" />
+      <Card style={styles.list}>
+        {topPosts.map((p, i) => (
+          <View key={p.rank} style={[styles.item, i > 0 && styles.topLine]}>
+            <View style={[styles.rank, p.rank === 1 && styles.rankTop]}>
+              <Text variant="small" weight="bold" color={p.rank === 1 ? colors.onPrimary : colors.primary}>
+                {p.rank}
+              </Text>
+            </View>
+            <View style={styles.body}>
+              <Text variant="small" weight="bold">
+                {p.title}
+              </Text>
+              <Text variant="caption" color={colors.onSurfaceVariant}>
+                {p.platform} · {p.clicks} clicks · {p.bookings} booking
+              </Text>
+              <View style={styles.foot}>
+                <Text variant="small" weight="bold">
+                  {formatVnd(p.revenue)}
+                </Text>
+                <Chip label={`ROI ${p.roi}`} tone="tertiary" />
+              </View>
+            </View>
+          </View>
+        ))}
+      </Card>
+    </StaffScreen>
+  );
+}
+
+const styles = StyleSheet.create({
+  list: { gap: 0, paddingVertical: 2 },
+  item: { flexDirection: 'row', gap: 12, paddingVertical: 12 },
+  topLine: { borderTopWidth: 1, borderTopColor: colors.surfaceContainerHigh },
+  rank: { width: 28, height: 28, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceContainerLow },
+  rankTop: { backgroundColor: colors.primary },
+  body: { flex: 1, gap: 6 },
+  foot: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+});
