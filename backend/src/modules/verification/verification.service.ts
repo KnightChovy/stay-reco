@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
+  type HotelBeneficiary,
   REQUIRED_VERIFICATION_DOCUMENTS,
   type SubmitVerificationInput,
   type VerificationFileLink,
@@ -39,12 +40,15 @@ import {
   VerificationMailer,
 } from './verification-mailer';
 import {
+  beneficiaryInclude,
   notificationEmailOf,
   requestInclude,
   summaryInclude,
+  toHotelBeneficiary,
   toSnapshotRows,
   toVerificationRequest,
   toVerificationSummary,
+  withBeneficiary,
 } from './verification.mapper';
 
 /** Signed links to private documents expire quickly; the client asks for a new one when needed. */
@@ -168,6 +172,24 @@ export class VerificationService {
     return requests.map((r) =>
       toVerificationRequest(r, this.cipher, { full: false }),
     );
+  }
+
+  /**
+   * The account payouts go to: the one of the most recently approved request (contract D12), masked. A request still
+   * waiting for review does not replace it until approved.
+   */
+  async beneficiary(hotelId: string): Promise<HotelBeneficiary> {
+    const [approved, pending] = await Promise.all([
+      this.prisma.hotelVerificationRequest.findFirst({
+        where: { hotelId, status: 'APPROVED', ...withBeneficiary },
+        include: beneficiaryInclude,
+        orderBy: [{ reviewedAt: 'desc' }, { createdAt: 'desc' }],
+      }),
+      this.prisma.hotelVerificationRequest.count({
+        where: { hotelId, status: 'PENDING', ...withBeneficiary },
+      }),
+    ]);
+    return toHotelBeneficiary(approved, pending > 0, this.cipher);
   }
 
   /** Platform manager queue. `search` matches the hotel name. */
