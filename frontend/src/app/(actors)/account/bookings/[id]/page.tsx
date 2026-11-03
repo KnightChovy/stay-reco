@@ -91,6 +91,10 @@ export default function BookingDetailPage() {
 
   const canVoucher = booking.status === 'CONFIRMED' || booking.status === 'CHECKED_IN';
   const canCancel = booking.status === 'CONFIRMED' && booking.paymentStatus === 'PAID';
+  const canChange =
+    booking.status === 'CONFIRMED' &&
+    booking.paymentStatus === 'PAID' &&
+    booking.changeRequest?.status !== 'PENDING';
   const canPay = booking.status === 'PENDING';
   const image = booking.hotel.coverImageUrl ?? FALLBACK_IMAGE;
 
@@ -151,6 +155,16 @@ export default function BookingDetailPage() {
                 <Link href={`/booking/confirmation?id=${booking.id}`}>
                   <Button className="h-10 gap-1.5 bg-[#013758] px-4 text-xs font-bold text-white hover:bg-[#193B56]">
                     <QrCode className="size-4" /> Xem QR Voucher
+                  </Button>
+                </Link>
+              )}
+              {canChange && (
+                <Link href={`/account/bookings/${booking.id}/change`}>
+                  <Button
+                    variant="outline"
+                    className="h-10 border-slate-300 px-4 text-xs font-semibold text-[#013758]"
+                  >
+                    Đổi thông tin
                   </Button>
                 </Link>
               )}

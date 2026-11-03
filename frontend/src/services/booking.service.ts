@@ -5,6 +5,7 @@ import type {
   BookingVoucher,
   CancelBookingInput,
   CancellationQuote,
+  ChangeRequestInput,
   CreateBookingInput,
   MyBookingsQuery,
 } from "@stayreco/shared";
@@ -54,5 +55,12 @@ export async function cancelBooking(bookingId: string, input: CancelBookingInput
 /** Development only: confirms a PENDING booking without a bank transfer (`PAYMENT_SIMULATOR=true`). */
 export async function simulatePayment(bookingId: string) {
   const { data } = await api.post<APIResponse<Booking>>(`/dev/bookings/${bookingId}/simulate-payment`);
+  return data.data;
+}
+
+
+/** UC25: ask the hotel to change guest details (not dates, rooms or guests). */
+export async function requestBookingChange(bookingId: string, input: ChangeRequestInput) {
+  const { data } = await api.post<APIResponse<Booking>>(`/bookings/${bookingId}/change-request`, input);
   return data.data;
 }

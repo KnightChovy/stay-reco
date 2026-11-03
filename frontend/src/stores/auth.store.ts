@@ -49,15 +49,6 @@ export const roleDashboardPaths: Record<UserRole, string> = {
   admin: '/admin/dashboard',
 };
 
-const demoRoles = ['customer', 'partner', 'staff', 'manager', 'admin'] as const;
-
-function getDemoCredentials(role: UserRole) {
-  return { email: `${role}@gmail.com`, password: `${role}${123}`, role };
-}
-
-export const demoAccounts: ReadonlyArray<ReturnType<typeof getDemoCredentials>> =
-  demoRoles.map(getDemoCredentials);
-
 export function mapBackendRoleToFrontend(role: string): UserRole {
   switch (role) {
     case 'HOTEL_PARTNER':
@@ -144,6 +135,11 @@ export const useAuthStore = create<AuthState>()(
 
       hydrate: async () => {
         if (get().hasHydrated) return;
+
+        // A new tab/reload has no in-memory token: restore the persisted one before calling /auth/me, otherwise the
+        // first request would 401 and force a refresh-token rotation (two tabs can then revoke each other).
+        const storedToken = get().accessToken;
+        if (storedToken) setWindowAccessToken(storedToken);
 
         try {
           const res = await authService.getMe();
@@ -244,13 +240,19 @@ export const useAuthStore = create<AuthState>()(
     {
       name: 'stayreco-auth-storage',
       storage: createJSONStorage(() => localStorage),
-      partialize: (state) => ({ user: state.user }),
+      // Persist the access token too: links opened in a new tab/reloads can reuse it instead of immediately
+      // rotating the refresh token. It is cleared by logout/auth-expired like the user.
+      partialize: (state) => ({ user: state.user, accessToken: state.accessToken }),
     },
   ),
 );
 
 // Global event listeners for token refresh and auth expiry
 if (typeof window !== 'undefined') {
+  // localStorage rehydrates synchronously, so the interceptor has a token before the first request.
+  const restoredToken = useAuthStore.getState().accessToken;
+  if (restoredToken) setWindowAccessToken(restoredToken);
+
   window.addEventListener('stayreco:auth-expired', () => {
     useAuthStore.setState({ user: null, accessToken: null });
   });

@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import {
+  AlertTriangle,
   ArrowLeft,
+  Ban,
   BedDouble,
   CalendarClock,
   CheckCircle2,
@@ -17,9 +19,13 @@ import {
   Phone,
   Printer,
   RefreshCw,
+  Send,
   ShieldCheck,
   Sparkles,
+  ThumbsDown,
+  ThumbsUp,
   User,
+  UserCog,
   Users,
 } from "lucide-react";
 import type { Booking } from "@stayreco/shared";
@@ -27,7 +33,15 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { getApiErrorMessage } from "@/lib/api-error";
-import { useBooking } from "../api/staff-queries";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Input } from "@/components/ui/input";
+import {
+  useAcceptChange,
+  useBooking,
+  useForwardRefund,
+  useNoShow,
+  useRejectChange,
+} from "../api/staff-queries";
 import {
   bookingStatusLabels,
   formatCalendarDate,
@@ -75,6 +89,13 @@ export function StaffBookingDetail({ bookingId }: { bookingId: string }) {
   const { data: booking, isLoading, error, refetch, isFetching } = useBooking(
     isRealId ? bookingId : undefined,
   );
+
+  const [changeReason, setChangeReason] = useState("");
+  const [refundNote, setRefundNote] = useState("");
+  const noShow = useNoShow();
+  const acceptChange = useAcceptChange();
+  const rejectChange = useRejectChange();
+  const forwardRefund = useForwardRefund();
 
   if (!isRealId) {
     return (
@@ -132,6 +153,11 @@ export function StaffBookingDetail({ bookingId }: { bookingId: string }) {
   }
 
   const created = formatDateTime(booking.createdAt);
+  const pendingChange = booking.changeRequest?.status === "PENDING";
+  const refundPending = booking.paymentStatus === "REFUND_PENDING";
+  const today = new Date().toLocaleDateString("en-CA");
+  const canNoShow =
+    booking.status === "CONFIRMED" && booking.paymentStatus === "PAID" && booking.checkIn < today;
 
   return (
     <div className="space-y-6 pb-16">
@@ -384,6 +410,133 @@ export function StaffBookingDetail({ bookingId }: { bookingId: string }) {
         </div>
 
         <div className="flex flex-col space-y-6 lg:col-span-4">
+          {pendingChange && (
+            <Card className="space-y-4 rounded-2xl border border-amber-200 bg-amber-50/60 p-5 shadow-none">
+              <h2 className="flex items-center gap-2 text-sm font-bold text-amber-900">
+                <UserCog className="size-4" /> Yêu cầu đổi thông tin khách
+              </h2>
+              <div className="space-y-2 rounded-lg bg-white p-3 text-xs">
+                {booking.changeRequest?.changes.guestName && (
+                  <p><span className="text-muted-foreground">Họ tên:</span> <strong>{booking.changeRequest.changes.guestName}</strong></p>
+                )}
+                {booking.changeRequest?.changes.contactPhone && (
+                  <p><span className="text-muted-foreground">SĐT:</span> <strong>{booking.changeRequest.changes.contactPhone}</strong></p>
+                )}
+                {booking.changeRequest?.changes.arrivalTime !== undefined && (
+                  <p><span className="text-muted-foreground">Giờ đến:</span> <strong>{booking.changeRequest.changes.arrivalTime ?? "Xoá"}</strong></p>
+                )}
+                {booking.changeRequest?.changes.specialRequests !== undefined && (
+                  <p><span className="text-muted-foreground">Yêu cầu:</span> <strong>{booking.changeRequest.changes.specialRequests ?? "Xoá"}</strong></p>
+                )}
+                <p className="text-[10px] text-muted-foreground">
+                  Gửi lúc {formatDateTime(booking.changeRequest?.requestedAt)}
+                </p>
+              </div>
+
+              {(acceptChange.error || rejectChange.error) && (
+                <Alert variant="destructive" className="bg-red-50 p-3">
+                  <AlertDescription className="text-xs">
+                    {getApiErrorMessage(acceptChange.error ?? rejectChange.error, "Không xử lý được yêu cầu.")}
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => acceptChange.mutate(booking.id)}
+                  disabled={acceptChange.isPending || rejectChange.isPending}
+                  className="h-9 flex-1 gap-1.5 bg-emerald-600 text-xs font-semibold text-white hover:bg-emerald-700"
+                >
+                  <ThumbsUp className="size-3.5" /> Chấp nhận
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    if (!changeReason.trim()) return;
+                    rejectChange.mutate({ bookingId: booking.id, reason: changeReason.trim() });
+                  }}
+                  disabled={!changeReason.trim() || acceptChange.isPending || rejectChange.isPending}
+                  className="h-9 flex-1 gap-1.5 border-red-200 text-xs font-semibold text-red-700"
+                >
+                  <ThumbsDown className="size-3.5" /> Từ chối
+                </Button>
+              </div>
+              <Input
+                value={changeReason}
+                onChange={(event) => setChangeReason(event.target.value)}
+                placeholder="Lý do từ chối (bắt buộc khi từ chối)…"
+                className="h-9 bg-white text-xs"
+              />
+            </Card>
+          )}
+
+          {refundPending && (
+            <Card className="space-y-3 rounded-2xl border border-sky-200 bg-sky-50/60 p-5 shadow-none">
+              <h2 className="flex items-center gap-2 text-sm font-bold text-sky-900">
+                <Send className="size-4" /> Yêu cầu hoàn tiền
+              </h2>
+              <p className="text-xs text-sky-900">
+                Khách yêu cầu hoàn <strong>{formatMoney(booking.refund?.amount ?? 0)}</strong>. Chuyển yêu cầu này
+                tới chủ khách sạn để quyết định.
+              </p>
+              {forwardRefund.error && (
+                <p className="text-xs text-red-600">
+                  {getApiErrorMessage(forwardRefund.error, "Không chuyển được yêu cầu.")}
+                </p>
+              )}
+              {forwardRefund.isSuccess ? (
+                <p className="rounded-lg bg-white p-3 text-xs font-semibold text-emerald-700">
+                  Đã chuyển yêu cầu tới partner.
+                </p>
+              ) : (
+                <>
+                  <Input
+                    value={refundNote}
+                    onChange={(event) => setRefundNote(event.target.value)}
+                    placeholder="Ghi chú đã kiểm tra cho partner…"
+                    className="h-9 bg-white text-xs"
+                  />
+                  <Button
+                    onClick={() => {
+                      if (!refundNote.trim()) return;
+                      forwardRefund.mutate({ bookingId: booking.id, note: refundNote.trim() });
+                    }}
+                    disabled={!refundNote.trim() || forwardRefund.isPending}
+                    className="h-9 w-full gap-1.5 bg-sky-700 text-xs font-semibold text-white hover:bg-sky-800"
+                  >
+                    <Send className="size-3.5" /> Chuyển partner
+                  </Button>
+                </>
+              )}
+            </Card>
+          )}
+
+          {canNoShow && (
+            <Card className="space-y-3 rounded-2xl border border-red-200 bg-red-50/60 p-5 shadow-none">
+              <h2 className="flex items-center gap-2 text-sm font-bold text-red-900">
+                <Ban className="size-4" /> Khách không đến
+              </h2>
+              <p className="text-xs text-red-800">
+                Đánh dấu khách không đến sau ngày nhận phòng. Khách sạn giữ tiền và các đêm còn lại được giải phóng.
+              </p>
+              {noShow.error && (
+                <p className="text-xs text-red-700">{getApiErrorMessage(noShow.error, "Không thể đánh dấu no-show.")}</p>
+              )}
+              <Button
+                variant="outline"
+                onClick={() => {
+                  if (window.confirm(`Đánh dấu khách không đến cho đơn ${booking.code}?`)) {
+                    noShow.mutate(booking.id);
+                  }
+                }}
+                disabled={noShow.isPending}
+                className="h-9 w-full gap-1.5 border-red-300 text-xs font-semibold text-red-700 hover:bg-red-50"
+              >
+                <AlertTriangle className="size-3.5" /> Đánh dấu không đến
+              </Button>
+            </Card>
+          )}
+
           <Card className="space-y-4 rounded-2xl border border-border bg-white p-5 shadow-2xs">
             <h2 className="flex items-center gap-2 text-sm font-bold text-foreground">
               <ShieldCheck className="size-4 text-primary" /> Chính sách huỷ
