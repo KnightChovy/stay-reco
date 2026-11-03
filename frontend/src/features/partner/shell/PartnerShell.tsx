@@ -5,10 +5,14 @@ import { usePathname } from "next/navigation";
 import {
   BedDouble,
   BookOpenCheck,
+  Briefcase,
+  Building,
   Building2,
   CalendarDays,
   ChartNoAxesCombined,
+  FolderKanban,
   LayoutDashboard,
+  Megaphone,
   Percent,
   ShieldCheck,
   Sparkles,
@@ -26,85 +30,92 @@ import { useRefundQueueCount } from "../api/partner-queries";
 import { usePartnerHotel } from "../components";
 import { hotelStatusLabels } from "../lib/labels";
 
+/** Sidebar dropdowns, in display order; "Tổng quan" has no section, so it stays on top as a plain link. */
+const sections = {
+  "Kinh doanh": Briefcase,
+  "Vận hành cơ sở": Building,
+  "Tiếp thị & khách hàng": Megaphone,
+  "Tổ chức & hồ sơ": FolderKanban,
+};
+
 const navigation: Omit<SidebarItem, "isActive">[] = [
   {
     href: "/partner/dashboard",
     label: "Tổng quan",
     icon: LayoutDashboard,
-    section: "KINH DOANH",
   },
   {
     href: "/partner/bookings",
     label: "Đặt phòng",
     icon: BookOpenCheck,
-    section: "KINH DOANH",
+    section: "Kinh doanh",
   },
   {
     href: "/partner/revenue",
     label: "Doanh thu & đối soát",
     icon: ChartNoAxesCombined,
-    section: "KINH DOANH",
+    section: "Kinh doanh",
   },
   {
     href: "/partner/hotel",
     label: "Khách sạn & cơ sở",
     icon: Building2,
-    section: "VẬN HÀNH CƠ SỞ",
+    section: "Vận hành cơ sở",
   },
   {
     href: "/partner/rooms",
     label: "Kho phòng",
     icon: BedDouble,
-    section: "VẬN HÀNH CƠ SỞ",
+    section: "Vận hành cơ sở",
   },
   {
     href: "/partner/availability",
     label: "Lịch tồn & khả dụng",
     icon: CalendarDays,
-    section: "VẬN HÀNH CƠ SỞ",
+    section: "Vận hành cơ sở",
   },
   {
     href: "/partner/pricing",
     label: "Luật giá & mùa vụ",
     icon: Tags,
-    section: "VẬN HÀNH CƠ SỞ",
+    section: "Vận hành cơ sở",
   },
   {
     href: "/partner/promotions",
     label: "Chiến dịch & giảm giá",
     icon: Percent,
-    section: "TIẾP THỊ & KHÁCH HÀNG",
+    section: "Tiếp thị & khách hàng",
   },
   {
     href: "/partner/loyalty",
     label: "Khách hàng thân thiết",
     icon: UsersRound,
-    section: "TIẾP THỊ & KHÁCH HÀNG",
+    section: "Tiếp thị & khách hàng",
   },
   {
     href: "/partner/ai-brand",
     label: "Giọng thương hiệu AI",
     icon: Sparkles,
-    section: "TIẾP THỊ & KHÁCH HÀNG",
+    section: "Tiếp thị & khách hàng",
   },
   {
     href: "/partner/staff",
     label: "Nhân viên & phân quyền",
     icon: UsersRound,
-    section: "TỔ CHỨC & HỒ SƠ",
+    section: "Tổ chức & hồ sơ",
   },
   {
     href: "/partner/verification",
     label: "Hồ sơ & xác minh",
     icon: ShieldCheck,
-    section: "TỔ CHỨC & HỒ SƠ",
+    section: "Tổ chức & hồ sơ",
   },
 ];
 
 export function PartnerShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const user = useAuthStore((state) => state.user);
-  const { hotel } = usePartnerHotel();
+  const { hotel, hotels, selectHotel } = usePartnerHotel();
   // Refund requests wait for the partner's decision, so they are the bookings badge.
   const { count: refundQueue } = useRefundQueueCount(hotel?.id);
   const items = navigation.map((item) => ({
@@ -118,19 +129,26 @@ export function PartnerShell({ children }: { children: ReactNode }) {
 
   return (
     <SidebarProvider>
-      <Sidebar
-        items={items}
-        roleLabel="Partner Portal"
-        contextName={hotel?.name ?? "Chưa có khách sạn"}
-      />
+      {/* The hotel is shown and picked in the header, so the sidebar has no context block. */}
+      <Sidebar items={items} collapsibleSections={sections} collapsibleToIcon />
       <SidebarInset className="min-w-0 bg-background">
         <Navbar
+          // Stays on top while the page scrolls: the hotel picker and the notifications remain at hand.
+          className="sticky top-0 z-30"
           context={
             hotel
               ? {
                   name: hotel.name,
                   meta: hotelMeta,
                   status: hotelStatusLabels[hotel.status].label,
+                  // The one hotel picker of the portal: every hotel-scoped screen follows the selection.
+                  options: hotels.map((item) => ({
+                    id: item.id,
+                    name: item.name,
+                    meta: `${item.city} · ${hotelStatusLabels[item.status].label}`,
+                  })),
+                  selectedId: hotel.id,
+                  onSelect: selectHotel,
                 }
               : undefined
           }

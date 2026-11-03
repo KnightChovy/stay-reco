@@ -12,6 +12,8 @@ import {
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
@@ -37,8 +39,29 @@ type NavbarProps = {
   onNotificationClick?: () => void;
   showSidebarTrigger?: boolean;
   className?: string;
-  context?: { name: string; meta?: string; status?: string };
+  context?: NavbarContext;
 };
+
+type NavbarContext = {
+  name: string;
+  meta?: string;
+  status?: string;
+  /** With two or more options the context becomes a picker (e.g. the partner's hotels). */
+  options?: Array<{ id: string; name: string; meta?: string }>;
+  selectedId?: string;
+  onSelect?: (id: string) => void;
+};
+
+function ContextSummary({ context, compact = false }: { context: NavbarContext; compact?: boolean }) {
+  return (
+    <>
+      <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-card text-primary shadow-sm"><House className="size-4" /></span>
+      <span className="min-w-0 flex-1"><strong className="block truncate text-xs text-foreground">{context.name}</strong>{context.meta && <span className={cn('block truncate text-[10px] text-muted-foreground', compact && 'hidden sm:block')}>{context.meta}</span>}</span>
+      {context.status && <span className={cn('shrink-0 rounded-full bg-success-soft px-2 py-1 text-[9px] font-semibold text-success', compact && 'hidden sm:inline')}>{context.status}</span>}
+      <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
+    </>
+  );
+}
 
 function getInitials(name: string) {
   return name
@@ -91,13 +114,38 @@ export default function Navbar({
           aria-label="Mở thanh điều hướng"
         />
       )}
-      {context && (
-        <div className="hidden min-w-64 items-center gap-3 rounded-xl bg-muted px-3 py-2 xl:flex">
-          <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-card text-primary shadow-sm"><House className="size-4" /></span>
-          <span className="min-w-0 flex-1"><strong className="block truncate text-xs text-foreground">{context.name}</strong>{context.meta && <span className="block truncate text-[10px] text-muted-foreground">{context.meta}</span>}</span>
-          {context.status && <span className="rounded-full bg-success-soft px-2 py-1 text-[9px] font-semibold text-success">{context.status}</span>}
-          <ChevronDown className="size-3.5 text-muted-foreground" />
-        </div>
+      {context && context.options && context.options.length > 1 ? (
+        // A picker is the only place to switch, so unlike the static summary it stays visible on small screens.
+        <DropdownMenu modal={false}>
+          <DropdownMenuTrigger
+            className="flex min-w-0 max-w-[55vw] cursor-pointer items-center gap-3 rounded-xl bg-muted px-3 py-2 text-left transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none sm:max-w-80 sm:min-w-64 sm:shrink-0"
+            aria-label={`Đang quản lý ${context.name}. Đổi sang cơ sở khác`}
+          >
+            <ContextSummary context={context} compact />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-72 rounded-xl p-2 shadow-card">
+            <DropdownMenuGroup>
+              <DropdownMenuLabel className="px-2">Chọn cơ sở quản lý</DropdownMenuLabel>
+              <DropdownMenuRadioGroup value={context.selectedId} onValueChange={(id) => context.onSelect?.(id as string)}>
+                {context.options.map((option) => (
+                  // Radio items keep the menu open by default; a pick here is final, so close it.
+                  <DropdownMenuRadioItem key={option.id} value={option.id} closeOnClick className="min-h-10 cursor-pointer px-2">
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-medium">{option.name}</span>
+                      {option.meta && <span className="block truncate text-xs text-muted-foreground">{option.meta}</span>}
+                    </span>
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ) : (
+        context && (
+          <div className="hidden min-w-64 items-center gap-3 rounded-xl bg-muted px-3 py-2 xl:flex">
+            <ContextSummary context={context} />
+          </div>
+        )
       )}
       <form
         onSubmit={handleSearch}
