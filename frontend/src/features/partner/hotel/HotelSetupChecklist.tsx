@@ -6,14 +6,16 @@ import type { Hotel } from "@stayreco/shared";
 import { useRoomTypes } from "../api/partner-queries";
 import { PartnerPanel } from "../components";
 
-/** The listing flow of docs/api/partner.md, checked against the hotel's current data. */
-export function HotelSetupChecklist({ hotel }: { hotel: Hotel }) {
+type SetupStep = { label: string; done: boolean; href: string };
+
+/** The listing setup of docs/api/partner.md (everything before the verification), checked against the hotel's data. */
+export function useHotelSetupSteps(hotel: Hotel): SetupStep[] {
   const roomTypes = useRoomTypes(hotel.id);
   const roomCount = (roomTypes.data ?? []).reduce(
     (sum, type) => sum + type.roomCount,
     0,
   );
-  const steps: Array<{ label: string; done: boolean; href: string }> = [
+  return [
     { label: "Thông tin cơ bản", done: true, href: "/partner/hotel?tab=info" },
     {
       label: "Tiện ích",
@@ -40,6 +42,12 @@ export function HotelSetupChecklist({ hotel }: { hotel: Hotel }) {
       done: roomCount > 0,
       href: "/partner/rooms",
     },
+  ];
+}
+
+export function HotelSetupChecklist({ hotel }: { hotel: Hotel }) {
+  const steps: SetupStep[] = [
+    ...useHotelSetupSteps(hotel),
     {
       label: "Gửi hồ sơ xác minh",
       done: hotel.status !== "DRAFT",

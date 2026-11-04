@@ -1,24 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Building2, Plus } from "lucide-react";
 import type { Hotel } from "@stayreco/shared";
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useHotel } from "../api/partner-queries";
 import {
-  EmptyPanel,
   ErrorPanel,
   LoadingPanel,
+  NoHotelPanel,
   PartnerPanel,
   PartnerTitle,
   StatusBadge,
@@ -55,25 +45,15 @@ export default function PartnerHotel() {
     isLoading,
     error,
     refetch,
-    canEdit,
     isSuspended,
   } = usePartnerHotel();
-  const [createOpen, setCreateOpen] = useState(false);
   const hotelQuery = useHotel(summary?.id);
-
-  const createAction = canEdit && (
-    <Button className={"cursor-pointer"} onClick={() => setCreateOpen(true)}>
-      <Plus />
-      Thêm khách sạn
-    </Button>
-  );
 
   return (
     <div className="space-y-6">
       <PartnerTitle
         title="Khách sạn & cơ sở"
         description="Quản lý thông tin hiển thị, tiện ích, chính sách, cấu hình phòng và hình ảnh của khách sạn."
-        action={hotels.length > 0 ? createAction : undefined}
       />
       {isSuspended && <SuspendedBanner />}
 
@@ -82,12 +62,8 @@ export default function PartnerHotel() {
       ) : error ? (
         <ErrorPanel error={error} onRetry={refetch} />
       ) : hotels.length === 0 ? (
-        <EmptyPanel
-          icon={Building2}
-          title="Bắt đầu với khách sạn đầu tiên"
-          description="Khách sạn mới được tạo ở trạng thái bản nháp. Sau khi hoàn thiện thông tin, phòng và hình ảnh, bạn gửi hồ sơ xác minh để mở bán."
-          action={createAction}
-        />
+        // New hotels are added from "Hồ sơ & xác minh", where their verification starts.
+        <NoHotelPanel />
       ) : hotelQuery.isLoading ? (
         <LoadingPanel rows={5} />
       ) : hotelQuery.error || !hotelQuery.data ? (
@@ -98,19 +74,6 @@ export default function PartnerHotel() {
       ) : (
         <HotelDetail key={hotelQuery.data.id} hotel={hotelQuery.data} />
       )}
-
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Tạo khách sạn mới</DialogTitle>
-            <DialogDescription>
-              Khách sạn được lưu ở trạng thái bản nháp; bạn có thể bổ sung thông
-              tin trước khi gửi xác minh.
-            </DialogDescription>
-          </DialogHeader>
-          {createOpen && <HotelInfoForm onSaved={() => setCreateOpen(false)} />}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
