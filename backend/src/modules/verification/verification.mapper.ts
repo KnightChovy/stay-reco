@@ -1,4 +1,5 @@
 import type {
+  HotelBeneficiary,
   SubmitVerificationInput,
   VerificationRequest,
   VerificationRequestSummary,
@@ -57,6 +58,41 @@ export function toSnapshotRows(
       accountNumber: cipher.encrypt(input.beneficiary.accountNumber),
     }),
   ];
+}
+
+/** Requests that carry a beneficiary account (a manager's re-verification request has none until answered). */
+export const withBeneficiary = {
+  hotelProperties: { some: { propertyKey: ACCOUNT_NUMBER_KEY } },
+} satisfies Prisma.HotelVerificationRequestWhereInput;
+
+export const beneficiaryInclude = {
+  hotelProperties: {
+    where: { propertyKey: { startsWith: PREFIX.beneficiary } },
+  },
+} satisfies Prisma.HotelVerificationRequestInclude;
+
+/** The payout account from `approved` (the latest approved request with one, or none), always masked. */
+export function toHotelBeneficiary(
+  approved: Prisma.HotelVerificationRequestGetPayload<{
+    include: typeof beneficiaryInclude;
+  }> | null,
+  updatePending: boolean,
+  cipher: FieldCipher,
+): HotelBeneficiary {
+  if (!approved) return { account: null, verifiedAt: null, updatePending };
+  const value = (key: string) =>
+    approved.hotelProperties.find(
+      (p) => p.propertyKey === PREFIX.beneficiary + key,
+    )?.propertyValue ?? '';
+  return {
+    account: {
+      bankName: value('bankName'),
+      accountNumber: mask(cipher.decrypt(value('accountNumber'))),
+      accountHolder: value('accountHolder'),
+    },
+    verifiedAt: approved.reviewedAt?.toISOString() ?? null,
+    updatePending,
+  };
 }
 
 /** `notificationEmail` given in the request (where decisions are emailed), if any. */

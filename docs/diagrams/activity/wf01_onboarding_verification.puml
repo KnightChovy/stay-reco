@@ -1,0 +1,61 @@
+@startuml
+' WF-01 Partner onboarding and hotel verification (Report 4, Figure 12). Owner: Dinh Hoang Phuc.
+' Same steps as wf01_onboarding_verification.drawio.
+skinparam dpi 180
+skinparam defaultFontName Helvetica
+skinparam shadowing false
+title WF-01 Partner onboarding and hotel verification
+
+|Hotel Partner|
+start
+:Open the partner sign-up page;
+:Submit registration (full name,\nemail, password, phone,\ncompany name optional);
+|System (Auth / Mail / Storage)|
+:Create account [PENDING_VERIFICATION]\nEmail a 6-digit OTP (10 min, 5 attempts);
+repeat
+  |Hotel Partner|
+  :Enter the OTP code;
+  |System (Auth / Mail / Storage)|
+  if (OTP result?) then (valid)
+    break
+  elseif () then (expired, used or 5 wrong attempts\n(AUTH_OTP_EXPIRED))
+    |Hotel Partner|
+    :Tap "Resend code": a new OTP is\nemailed, the old one is voided;
+  else (wrong code\n(AUTH_OTP_INVALID))
+  endif
+repeat while ()
+|System (Auth / Mail / Storage)|
+:Activate account [ACTIVE]\nIssue access / refresh tokens;
+|Hotel Partner|
+:Create hotel [DRAFT]\nSet room config, room types and rooms;
+repeat
+  :Fill the 4-step wizard: Legal entity,\nProperty, Documents, Confirmation;
+  |System (Auth / Mail / Storage)|
+  :Upload documents to Cloudinary (private storage);\nencrypt the bank account (AES-256-GCM);
+  repeat
+    |Hotel Partner|
+    :Submit the verification request;
+    |System (Auth / Mail / Storage)|
+  backward :Refuse with the reason: VERIFICATION_DOCUMENTS_MISSING,\nVERIFICATION_PENDING, HOTEL_STATUS_CONFLICT,\nPARTNER_SUSPENDED (fix, resubmit);
+  repeat while (Request accepted?) is (no) not (yes)
+  :Create request [PENDING]\nHotel [PENDING_VERIFICATION]\n(first verification; an ACTIVE hotel stays ACTIVE);
+  |Platform Manager|
+  :Open the review queue;
+  :View the documents (5-minute signed link);
+  if (Decision?) then (approve)
+    |System (Auth / Mail / Storage)|
+    :Request [APPROVED], Hotel [ACTIVE],\nPartner [APPROVED] on its first hotel\n(refused while the partner is suspended);\nemail the approval;
+    stop
+  elseif () then (reject)
+    |Platform Manager|
+    :Reject: Request [REJECTED],\nhotel back to [DRAFT];
+  else (request changes)
+    |Platform Manager|
+    :Request changes: Request [NEEDS_REVISION],\nhotel back to [DRAFT];
+  endif
+  |System (Auth / Mail / Storage)|
+  :Email the result with the reason;
+  |Hotel Partner|
+  :Read the reason and revise;
+repeat while (new request)
+@enduml

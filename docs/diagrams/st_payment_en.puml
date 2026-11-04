@@ -1,0 +1,33 @@
+@startuml
+' State machine of invoice.payment_status (Report 4, Figure 24). States show the label of the figure and the value stored in the code.
+skinparam dpi 180
+skinparam shadowing false
+skinparam defaultFontName Helvetica
+skinparam defaultFontSize 13
+skinparam state {
+  BackgroundColor #FFFFFF
+  BorderColor #333333
+}
+skinparam ArrowColor #333333
+hide empty description
+state "Awaiting payment\n(UNPAID)" as UNPAID
+state "Payment failed\n(FAILED)" as FAILED
+state "Invoice paid\n(PAID)" as PAID
+state "Refund pending\n(auto-approved at\ncheck-in time)\n(REFUND_PENDING)" as REFUND_PENDING
+state "Fully refunded\n(REFUNDED)" as REFUNDED
+state "Partially refunded\n(PARTIALLY_REFUNDED)" as PARTIALLY_REFUNDED
+state paid <<choice>>
+state refund <<choice>>
+[*] --> UNPAID : Booking created
+UNPAID --> paid
+paid --> FAILED : [Hold expired]
+paid --> PAID : [SePay webhook confirms\nthe transfer]
+PAID --> REFUND_PENDING : [Customer cancels\nwith a refund]
+REFUND_PENDING --> refund
+refund --> PAID : [Partner rejects\nthe refund]
+refund --> REFUNDED : [Approved,\nfull refund]
+refund --> PARTIALLY_REFUNDED : [Approved, refund\nafter the fee]
+FAILED --> [*]
+REFUNDED --> [*]
+PARTIALLY_REFUNDED --> [*]
+@enduml

@@ -1,0 +1,189 @@
+@startuml
+skinparam dpi 180
+skinparam shadowing false
+skinparam linetype ortho
+skinparam defaultFontName Helvetica
+skinparam defaultFontSize 12
+skinparam entity {
+  BackgroundColor #FFFFFF
+  BorderColor #333333
+  FontStyle bold
+}
+skinparam ArrowColor #333333
+hide circle
+hide methods
+
+title Hotels, rooms and inventory
+
+entity "hotel" as hotel {
+  * hotel_id : uuid <<PK>>
+  --
+  * hotel_partner_id : uuid <<FK>>
+  * name : string
+  description : string
+  * address : string
+  * city : string
+  * country : string
+  latitude : decimal
+  longitude : decimal
+  star_rating : int
+  phone : string
+  * email : string
+  website : string
+  check_in_time : time
+  check_out_time : time
+  * status : HotelStatus
+  * created_at : datetime
+  * updated_at : datetime
+}
+entity "hotel_image" as hotel_image {
+  * hotel_image_id : uuid <<PK>>
+  --
+  * hotel_id : uuid <<FK>>
+  * image_url : string
+  * storage_key : string
+  caption : string
+  * is_cover : boolean
+  * sort_order : int
+  * created_at : datetime
+}
+entity "hotel_amenity" as hotel_amenity {
+  * hotel_amenity_id : uuid <<PK>>
+  --
+  * hotel_id : uuid <<FK>>
+  * amenity_id : uuid <<FK>>
+}
+entity "amenity" as amenity {
+  * amenity_id : uuid <<PK>>
+  --
+  * name : string
+  icon : string
+  * category : string
+}
+entity "hotel_room_config" as hotel_room_config {
+  * hotel_room_config_id : uuid <<PK>>
+  --
+  * hotel_id : uuid <<FK, U>>
+  * total_rooms : int
+  * base_price : decimal
+  * currency : string
+  * created_at : datetime
+  * updated_at : datetime
+}
+entity "room_type" as room_type {
+  * room_type_id : uuid <<PK>>
+  --
+  * hotel_id : uuid <<FK>>
+  * name : string
+  description : string
+  * max_occupancy : int
+  * base_area_sqm : decimal
+  * created_at : datetime
+  * updated_at : datetime
+}
+entity "room_type_image" as room_type_image {
+  * room_type_image_id : uuid <<PK>>
+  --
+  * room_type_id : uuid <<FK>>
+  * image_url : string
+  * storage_key : string
+  caption : string
+  * sort_order : int
+  * created_at : datetime
+}
+entity "room_type_amenity" as room_type_amenity {
+  * room_type_amenity_id : uuid <<PK>>
+  --
+  * room_type_id : uuid <<FK>>
+  * amenity_id : uuid <<FK>>
+}
+entity "room_type_bed" as room_type_bed {
+  * room_type_bed_id : uuid <<PK>>
+  --
+  * room_type_id : uuid <<FK>>
+  * bed_type_id : uuid <<FK>>
+  * quantity : int
+}
+entity "bed_type" as bed_type {
+  * bed_type_id : uuid <<PK>>
+  --
+  * name : string
+  description : string
+  capacity : int
+}
+entity "room" as room {
+  * room_id : uuid <<PK>>
+  --
+  * room_type_id : uuid <<FK>>
+  * room_number : string
+  floor : int
+  * status : RoomStatus
+  notes : string
+  * created_at : datetime
+  * updated_at : datetime
+}
+entity "room_image" as room_image {
+  * room_image_id : uuid <<PK>>
+  --
+  * room_id : uuid <<FK>>
+  * image_url : string
+  caption : string
+  sort_order : int
+  * created_at : datetime
+}
+entity "room_calendars" as room_calendars {
+  * room_calendar_id : uuid <<PK>>
+  --
+  * room_id : uuid <<FK>>
+  booking_id : uuid <<FK>>
+  * date : date
+  * status : CalendarStatus
+  hold_expires_at : datetime
+  price_override : decimal
+  * updated_at : datetime
+}
+entity "price" as price {
+  * price_id : uuid <<PK>>
+  --
+  * room_type_id : uuid <<FK>>
+  room_id : uuid <<FK>>
+  * name : string
+  price_per_night : decimal
+  * currency : string
+  valid_from : date
+  valid_to : date
+  day_of_week : DayOfWeek
+  * rule_type : PriceRuleType
+  adjustment_type : PriceAdjustmentType
+  adjustment_value : decimal
+  min_days_before : int
+  max_days_before : int
+  * priority : int
+  * is_active : boolean
+  * created_at : datetime
+}
+entity "booking" as booking #EEEEEE {
+  * booking_id : uuid <<PK>>
+}
+entity "hotel_partner" as hotel_partner #EEEEEE {
+  * hotel_partner_id : uuid <<PK, FK>>
+}
+
+amenity ||--o{ hotel_amenity
+amenity ||--o{ room_type_amenity
+bed_type ||--o{ room_type_bed
+booking |o--o{ room_calendars
+hotel ||--o{ hotel_amenity
+hotel ||--o{ hotel_image
+hotel ||--o{ room_type
+hotel ||--|| hotel_room_config
+hotel_partner ||--o{ hotel
+room |o--o{ price
+room ||--o{ room_calendars
+room ||--o{ room_image
+room_type ||--o{ price
+room_type ||--o{ room
+room_type ||--o{ room_type_amenity
+room_type ||--o{ room_type_bed
+room_type ||--o{ room_type_image
+@enduml

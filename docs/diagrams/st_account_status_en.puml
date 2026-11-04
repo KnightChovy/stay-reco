@@ -1,0 +1,35 @@
+@startuml
+' State machine of user_account.status (Report 4, Figure 17). States show the label of the figure and the value stored in the code.
+skinparam dpi 180
+skinparam shadowing false
+skinparam defaultFontName Helvetica
+skinparam defaultFontSize 13
+skinparam state {
+  BackgroundColor #FFFFFF
+  BorderColor #333333
+}
+skinparam ArrowColor #333333
+hide empty description
+state "Waiting for\nemail verification\n(PENDING_VERIFICATION)" as PENDING_VERIFICATION
+state "Invitation sent\n(INVITED)" as INVITED
+state "Account active\n(ACTIVE)" as ACTIVE
+state "Staff account\ndeactivated\n(DEACTIVATED)" as DEACTIVATED
+state "Account suspended\n(SUSPENDED)" as SUSPENDED
+state "Account deleted\n(DELETED)" as DELETED
+state start_choice <<choice>>
+[*] --> start_choice
+start_choice --> PENDING_VERIFICATION : [Customer or partner registers]
+start_choice --> INVITED : [Staff or manager invited]
+INVITED --> [*] : [Partner cancels the invitation]
+PENDING_VERIFICATION --> ACTIVE : [Correct email code entered]
+INVITED --> ACTIVE : [Invitation accepted, password set]
+ACTIVE --> DEACTIVATED : [Partner deactivates staff]
+DEACTIVATED --> ACTIVE : [Partner reactivates staff]
+ACTIVE -[dashed]-> SUSPENDED : [Admin suspends] (planned)
+SUSPENDED -[dashed]-> ACTIVE : [Suspension lifted] (planned)
+ACTIVE -[dashed]-> DELETED : [Account deleted] (planned)
+DELETED --> [*]
+legend bottom
+Dashed arrow: planned, not implemented yet.
+endlegend
+@enduml

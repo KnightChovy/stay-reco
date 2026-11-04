@@ -59,7 +59,7 @@ Web client: set `NEXT_PUBLIC_API_URL=http://localhost:3000/api/v1`.
 
 The full endpoint table, flows (OTP, password reset, invitations, lockout) and the `Account` type are in [api/auth.md](./api/auth.md). Endpoints for each user role are listed in [api/](./api/README.md).
 
-TypeScript types for auth responses come from `@stayreco/shared` (`Account`, `RegisterResult`, `AuthResult`, `RefreshResult`, `SessionInfo`, `InvitationResult`, `PartnerProfile`, `StaffProfile`). Import them instead of redefining them. The backend fails to compile if `Account` drifts from what it actually returns.
+TypeScript types for auth responses come from `@stayreco/shared` (`Account`, `RegisterResult`, `AuthResult`, `RefreshResult`, `SessionInfo`, `InvitationResult`, `PartnerProfile`, `StaffProfile`, `CustomerProfile`). Import them instead of redefining them. The backend fails to compile if `Account` drifts from what it actually returns.
 
 ### 2.5 FE pages for emails
 

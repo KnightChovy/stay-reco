@@ -6,6 +6,9 @@ import type { Prisma } from '../../generated/prisma/client';
  * one after another, so "count, then insert" stays correct. The lock is released when the transaction ends.
  * Each resolves to the number of rows locked: 0 means the row no longer exists.
  */
+export const lockAccount = (tx: Prisma.TransactionClient, accountId: string) =>
+  tx.$executeRaw`SELECT 1 FROM user_account WHERE user_account_id = ${accountId}::uuid FOR UPDATE`;
+
 export const lockHotel = (tx: Prisma.TransactionClient, hotelId: string) =>
   tx.$executeRaw`SELECT 1 FROM hotel WHERE hotel_id = ${hotelId}::uuid FOR UPDATE`;
 

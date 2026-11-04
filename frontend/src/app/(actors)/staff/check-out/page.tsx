@@ -1,337 +1,472 @@
-"use client";
+'use client';
 
-import React, { useState } from "react";
-import Link from "next/link";
+import { useState } from 'react';
+import Link from 'next/link';
 import {
-  LogOut,
-  Search,
-  CheckCircle2,
   AlertTriangle,
-  Receipt,
-  CreditCard,
-  Key,
-  Building,
-  Coffee,
-  Sparkles,
-  Printer,
-  ChevronRight,
-  ArrowLeft,
-  DollarSign,
-  Check,
-  RotateCcw,
-  Sparkle,
   BedDouble,
-  ShieldCheck,
-  FileText,
+  Calendar,
+  CheckCircle2,
+  ChevronRight,
   Clock,
-  Sparkles as HousekeepingIcon,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
+  CreditCard,
+  Loader2,
+  LogOut,
+  QrCode,
+  Search,
+  Sparkles,
+  Wallet,
+} from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { getApiErrorMessage, getApiFieldErrors } from '@/lib/api-error';
+import { useStaffHotel } from '@/features/staff/components/StaffHotelProvider';
+import {
+  useBookingLookup,
+  useCheckOut,
+  useCheckOutQuote,
+  useCleanRoom,
+} from '@/features/staff/api/staff-queries';
+import {
+  bookingStatusLabels,
+  formatCalendarDate,
+  formatDateTime,
+  formatMoney,
+  paymentStatusLabels,
+  toneClasses,
+} from '@/features/staff/lib/labels';
 
 export default function StaffCheckOutPage() {
-  const [selectedRoom, setSelectedRoom] = useState<string>("P.602");
-  const [keyCardsReturned, setKeyCardsReturned] = useState<number>(2);
-  const [housekeepingStatus, setHousekeepingStatus] = useState<string>("Đã kiểm tra - Tốt");
-  const [isCheckOutSuccess, setIsCheckOutSuccess] = useState<boolean>(false);
+  const { hotel } = useStaffHotel();
+  const hotelId = hotel?.summary.id;
 
-  const extraCharges = [
-    { id: 1, name: "Nước khoáng Evian 500ml (Minibar)", qty: 1, price: 75000 },
-    { id: 2, name: "Phí Trả phòng Muộn (Late Checkout +2h)", qty: 1, price: 300000 },
-    { id: 3, name: "Dịch vụ giặt ủi áo sơ mi", qty: 1, price: 150000 },
-  ];
+  const [input, setInput] = useState('');
+  const [lookupQuery, setLookupQuery] = useState<{ code?: string; qrToken?: string } | null>(null);
+  const [lateFeeAmount, setLateFeeAmount] = useState('');
+  const [lateFeeReason, setLateFeeReason] = useState('');
+  const [localError, setLocalError] = useState<string | null>(null);
+  const [cleanedRooms, setCleanedRooms] = useState<string[]>([]);
 
-  const subtotalExtra = extraCharges.reduce((acc, item) => acc + item.price * item.qty, 0);
-  const initialDeposit = 1000000;
-  const netRefund = initialDeposit - subtotalExtra;
+  const lookup = useBookingLookup(hotelId, lookupQuery ?? {}, !!lookupQuery);
+  const booking = lookup.data;
+  const canCheckOut = booking?.status === 'CHECKED_IN';
+  const checkOut = useCheckOut();
+  // After a successful check-out the quote endpoint only accepts CHECKED_IN; stop refetching it (409).
+  const quote = useCheckOutQuote(booking?.id, !!canCheckOut && !checkOut.isSuccess);
+  const cleanRoom = useCleanRoom();
+
+  const computedFee = quote.data?.lateFee?.amount ?? 0;
+  const enteredFee = Number(lateFeeAmount);
+  const hasAdjustment = lateFeeAmount.trim() !== '' || lateFeeReason.trim() !== '';
+  const adjustmentValid =
+    !hasAdjustment ||
+    (lateFeeAmount.trim() !== '' &&
+      lateFeeReason.trim() !== '' &&
+      Number.isFinite(enteredFee) &&
+      enteredFee >= 0 &&
+      enteredFee <= computedFee);
+
+  const submitLookup = () => {
+    const value = input.trim();
+    if (!value) return;
+    setLookupQuery(value.includes('.') ? { qrToken: value } : { code: value });
+    setLateFeeAmount('');
+    setLateFeeReason('');
+    setLocalError(null);
+    setCleanedRooms([]);
+    checkOut.reset();
+  };
+
+  const doCheckOut = () => {
+    if (!booking || !canCheckOut) return;
+    setLocalError(null);
+
+    if (hasAdjustment && !adjustmentValid) {
+      setLocalError(
+        computedFee > 0
+          ? `Phí trả muộn đã nhập không hợp lệ: phải từ 0 đến ${formatMoney(computedFee)} và có lý do.`
+          : 'Đơn này không có phí trả muộn để điều chỉnh.',
+      );
+      return;
+    }
+
+    checkOut.mutate({
+      bookingId: booking.id,
+      lateFee: hasAdjustment
+        ? { amount: Math.round(enteredFee), reason: lateFeeReason.trim() }
+        : undefined,
+    });
+  };
+
+  const fieldErrors = checkOut.error ? getApiFieldErrors(checkOut.error) : {};
 
   return (
-    <div className="font-sans antialiased text-foreground">
-      <main>
-        <div className="p-8 space-y-6 max-w-7xl mx-auto w-full">
-          {/* Breadcrumb & Navigation */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2 text-xs text-slate-500 mb-1">
-                <Link href="/staff/dashboard" className="hover:text-[#934a33]">Bàn làm việc</Link>
-                <ChevronRight className="w-3 h-3" />
-                <Link href="/staff/bookings" className="hover:text-[#934a33]">Đặt phòng</Link>
-                <ChevronRight className="w-3 h-3" />
-                <span className="text-slate-800 font-medium">Quyết toán Check-out P.602</span>
-              </div>
-              <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-                <LogOut className="w-7 h-7 text-[#934a33]" /> Check-out & Quyết Toán Lưu Trú
-              </h1>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <Link href="/staff/bookings/BK-8839">
-                <Button variant="outline" className="h-10 text-xs md:text-sm font-semibold border-slate-300">
-                  <ArrowLeft className="w-4 h-4 mr-2" /> Hồ Sơ Booking BK-8839
-                </Button>
-              </Link>
-              <Button 
-                className="h-10 bg-[#934a33] hover:bg-[#7b3e2b] text-white text-xs md:text-sm font-semibold shadow-md"
-                onClick={() => setIsCheckOutSuccess(true)}
-              >
-                <CheckCircle2 className="w-4 h-4 mr-2" /> Xử Lý Quyết Toán P.602
-              </Button>
-            </div>
+    <div className="mx-auto w-full max-w-7xl space-y-6 p-6">
+      <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
+        <div>
+          <div className="mb-1 flex items-center gap-2 text-xs text-slate-500">
+            <Link href="/staff/dashboard" className="hover:text-[#934a33]">
+              Bàn làm việc
+            </Link>
+            <ChevronRight className="size-3" />
+            <Link href="/staff/bookings" className="hover:text-[#934a33]">
+              Đặt phòng
+            </Link>
+            <ChevronRight className="size-3" />
+            <span className="font-medium text-slate-800">Check-out</span>
           </div>
+          <h1 className="flex items-center gap-2 text-2xl font-bold text-slate-900">
+            <LogOut className="size-7 text-[#934a33]" /> Check-out &amp; quyết toán
+          </h1>
+          <p className="mt-1 text-xs text-slate-500">
+            Tìm đơn đang lưu trú, xem phí trả muộn (nếu có) rồi xác nhận trả phòng.
+          </p>
+        </div>
+        <Badge className="w-fit border-none bg-[#EAF0F5] px-3 py-1 text-xs font-semibold text-[#013758]">
+          {hotel?.summary.name ?? 'Khách sạn của bạn'}
+        </Badge>
+      </div>
 
-          {/* Alert Banner for Late Check-out & Housekeeping Inspection */}
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-start gap-3">
-            <Clock className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
-            <div>
-              <h4 className="text-sm font-semibold text-blue-900">Yêu cầu Check-out Phòng P.602</h4>
-              <p className="text-xs text-blue-800 mt-0.5">
-                Khách **Trần Thị B** trả phòng lúc 14:00 (Check-out muộn 2 giờ có tính phí). Buồng phòng đã kiểm tra Minibar & tài sản phòng lúc 13:45 — Không có hư hại.
-              </p>
-            </div>
+      <Card className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-xs">
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <div className="relative flex-1">
+            <Search className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+            <Input
+              value={input}
+              onChange={(event) => setInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') submitLookup();
+              }}
+              placeholder="Nhập mã đơn đang lưu trú (SR-261031-1234)…"
+              className="h-11 pl-10 text-sm"
+            />
           </div>
+          <Button
+            onClick={submitLookup}
+            disabled={!input.trim() || lookup.isLoading}
+            className="h-11 gap-1.5 bg-[#934a33] px-5 text-sm font-semibold text-white hover:bg-[#7b3e2b]"
+          >
+            {lookup.isLoading ? <Loader2 className="size-4 animate-spin" /> : <QrCode className="size-4" />}
+            Tìm đơn
+          </Button>
+        </div>
+      </Card>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Left Column: Guest Summary & Housekeeping Inspection */}
-            <div className="lg:col-span-1 space-y-6">
-              {/* Room & Guest Summary */}
-              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Thông tin phòng</span>
-                  <Badge className="bg-purple-100 text-purple-800 hover:bg-purple-100 text-xs font-semibold">
-                    Đang Check-out
+      {lookup.error && (
+        <Alert variant="destructive" className="bg-red-50 p-4">
+          <AlertTitle>Không tìm thấy đơn</AlertTitle>
+          <AlertDescription className="mt-1 text-xs">
+            {getApiErrorMessage(lookup.error, 'Mã đơn hoặc token QR không hợp lệ.')}
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {!lookupQuery && (
+        <Card className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center shadow-none">
+          <LogOut className="mx-auto size-10 text-slate-300" />
+          <p className="mt-3 text-sm font-semibold text-slate-700">Nhập mã đơn để bắt đầu check-out</p>
+          <p className="mt-1 text-xs text-slate-500">Chỉ đơn đang ở trạng thái “Đang lưu trú” mới check-out được.</p>
+        </Card>
+      )}
+
+      {booking && (
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
+          <div className="space-y-6 lg:col-span-7">
+            <Card className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-xs">
+              <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-3">
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Đơn đặt phòng</span>
+                  <p className="font-mono text-lg font-bold text-[#013758]">{booking.code}</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Badge className={`border text-[11px] font-semibold ${toneClasses[bookingStatusLabels[booking.status].tone]}`}>
+                    {bookingStatusLabels[booking.status].label}
+                  </Badge>
+                  <Badge className={`border text-[11px] font-semibold ${toneClasses[paymentStatusLabels[booking.paymentStatus].tone]}`}>
+                    {paymentStatusLabels[booking.paymentStatus].label}
                   </Badge>
                 </div>
-
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="font-bold text-[#934a33] text-2xl">Phòng P.602</h3>
-                    <p className="text-xs text-slate-500">Executive Suite Ocean View • Tầng 6</p>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-xs text-slate-500 block">Khách hàng:</span>
-                    <span className="font-bold text-slate-900 text-sm">Trần Thị B</span>
-                  </div>
-                </div>
-
-                <div className="bg-slate-50 p-3 rounded-lg border border-slate-100 text-xs space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Ngày Check-in:</span>
-                    <span className="font-semibold text-slate-800">12/10/2026 14:00</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Ngày Check-out:</span>
-                    <span className="font-semibold text-slate-800">14/10/2026 14:00</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Số lượng thẻ đã thu:</span>
-                    <span className="font-semibold text-emerald-700 flex items-center gap-1">
-                      <Key className="w-3.5 h-3.5" /> 2 / 2 Thẻ từ
-                    </span>
-                  </div>
-                </div>
               </div>
 
-              {/* Housekeeping Report */}
-              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                    <ShieldCheck className="w-4 h-4 text-emerald-600" /> Báo cáo nghiệm thu phòng
-                  </span>
-                  <Badge className="bg-emerald-100 text-emerald-800 text-[10px] font-semibold">
-                    Đã duyệt
-                  </Badge>
+              <div className="mt-4 grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
+                <div>
+                  <span className="text-[10px] font-semibold uppercase text-slate-400">Khách lưu trú</span>
+                  <p className="font-bold text-slate-800">{booking.guestName}</p>
+                  <p className="text-xs text-slate-500">{booking.contactPhone}</p>
                 </div>
-
-                <div className="space-y-3 text-xs">
-                  <div className="p-3 bg-emerald-50/60 rounded-lg border border-emerald-200 space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-emerald-900">Nhân viên kiểm tra:</span>
-                      <span className="text-emerald-800 font-medium">Lê Thị Mai (Housekeeping)</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-emerald-900">Tình trạng nội thất:</span>
-                      <span className="text-emerald-700 font-bold">Hoàn hảo (Không hư hại)</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-emerald-900">Minibar sử dụng:</span>
-                      <span className="text-slate-800">1 Chai Evian 500ml</span>
-                    </div>
-                  </div>
-
-                  <p className="text-[11px] text-slate-500 italic">
-                    * Đã ghi nhận các khoản sử dụng phát sinh vào hóa đơn thanh toán bên phải.
+                <div>
+                  <span className="text-[10px] font-semibold uppercase text-slate-400">Phòng</span>
+                  <p className="flex items-center gap-1.5 font-semibold text-slate-800">
+                    <BedDouble className="size-4 text-[#934a33]" /> {booking.roomType.name}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    {booking.assignedRooms.length > 0
+                      ? `Phòng ${booking.assignedRooms.map((room) => room.roomNumber).join(', ')}`
+                      : `${booking.rooms} phòng`}
                   </p>
                 </div>
+                <div>
+                  <span className="text-[10px] font-semibold uppercase text-slate-400">Lưu trú</span>
+                  <p className="flex items-center gap-1.5 font-semibold text-slate-800">
+                    <Calendar className="size-4 text-[#934a33]" /> {formatCalendarDate(booking.checkIn)} →{' '}
+                    {formatCalendarDate(booking.checkOut)}
+                  </p>
+                  <p className="text-xs text-slate-500">{booking.nights} đêm</p>
+                </div>
+                <div>
+                  <span className="text-[10px] font-semibold uppercase text-slate-400">Đã thanh toán</span>
+                  <p className="flex items-center gap-1.5 font-semibold text-slate-800">
+                    <CreditCard className="size-4 text-[#934a33]" /> {formatMoney(booking.totalAmount)}
+                  </p>
+                  {booking.paidAt && <p className="text-xs text-slate-500">Lúc {formatDateTime(booking.paidAt)}</p>}
+                </div>
               </div>
-            </div>
+            </Card>
 
-            {/* Right Column: Folio / Charges Breakdown & Deposit Refund Settlement */}
-            <div className="lg:col-span-2 space-y-6">
-              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 space-y-6">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
-                  <div>
-                    <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                      <Receipt className="w-5 h-5 text-[#934a33]" /> Bảng Quyết Toán Tài Chính (Folio)
-                    </h3>
-                    <p className="text-xs text-slate-500 mt-0.5">Chi tiết các khoản phòng, phát sinh và hoàn cọc tiền thế chân</p>
-                  </div>
-                  <Badge variant="outline" className="text-xs bg-slate-100 text-slate-800 border-slate-300">
-                    Mã HD: #INV-P602-8839
-                  </Badge>
-                </div>
-
-                {/* Pre-paid Booking Room Charges */}
-                <div className="space-y-3">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">1. Tiền phòng cơ bản (Đã thanh toán trước)</h4>
-                  <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 flex items-center justify-between text-xs">
-                    <div>
-                      <span className="font-bold text-slate-900 block">Executive Suite Ocean View (2 đêm)</span>
-                      <span className="text-slate-500">12/10/2026 - 14/10/2026 • 2,500,000 VNĐ / đêm</span>
-                    </div>
-                    <span className="font-bold text-emerald-700 text-sm">5,000,000 VNĐ (Đã thu)</span>
-                  </div>
-                </div>
-
-                {/* Extra Charges Table */}
-                <div className="space-y-3">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">2. Phát sinh trong quá trình lưu trú</h4>
-                  <div className="border border-slate-200 rounded-xl overflow-hidden text-xs">
-                    <table className="w-full text-left">
-                      <thead className="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
-                        <tr>
-                          <th className="p-3">Dịch vụ / Hàng hóa</th>
-                          <th className="p-3 text-center">SL</th>
-                          <th className="p-3 text-right">Đơn giá</th>
-                          <th className="p-3 text-right">Thành tiền</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {extraCharges.map((item) => (
-                          <tr key={item.id} className="hover:bg-slate-50">
-                            <td className="p-3 font-medium text-slate-800">{item.name}</td>
-                            <td className="p-3 text-center text-slate-600">{item.qty}</td>
-                            <td className="p-3 text-right text-slate-600">{item.price.toLocaleString("vi-VN")} đ</td>
-                            <td className="p-3 text-right font-semibold text-slate-900">
-                              {(item.price * item.qty).toLocaleString("vi-VN")} đ
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                      <tfoot className="bg-slate-50 font-bold border-t border-slate-200">
-                        <tr>
-                          <td colSpan={3} className="p-3 text-slate-700">Tổng cộng dịch vụ phát sinh:</td>
-                          <td className="p-3 text-right text-[#934a33] text-sm">
-                            {subtotalExtra.toLocaleString("vi-VN")} VNĐ
-                          </td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
-                </div>
-
-                {/* Deposit Refund Calculation */}
-                <div className="bg-slate-900 text-white rounded-xl p-5 space-y-4">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
-                    <CreditCard className="w-4 h-4" /> 3. Quyết toán Tiền cọc (Deposit Settlement)
-                  </h4>
-
-                  <div className="space-y-2 text-xs border-b border-slate-800 pb-3">
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Tiền cọc tạm thu lúc check-in:</span>
-                      <span className="font-semibold text-white">{initialDeposit.toLocaleString("vi-VN")} VNĐ</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Trừ chi phí phát sinh:</span>
-                      <span className="font-semibold text-amber-400">- {subtotalExtra.toLocaleString("vi-VN")} VNĐ</span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between pt-1">
-                    <div>
-                      <span className="text-xs text-slate-300 block">Số tiền HOÀN LẠI CHO KHÁCH:</span>
-                      <span className="text-xl font-extrabold text-emerald-400">
-                        {netRefund.toLocaleString("vi-VN")} VNĐ
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs h-10 px-4">
-                        <RotateCcw className="w-4 h-4 mr-1.5" /> Hoàn Tiền Mặt / VNPay
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Final Action Bar */}
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 flex flex-col sm:flex-row items-center justify-between gap-4">
-                  <div>
-                    <h4 className="font-bold text-amber-900 text-sm">Chuyển Trạng Thái Phòng P.602</h4>
-                    <p className="text-xs text-amber-800 mt-0.5">
-                      Sau khi hoàn tất check-out, phòng **P.602** sẽ tự động chuyển sang trạng thái **&ldquo;Cần dọn dẹp (Dirty)&rdquo;** cho bộ phận buồng phòng.
+            {booking.status === 'COMPLETED' ? (
+              <Card className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-5 shadow-none">
+                <div className="flex items-start gap-3">
+                  <CheckCircle2 className="mt-0.5 size-6 shrink-0 text-emerald-600" />
+                  <div className="flex-1">
+                    <h2 className="text-base font-bold text-emerald-900">Đã check-out</h2>
+                    <p className="mt-1 text-xs text-emerald-800">
+                      Đơn đã hoàn tất. Phòng đang ở trạng thái <strong>Đang dọn</strong>.
                     </p>
+
+                    {booking.lateCheckout && (
+                      <div className="mt-3 rounded-lg bg-white/70 p-3 text-xs text-emerald-900">
+                        <p className="font-semibold">
+                          Trả muộn {booking.lateCheckout.minutesLate} phút · phí {formatMoney(booking.lateCheckout.fee)}
+                        </p>
+                        {booking.lateCheckout.computedFee !== booking.lateCheckout.fee && (
+                          <p className="text-[11px]">
+                            Phí gốc {formatMoney(booking.lateCheckout.computedFee)}
+                            {booking.lateCheckout.reason ? ` · lý do giảm: ${booking.lateCheckout.reason}` : ''}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {booking.assignedRooms.length > 0 && (
+                      <div className="mt-4 space-y-2">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-800">
+                          Đánh dấu phòng đã dọn
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {booking.assignedRooms.map((room) => {
+                            const cleaned = cleanedRooms.includes(room.id);
+                            return (
+                              <Button
+                                key={room.id}
+                                size="sm"
+                                variant="outline"
+                                disabled={cleaned || cleanRoom.isPending}
+                                onClick={() =>
+                                  cleanRoom.mutate(room.id, {
+                                    onSuccess: () => setCleanedRooms((ids) => [...ids, room.id]),
+                                  })
+                                }
+                                className="h-8 gap-1.5 border-emerald-300 bg-white text-xs font-semibold text-emerald-800"
+                              >
+                                <Sparkles className="size-3.5" />
+                                Phòng {room.roomNumber} {cleaned ? 'đã dọn' : 'đã dọn xong?'}
+                              </Button>
+                            );
+                          })}
+                        </div>
+                        {cleanRoom.error && (
+                          <p className="text-[11px] text-red-600">
+                            {getApiErrorMessage(cleanRoom.error, 'Không cập nhật được trạng thái phòng.')}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    <Link href={`/staff/bookings/${booking.id}`} className="mt-4 inline-block">
+                      <Button variant="outline" className="h-9 border-emerald-300 text-xs font-semibold text-emerald-800">
+                        Xem chi tiết đơn
+                      </Button>
+                    </Link>
                   </div>
-                  <Button 
-                    className="bg-[#934a33] hover:bg-[#7b3e2b] text-white font-semibold text-xs md:text-sm px-6 h-11 shadow-md w-full sm:w-auto shrink-0"
-                    onClick={() => setIsCheckOutSuccess(true)}
-                  >
-                    <CheckCircle2 className="w-4 h-4 mr-2" /> Xử Lý Check-out & Giải Phóng Phòng
-                  </Button>
                 </div>
-              </div>
-            </div>
+              </Card>
+            ) : canCheckOut ? (
+              <Card className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-xs">
+                <h2 className="flex items-center gap-2 border-b border-slate-100 pb-3 text-sm font-bold text-slate-800">
+                  <Wallet className="size-4 text-[#934a33]" /> Quyết toán khi trả phòng
+                </h2>
+
+                {quote.isLoading ? (
+                  <div className="flex items-center gap-2 py-8 text-xs text-slate-500">
+                    <Loader2 className="size-4 animate-spin" /> Đang tính phí check-out…
+                  </div>
+                ) : quote.error ? (
+                  <Alert variant="destructive" className="mt-3 bg-red-50 p-3">
+                    <AlertDescription className="text-xs">
+                      {getApiErrorMessage(quote.error, 'Không tải được thông tin check-out.')}
+                    </AlertDescription>
+                  </Alert>
+                ) : quote.data ? (
+                  <div className="mt-3 space-y-3 text-xs">
+                    <div className="grid grid-cols-2 gap-3 rounded-lg bg-slate-50 p-3">
+                      <div>
+                        <span className="block text-[10px] font-semibold uppercase text-slate-400">Giờ trả phòng</span>
+                        <span className="font-semibold text-slate-800">{formatDateTime(quote.data.scheduledAt)}</span>
+                      </div>
+                      <div>
+                        <span className="block text-[10px] font-semibold uppercase text-slate-400">Đã thanh toán</span>
+                        <span className="font-semibold text-slate-800">{formatMoney(quote.data.amountPaid)}</span>
+                      </div>
+                      {quote.data.minutesLate > 0 && (
+                        <div>
+                          <span className="block text-[10px] font-semibold uppercase text-slate-400">Trả muộn</span>
+                          <span className="font-semibold text-amber-700">{quote.data.minutesLate} phút</span>
+                        </div>
+                      )}
+                      {quote.data.early && (
+                        <div>
+                          <span className="block text-[10px] font-semibold uppercase text-slate-400">Trả sớm</span>
+                          <span className="font-semibold text-amber-700">
+                            Giải phóng {quote.data.releasedNights.length} đêm
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {quote.data.lateFee ? (
+                      <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-900">
+                        <p className="font-semibold">
+                          Phí trả muộn: {formatMoney(quote.data.lateFee.amount)} ({quote.data.lateFee.percent}% ×{' '}
+                          {formatMoney(quote.data.lateFee.nightPrice)})
+                        </p>
+                        <p className="mt-1 text-[11px]">Thu tại quầy lễ tân, không trừ vào ví StayReco.</p>
+                      </div>
+                    ) : (
+                      <p className="rounded-lg bg-emerald-50 p-3 text-emerald-800">
+                        Không có phí trả muộn cho lần check-out này.
+                      </p>
+                    )}
+
+                    {quote.data.early && (
+                      <p className="rounded-lg bg-slate-50 p-3 text-slate-600">
+                        Trả phòng trước ngày dự kiến: các đêm còn lại được giải phóng và không hoàn tiền.
+                      </p>
+                    )}
+
+                    {quote.data.lateFee && (
+                      <div className="space-y-2 rounded-lg border border-slate-200 p-3">
+                        <p className="text-[11px] font-semibold text-slate-600">
+                          Giảm phí trả muộn (không bắt buộc, tối đa {formatMoney(computedFee)})
+                        </p>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          <Input
+                            type="number"
+                            min={0}
+                            max={computedFee}
+                            value={lateFeeAmount}
+                            onChange={(event) => setLateFeeAmount(event.target.value)}
+                            placeholder={`0 – ${computedFee}`}
+                            className="h-9 text-xs"
+                          />
+                          <Input
+                            value={lateFeeReason}
+                            onChange={(event) => setLateFeeReason(event.target.value)}
+                            placeholder="Lý do giảm phí…"
+                            className="h-9 text-xs"
+                          />
+                        </div>
+                        {hasAdjustment && !adjustmentValid && (
+                          <p className="text-[11px] text-red-600">
+                            Nhập số tiền từ 0 đến {formatMoney(computedFee)} và lý do.
+                          </p>
+                        )}
+                        {fieldErrors['lateFee.amount'] && (
+                          <p className="text-[11px] text-red-600">{fieldErrors['lateFee.amount']}</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+              </Card>
+            ) : null}
           </div>
-        </div>
-      </main>
 
-      {/* Check-out Completion Modal Simulation */}
-      {isCheckOutSuccess && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in duration-200">
-            <div className="w-14 h-14 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
-              <Check className="w-8 h-8 stroke-[3]" />
-            </div>
+          <aside className="space-y-4 lg:sticky lg:top-4 lg:col-span-5">
+            <Card className="space-y-3 rounded-xl border border-slate-200/80 bg-white p-5 shadow-md">
+              <h2 className="flex items-center gap-2 text-sm font-bold text-slate-800">
+                <LogOut className="size-4 text-[#934a33]" /> Xác nhận trả phòng
+              </h2>
 
-            <div className="text-center space-y-1">
-              <h3 className="text-xl font-bold text-slate-900">Check-out Hoàn Tất!</h3>
-              <p className="text-xs text-slate-600">
-                Phòng **P.602** đã hoàn tất quyết toán. Khách **Trần Thị B** đã nhận lại **{netRefund.toLocaleString("vi-VN")} VNĐ**.
-              </p>
-            </div>
+              {booking.status !== 'CHECKED_IN' && booking.status !== 'COMPLETED' && (
+                <p className="rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
+                  Đơn đang ở trạng thái <strong>{bookingStatusLabels[booking.status].label}</strong>. Chỉ đơn “Đang
+                  lưu trú” mới check-out được.
+                </p>
+              )}
 
-            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2 text-xs">
-              <div className="flex justify-between">
-                <span className="text-slate-500">Mã hóa đơn:</span>
-                <span className="font-mono font-bold text-slate-900">#INV-P602-8839</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Số phòng trả:</span>
-                <span className="font-bold text-[#934a33]">P.602</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Thẻ từ nhận lại:</span>
-                <span className="font-semibold text-emerald-700">2 / 2 Thẻ (Đủ)</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Trạng thái phòng mới:</span>
-                <span className="font-semibold text-amber-700">Cần dọn dẹp (Dirty)</span>
-              </div>
-            </div>
+              {canCheckOut && (
+                <>
+                  <p className="text-xs text-slate-600">
+                    Sau khi xác nhận, đơn chuyển sang <strong>Đã trả phòng</strong>, phòng chuyển sang{' '}
+                    <strong>Đang dọn</strong> và hoa hồng được ghi nhận.
+                  </p>
 
-            <div className="flex items-center gap-3">
-              <Button 
-                variant="outline"
-                className="flex-1 h-10 text-xs font-semibold border-slate-300"
-                onClick={() => setIsCheckOutSuccess(false)}
-              >
-                <Printer className="w-4 h-4 mr-1.5" /> In Hóa Đơn Quyết Toán
-              </Button>
-              <Link href="/staff/dashboard" className="flex-1">
-                <Button className="w-full h-10 bg-[#934a33] hover:bg-[#7b3e2b] text-white text-xs font-semibold">
-                  Về Bàn Làm Việc
+                  {(checkOut.error || localError) && (
+                    <Alert variant="destructive" className="bg-red-50 p-3">
+                      <AlertTitle className="text-xs">Check-out thất bại</AlertTitle>
+                      <AlertDescription className="mt-1 text-xs">
+                        {localError ??
+                          getApiErrorMessage(checkOut.error, 'Không thể check-out. Vui lòng thử lại.')}
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  <Button
+                    onClick={doCheckOut}
+                    disabled={checkOut.isPending || quote.isLoading || !!quote.error}
+                    className="h-11 w-full gap-2 bg-[#934a33] text-sm font-bold text-white hover:bg-[#7b3e2b]"
+                  >
+                    {checkOut.isPending ? <Loader2 className="size-4 animate-spin" /> : <LogOut className="size-4" />}
+                    Xác nhận check-out
+                  </Button>
+                </>
+              )}
+
+              <div className="flex items-start gap-2 rounded-lg bg-slate-50 p-3 text-[11px] text-slate-500">
+                <Clock className="mt-0.5 size-3.5 shrink-0" />
+                Phí trả muộn được tính theo chính sách khách sạn và thu trực tiếp tại quầy.
+              </div>
+
+              <Link href="/staff/bookings" className="block">
+                <Button variant="outline" className="h-9 w-full text-xs font-semibold">
+                  Về danh sách đặt phòng
                 </Button>
               </Link>
-            </div>
-          </div>
+            </Card>
+
+            {booking.status === 'CHECKED_IN' && !quote.isLoading && !quote.data?.lateFee && (
+              <Card className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-xs text-emerald-800 shadow-none">
+                <p className="flex items-center gap-1.5 font-semibold">
+                  <CheckCircle2 className="size-4" /> Không phát sinh phí trả muộn
+                </p>
+                <p className="mt-1">Khách trả phòng đúng hạn hoặc trong thời gian ân hạn.</p>
+              </Card>
+            )}
+
+            {booking.status === 'CHECKED_IN' && quote.data?.early && (
+              <Card className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-800 shadow-none">
+                <p className="flex items-center gap-1.5 font-semibold">
+                  <AlertTriangle className="size-4" /> Trả phòng sớm
+                </p>
+                <p className="mt-1">
+                  {quote.data.releasedNights.length} đêm còn lại sẽ được giải phóng, không hoàn tiền theo chính sách.
+                </p>
+              </Card>
+            )}
+          </aside>
         </div>
       )}
     </div>

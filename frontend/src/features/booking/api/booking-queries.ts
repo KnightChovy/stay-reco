@@ -1,7 +1,13 @@
 "use client";
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { CancelBookingInput, CreateBookingInput, MyBookingsQuery, PaymentStatus } from "@stayreco/shared";
+import type {
+  CancelBookingInput,
+  ChangeRequestInput,
+  CreateBookingInput,
+  MyBookingsQuery,
+  PaymentStatus,
+} from "@stayreco/shared";
 import * as bookingService from "@/services/booking.service";
 
 export const bookingKeys = {
@@ -97,6 +103,20 @@ export function useCancelBooking() {
       queryClient.setQueryData(bookingKeys.detail(booking.id), booking);
       void queryClient.invalidateQueries({ queryKey: [...bookingKeys.all, "my-trips"] });
       void queryClient.invalidateQueries({ queryKey: bookingKeys.quote(booking.id) });
+    },
+  });
+}
+
+
+/** UC25: only guest details; the hotel accepts or rejects the request. */
+export function useRequestBookingChange() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ bookingId, input }: { bookingId: string; input: ChangeRequestInput }) =>
+      bookingService.requestBookingChange(bookingId, input),
+    onSuccess: (booking) => {
+      queryClient.setQueryData(bookingKeys.detail(booking.id), booking);
+      void queryClient.invalidateQueries({ queryKey: [...bookingKeys.all, "my-trips"] });
     },
   });
 }

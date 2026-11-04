@@ -537,4 +537,80 @@ describe('Hotel verification (e2e)', () => {
       );
     });
   });
+
+  describe('GET /hotels/:hotelId/beneficiary', () => {
+    const beneficiary = (token: string, hotelId: string) =>
+      t.api().get(`/api/v1/hotels/${hotelId}/beneficiary`).set(auth(token));
+
+    it('shows the account of the latest approved request, masked, until a newer one is approved', async () => {
+      const manager = await t.signIn('PLATFORM_MANAGER', 'pm@stayreco.test');
+      const { token, hotelId } = await partnerWithHotel();
+      const none = { account: null, verifiedAt: null, updatePending: false };
+      expect((await beneficiary(token, hotelId).expect(200)).body.data).toEqual(
+        none,
+      );
+
+      const initial = requestOf(await submitNew(token, hotelId));
+      expect((await beneficiary(token, hotelId).expect(200)).body.data).toEqual(
+        { ...none, updatePending: true },
+      );
+
+      await decide(manager.token, initial.id, 'approve').expect(200);
+      const approved = (await beneficiary(token, hotelId).expect(200)).body
+        .data;
+      expect(approved).toEqual({
+        account: {
+          bankName: 'Vietcombank',
+          accountNumber: '****6789',
+          accountHolder: 'CONG TY AN NHIEN',
+        },
+        verifiedAt: expect.any(String),
+        updatePending: false,
+      });
+
+      // A manager's re-verification request has no account yet: nothing changes.
+      await t
+        .api()
+        .post(`/api/v1/hotels/${hotelId}/reverification`)
+        .set(auth(manager.token))
+        .send({ reason: 'Business license expired' })
+        .expect(201);
+      expect((await beneficiary(token, hotelId).expect(200)).body.data).toEqual(
+        approved,
+      );
+
+      const renewal = requestOf(
+        await submit(
+          token,
+          hotelId,
+          await wizard(token, {
+            beneficiary: {
+              bankName: 'ACB',
+              accountNumber: '999988887777',
+              accountHolder: 'CONG TY AN NHIEN',
+            },
+          }),
+        ).expect(201),
+      );
+      expect((await beneficiary(token, hotelId).expect(200)).body.data).toEqual(
+        { ...approved, updatePending: true },
+      );
+
+      await decide(manager.token, renewal.id, 'approve').expect(200);
+      expect(
+        (await beneficiary(token, hotelId).expect(200)).body.data,
+      ).toMatchObject({
+        account: { bankName: 'ACB', accountNumber: '****7777' },
+        updatePending: false,
+      });
+    });
+
+    it('is only for the owner', async () => {
+      const { hotelId } = await partnerWithHotel();
+      const other = await partnerWithHotel('other@hotel.test', 'Other');
+      await beneficiary(other.token, hotelId).expect(404);
+      const staff = await t.signInStaff(hotelId, 'desk@hotel.test', ['REFUND']);
+      await beneficiary(staff.token, hotelId).expect(403);
+    });
+  });
 });

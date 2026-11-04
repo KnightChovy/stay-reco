@@ -1,0 +1,49 @@
+@startuml
+' Source of Report 4, Figure 1 (system architecture). Planned services are listed in Report 4 section 1.1 and 1.2.1.
+skinparam dpi 180
+skinparam shadowing false
+skinparam defaultFontName Helvetica
+skinparam defaultFontSize 13
+skinparam ArrowColor #333333
+skinparam componentStyle rectangle
+skinparam rectangle {
+  BorderColor #333333
+}
+title StayReco system architecture
+left to right direction
+
+rectangle "Third-party services" as TP {
+  rectangle "Payment Gateway\n(SePay)" as PAY
+  rectangle "Email Service\n(Gmail SMTP)" as MAIL
+  rectangle "Push Notification\n(planned)" as PUSH
+  rectangle "LLM Provider\n(planned)" as LLM
+  rectangle "Maps / Geocoding\n(planned)" as MAPS
+  rectangle "Social Media\n(planned)" as SOC
+  rectangle "Cloudinary\n(image and document storage)" as CLD
+}
+
+rectangle "StayReco System" as SYS {
+  rectangle "Frontend" as FE {
+    rectangle "Web Application" as WEB
+    rectangle "Mobile App" as MOB
+  }
+  rectangle "Backend" as BE {
+    rectangle "StayReco Service" as SVC
+    rectangle "Recommendation Service\noffline batch training (planned)" as REC
+  }
+  rectangle "Data Layer" as DL {
+    database "Database Primary" as DB
+  }
+}
+
+WEB --> SVC : HTTPS Request
+SVC ..> WEB : HTTPS Response
+MOB --> SVC : HTTPS Request
+SVC ..> MOB : HTTPS Response
+SVC --> DB : Query / Save Data
+DB ..> SVC : Data Response
+REC --> DB : Read interaction data /\nSave recommendation results
+DB ..> REC : Data Response
+SVC --> TP : HTTPS Request
+TP ..> SVC : HTTPS Response
+@enduml

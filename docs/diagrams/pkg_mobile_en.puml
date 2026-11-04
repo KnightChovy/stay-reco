@@ -1,0 +1,59 @@
+@startuml
+' Mobile Package Diagram (Report 4, Figure 4). Generated from the imports of the code: an arrow means
+' "the tail package imports the head package".
+skinparam dpi 150
+skinparam shadowing false
+skinparam defaultFontName Helvetica
+skinparam defaultFontSize 13
+skinparam ArrowColor #333333
+skinparam packageStyle folder
+skinparam package {
+  BorderColor #333333
+  BackgroundColor #FFFFFF
+}
+title Mobile Package Diagram
+package "@stayreco/shared" as _stayreco_shared {
+}
+package "app" as app {
+}
+package "assets" as assets {
+}
+package "components" as components {
+}
+package "constants" as constants {
+}
+package "features" as features {
+}
+package "lib" as lib {
+}
+package "provider" as provider {
+}
+package "services" as services {
+}
+package "stores" as stores {
+}
+app ..> _stayreco_shared
+app ..> components
+app ..> constants
+app ..> features
+app ..> lib
+app ..> provider
+app ..> services
+app ..> stores
+components ..> _stayreco_shared
+components ..> constants
+components ..> lib
+components ..> services
+components ..> stores
+features ..> assets
+features ..> components
+features ..> constants
+features ..> services
+lib ..> _stayreco_shared
+services ..> _stayreco_shared
+stores ..> _stayreco_shared
+stores ..> services
+legend bottom right
+  - - -> : <<import>> (tail package imports head package)
+endlegend
+@enduml

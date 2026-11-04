@@ -1,0 +1,30 @@
+@startuml
+' State machine of verification_token (Report 4, Figure 18). States show the label of the figure and the value stored in the code.
+' A token has no status column: used_at, expires_at, attempt_count and a newer token of the same type decide the state.
+skinparam dpi 180
+skinparam shadowing false
+skinparam defaultFontName Helvetica
+skinparam defaultFontSize 13
+skinparam state {
+  BackgroundColor #FFFFFF
+  BorderColor #333333
+}
+skinparam ArrowColor #333333
+hide empty description
+state "Code or link issued" as ISSUED
+state "Token used\n(used_at set)" as USED
+state "Token expired\n(expires_at passed)" as EXPIRED
+state "Token cancelled\n(attempt_count = 5)" as CANCELLED
+state "Token replaced\n(newer token sent)" as REPLACED
+state outcome <<choice>>
+[*] --> ISSUED
+ISSUED --> outcome
+outcome --> USED : [Correct code entered / link opened]
+outcome --> EXPIRED : [Time limit reached:\n10 min code, 15 min reset,\n72 h invitation]
+outcome --> CANCELLED : [5th wrong code]
+outcome --> REPLACED : [New code or link sent]
+USED --> [*]
+EXPIRED --> [*]
+CANCELLED --> [*]
+REPLACED --> [*]
+@enduml

@@ -6,7 +6,6 @@ import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
-import { AuthSocialActions } from '@/features/auth/AuthSocialActions';
 import { OtpVerification } from '@/features/auth/OtpVerification';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -174,8 +173,6 @@ function RegisterPageContent() {
                       Điền thông tin bên dưới để bắt đầu trải nghiệm dịch vụ StayReco.
                     </p>
                   </div>
-
-                  <AuthSocialActions dividerLabel="hoặc đăng ký bằng Form" />
 
                   <form onSubmit={handleSubmit} className="space-y-3.5">
                     <div className="space-y-1">

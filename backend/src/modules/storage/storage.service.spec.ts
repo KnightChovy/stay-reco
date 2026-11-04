@@ -40,6 +40,29 @@ describe('CloudinaryStorageService', () => {
     });
   });
 
+  it('reads the key of an image back from its url', () => {
+    expect(
+      storage.imageKeyFromUrl(
+        'https://res.cloudinary.com/test/image/upload/v1730000000/stayreco/avatars/a1/abc.jpg',
+      ),
+    ).toBe('stayreco/avatars/a1/abc');
+    expect(
+      storage.imageKeyFromUrl(
+        'https://res.cloudinary.com/test/image/upload/stayreco/avatars/a1/abc.webp',
+      ),
+    ).toBe('stayreco/avatars/a1/abc');
+  });
+
+  it('gives no key for a url of another cloud or site', () => {
+    for (const url of [
+      'https://res.cloudinary.com/other/image/upload/v1/stayreco/avatars/a1/abc.jpg',
+      'https://example.com/avatar.png',
+      'https://res.cloudinary.com/test/image/upload/v1/no-extension',
+    ]) {
+      expect(storage.imageKeyFromUrl(url)).toBeNull();
+    }
+  });
+
   it('reports a file Cloudinary refuses (4xx) as UPLOAD_INVALID_FILE', async () => {
     cloudinaryAnswers({ http_code: 400, message: 'Invalid image file' });
     const upload = storage.uploadImage(file, 'stayreco/hotels/h1');

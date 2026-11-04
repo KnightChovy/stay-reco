@@ -1,0 +1,35 @@
+@startuml
+' State machine of marketing_content.status (planned, WF-05) (Report 4, Figure 25). States show the label of the figure and the value stored in the code.
+skinparam dpi 180
+skinparam shadowing false
+skinparam defaultFontName Helvetica
+skinparam defaultFontSize 13
+skinparam state {
+  BackgroundColor #FFFFFF
+  BorderColor #333333
+}
+skinparam ArrowColor #333333
+hide empty description
+state "Post drafted with AI\n(DRAFT)" as DRAFT
+state "Waiting for\npartner approval\n(PENDING_APPROVAL)" as PENDING_APPROVAL
+state "Post rejected\n(REJECTED)" as REJECTED
+state "Post approved\n(APPROVED)" as APPROVED
+state "Post scheduled\n(SCHEDULED)" as SCHEDULED
+state "Post published\n(PUBLISHED)" as PUBLISHED
+state review <<choice>>
+state when <<choice>>
+[*] -[dashed]-> DRAFT : Staff creates with AI
+DRAFT -[dashed]-> PENDING_APPROVAL : [Staff submits for review]
+PENDING_APPROVAL -[dashed]-> review
+review -[dashed]-> REJECTED : [Partner rejects\nwith feedback]
+REJECTED -[dashed]-> DRAFT : [Staff edits]
+review -[dashed]-> APPROVED : [Partner approves]
+APPROVED -[dashed]-> when
+when -[dashed]-> SCHEDULED : [Publishing time set]
+when -[dashed]-> PUBLISHED : [Publish now]
+SCHEDULED -[dashed]-> PUBLISHED : [Scheduled time reached]
+PUBLISHED -[dashed]-> [*]
+legend bottom
+Dashed arrow: planned, not implemented yet.
+endlegend
+@enduml

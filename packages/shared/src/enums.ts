@@ -156,3 +156,30 @@ export const DayOfWeek = {
   SUN: 'SUN',
 } as const;
 export type DayOfWeek = (typeof DayOfWeek)[keyof typeof DayOfWeek];
+
+/** Customer profile (`customer.gender`). */
+export const Gender = {
+  MALE: 'MALE',
+  FEMALE: 'FEMALE',
+  OTHER: 'OTHER',
+} as const;
+export type Gender = (typeof Gender)[keyof typeof Gender];
+
+/** Kind of a `wallet_transaction` row (money-rules §5). */
+export const WalletTxnType = {
+  /** The customer's payment, credited to the hotel's pending balance. */
+  BOOKING_PAYMENT: 'BOOKING_PAYMENT',
+  /** Platform commission, taken from the hotel at check-out. */
+  COMMISSION: 'COMMISSION',
+  /** Money paid out to the hotel's bank account. */
+  PAYOUT: 'PAYOUT',
+  /** Refund of a cancelled booking: the hotel is debited, the customer credited. */
+  REFUND: 'REFUND',
+  /** Customer wallets only; not used yet. */
+  TOPUP: 'TOPUP',
+  /** Manual or compensating correction. */
+  ADJUSTMENT: 'ADJUSTMENT',
+  /** After the holding period, a pair of rows moves a stay's net amount from pending (−) to available (+). */
+  SETTLEMENT: 'SETTLEMENT',
+} as const;
+export type WalletTxnType = (typeof WalletTxnType)[keyof typeof WalletTxnType];

@@ -1,0 +1,93 @@
+@startuml
+' WF-02 Search, book and pay (Report 4, Figure 13). Owner: Nguyen Kim Thien Ngan; recommendation part with
+' Dinh Hoang Phuc and Ngo Minh Tan. Same steps as wf02_search_book_pay.drawio; grey steps are planned.
+skinparam dpi 100
+skinparam defaultFontName Helvetica
+skinparam shadowing false
+title WF-02 Search, book and pay
+
+|Customer|
+start
+:Enter destination, check-in/out dates,\nguests and rooms;
+|Website|
+:Call GET /hotels with keywords and filters;
+|StayReco System|
+:Normalize the destination (unaccent),\nkeep hotels on sale;
+:Compute price and availability,\nsort the results;
+|Website|
+:Show the stays list with the total stay price;
+if (Use AI recommendations?) then (Yes)
+  |AI Recommendation (planned)|
+  #F5F5F5:Read booking history and\ntravel preferences (planned);
+  #F5F5F5:Score and rank hotels,\nreturn top N + reason (planned);
+  |Website|
+  #F5F5F5:Show suggestions + match score (planned)\nCustomer picks one;
+else (No)
+endif
+repeat
+  |Website|
+  :Open the hotel detail and room types;
+  |StayReco System|
+  :GET /hotels/:id/listing: room types,\nprices and availability;
+  |Customer|
+  :Select the room type and quantity;
+  |Website|
+  while (Signed in as a customer?) is (No)
+    |Customer|
+    :Sign in or register;
+    |Website|
+  endwhile (Yes)
+  repeat
+    |Website|
+    :Open the booking form with expectedTotal;
+    |Customer|
+    :Fill the booking form and confirm;
+    |StayReco System|
+    :POST /bookings: price the stay again;
+  backward :Price changed (MSG13): show the new total;
+  repeat while (Total = expectedTotal?) is (No (409)) not (Yes)
+backward :Room sold out (MSG12): choose again;
+repeat while (Rooms free on every night?) is (No (409)) not (Yes)
+|StayReco System|
+:Lock the room type, hold the rooms for 15 min,\ncreate invoice SR-...: Booking [PENDING],\ninvoice [UNPAID];
+fork
+  |Website|
+  :Payment page: VietQR, amount,\ntransfer content, 15-minute countdown;
+  |Customer|
+  :Scan the VietQR and transfer the exact\namount with the booking code;
+  |Payment (SePay)|
+  :Bank records the transfer; SePay calls\nthe webhook (Apikey + transaction);
+  |StayReco System|
+  if (Apikey valid?) then (No)
+    |Payment (SePay)|
+    :Refuse with 401 (SePay retries);
+    end
+  else (Yes)
+  endif
+  |StayReco System|
+  if (Our account, booking code found, exact amount?) then (Yes)
+    if (Booking still PENDING?) then (Yes)
+      :Booking [CONFIRMED], invoice [PAID], nights BOOKED,\nhotel wallet pending + amount (idempotent),\nemail + in-app notification;
+      |Website|
+      :Booking confirmation page with the QR e-voucher;
+      |Customer|
+      :Receive the confirmation email and QR e-voucher;
+      stop
+    else (No)
+    endif
+  else (No)
+  endif
+  |StayReco System|
+  :Write audit_log (UNMATCHED / LATE): kept for\nmanual handling, no automatic refund;
+  end
+fork again
+  |StayReco System|
+  :15 minutes after the hold;
+  if (Still PENDING?) then (Yes)
+    :Per-minute job: Booking [EXPIRED],\ninvoice [FAILED], release the rooms;
+    end
+  else (No (paid))
+    end
+  endif
+end fork
+@enduml

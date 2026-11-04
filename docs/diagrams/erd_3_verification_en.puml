@@ -1,0 +1,109 @@
+@startuml
+skinparam dpi 180
+skinparam shadowing false
+skinparam linetype ortho
+skinparam defaultFontName Helvetica
+skinparam defaultFontSize 12
+skinparam entity {
+  BackgroundColor #FFFFFF
+  BorderColor #333333
+  FontStyle bold
+}
+skinparam ArrowColor #333333
+hide circle
+hide methods
+
+title Partner verification and compliance
+
+entity "hotel_verification_request" as hotel_verification_request {
+  * verification_request_id : uuid <<PK>>
+  --
+  * hotel_id : uuid <<FK>>
+  platform_manager_id : uuid <<FK>>
+  * status : VerificationStatus
+  * request_type : VerificationRequestType
+  notes : string
+  reviewed_at : datetime
+  * created_at : datetime
+}
+entity "hotel_verification_document" as hotel_verification_document {
+  * verification_document_id : uuid <<PK>>
+  --
+  * verification_request_id : uuid <<FK>>
+  parent_document_id : uuid <<FK>>
+  * document_type : DocumentType
+  * file_url : string
+  * uploaded_at : datetime
+}
+entity "hotel_properties" as hotel_properties {
+  * hotel_property_id : uuid <<PK>>
+  --
+  * hotel_id : uuid <<FK>>
+  verification_request_id : uuid <<FK>>
+  verification_document_id : uuid <<FK>>
+  * property_key : string
+  * property_value : string
+  * created_at : datetime
+}
+entity "policy_violation" as policy_violation {
+  * policy_violation_id : uuid <<PK>>
+  --
+  platform_manager_id : uuid <<FK>>
+  * hotel_partner_id : uuid <<FK>>
+  * violation_type : string
+  description : string
+  * severity : ViolationSeverity
+  * status : ViolationStatus
+  * created_at : datetime
+  resolved_at : datetime
+}
+entity "audit_log" as audit_log {
+  * audit_log_id : uuid <<PK>>
+  --
+  customer_id : uuid <<FK>>
+  hotel_staff_id : uuid <<FK>>
+  hotel_partner_id : uuid <<FK>>
+  admin_id : uuid <<FK>>
+  platform_manager_id : uuid <<FK>>
+  * action : string
+  entity_type : string
+  entity_id : uuid
+  old_value : string
+  new_value : string
+  ip_address : string
+  * created_at : datetime
+}
+entity "admin" as admin #EEEEEE {
+  * admin_id : uuid <<PK, FK>>
+}
+entity "customer" as customer #EEEEEE {
+  * customer_id : uuid <<PK, FK>>
+}
+entity "hotel" as hotel #EEEEEE {
+  * hotel_id : uuid <<PK>>
+}
+entity "hotel_partner" as hotel_partner #EEEEEE {
+  * hotel_partner_id : uuid <<PK, FK>>
+}
+entity "hotel_staff" as hotel_staff #EEEEEE {
+  * hotel_staff_id : uuid <<PK, FK>>
+}
+entity "platform_manager" as platform_manager #EEEEEE {
+  * platform_manager_id : uuid <<PK, FK>>
+}
+
+admin |o--o{ audit_log
+customer |o--o{ audit_log
+hotel ||--o{ hotel_properties
+hotel ||--o{ hotel_verification_request
+hotel_partner |o--o{ audit_log
+hotel_partner ||--o{ policy_violation
+hotel_staff |o--o{ audit_log
+hotel_verification_document |o--o{ hotel_properties
+hotel_verification_document |o--o{ hotel_verification_document
+hotel_verification_request |o--o{ hotel_properties
+hotel_verification_request ||--o{ hotel_verification_document
+platform_manager |o--o{ audit_log
+platform_manager |o--o{ hotel_verification_request
+platform_manager |o--o{ policy_violation
+@enduml
