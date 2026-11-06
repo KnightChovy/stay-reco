@@ -130,6 +130,20 @@ describe('Auth (e2e)', () => {
   });
 
   describe('response contract', () => {
+    it('answers the bare host address with the service name instead of a 404', async () => {
+      const res = await api().get('/').expect(200);
+      expect(res.body).toEqual({
+        success: true,
+        message: 'OK',
+        data: {
+          name: 'StayReco API',
+          status: 'running',
+          health: '/api/v1/health',
+        },
+      });
+      await api().get('/api/v1').expect(404);
+    });
+
     it('wraps success as { success, message, data }', async () => {
       const res = await api().get('/api/v1/health').expect(200);
       expect(res.body).toEqual({
@@ -426,6 +440,9 @@ describe('Auth (e2e)', () => {
       const cookie = cookies.find((c) => c.startsWith('refresh_token='));
       expect(cookie).toContain('HttpOnly');
       expect(cookie).toContain('Path=/api/v1/auth');
+      // Outside production web and API share localhost over HTTP: Lax, and no Secure flag that would drop the cookie.
+      expect(cookie).toContain('SameSite=Lax');
+      expect(cookie).not.toContain('Secure');
 
       const refreshed = await api()
         .post('/api/v1/auth/refresh')
