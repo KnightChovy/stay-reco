@@ -430,6 +430,16 @@
   }
 }
 
+/* Scrolls without showing a scrollbar (wheel, touch and keyboard still work). Used by dialogs and the sidebar. */
+@utility no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 /* Dense operational workspace shared by Partner and Manager portals. */
 @layer utilities {
   .sr-dense-ui {
