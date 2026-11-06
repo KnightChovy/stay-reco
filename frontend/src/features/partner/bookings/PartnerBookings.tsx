@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Eye, Search } from "lucide-react";
+import { Eye, Search, X } from "lucide-react";
 import {
   BookingStatus,
   HOTEL_BOOKING_SORTS,
@@ -18,6 +18,7 @@ import { useDebounce } from "@/hooks/use-debounce";
 import type { HotelBookingsParams } from "@/services/partner.service";
 import { useHotelBookings, useRefundQueueCount } from "../api/partner-queries";
 import {
+  DateInput,
   ErrorPanel,
   FormField,
   LoadingPanel,
@@ -74,7 +75,14 @@ function BookingsWorkspace({ hotelId }: { hotelId: string }) {
   // `?tab=refunds` opens the refund queue (link of the dashboard's action items).
   const searchParams = useSearchParams();
   const [tab, setTab] = useState<BookingTab>(searchParams.get("tab") === "refunds" ? "refunds" : "all");
-  const [search, setSearch] = useState("");
+  // `?search=` comes from the header search box; a new header search replaces the box's text.
+  const searchParam = searchParams.get("search") ?? "";
+  const [search, setSearch] = useState(searchParam);
+  const [shownSearchParam, setShownSearchParam] = useState(searchParam);
+  if (shownSearchParam !== searchParam) {
+    setShownSearchParam(searchParam);
+    setSearch(searchParam);
+  }
   const [status, setStatus] = useState("");
   const [paymentStatus, setPaymentStatus] = useState("");
   const [checkInFrom, setCheckInFrom] = useState("");
@@ -169,6 +177,15 @@ function BookingsWorkspace({ hotelId }: { hotelId: string }) {
 
   const filtered = !!(debouncedSearch || status || paymentStatus || checkInFrom || checkInTo);
 
+  function clearFilters() {
+    setSearch("");
+    setStatus("");
+    setPaymentStatus("");
+    setCheckInFrom("");
+    setCheckInTo("");
+    setPage(1);
+  }
+
   return (
     <PartnerPanel className="overflow-hidden p-0">
       <div className="border-b px-5 pt-4">
@@ -187,19 +204,20 @@ function BookingsWorkspace({ hotelId }: { hotelId: string }) {
         </Tabs>
       </div>
 
-      <div className="grid gap-3 border-b px-5 py-4 sm:grid-cols-2 lg:grid-cols-6">
-        <FormField label="Tìm kiếm" className="lg:col-span-2">
-          <span className="relative">
-            <Search size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(event) => update(setSearch)(event.target.value)}
-              placeholder="Mã booking hoặc tên khách"
-              className="pl-8"
-              maxLength={100}
-            />
-          </span>
-        </FormField>
+      <div className="space-y-3 border-b px-5 py-4">
+        {/* The search is the main control, so it gets its own row; the filters narrow it below. */}
+        <label className="relative block">
+          <span className="sr-only">Tìm kiếm booking</span>
+          <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(event) => update(setSearch)(event.target.value)}
+            placeholder="Tìm theo mã booking hoặc tên khách"
+            className="h-10 pl-9"
+            maxLength={100}
+          />
+        </label>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <FormField label="Trạng thái">
           <NativeSelect value={status} onChange={(event) => update(setStatus)(event.target.value)} className="w-full">
             <NativeSelectOption value="">Tất cả</NativeSelectOption>
@@ -229,21 +247,45 @@ function BookingsWorkspace({ hotelId }: { hotelId: string }) {
           <div className="hidden lg:block" />
         )}
         <FormField label="Nhận phòng từ">
-          <Input type="date" value={checkInFrom} onChange={(event) => update(setCheckInFrom)(event.target.value)} />
+          <DateInput value={checkInFrom} onChange={update(setCheckInFrom)} clearable />
         </FormField>
-        <FormField label="Đến" error={rangeInvalid ? "Ngày kết thúc không được trước ngày bắt đầu." : undefined}>
-          <Input
-            type="date"
+        <FormField label="Đến ngày" error={rangeInvalid ? "Ngày kết thúc không được trước ngày bắt đầu." : undefined}>
+          <DateInput
             value={checkInTo}
             min={checkInFrom || undefined}
-            onChange={(event) => update(setCheckInTo)(event.target.value)}
+            onChange={update(setCheckInTo)}
+            clearable
+            invalid={rangeInvalid}
           />
         </FormField>
-        <FormField label="Sắp xếp" className="lg:col-start-6">
+        </div>
+      </div>
+
+      {/* Sorting orders the result, so it sits with the result count instead of among the filters. */}
+      <div className="flex flex-col gap-2 border-b px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3 text-sm">
+          <span className="text-muted-foreground" aria-live="polite">
+            {meta ? (
+              <>
+                <strong className="text-foreground">{meta.total}</strong> booking
+              </>
+            ) : (
+              "Đang tải..."
+            )}
+          </span>
+          {filtered && (
+            <Button type="button" variant="ghost" size="sm" onClick={clearFilters}>
+              <X />
+              Xoá bộ lọc
+            </Button>
+          )}
+        </div>
+        <label className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+          Sắp xếp
           <NativeSelect
             value={sort}
             onChange={(event) => setSort(event.target.value as (typeof HOTEL_BOOKING_SORTS)[number])}
-            className="w-full"
+            className="min-w-52"
           >
             {HOTEL_BOOKING_SORTS.map((value) => (
               <NativeSelectOption key={value} value={value}>
@@ -251,7 +293,7 @@ function BookingsWorkspace({ hotelId }: { hotelId: string }) {
               </NativeSelectOption>
             ))}
           </NativeSelect>
-        </FormField>
+        </label>
       </div>
 
       {bookingsQuery.error ? (

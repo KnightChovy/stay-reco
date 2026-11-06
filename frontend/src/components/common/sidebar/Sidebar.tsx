@@ -57,6 +57,8 @@ export type SidebarItem = {
   isActive?: boolean;
   badge?: string | number;
   section?: string;
+  /** Not built yet: shown with a "Sắp có" badge and no link, so it is not a dead end. */
+  comingSoon?: boolean;
 };
 
 export type SidebarProps = {
@@ -71,6 +73,8 @@ export type SidebarProps = {
   collapsibleSections?: Record<string, LucideIcon>;
   /** Adds a "Thu gọn" button that shrinks the sidebar to its icons (desktop only; mobile keeps the sheet). */
   collapsibleToIcon?: boolean;
+  /** Off when the account menu of the navbar already offers it. */
+  showLogout?: boolean;
   onLogout?: () => void;
   logoutLabel?: string;
   footerContent?: ReactNode;
@@ -98,6 +102,25 @@ const navItemClassName =
 function NavItem({ item }: { item: SidebarItem }) {
   const Icon = item.icon;
 
+  if (item.comingSoon) {
+    return (
+      <SidebarMenuItem>
+        <SidebarMenuButton
+          size="lg"
+          disabled
+          tooltip={`${item.label} (sắp có)`}
+          className={cn(navItemClassName, 'text-muted-foreground disabled:opacity-100')}
+        >
+          <Icon strokeWidth={1.75} aria-hidden="true" />
+          <span className={iconLabelClassName}>{item.label}</span>
+          <span className={cn('ml-auto shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground', iconLabelClassName)}>
+            Sắp có
+          </span>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    );
+  }
+
   return (
     <SidebarMenuItem>
       <SidebarMenuButton
@@ -124,23 +147,24 @@ function NavItem({ item }: { item: SidebarItem }) {
   );
 }
 
-/** A section as a dropdown; it opens by itself while one of its pages is the current one. */
+/** A section as a dropdown. The sidebar keeps one section open at a time (see `Sidebar`). */
 function CollapsibleSection({
   label,
   icon: Icon,
   items,
   iconOnly,
+  open,
+  onOpenChange,
 }: {
   label: string;
   icon: LucideIcon;
   items: SidebarItem[];
   /** The sidebar is shrunk to icons: the section opens as a flyout menu instead of expanding in place. */
   iconOnly: boolean;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }) {
   const hasActive = items.some((item) => item.isActive);
-  // `undefined` until the user toggles it, so navigating into the section still opens it.
-  const [toggled, setToggled] = useState<boolean>();
-  const open = toggled ?? hasActive;
   // Badges of hidden items are summed on the section, so a closed section still shows there is work inside.
   const hiddenBadges = items.reduce(
     (sum, item) => sum + (typeof item.badge === 'number' ? item.badge : 0),
@@ -173,6 +197,15 @@ function CollapsibleSection({
               <DropdownMenuLabel className="px-2">{label}</DropdownMenuLabel>
               {items.map((item) => {
                 const ItemIcon = item.icon;
+                if (item.comingSoon) {
+                  return (
+                    <DropdownMenuItem key={`${item.href}-${item.label}`} disabled className="min-h-9 px-2">
+                      <ItemIcon strokeWidth={1.75} aria-hidden="true" />
+                      <span className="flex-1 truncate">{item.label}</span>
+                      <span className="rounded-full bg-muted px-1.5 text-[10px] font-semibold">Sắp có</span>
+                    </DropdownMenuItem>
+                  );
+                }
                 return (
                   <DropdownMenuItem
                     key={`${item.href}-${item.label}`}
@@ -197,7 +230,7 @@ function CollapsibleSection({
   }
 
   return (
-    <Collapsible open={open} onOpenChange={setToggled} render={<SidebarMenuItem />}>
+    <Collapsible open={open} onOpenChange={onOpenChange} render={<SidebarMenuItem />}>
       <CollapsibleTrigger
         render={
           <SidebarMenuButton
@@ -243,6 +276,7 @@ export default function Sidebar({
   contextName,
   collapsibleSections,
   collapsibleToIcon = false,
+  showLogout = true,
   onLogout,
   logoutLabel = 'Đăng xuất',
   footerContent,
@@ -251,6 +285,15 @@ export default function Sidebar({
   const router = useRouter();
   const logout = useAuthStore((state) => state.logout);
   const { state, isMobile, toggleSidebar } = useSidebar();
+  // One open section at a time keeps the sidebar height stable, so the next target does not move under the pointer.
+  // It follows the current page until the user opens or closes a section; a new current section takes over again.
+  const activeSection = items.find((item) => item.isActive)?.section ?? null;
+  const [openSection, setOpenSection] = useState<string | null>(activeSection);
+  const [shownSection, setShownSection] = useState(activeSection);
+  if (shownSection !== activeSection) {
+    setShownSection(activeSection);
+    if (activeSection) setOpenSection(activeSection);
+  }
   // The mobile sheet always shows the full sidebar, whatever the desktop state.
   const iconOnly = collapsibleToIcon && state === 'collapsed' && !isMobile;
   const showToggle = collapsibleToIcon && !isMobile;
@@ -369,59 +412,67 @@ export default function Sidebar({
       </SidebarHeader>
 
       <SidebarContent className="py-2">
-        {collapsibleSections ? (
-          <SidebarGroup className="px-3 py-2 group-data-[collapsible=icon]:px-2">
-            <SidebarGroupContent>
-              <SidebarMenu className="gap-0.5">
-                {topItems.map((item) => (
-                  <NavItem key={`${item.href}-${item.label}`} item={item} />
-                ))}
-                {groupedItems.map((group) => (
-                  <CollapsibleSection
-                    key={group.label}
-                    label={group.label}
-                    icon={collapsibleSections[group.label] ?? LayoutDashboard}
-                    items={group.items}
-                    iconOnly={iconOnly}
-                  />
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        ) : (
-          groupedItems.map((group) => (
-            <SidebarGroup key={group.label} className="px-3 py-2 group-data-[collapsible=icon]:px-2">
-              <SidebarGroupLabel className="px-3 text-[10px] font-semibold tracking-wide text-muted-foreground">
-                {group.label}
-              </SidebarGroupLabel>
+        <nav aria-label="Điều hướng chính" className="contents">
+          {collapsibleSections ? (
+            <SidebarGroup className="px-3 py-2 group-data-[collapsible=icon]:px-2">
               <SidebarGroupContent>
                 <SidebarMenu className="gap-0.5">
-                  {group.items.map((item) => (
+                  {topItems.map((item) => (
                     <NavItem key={`${item.href}-${item.label}`} item={item} />
+                  ))}
+                  {groupedItems.map((group) => (
+                    <CollapsibleSection
+                      key={group.label}
+                      label={group.label}
+                      icon={collapsibleSections[group.label] ?? LayoutDashboard}
+                      items={group.items}
+                      iconOnly={iconOnly}
+                      open={openSection === group.label}
+                      onOpenChange={(open) => setOpenSection(open ? group.label : null)}
+                    />
                   ))}
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>
-          ))
-        )}
+          ) : (
+            groupedItems.map((group) => (
+              <SidebarGroup key={group.label} className="px-3 py-2 group-data-[collapsible=icon]:px-2">
+                <SidebarGroupLabel className="px-3 text-[10px] font-semibold tracking-wide text-muted-foreground">
+                  {group.label}
+                </SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <SidebarMenu className="gap-0.5">
+                    {group.items.map((item) => (
+                      <NavItem key={`${item.href}-${item.label}`} item={item} />
+                    ))}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            ))
+          )}
+        </nav>
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-sidebar-border p-3 group-data-[collapsible=icon]:p-2">
-        {footerContent}
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              size="lg"
-              onClick={handleLogout}
-              tooltip={logoutLabel}
-              className="cursor-pointer rounded-lg px-3 text-muted-foreground hover:bg-danger-soft hover:text-danger group-data-[collapsible=icon]:justify-center"
-            >
-              <LogOut strokeWidth={1.75} aria-hidden="true" />
-              <span className={iconLabelClassName}>{logoutLabel}</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
-      </SidebarFooter>
+      {(footerContent || showLogout) && (
+        <SidebarFooter className="border-t border-sidebar-border p-3 group-data-[collapsible=icon]:p-2">
+          {footerContent}
+          {showLogout && (
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  size="lg"
+                  onClick={handleLogout}
+                  tooltip={logoutLabel}
+                  className="cursor-pointer rounded-lg px-3 text-muted-foreground hover:bg-danger-soft hover:text-danger group-data-[collapsible=icon]:justify-center"
+                >
+                  <LogOut strokeWidth={1.75} aria-hidden="true" />
+                  <span className={iconLabelClassName}>{logoutLabel}</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          )}
+        </SidebarFooter>
+      )}
     </ShadcnSidebar>
   );
 }

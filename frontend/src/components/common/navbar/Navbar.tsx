@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { Bell, ChevronDown, House, LogOut, Search, UserRound } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -37,6 +37,8 @@ type NavbarProps = {
   homeHref?: string;
   onSearch?: (query: string) => void;
   onNotificationClick?: () => void;
+  /** Replaces the plain bell button, e.g. with a working notification popover. */
+  notifications?: ReactNode;
   showSidebarTrigger?: boolean;
   className?: string;
   context?: NavbarContext;
@@ -56,7 +58,7 @@ function ContextSummary({ context, compact = false }: { context: NavbarContext; 
   return (
     <>
       <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-card text-primary shadow-sm"><House className="size-4" /></span>
-      <span className="min-w-0 flex-1"><strong className="block truncate text-xs text-foreground">{context.name}</strong>{context.meta && <span className={cn('block truncate text-[10px] text-muted-foreground', compact && 'hidden sm:block')}>{context.meta}</span>}</span>
+      <span className="min-w-0 flex-1"><strong className="block truncate text-xs text-foreground" title={context.name}>{context.name}</strong>{context.meta && <span className={cn('block truncate text-[10px] text-muted-foreground', compact && 'hidden sm:block')}>{context.meta}</span>}</span>
       {context.status && <span className={cn('shrink-0 rounded-full bg-success-soft px-2 py-1 text-[9px] font-semibold text-success', compact && 'hidden sm:inline')}>{context.status}</span>}
       <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
     </>
@@ -81,6 +83,7 @@ export default function Navbar({
   homeHref = '/',
   onSearch,
   onNotificationClick,
+  notifications,
   showSidebarTrigger = false,
   className,
   context,
@@ -167,25 +170,27 @@ export default function Navbar({
       </form>
 
       <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-lg"
-          onClick={onNotificationClick}
-          className="relative size-11 rounded-lg text-muted-foreground hover:text-primary"
-          aria-label={
-            notificationCount > 0
-              ? `Thông báo, có ${notificationCount} thông báo chưa đọc`
-              : 'Thông báo'
-          }
-        >
-          <Bell className="size-5" strokeWidth={1.75} aria-hidden="true" />
-          {notificationCount > 0 && (
-            <span className="absolute top-1.5 right-1.5 flex min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] leading-4 font-semibold text-primary-foreground">
-              {visibleNotificationCount}
-            </span>
-          )}
-        </Button>
+        {notifications ?? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-lg"
+            onClick={onNotificationClick}
+            className="relative size-11 rounded-lg text-muted-foreground hover:text-primary"
+            aria-label={
+              notificationCount > 0
+                ? `Thông báo, có ${notificationCount} thông báo chưa đọc`
+                : 'Thông báo'
+            }
+          >
+            <Bell className="size-5" strokeWidth={1.75} aria-hidden="true" />
+            {notificationCount > 0 && (
+              <span className="absolute top-1.5 right-1.5 flex min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] leading-4 font-semibold text-primary-foreground">
+                {visibleNotificationCount}
+              </span>
+            )}
+          </Button>
+        )}
 
         <DropdownMenu modal={false}>
           <DropdownMenuTrigger

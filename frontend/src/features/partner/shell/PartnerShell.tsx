@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   BedDouble,
   BookOpenCheck,
@@ -25,9 +25,10 @@ import Sidebar, {
   type SidebarItem,
 } from "@/components/common/sidebar/Sidebar";
 import { SidebarInset } from "@/components/ui/sidebar";
+import { NotificationBell } from "@/features/notifications/components/NotificationBell";
 import { useAuthStore } from "@/lib/auth-store";
 import { useRefundQueueCount } from "../api/partner-queries";
-import { usePartnerHotel } from "../components";
+import { useConfirmDiscard, usePartnerHotel } from "../components";
 import { hotelStatusLabels } from "../lib/labels";
 
 /** Sidebar dropdowns, in display order; "Tổng quan" has no section, so it stays on top as a plain link. */
@@ -55,6 +56,7 @@ const navigation: Omit<SidebarItem, "isActive">[] = [
     label: "Doanh thu & đối soát",
     icon: ChartNoAxesCombined,
     section: "Kinh doanh",
+    comingSoon: true,
   },
   {
     href: "/partner/hotel",
@@ -85,18 +87,21 @@ const navigation: Omit<SidebarItem, "isActive">[] = [
     label: "Chiến dịch & giảm giá",
     icon: Percent,
     section: "Tiếp thị & khách hàng",
+    comingSoon: true,
   },
   {
     href: "/partner/loyalty",
     label: "Khách hàng thân thiết",
     icon: UsersRound,
     section: "Tiếp thị & khách hàng",
+    comingSoon: true,
   },
   {
     href: "/partner/ai-brand",
     label: "Giọng thương hiệu AI",
     icon: Sparkles,
     section: "Tiếp thị & khách hàng",
+    comingSoon: true,
   },
   {
     href: "/partner/staff",
@@ -114,8 +119,10 @@ const navigation: Omit<SidebarItem, "isActive">[] = [
 
 export function PartnerShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const user = useAuthStore((state) => state.user);
   const { hotel, hotels, selectHotel } = usePartnerHotel();
+  const confirmDiscard = useConfirmDiscard();
   // Refund requests wait for the partner's decision, so they are the bookings badge.
   const { count: refundQueue } = useRefundQueueCount(hotel?.id);
   const items = navigation.map((item) => ({
@@ -129,8 +136,14 @@ export function PartnerShell({ children }: { children: ReactNode }) {
 
   return (
     <SidebarProvider>
-      {/* The hotel is shown and picked in the header, so the sidebar has no context block. */}
-      <Sidebar items={items} collapsibleSections={sections} collapsibleToIcon />
+      <a
+        href="#partner-main"
+        className="sr-only z-50 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground focus:not-sr-only focus:fixed focus:top-3 focus:left-3"
+      >
+        Bỏ qua điều hướng
+      </a>
+      {/* The hotel is shown and picked in the header, so the sidebar has no context block. Logout is in the account menu. */}
+      <Sidebar items={items} collapsibleSections={sections} collapsibleToIcon showLogout={false} />
       <SidebarInset className="min-w-0 bg-background">
         <Navbar
           // Stays on top while the page scrolls: the hotel picker and the notifications remain at hand.
@@ -148,16 +161,28 @@ export function PartnerShell({ children }: { children: ReactNode }) {
                     meta: `${item.city} · ${hotelStatusLabels[item.status].label}`,
                   })),
                   selectedId: hotel.id,
-                  onSelect: selectHotel,
+                  // Every screen follows the selected hotel, so unsaved edits of the current one would be lost.
+                  onSelect: (id) => {
+                    if (id !== hotel.id && confirmDiscard()) selectHotel(id);
+                  },
                 }
               : undefined
           }
           user={{ name: user?.name ?? "Đối tác", role: "Chủ cơ sở", avatarUrl: user?.avatarUrl }}
-          searchPlaceholder="Tìm booking, khách lưu trú hoặc phòng..."
+          // The bookings list is the one searchable list (code or guest name), so the header search opens it.
+          searchPlaceholder="Tìm mã booking hoặc tên khách"
+          onSearch={(query) => {
+            if (query) router.push(`/partner/bookings?search=${encodeURIComponent(query)}`);
+          }}
+          notifications={<NotificationBell allHref={null} />}
           showSidebarTrigger
           profileHref="/partner/profile"
         />
-        <main className="min-h-[calc(100dvh-5rem)] bg-background p-3 sm:p-4 lg:p-5">
+        <main
+          id="partner-main"
+          tabIndex={-1}
+          className="min-h-[calc(100dvh-5rem)] bg-background p-3 outline-none sm:p-4 lg:p-5"
+        >
           <div className="sr-dense-ui mx-auto min-h-[calc(100dvh-8rem)] max-w-[1480px] rounded-[1.5rem] bg-card p-4 shadow-[0_1px_2px_rgb(32_43_54/4%),0_18px_48px_rgb(32_43_54/6%)] ring-1 ring-border/70 md:p-5 xl:p-6">
             {children}
           </div>
