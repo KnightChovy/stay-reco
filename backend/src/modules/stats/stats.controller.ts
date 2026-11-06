@@ -2,6 +2,7 @@ import { Controller, Get, Param, Query } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
   actionItemListResponseSchema,
+  hotelStatsBreakdownResponseSchema,
   hotelStatsOverviewResponseSchema,
   hotelStatsSeriesResponseSchema,
   hotelTodayStatsResponseSchema,
@@ -86,6 +87,22 @@ export class StatsController {
     @Query() query: StatsSeriesQueryDto,
   ) {
     return this.stats.series(hotelId, query);
+  }
+
+  @ApiOperation({
+    summary:
+      'Figures of a period by room type, booking source, status and payment method',
+    description:
+      'Room types with the performance figures by stay date (they add up to `stats/overview`), and the bookings created in the period split by source, current status and payment method. `from` and `to` together (at most 366 days), or neither for the month to date.',
+  })
+  @HotelAccessRequired('owner-view')
+  @ApiData(hotelStatsBreakdownResponseSchema)
+  @Get('stats/breakdown')
+  breakdown(
+    @Param('hotelId') hotelId: string,
+    @Query() query: StatsRangeQueryDto,
+  ) {
+    return this.stats.breakdown(hotelId, query);
   }
 
   @ApiOperation({

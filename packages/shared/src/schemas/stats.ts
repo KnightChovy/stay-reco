@@ -53,7 +53,7 @@ const checkPair = (v: { from?: string; to?: string }, ctx: z.RefinementCtx) => {
   return true;
 };
 
-/** `GET /hotels/:hotelId/stats/overview` (and later `breakdown`, `/me/hotels/stats`). */
+/** `GET /hotels/:hotelId/stats/overview` and `stats/breakdown` (and later `/me/hotels/stats`). */
 export const statsRangeQuerySchema = z.object(range).superRefine((v, ctx) => {
   if (checkPair(v, ctx) && daysBetween(v.from!, v.to!) + 1 > STATS_LIMITS.rangeMaxDays) {
     ctx.addIssue({ code: 'custom', path: ['to'], message: `at most ${STATS_LIMITS.rangeMaxDays} days` });

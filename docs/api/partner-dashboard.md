@@ -15,7 +15,7 @@ The dashboard answers the partner's questions, in this order (the top of the scr
 | 3 | How is the business doing in this period, compared with the previous one? | KPI cards with ▲▼ | `GET /hotels/:hotelId/stats/overview` | ✅ |
 | 4 | How did it evolve? | Revenue + occupancy chart | `GET /hotels/:hotelId/stats/series` | ✅ |
 | 5 | How full am I in the coming weeks (should I change prices)? | 30-day occupancy heatmap | `GET /hotels/:hotelId/stats/occupancy-forecast` | ✅ |
-| 6 | Which room types / channels perform best? | Breakdown tables | `GET /hotels/:hotelId/stats/breakdown` | later (§4.6) |
+| 6 | Which room types / channels perform best? | Breakdown tables | `GET /hotels/:hotelId/stats/breakdown` | ✅ (2026-11-06) |
 | 7 | (Several hotels) Which hotel needs attention? | Portfolio table | `GET /me/hotels/stats` | later (§4.7) |
 
 Layout (desktop; on mobile the sections stack in the same order):
@@ -46,7 +46,7 @@ UX rules this API is designed for:
 |---|---|
 | Time zone | All day boundaries ("today", `from`/`to`, buckets) are computed in **Asia/Ho_Chi_Minh**. Timestamps in responses are ISO UTC. `date` columns (`check_in_date`, `room_calendars.date`) are already local dates. |
 | Period query | `from`, `to`: `YYYY-MM-DD`, both inclusive (api-guide §5), sent **together or not at all** (only one → `VALIDATION_ERROR`, field `to`). Default: from the 1st of the current month to today. `from > to` → `VALIDATION_ERROR` (field `to`). Future dates are allowed (bookings already on the books). |
-| Maximum range | `overview`: 366 days. `series`: depends on `granularity` (§4.4). Over the limit → `VALIDATION_ERROR` (field `to`). |
+| Maximum range | `overview`, `breakdown`: 366 days. `series`: depends on `granularity` (§4.4). Over the limit → `VALIDATION_ERROR` (field `to`). |
 | Comparison period | The `n` days just before `from`, where `n` is the length of the period. Example: 2026-10-01..2026-10-21 is compared with 2026-09-10..2026-09-30. |
 | Money | VND as JSON numbers. Revenue, earnings, commission and refunds are sums of whole-dong amounts (BR-29); ADR and RevPAR are rounded half up to 2 decimals. |
 | Rates and averages | Percentages as numbers `0–100` with 1 decimal (`78.4`). The change of a rate is in **percentage points** (`deltaPoints` = value − previous, 1 decimal); the change of an amount, count or average is in **percent** (`deltaPercent` = (value − previous) / previous × 100, 1 decimal). Averages (stay length, lead time) have 1 decimal. |
@@ -102,6 +102,7 @@ The commission is never recomputed from the partner's current rate: the rate is 
 | GET | `/hotels/:hotelId/stats/overview` | owner | `from?`, `to?` | `HotelStatsOverview` |
 | GET | `/hotels/:hotelId/stats/series` | owner | `from?`, `to?`, `granularity?` | `HotelStatsSeries` |
 | GET | `/hotels/:hotelId/stats/occupancy-forecast` | member | `days?` (default 30, 7–90) | `OccupancyForecast` |
+| GET | `/hotels/:hotelId/stats/breakdown` | owner | `from?`, `to?` | `HotelStatsBreakdown` |
 
 Errors: `HOTEL_NOT_FOUND` (not the caller's hotel), `FORBIDDEN` (staff on an owner-only endpoint), `VALIDATION_ERROR` (bad dates, range too large, `granularity` / `days` / `arrivalsLimit` out of range). **No new error codes.**
 
@@ -261,13 +262,45 @@ The chart shows `roomRevenue` (bars) and `occupancyRate` (line) by default; the 
 - `occupancyRate` = `booked / (roomsTotal − blocked) × 100`, `null` when the denominator is 0. The FE draws a heatmap with fixed thresholds: < 50 %, 50–79 %, 80–89 %, ≥ 90 %.
 - Every day of the range is present.
 
-### 4.6 `GET /hotels/:hotelId/stats/breakdown` *(later)*
+### 4.6 `GET /hotels/:hotelId/stats/breakdown`
 
-Not in the first release. FE's proposal kept for when it is built (owner, `from?`/`to?`, 366 days max):
+Which room types and channels perform best in the period (owner only, `from?`/`to?` as in `overview`, 366 days max). No comparison with the previous period: the KPI cards of `overview` carry it.
 
-- `byRoomType`: every room type of the hotel (also with 0 sales) with `rooms`, `roomNightsSold`, `occupancyRate`, `roomRevenue`, `adr`, sorted by `roomRevenue` desc; totals equal `overview.performance`.
-- `bySource`: `AI_RECOMMENDATION` (`booking.recommendationId` set) > `PROMOTION` (`promotionId` or `voucherId` set) > `DIRECT`, each booking counted once; the sum equals `bookingsCreated`. Only `DIRECT` has values until recommendations and promotions exist.
-- `byStatus`: bookings created in the period by current status. `byPaymentMethod`: `SEPAY` only for now.
+```jsonc
+{
+  "generatedAt": "2026-11-06T03:42:00.000Z",
+  "period": { "from": "2026-10-01", "to": "2026-10-31", "days": 31 },
+  "byRoomType": [
+    { "roomTypeId": "uuid", "name": "Suite",  "rooms": 1, "roomNightsSold": 2, "roomNightsAvailable": 16, "occupancyRate": 12.5, "roomRevenue": 6000000, "adr": 3000000 },
+    { "roomTypeId": "uuid", "name": "Deluxe", "rooms": 2, "roomNightsSold": 6, "roomNightsAvailable": 60, "occupancyRate": 10,   "roomRevenue": 5300000, "adr": 883333.33 },
+    { "roomTypeId": "uuid", "name": "Family", "rooms": 0, "roomNightsSold": 0, "roomNightsAvailable": 0,  "occupancyRate": null, "roomRevenue": 0,       "adr": null }
+  ],
+  "totals": { "rooms": 3, "roomNightsSold": 8, "roomNightsAvailable": 76, "occupancyRate": 10.5, "roomRevenue": 11300000, "adr": 1412500, "bookingsCreated": 4 },
+  "bySource": [
+    { "source": "AI_RECOMMENDATION", "bookings": 0, "sharePercent": 0 },
+    { "source": "PROMOTION",         "bookings": 1, "sharePercent": 25 },
+    { "source": "DIRECT",            "bookings": 3, "sharePercent": 75 }
+  ],
+  "byStatus": [
+    { "status": "CONFIRMED", "bookings": 1, "sharePercent": 25 },
+    { "status": "CHECKED_IN", "bookings": 0, "sharePercent": 0 },
+    { "status": "COMPLETED", "bookings": 1, "sharePercent": 25 },
+    { "status": "NO_SHOW",   "bookings": 1, "sharePercent": 25 },
+    { "status": "CANCELLED", "bookings": 1, "sharePercent": 25 }
+  ],
+  "byPaymentMethod": [
+    { "method": "SEPAY",  "bookings": 3, "sharePercent": 75 },
+    { "method": "WALLET", "bookings": 1, "sharePercent": 25 }
+  ]
+}
+```
+
+- `byRoomType`: **every** room type of the hotel, also without rooms or sales, sorted by `roomRevenue` (highest first) then name. Each figure follows §3 restricted to the type: nights sold and revenue by the booking's room type, nights available by the rooms of the type (a room counts under its current type). `rooms` = rooms of the type now, whatever their status.
+- `totals`: the whole hotel; `roomNightsSold`, `roomNightsAvailable`, `occupancyRate`, `roomRevenue`, `adr` and `bookingsCreated` equal the same fields of `overview.performance` for the period (`rooms` is the sum of the types).
+- `bySource`, `byStatus`, `byPaymentMethod` split the `bookingsCreated` of the period (§3: paid bookings created in the period, cancelled later included); each list adds up to `totals.bookingsCreated`. `sharePercent` = bookings / `bookingsCreated` × 100, 1 decimal, `null` when `bookingsCreated` is 0.
+- `bySource`: `AI_RECOMMENDATION` (`booking.recommendationId` set) > `PROMOTION` (`promotionId` or `voucherId` set) > `DIRECT`; a booking counts once, under the first that applies. All three are always listed; only `DIRECT` has values until recommendations and promotions are built.
+- `byStatus`: the **current** status of those bookings, all five listed (`CONFIRMED`, `CHECKED_IN`, `COMPLETED`, `NO_SHOW`, `CANCELLED`).
+- `byPaymentMethod`: the invoice's payment method, **only the methods used**, most used first (only `SEPAY` is offered now; the enum also has `VNPAY`, `WALLET`, `CASH`, `MIXED`).
 
 ### 4.7 `GET /me/hotels/stats` *(later)*
 
@@ -278,11 +311,11 @@ Not in the first release. For partners with 2 or more hotels: every hotel the pa
 | File | Content |
 |---|---|
 | `src/schemas/stats.ts` | `statsRangeQuerySchema` (`from` + `to` together, 366-day limit), `statsSeriesQuerySchema` (+ `granularity`, bucket limit per granularity), `occupancyForecastQuerySchema` (`days` 7–90, default 30), `todayStatsQuerySchema` (`arrivalsLimit` 1–20, default 5), `STATS_GRANULARITIES`, `STATS_LIMITS`, and the helpers `defaultGranularity(from, to)` and `statsBucketCount(from, to, granularity)` |
-| `src/responses/stats.ts` | `Metric`, `RateMetric`, `StatsPeriod`, `ActionItem` (a union on `type`, so each type has typed `params`; + `ACTION_ITEM_TYPES`, `ACTION_ITEM_SEVERITIES`, `SETUP_STEPS`), `ActionItemList`, `TodayArrival`, `HotelTodayStats`, `HotelStatsOverview`, `StatsSeriesPoint`, `HotelStatsSeries`, `OccupancyForecastDay`, `OccupancyForecast`, all registered in `responseSchemas` for Swagger |
+| `src/responses/stats.ts` | `Metric`, `RateMetric`, `StatsPeriod`, `RoomTypeBreakdown`, `HotelStatsBreakdown` (+ `BOOKING_SOURCES`, `CREATED_BOOKING_STATUSES`), `ActionItem` (a union on `type`, so each type has typed `params`; + `ACTION_ITEM_TYPES`, `ACTION_ITEM_SEVERITIES`, `SETUP_STEPS`), `ActionItemList`, `TodayArrival`, `HotelTodayStats`, `HotelStatsOverview`, `StatsSeriesPoint`, `HotelStatsSeries`, `OccupancyForecastDay`, `OccupancyForecast`, all registered in `responseSchemas` for Swagger |
 
 ## 6. Backend notes
 
-- **Module**: `modules/stats` (`StatsController`, `StatsService`, an action-items service), hotel access as in the other hotel routes: `member` for action items, today and forecast; `owner-view` (owner only, allowed while suspended) for overview and series.
+- **Module**: `modules/stats` (`StatsController`, `StatsService`, an action-items service), hotel access as in the other hotel routes: `member` for action items, today and forecast; `owner-view` (owner only, allowed while suspended) for overview, series and breakdown.
 - **Queries**: aggregate in SQL (`$queryRaw` with `generate_series` for the days and buckets, `jsonb_array_elements` over `nightly_prices`), never by loading bookings into memory. Day boundaries of `timestamptz` columns use `AT TIME ZONE 'Asia/Ho_Chi_Minh'`.
 - **Tenant** (PD3): `booking` has no `hotel_id`; hotel-scoped queries join through `room_type` (`room_type.hotel_id`), covered by the indexes below. Adding `booking.hotel_id` is reconsidered only if a measurement shows it is needed.
 - **Indexes** (one migration with the module): `booking(room_type_id, check_in_date)`, `booking(room_type_id, created_at)`, `wallet_transaction(wallet_id, created_at)`. `room_calendars` needs none: its unique `(room_id, date)` already serves a hotel's rooms over a date range. Reviews get `review(hotel_id, created_at)` with the loyalty phase.
@@ -308,6 +341,7 @@ Changes from FE's draft (2026-10-22), because of the booking data model: booking
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-11-06 | BE | `stats/breakdown` built (§4.6): room types with the §3 figures adding up to `overview`, bookings created by source, current status and payment method with `sharePercent`; no new index (the dashboard indexes cover it) |
 | 2026-10-30 | BE | `OVERDUE_CHECKOUTS` and `CHANGE_REQUESTS_PENDING` sent; today's `checkedIn`, `checkedOut` and `inHouse` now real (check-in / check-out built) |
 | 2026-10-29 | BE | Action items `OVERDUE_CHECKOUTS` (staff `FRONT_DESK`) and `CHANGE_REQUESTS_PENDING` (staff `BOOKING`) added to the types, sent once check-out and change requests are built |
 | 2026-10-28 | BE | First release built: the five endpoints, indexes `booking(room_type_id, check_in_date)`, `booking(room_type_id, created_at)`, `wallet_transaction(wallet_id, created_at)` (migration `dashboard_indexes`); e2e checks every figure against hand-computed values |
