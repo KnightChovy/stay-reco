@@ -6,12 +6,11 @@ import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
-import { AuthSocialActions } from '@/features/auth/AuthSocialActions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Eye, EyeOff, Lock, Mail, ArrowRight, ShieldCheck, Star } from 'lucide-react';
-import { demoAccounts, getSafeNextPath, roleDashboardPaths, useAuthStore } from '@/lib/auth-store';
+import { getSafeNextPath, roleDashboardPaths, useAuthStore } from '@/lib/auth-store';
 
 function LoginPageContent() {
   const [showPassword, setShowPassword] = useState(false);
@@ -78,20 +77,6 @@ function LoginPageContent() {
                   Đăng nhập để khám phá các ưu đãi độc quyền và quản lý chuyến đi của bạn.
                 </p>
               </div>
-
-              <div className="mb-6 rounded-xl border border-primary/15 bg-primary/5 p-3 text-xs">
-                <p className="font-semibold text-primary">Tài khoản demo theo vai trò</p>
-                <div className="mt-2 space-y-1 text-muted-foreground">
-                  {demoAccounts.map((account) => (
-                    <p key={account.role} className="flex flex-wrap justify-between gap-x-3 gap-y-0.5">
-                      <span className="capitalize">{account.role}</span>
-                      <span className="font-mono text-foreground">{account.email} / {account.password}</span>
-                    </p>
-                  ))}
-                </div>
-              </div>
-
-              <AuthSocialActions dividerLabel="hoặc đăng nhập bằng Email" />
 
               {/* Login Form */}
               <form onSubmit={handleSubmit} className="space-y-4">

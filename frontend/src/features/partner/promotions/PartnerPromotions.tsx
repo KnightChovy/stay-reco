@@ -9,8 +9,8 @@ export default function PartnerPromotions() {
       phase="Phase 4: Thân thiết, khuyến mãi & đánh giá"
       icon={Percent}
       upcoming={[
-        "Tạo chiến dịch khuyến mãi và mã giảm giá",
-        "Theo dõi lượt sử dụng ưu đãi",
+        "Tạo mã giảm giá để lấp phòng trống vào mùa thấp điểm",
+        "Xem mỗi ưu đãi mang về bao nhiêu booking",
       ]}
     />
   );

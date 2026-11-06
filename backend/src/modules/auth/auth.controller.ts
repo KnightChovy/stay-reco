@@ -375,16 +375,34 @@ export class AuthController {
     if (req.headers['x-client-type'] !== 'web') return tokens;
 
     res.cookie(REFRESH_COOKIE, tokens.refreshToken, {
-      httpOnly: true,
-      secure: this.config.get('NODE_ENV', { infer: true }) === 'production',
-      sameSite: 'lax',
-      path: COOKIE_PATH,
+      ...this.refreshCookieOptions(),
       maxAge: this.tokens.refreshTtlMs,
     });
     return { accessToken: tokens.accessToken, expiresIn: tokens.expiresIn };
   }
 
   private clearRefreshCookie(res: Response) {
-    res.clearCookie(REFRESH_COOKIE, { path: COOKIE_PATH });
+    res.clearCookie(REFRESH_COOKIE, this.refreshCookieOptions());
   }
+
+  private refreshCookieOptions() {
+    return refreshCookieOptions(
+      this.config.get('NODE_ENV', { infer: true }) === 'production',
+    );
+  }
+}
+
+/**
+ * In production the web app and the API live on different sites (e.g. Vercel and Render), so the browser only sends
+ * the cookie back on a cross-site call when it is `SameSite=None`, which in turn requires `Secure`. Elsewhere both run
+ * on localhost over plain HTTP, where `Lax` works and `Secure` would drop the cookie. Clearing uses the same
+ * attributes, or the browser keeps the old cookie.
+ */
+export function refreshCookieOptions(production: boolean) {
+  return {
+    httpOnly: true,
+    secure: production,
+    sameSite: production ? ('none' as const) : ('lax' as const),
+    path: COOKIE_PATH,
+  };
 }

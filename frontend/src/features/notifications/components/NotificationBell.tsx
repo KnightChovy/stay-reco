@@ -20,9 +20,9 @@ import {
 
 /**
  * The header bell: a compact preview of the latest 5 notifications. The full page is one click away; opening the
- * panel does not navigate.
+ * panel does not navigate. `allHref` is the full list page; `null` for roles that have none (the page is customer only).
  */
-export function NotificationBell() {
+export function NotificationBell({ allHref = '/account/notifications' }: { allHref?: string | null } = {}) {
   const [open, setOpen] = useState(false);
   const notificationsQuery = useNotifications({ page: 1, pageSize: 5 });
   const unreadCountQuery = useUnreadNotificationCount();
@@ -150,15 +150,17 @@ export function NotificationBell() {
           })}
         </div>
 
-        <div className="border-t border-border bg-slate-50/80 p-2">
-          <Link
-            href="/account/notifications"
-            onClick={() => setOpen(false)}
-            className="flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold text-primary transition-colors hover:bg-white"
-          >
-            Xem tất cả thông báo <ArrowRight className="size-3.5" />
-          </Link>
-        </div>
+        {allHref && (
+          <div className="border-t border-border bg-slate-50/80 p-2">
+            <Link
+              href={allHref}
+              onClick={() => setOpen(false)}
+              className="flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold text-primary transition-colors hover:bg-white"
+            >
+              Xem tất cả thông báo <ArrowRight className="size-3.5" />
+            </Link>
+          </div>
+        )}
 
         {notificationsQuery.isFetching && !notificationsQuery.isLoading && (
           <span className="absolute right-3 top-3 text-muted-foreground">

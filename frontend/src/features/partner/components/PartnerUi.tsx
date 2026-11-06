@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { Building2, RefreshCw, ShieldAlert, TriangleAlert } from "lucide-react";
+import { Building2, Plus, RefreshCw, ShieldAlert, TriangleAlert } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -126,15 +126,16 @@ export function EmptyPanel({ icon: Icon = Building2, title, description, action 
   );
 }
 
-/** Shown on hotel-scoped screens when the partner has not created a hotel yet. */
+/** Shown on hotel-scoped screens when the partner has not created a hotel yet; hotels are added in "Hồ sơ & xác minh". */
 export function NoHotelPanel() {
   return (
     <EmptyPanel
       title="Bạn chưa có khách sạn nào"
-      description="Tạo khách sạn đầu tiên để cấu hình phòng, mời nhân viên và gửi hồ sơ xác minh."
+      description="Thêm khách sạn đầu tiên trong mục Hồ sơ & xác minh để cấu hình phòng, mời nhân viên và bắt đầu mở bán."
       action={
-        <Link href="/partner/hotel" className={buttonVariants()}>
-          Tạo khách sạn
+        <Link href="/partner/verification" className={buttonVariants()}>
+          <Plus />
+          Thêm khách sạn
         </Link>
       }
     />

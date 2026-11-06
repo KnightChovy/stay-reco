@@ -1,4 +1,4 @@
-import { INestApplication } from '@nestjs/common';
+import { INestApplication, RequestMethod } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
@@ -16,7 +16,10 @@ export function configureApp(app: INestApplication) {
 
   // Trust the first reverse proxy so req.ip is the real client IP (rate limiting, audit).
   (app as NestExpressApplication).set('trust proxy', 1);
-  app.setGlobalPrefix(API_PREFIX);
+  // The bare host address stays outside the prefix, so opening the API URL in a browser does not look broken.
+  app.setGlobalPrefix(API_PREFIX, {
+    exclude: [{ path: '/', method: RequestMethod.GET }],
+  });
   app.use(helmet());
   app.use(cookieParser());
   app.enableCors({

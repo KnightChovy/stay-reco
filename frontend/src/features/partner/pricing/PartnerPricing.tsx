@@ -1,11 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
-import { Calculator, Pencil, Plus, Tags, Trash2 } from "lucide-react";
+import { BedDouble, Calculator, Pencil, Plus, Tags, Trash2 } from "lucide-react";
 import type { PricingRule, RoomType } from "@stayreco/shared";
 import { TableCommon, type CommonTableColumn } from "@/components/common/table";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Switch } from "@/components/ui/switch";
 import * as partnerService from "@/services/partner.service";
@@ -18,6 +18,7 @@ import {
 } from "../api/partner-queries";
 import {
   ConfirmDialog,
+  DateInput,
   EmptyPanel,
   ErrorPanel,
   FormField,
@@ -109,6 +110,12 @@ function PricingWorkspace({ hotelId }: { hotelId: string }) {
         icon={Tags}
         title="Chưa có loại phòng"
         description="Luật giá điều chỉnh giá cơ bản của từng loại phòng. Hãy tạo loại phòng ở Kho phòng trước."
+        action={
+          <Link href="/partner/rooms" className={buttonVariants()}>
+            <BedDouble />
+            Tạo loại phòng
+          </Link>
+        }
       />
     );
   }
@@ -257,10 +264,10 @@ function PricePreviewPanel({ roomTypes }: { roomTypes: RoomType[] }) {
         </NativeSelect>
       </FormField>
       <FormField label="Ngày nhận phòng">
-        <Input type="date" value={date} onChange={(event) => setDate(event.target.value)} />
+        <DateInput value={date} onChange={setDate} />
       </FormField>
       <FormField label="Ngày khách đặt" hint="Ảnh hưởng luật đặt sớm / phút chót.">
-        <Input type="date" value={bookedOn} max={date} onChange={(event) => setBookedOn(event.target.value)} />
+        <DateInput value={bookedOn} max={date || undefined} onChange={setBookedOn} />
       </FormField>
       <div className="rounded-xl bg-muted p-4">
         {preview.isLoading ? (

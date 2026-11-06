@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { Plus, Save, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { hotelPoliciesSchema, type Hotel } from "@stayreco/shared";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,7 +9,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { getApiErrorMessage, validateWith } from "@/lib/api-error";
 import * as partnerService from "@/services/partner.service";
 import { partnerKeys, usePartnerMutation } from "../api/partner-queries";
-import { FormAlert, FormField, SubmitButton, usePartnerHotel } from "../components";
+import {
+  countChanges,
+  FormAlert,
+  FormField,
+  savedMessage,
+  StickySaveBar,
+  usePartnerHotel,
+  useUnsavedChanges,
+} from "../components";
 
 /** Suggested policy keys (snake_case, as the API requires) with their Vietnamese titles. */
 const presetPolicies: Array<{ key: string; label: string; placeholder: string }> = [
@@ -22,17 +30,20 @@ const presetPolicies: Array<{ key: string; label: string; placeholder: string }>
 
 type CustomPolicy = { id: number; key: string; value: string };
 
+const presetKeys = new Set(presetPolicies.map((policy) => policy.key));
+
+const presetOf = (hotel: Hotel) =>
+  Object.fromEntries(presetPolicies.map(({ key }) => [key, hotel.policies[key] ?? ""]));
+
+const customOf = (hotel: Hotel): CustomPolicy[] =>
+  Object.entries(hotel.policies)
+    .filter(([key]) => !presetKeys.has(key))
+    .map(([key, value], index) => ({ id: index, key, value }));
+
 export function HotelPoliciesForm({ hotel }: { hotel: Hotel }) {
   const { canEdit } = usePartnerHotel();
-  const presetKeys = new Set(presetPolicies.map((policy) => policy.key));
-  const [preset, setPreset] = useState<Record<string, string>>(() =>
-    Object.fromEntries(presetPolicies.map(({ key }) => [key, hotel.policies[key] ?? ""])),
-  );
-  const [custom, setCustom] = useState<CustomPolicy[]>(() =>
-    Object.entries(hotel.policies)
-      .filter(([key]) => !presetKeys.has(key))
-      .map(([key, value], index) => ({ id: index, key, value })),
-  );
+  const [preset, setPreset] = useState<Record<string, string>>(() => presetOf(hotel));
+  const [custom, setCustom] = useState<CustomPolicy[]>(() => customOf(hotel));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string>();
 
@@ -40,20 +51,26 @@ export function HotelPoliciesForm({ hotel }: { hotel: Hotel }) {
     (policies: Record<string, string>) => partnerService.setHotelPolicies(hotel.id, policies),
     {
       invalidate: () => [partnerKeys.hotel(hotel.id)],
-      successMessage: "Đã cập nhật chính sách.",
+      successMessage: () => savedMessage("chính sách"),
       errorNotice: false,
     },
   );
 
+  // Empty texts are left out, which removes that policy (the list replaces the stored one).
+  const policies = Object.fromEntries(
+    [
+      ...Object.entries(preset),
+      ...custom.map((policy) => [policy.key.trim(), policy.value] as [string, string]),
+    ].filter(([key, value]) => key && value.trim()),
+  );
+  // A blank custom row is not a change until it gets a key and a text.
+  const changes = canEdit ? countChanges(policies, hotel.policies) : 0;
+  useUnsavedChanges(changes > 0);
+
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setFormError(undefined);
-    // Empty texts are left out, which removes that policy (the list replaces the stored one).
-    const entries = [
-      ...Object.entries(preset),
-      ...custom.map((policy) => [policy.key.trim(), policy.value] as [string, string]),
-    ].filter(([key, value]) => key && value.trim());
-    const result = validateWith(hotelPoliciesSchema, { policies: Object.fromEntries(entries) });
+    const result = validateWith(hotelPoliciesSchema, { policies });
     if (result.errors) {
       setErrors(result.errors);
       return;
@@ -136,14 +153,17 @@ export function HotelPoliciesForm({ hotel }: { hotel: Hotel }) {
       </div>
 
       <FormAlert message={formError ?? errors.policies} />
-      {canEdit && (
-        <div className="flex justify-end">
-          <SubmitButton pending={mutation.isPending}>
-            <Save />
-            Lưu chính sách
-          </SubmitButton>
-        </div>
-      )}
+      <StickySaveBar
+        changes={changes}
+        pending={mutation.isPending}
+        onDiscard={() => {
+          setPreset(presetOf(hotel));
+          setCustom(customOf(hotel));
+          setErrors({});
+          setFormError(undefined);
+        }}
+        submitLabel="Lưu chính sách"
+      />
     </form>
   );
 }

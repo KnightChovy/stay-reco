@@ -228,7 +228,7 @@ function QuestionnairePrevious({
       )}
       {...props}
     >
-      {children ?? 'Previous'}
+      {children ?? 'Quay lại'}
     </QuestionnairePrimitive.Previous>
   );
 }
@@ -278,7 +278,7 @@ function QuestionnaireNext({
       )}
       {...props}
     >
-      {children ?? 'Next'}
+      {children ?? 'Tiếp tục'}
     </QuestionnairePrimitive.Next>
   );
 }
@@ -303,7 +303,7 @@ function QuestionnaireSubmit({
       )}
       {...props}
     >
-      {children ?? 'Submit'}
+      {children ?? 'Gửi'}
     </QuestionnairePrimitive.Submit>
   );
 }

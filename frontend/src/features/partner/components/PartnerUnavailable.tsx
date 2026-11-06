@@ -3,22 +3,21 @@ import { PartnerPanel } from "./PartnerPanel";
 import { PartnerTitle } from "./PartnerTitle";
 
 /**
- * Screen for a partner feature whose backend API does not exist yet. It states the phase that will deliver it
- * (docs/phases) instead of showing sample figures that could be mistaken for real data.
+ * Screen for a partner feature that is not built yet, shown instead of sample figures that could be mistaken for real
+ * data. The sidebar marks these routes "Sắp có", so this page is only reached by a direct link.
  */
 export function PartnerUnavailable({
   title,
   description,
-  phase,
   icon: Icon = Construction,
   upcoming,
 }: {
   title: string;
   description: string;
-  /** e.g. "Phase 3: Hotel operations". */
+  /** Internal roadmap reference (docs/phases), e.g. "Phase 4". Never shown: partners do not know our phases. */
   phase: string;
   icon?: LucideIcon;
-  /** What the screen will show once the API is available. */
+  /** What the partner will be able to do, written as benefits. */
   upcoming: string[];
 }) {
   return (
@@ -29,9 +28,12 @@ export function PartnerUnavailable({
           <Icon size={22} />
         </span>
         <div className="space-y-2">
-          <h2 className="font-bold text-primary">Tính năng chưa có dữ liệu</h2>
+          <span className="inline-flex rounded-full bg-brand-accent-soft px-2.5 py-1 text-xs font-semibold text-brand-accent">
+            Sắp ra mắt
+          </span>
+          <h2 className="font-bold text-primary">Tính năng đang được hoàn thiện</h2>
           <p className="max-w-md text-sm text-muted-foreground">
-            Backend chưa cung cấp API cho màn hình này. Dữ liệu sẽ hiển thị khi <strong>{phase}</strong> được triển khai.
+            Chúng tôi sẽ thông báo cho bạn ngay khi tính năng này sẵn sàng. Khi đó bạn có thể:
           </p>
         </div>
         <ul className="grid max-w-md gap-2 text-left text-sm text-muted-foreground">

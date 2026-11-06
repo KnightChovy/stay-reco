@@ -9,8 +9,8 @@ export default function PartnerAiBrand() {
       phase="Phase 5: AI gợi ý & marketing"
       icon={Sparkles}
       upcoming={[
-        "Thiết lập giọng thương hiệu cho AI",
-        "Lịch và nội dung marketing",
+        "Để AI viết mô tả và trả lời khách đúng phong cách khách sạn",
+        "Lên lịch nội dung marketing mà không cần tự soạn từng bài",
       ]}
     />
   );

@@ -68,6 +68,17 @@ export async function getAmenities() {
   return data.data;
 }
 
+export type CreateAmenityInput = { name: string; category: string };
+
+/**
+ * Proposed contract, not served by the backend yet: adds an amenity to the shared catalog. `category` is free text,
+ * so a new value creates the group.
+ */
+export async function createAmenity(input: CreateAmenityInput) {
+  const { data } = await api.post<APIResponse<Amenity>>("/amenities", input);
+  return data.data;
+}
+
 export async function getBedTypes() {
   const { data } = await api.get<APIResponse<BedType[]>>("/bed-types");
   return data.data;

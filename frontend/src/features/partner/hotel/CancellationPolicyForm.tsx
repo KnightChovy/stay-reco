@@ -1,14 +1,22 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { Save } from "lucide-react";
 import { cancellationPolicySchema, type CancellationPolicyInput, type Hotel } from "@stayreco/shared";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { getApiErrorMessage, getApiFieldErrors, validateWith, type FieldErrors } from "@/lib/api-error";
 import * as partnerService from "@/services/partner.service";
 import { partnerKeys, usePartnerMutation } from "../api/partner-queries";
-import { FormAlert, FormField, SubmitButton, toOptionalNumber, usePartnerHotel } from "../components";
+import {
+  countChanges,
+  FormAlert,
+  FormField,
+  savedMessage,
+  StickySaveBar,
+  toOptionalNumber,
+  usePartnerHotel,
+  useUnsavedChanges,
+} from "../components";
 
 /** Ready-made policies; the partner can still type any value. */
 const presets: Array<{ label: string; value: CancellationPolicyInput }> = [
@@ -38,9 +46,10 @@ function describePolicy(policy: CancellationPolicyInput, checkInTime: string) {
 /** BR-07: the policy is copied onto each booking when it is made, so a change only affects new bookings. */
 export function CancellationPolicyForm({ hotel }: { hotel: Hotel }) {
   const { canEdit } = usePartnerHotel();
-  const [hasFreePeriod, setHasFreePeriod] = useState(hotel.cancellationPolicy.freeCancellationDays !== null);
-  const [days, setDays] = useState(hotel.cancellationPolicy.freeCancellationDays?.toString() ?? "1");
-  const [feePercent, setFeePercent] = useState(hotel.cancellationPolicy.feePercent.toString());
+  const stored = hotel.cancellationPolicy;
+  const [hasFreePeriod, setHasFreePeriod] = useState(stored.freeCancellationDays !== null);
+  const [days, setDays] = useState(stored.freeCancellationDays?.toString() ?? "1");
+  const [feePercent, setFeePercent] = useState(stored.feePercent.toString());
   const [errors, setErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string>();
 
@@ -48,10 +57,31 @@ export function CancellationPolicyForm({ hotel }: { hotel: Hotel }) {
     (input: CancellationPolicyInput) => partnerService.setCancellationPolicy(hotel.id, input),
     {
       invalidate: () => [partnerKeys.hotel(hotel.id)],
-      successMessage: "Đã lưu chính sách huỷ. Chính sách mới áp dụng cho các booking tạo từ bây giờ.",
+      successMessage: () =>
+        `${savedMessage("chính sách huỷ")} Chính sách mới áp dụng cho các booking tạo từ bây giờ.`,
       errorNotice: false,
     },
   );
+
+  const changes = canEdit
+    ? countChanges(
+        { free: hasFreePeriod, days: hasFreePeriod ? days.trim() : "", fee: feePercent.trim() },
+        {
+          free: stored.freeCancellationDays !== null,
+          days: stored.freeCancellationDays?.toString() ?? "",
+          fee: stored.feePercent.toString(),
+        },
+      )
+    : 0;
+  useUnsavedChanges(changes > 0);
+
+  function discard() {
+    setHasFreePeriod(stored.freeCancellationDays !== null);
+    setDays(stored.freeCancellationDays?.toString() ?? "1");
+    setFeePercent(stored.feePercent.toString());
+    setErrors({});
+    setFormError(undefined);
+  }
 
   const draft = {
     freeCancellationDays: hasFreePeriod ? toOptionalNumber(days) : null,
@@ -143,14 +173,12 @@ export function CancellationPolicyForm({ hotel }: { hotel: Hotel }) {
       </div>
 
       <FormAlert message={formError} />
-      {canEdit && (
-        <div className="flex justify-end">
-          <SubmitButton pending={mutation.isPending}>
-            <Save />
-            Lưu chính sách huỷ
-          </SubmitButton>
-        </div>
-      )}
+      <StickySaveBar
+        changes={changes}
+        pending={mutation.isPending}
+        onDiscard={discard}
+        submitLabel="Lưu chính sách huỷ"
+      />
     </form>
   );
 }
