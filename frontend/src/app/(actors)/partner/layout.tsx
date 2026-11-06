@@ -1,5 +1,9 @@
 import type { ReactNode } from "react";
-import { PartnerActionProvider, PartnerHotelProvider } from "@/features/partner/components";
+import {
+  PartnerActionProvider,
+  PartnerHotelProvider,
+  UnsavedChangesProvider,
+} from "@/features/partner/components";
 import { PartnerShell } from "@/features/partner/shell/PartnerShell";
 
 export default function PartnerLayout({ children }: { children: ReactNode }) {
@@ -7,7 +11,9 @@ export default function PartnerLayout({ children }: { children: ReactNode }) {
     <div className="partner-role">
       <PartnerActionProvider>
         <PartnerHotelProvider>
-          <PartnerShell>{children}</PartnerShell>
+          <UnsavedChangesProvider>
+            <PartnerShell>{children}</PartnerShell>
+          </UnsavedChangesProvider>
         </PartnerHotelProvider>
       </PartnerActionProvider>
     </div>

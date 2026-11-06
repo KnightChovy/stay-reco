@@ -13,11 +13,10 @@ import {
   type StatsGranularity,
 } from "@stayreco/shared";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { StatsRangeParams } from "@/services/partner.service";
 import { useStatsOverview, useStatsSeries } from "../api/partner-queries";
-import { ErrorPanel, PartnerPanel } from "../components";
+import { DateInput, ErrorPanel, PartnerPanel } from "../components";
 import { addDays, todayInVietnam } from "../lib/dates";
 import { formatDate, formatMoney } from "../lib/labels";
 import { Delta, formatNumber, formatPercent } from "./format";
@@ -33,9 +32,16 @@ const presetLabels: Record<Preset, string> = {
   custom: "Tuỳ chọn",
 };
 
-const granularityLabels: Record<StatsGranularity, string> = { day: "Ngày", week: "Tuần", month: "Tháng" };
+const granularityLabels: Record<StatsGranularity, string> = {
+  day: "Ngày",
+  week: "Tuần",
+  month: "Tháng",
+};
 
-function presetRange(preset: Exclude<Preset, "custom">, today: string): Required<StatsRangeParams> {
+function presetRange(
+  preset: Exclude<Preset, "custom">,
+  today: string,
+): Required<StatsRangeParams> {
   switch (preset) {
     case "today":
       return { from: today, to: today };
@@ -58,19 +64,34 @@ function customRangeError(from: string, to: string) {
   return undefined;
 }
 
-const fitsSeries = (range: Required<StatsRangeParams>, granularity: StatsGranularity) =>
-  statsBucketCount(range.from, range.to, granularity) <= STATS_LIMITS.seriesMaxBuckets[granularity];
+const fitsSeries = (
+  range: Required<StatsRangeParams>,
+  granularity: StatsGranularity,
+) =>
+  statsBucketCount(range.from, range.to, granularity) <=
+  STATS_LIMITS.seriesMaxBuckets[granularity];
 
 /** ③ KPIs of the period against the previous one, ④ the chart, and the wallet. Owner only. */
 export function PeriodStats({ hotelId }: { hotelId: string }) {
   const today = todayInVietnam();
   const [preset, setPreset] = useState<Preset>("month");
-  const [custom, setCustom] = useState<StatsRangeParams>({ from: presetRange("month", today).from, to: today });
+  const [custom, setCustom] = useState<StatsRangeParams>({
+    from: presetRange("month", today).from,
+    to: today,
+  });
   const [granularity, setGranularity] = useState<StatsGranularity>();
   const [chartMetric, setChartMetric] = useState<BarMetric>("roomRevenue");
 
-  const rangeError = preset === "custom" ? customRangeError(custom.from ?? "", custom.to ?? "") : undefined;
-  const range = preset === "custom" ? (rangeError ? undefined : (custom as Required<StatsRangeParams>)) : presetRange(preset, today);
+  const rangeError =
+    preset === "custom"
+      ? customRangeError(custom.from ?? "", custom.to ?? "")
+      : undefined;
+  const range =
+    preset === "custom"
+      ? rangeError
+        ? undefined
+        : (custom as Required<StatsRangeParams>)
+      : presetRange(preset, today);
   // A granularity picked for a shorter period falls back to the default when it no longer fits.
   const effectiveGranularity = range
     ? granularity && fitsSeries(range, granularity)
@@ -79,7 +100,10 @@ export function PeriodStats({ hotelId }: { hotelId: string }) {
     : undefined;
 
   const overview = useStatsOverview(hotelId, range);
-  const series = useStatsSeries(hotelId, range && { ...range, granularity: effectiveGranularity });
+  const series = useStatsSeries(
+    hotelId,
+    range && { ...range, granularity: effectiveGranularity },
+  );
 
   return (
     <section aria-labelledby="period-heading" className="space-y-4">
@@ -90,14 +114,21 @@ export function PeriodStats({ hotelId }: { hotelId: string }) {
           </h2>
           {overview.data && (
             <p className="text-xs text-muted-foreground">
-              {formatDate(overview.data.period.from)} – {formatDate(overview.data.period.to)}, so với{" "}
-              {formatDate(overview.data.previous.from)} – {formatDate(overview.data.previous.to)}
+              {formatDate(overview.data.period.from)} –{" "}
+              {formatDate(overview.data.period.to)}, so với{" "}
+              {formatDate(overview.data.previous.from)} –{" "}
+              {formatDate(overview.data.previous.to)}
             </p>
           )}
         </div>
-        <div role="group" aria-label="Chọn kỳ thống kê" className="flex flex-wrap gap-1.5">
+        <div
+          role="group"
+          aria-label="Chọn kỳ thống kê"
+          className="flex flex-wrap gap-1.5"
+        >
           {(Object.keys(presetLabels) as Preset[]).map((value) => (
             <Button
+              className={"cursor-pointer"}
               key={value}
               size="sm"
               variant={preset === value ? "default" : "outline"}
@@ -112,20 +143,23 @@ export function PeriodStats({ hotelId }: { hotelId: string }) {
 
       {preset === "custom" && (
         <PartnerPanel className="flex flex-wrap items-end gap-3 p-4">
-          <label className="grid gap-1.5 text-xs font-semibold">
+          <label className="grid gap-1.5 text-xs font-semibold ">
             Từ ngày
-            <Input
-              type="date"
+            <DateInput
               value={custom.from ?? ""}
-              onChange={(event) => setCustom((value) => ({ ...value, from: event.target.value }))}
+              max={today}
+              onChange={(from) => setCustom((value) => ({ ...value, from }))}
+              className="min-w-40"
             />
           </label>
           <label className="grid gap-1.5 text-xs font-semibold">
             Đến ngày
-            <Input
-              type="date"
+            <DateInput
               value={custom.to ?? ""}
-              onChange={(event) => setCustom((value) => ({ ...value, to: event.target.value }))}
+              min={custom.from || undefined}
+              max={today}
+              onChange={(to) => setCustom((value) => ({ ...value, to }))}
+              className="min-w-40"
             />
           </label>
           {rangeError && (
@@ -137,9 +171,14 @@ export function PeriodStats({ hotelId }: { hotelId: string }) {
       )}
 
       {overview.error ? (
-        <ErrorPanel error={overview.error} onRetry={() => void overview.refetch()} />
+        <ErrorPanel
+          error={overview.error}
+          onRetry={() => void overview.refetch()}
+        />
       ) : !overview.data ? (
-        rangeError ? null : <KpiSkeleton />
+        rangeError ? null : (
+          <KpiSkeleton />
+        )
       ) : (
         <Kpis overview={overview.data} />
       )}
@@ -147,10 +186,17 @@ export function PeriodStats({ hotelId }: { hotelId: string }) {
       {range && (
         <PartnerPanel className="p-5">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-            <h3 className="mr-auto font-bold text-primary">Doanh thu & công suất</h3>
-            <div role="group" aria-label="Chỉ số dạng cột" className="flex flex-wrap gap-1.5">
+            <h3 className="mr-auto font-bold text-primary">
+              Doanh thu & công suất
+            </h3>
+            <div
+              role="group"
+              aria-label="Chỉ số dạng cột"
+              className="flex flex-wrap gap-1.5"
+            >
               {(Object.keys(barMetrics) as BarMetric[]).map((value) => (
                 <Button
+                  className={"cursor-pointer"}
                   key={value}
                   size="sm"
                   variant={chartMetric === value ? "outline" : "ghost"}
@@ -165,9 +211,12 @@ export function PeriodStats({ hotelId }: { hotelId: string }) {
             <div role="group" aria-label="Gộp theo" className="flex gap-1.5">
               {STATS_GRANULARITIES.map((value) => (
                 <Button
+                  className={"cursor-pointer"}
                   key={value}
                   size="sm"
-                  variant={effectiveGranularity === value ? "secondary" : "ghost"}
+                  variant={
+                    effectiveGranularity === value ? "secondary" : "ghost"
+                  }
                   aria-pressed={effectiveGranularity === value}
                   disabled={!fitsSeries(range, value)}
                   onClick={() => setGranularity(value)}
@@ -179,7 +228,10 @@ export function PeriodStats({ hotelId }: { hotelId: string }) {
           </div>
           {series.error ? (
             <div className="mt-4">
-              <ErrorPanel error={series.error} onRetry={() => void series.refetch()} />
+              <ErrorPanel
+                error={series.error}
+                onRetry={() => void series.refetch()}
+              />
             </div>
           ) : !series.data ? (
             <Skeleton className="mt-4 h-72 w-full" />
@@ -216,7 +268,7 @@ function KpiCard({
   hint?: string;
 }) {
   return (
-    <PartnerPanel className="p-4">
+    <PartnerPanel className="p-4 transition duration-200 hover:z-10 hover:scale-[1.03] hover:shadow-md motion-reduce:transition-none motion-reduce:hover:scale-100">
       <p className="text-xs font-semibold text-muted-foreground">{label}</p>
       <strong
         title={format(metric.value)}
@@ -240,23 +292,41 @@ function Kpis({ overview }: { overview: HotelStatsOverview }) {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4 cursor-pointer">
         <KpiCard
           label="Doanh thu phòng"
           metric={performance.roomRevenue}
           format={formatMoney}
           hint="Theo ngày lưu trú"
         />
-        <KpiCard label="Thực nhận" metric={cash.netEarnings} format={formatMoney} hint="Tiền vào ví, sau hoa hồng và hoàn tiền" />
+        <KpiCard
+          label="Thực nhận"
+          metric={cash.netEarnings}
+          format={formatMoney}
+          hint="Tiền vào ví, sau hoa hồng và hoàn tiền"
+        />
         <KpiCard
           label="Công suất"
           metric={performance.occupancyRate}
           format={formatPercent}
           hint={`${formatNumber(performance.roomNightsSold.value)}/${formatNumber(performance.roomNightsAvailable.value)} đêm phòng`}
         />
-        <KpiCard label="ADR (giá TB/đêm)" metric={performance.adr} format={formatMoney} />
-        <KpiCard label="RevPAR" metric={performance.revpar} format={formatMoney} hint="Doanh thu trên mỗi phòng có thể bán" />
-        <KpiCard label="Booking mới" metric={performance.bookingsCreated} format={formatNumber} />
+        <KpiCard
+          label="ADR (giá TB/đêm)"
+          metric={performance.adr}
+          format={formatMoney}
+        />
+        <KpiCard
+          label="RevPAR"
+          metric={performance.revpar}
+          format={formatMoney}
+          hint="Doanh thu trên mỗi phòng có thể bán"
+        />
+        <KpiCard
+          label="Booking mới"
+          metric={performance.bookingsCreated}
+          format={formatNumber}
+        />
         <KpiCard
           label="Huỷ phòng"
           metric={performance.cancellations}
@@ -274,10 +344,28 @@ function Kpis({ overview }: { overview: HotelStatsOverview }) {
 
       <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
         <PartnerPanel className="grid gap-x-6 gap-y-3 p-5 sm:grid-cols-2">
-          <SmallMetric label="Thời gian lưu trú TB" metric={performance.avgLengthOfStay} format={(v) => (v == null ? "—" : `${formatNumber(v)} đêm`)} />
-          <SmallMetric label="Đặt trước TB" metric={performance.avgLeadTimeDays} format={(v) => (v == null ? "—" : `${formatNumber(v)} ngày`)} />
-          <SmallMetric label="Hoàn tiền" metric={cash.refunds} format={formatMoney} good="down" />
-          <SmallMetric label="Hoa hồng nền tảng" metric={cash.commission} format={formatMoney} good="down" />
+          <SmallMetric
+            label="Thời gian lưu trú TB"
+            metric={performance.avgLengthOfStay}
+            format={(v) => (v == null ? "—" : `${formatNumber(v)} đêm`)}
+          />
+          <SmallMetric
+            label="Đặt trước TB"
+            metric={performance.avgLeadTimeDays}
+            format={(v) => (v == null ? "—" : `${formatNumber(v)} ngày`)}
+          />
+          <SmallMetric
+            label="Hoàn tiền"
+            metric={cash.refunds}
+            format={formatMoney}
+            good="down"
+          />
+          <SmallMetric
+            label="Hoa hồng nền tảng"
+            metric={cash.commission}
+            format={formatMoney}
+            good="down"
+          />
         </PartnerPanel>
         <PartnerPanel className="p-5">
           <h3 className="text-sm font-bold text-primary">Ví khách sạn</h3>
@@ -285,7 +373,9 @@ function Kpis({ overview }: { overview: HotelStatsOverview }) {
             <dl className="mt-3 space-y-2 text-sm">
               <div className="flex justify-between gap-3">
                 <dt className="text-muted-foreground">Khả dụng</dt>
-                <dd className="font-bold tabular-nums text-primary">{formatMoney(wallet.available)}</dd>
+                <dd className="font-bold tabular-nums text-primary">
+                  {formatMoney(wallet.available)}
+                </dd>
               </div>
               <div className="flex justify-between gap-3">
                 <dt className="text-muted-foreground">Đang chờ</dt>
@@ -297,7 +387,9 @@ function Kpis({ overview }: { overview: HotelStatsOverview }) {
               </div>
             </dl>
           ) : (
-            <p className="mt-3 text-sm text-muted-foreground">Khách sạn chưa có ví.</p>
+            <p className="mt-3 text-sm text-muted-foreground">
+              Khách sạn chưa có ví.
+            </p>
           )}
         </PartnerPanel>
       </div>
@@ -320,7 +412,9 @@ function SmallMetric({
     <div className="flex items-baseline justify-between gap-3">
       <span className="text-sm text-muted-foreground">{label}</span>
       <span className="flex items-baseline gap-2">
-        <strong className="text-sm tabular-nums text-primary">{format(metric.value)}</strong>
+        <strong className="text-sm tabular-nums text-primary">
+          {format(metric.value)}
+        </strong>
         <Delta metric={metric} good={good} />
       </span>
     </div>

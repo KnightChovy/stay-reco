@@ -68,12 +68,12 @@ function PaginationLink({
 
 function PaginationPrevious({
   className,
-  text = 'Previous',
+  text = 'Trước',
   ...props
 }: React.ComponentProps<typeof PaginationLink> & { text?: string }) {
   return (
     <PaginationLink
-      aria-label="Go to previous page"
+      aria-label="Trang trước"
       size="default"
       className={cn('pl-1.5!', className)}
       {...props}
@@ -86,12 +86,12 @@ function PaginationPrevious({
 
 function PaginationNext({
   className,
-  text = 'Next',
+  text = 'Sau',
   ...props
 }: React.ComponentProps<typeof PaginationLink> & { text?: string }) {
   return (
     <PaginationLink
-      aria-label="Go to next page"
+      aria-label="Trang sau"
       size="default"
       className={cn('pr-1.5!', className)}
       {...props}
@@ -117,7 +117,7 @@ function PaginationEllipsis({
       {...props}
     >
       <MoreHorizontalIcon />
-      <span className="sr-only">More pages</span>
+      <span className="sr-only">Các trang khác</span>
     </span>
   );
 }

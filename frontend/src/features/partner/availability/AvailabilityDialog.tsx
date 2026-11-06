@@ -21,7 +21,7 @@ import {
 } from "@/lib/api-error";
 import * as partnerService from "@/services/partner.service";
 import { partnerKeys, usePartnerMutation } from "../api/partner-queries";
-import { FormAlert, FormField, SubmitButton, toOptionalNumber } from "../components";
+import { DateInput, FormAlert, FormField, SubmitButton, toOptionalNumber } from "../components";
 import { formatDate } from "../lib/labels";
 
 export type AvailabilityDraft = { roomTypeId: string; from: string; to: string; onSale?: number };
@@ -135,10 +135,10 @@ function AvailabilityForm({
       </FormField>
       <div className="grid gap-4 sm:grid-cols-2">
         <FormField label="Từ ngày" required error={errors.from}>
-          <Input type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
+          <DateInput value={from} onChange={setFrom} invalid={!!errors.from} />
         </FormField>
         <FormField label="Đến ngày" required error={errors.to} hint={`Tối đa ${PRICING_LIMITS.availabilityMaxDays} ngày.`}>
-          <Input type="date" value={to} min={from} onChange={(event) => setTo(event.target.value)} />
+          <DateInput value={to} min={from || undefined} onChange={setTo} invalid={!!errors.to} />
         </FormField>
       </div>
       <FormField label="Số phòng mở bán mỗi ngày" required error={errors.onSale} hint="0 = đóng bán.">

@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import { useMemo, useState } from 'react';
-import Link from 'next/link';
-import type { BookingStatus, PaymentStatus } from '@stayreco/shared';
+import { useMemo, useState } from "react";
+import Link from "next/link";
+import type { BookingStatus, PaymentStatus } from "@stayreco/shared";
 import {
   CalendarDays,
   Check,
@@ -11,23 +11,23 @@ import {
   Loader2,
   ReceiptText,
   Search,
-} from 'lucide-react';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
+} from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
-import { Skeleton } from '@/components/ui/skeleton';
-import Pagination from '@/components/common/pagination/Pagination';
-import { useStaffHotel } from '@/features/staff/components/StaffHotelProvider';
-import { useHotelBookings } from '@/features/staff/api/staff-queries';
+} from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import Pagination from "@/components/common/pagination/Pagination";
+import { useStaffHotel } from "@/features/staff/components/StaffHotelProvider";
+import { useHotelBookings } from "@/features/staff/api/staff-queries";
 import {
   bookingStatusLabels,
   formatCalendarDate,
@@ -35,35 +35,45 @@ import {
   formatMoney,
   paymentStatusLabels,
   toneClasses,
-} from '@/features/staff/lib/labels';
-import { getApiErrorMessage } from '@/lib/api-error';
-import { useDebounce } from '@/hooks/use-debounce';
+} from "@/features/staff/lib/labels";
+import { getApiErrorMessage } from "@/lib/api-error";
+import { useDebounce } from "@/hooks/use-debounce";
 
-type StatusTab = 'all' | 'pending' | 'confirmed' | 'staying' | 'completed' | 'cancelled';
+type StatusTab =
+  | "all"
+  | "pending"
+  | "confirmed"
+  | "staying"
+  | "completed"
+  | "cancelled";
 
-const STATUS_TABS: { id: StatusTab; label: string; statuses?: BookingStatus[] }[] = [
-  { id: 'all', label: 'Tất cả' },
-  { id: 'pending', label: 'Chờ thanh toán', statuses: ['PENDING'] },
-  { id: 'confirmed', label: 'Đã xác nhận', statuses: ['CONFIRMED'] },
-  { id: 'staying', label: 'Đang lưu trú', statuses: ['CHECKED_IN'] },
-  { id: 'completed', label: 'Đã hoàn tất', statuses: ['COMPLETED', 'NO_SHOW'] },
-  { id: 'cancelled', label: 'Đã huỷ', statuses: ['CANCELLED', 'EXPIRED'] },
+const STATUS_TABS: {
+  id: StatusTab;
+  label: string;
+  statuses?: BookingStatus[];
+}[] = [
+  { id: "all", label: "Tất cả" },
+  { id: "pending", label: "Chờ thanh toán", statuses: ["PENDING"] },
+  { id: "confirmed", label: "Đã xác nhận", statuses: ["CONFIRMED"] },
+  { id: "staying", label: "Đang lưu trú", statuses: ["CHECKED_IN"] },
+  { id: "completed", label: "Đã hoàn tất", statuses: ["COMPLETED", "NO_SHOW"] },
+  { id: "cancelled", label: "Đã huỷ", statuses: ["CANCELLED", "EXPIRED"] },
 ];
 
-const PAYMENT_OPTIONS: { value: 'all' | PaymentStatus; label: string }[] = [
-  { value: 'all', label: 'Tất cả thanh toán' },
-  { value: 'UNPAID', label: 'Chưa thanh toán' },
-  { value: 'PAID', label: 'Đã thanh toán' },
-  { value: 'REFUND_PENDING', label: 'Chờ hoàn tiền' },
-  { value: 'PARTIALLY_REFUNDED', label: 'Đã hoàn một phần' },
-  { value: 'REFUNDED', label: 'Đã hoàn tiền' },
-  { value: 'FAILED', label: 'Thanh toán thất bại' },
+const PAYMENT_OPTIONS: { value: "all" | PaymentStatus; label: string }[] = [
+  { value: "all", label: "Tất cả thanh toán" },
+  { value: "UNPAID", label: "Chưa thanh toán" },
+  { value: "PAID", label: "Đã thanh toán" },
+  { value: "REFUND_PENDING", label: "Chờ hoàn tiền" },
+  { value: "PARTIALLY_REFUNDED", label: "Đã hoàn một phần" },
+  { value: "REFUNDED", label: "Đã hoàn tiền" },
+  { value: "FAILED", label: "Thanh toán thất bại" },
 ];
 
 const SORT_OPTIONS = [
-  { value: 'check-in-asc', label: 'Check-in sớm nhất' },
-  { value: 'check-in-desc', label: 'Check-in muộn nhất' },
-  { value: 'created-desc', label: 'Mới đặt gần đây' },
+  { value: "check-in-asc", label: "Check-in sớm nhất" },
+  { value: "check-in-desc", label: "Check-in muộn nhất" },
+  { value: "created-desc", label: "Mới đặt gần đây" },
 ] as const;
 
 const PAGE_SIZE = 10;
@@ -72,20 +82,21 @@ export default function StaffBookingsPage() {
   const { hotel, isLoading: hotelLoading } = useStaffHotel();
   const hotelId = hotel?.summary.id;
 
-  const [tab, setTab] = useState<StatusTab>('all');
-  const [search, setSearch] = useState('');
+  const [tab, setTab] = useState<StatusTab>("all");
+  const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search);
-  const [payment, setPayment] = useState<'all' | PaymentStatus>('all');
-  const [sort, setSort] = useState<(typeof SORT_OPTIONS)[number]['value']>('check-in-asc');
-  const [checkInFrom, setCheckInFrom] = useState('');
-  const [checkInTo, setCheckInTo] = useState('');
+  const [payment, setPayment] = useState<"all" | PaymentStatus>("all");
+  const [sort, setSort] =
+    useState<(typeof SORT_OPTIONS)[number]["value"]>("check-in-asc");
+  const [checkInFrom, setCheckInFrom] = useState("");
+  const [checkInTo, setCheckInTo] = useState("");
   const [page, setPage] = useState(1);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const params = useMemo(
     () => ({
       status: STATUS_TABS.find((item) => item.id === tab)?.statuses,
-      paymentStatus: payment === 'all' ? undefined : [payment],
+      paymentStatus: payment === "all" ? undefined : [payment],
       search: debouncedSearch.trim() || undefined,
       checkInFrom: checkInFrom || undefined,
       checkInTo: checkInTo || undefined,
@@ -96,7 +107,10 @@ export default function StaffBookingsPage() {
     [tab, payment, debouncedSearch, checkInFrom, checkInTo, sort, page],
   );
 
-  const { data, isLoading, isFetching, error, refetch } = useHotelBookings(hotelId, params);
+  const { data, isLoading, isFetching, error, refetch } = useHotelBookings(
+    hotelId,
+    params,
+  );
   const bookings = data?.bookings ?? [];
   const meta = data?.meta;
 
@@ -109,7 +123,18 @@ export default function StaffBookingsPage() {
   };
 
   const exportCsv = () => {
-    const header = ['Mã đơn', 'Hạng phòng', 'Check-in', 'Check-out', 'Số đêm', 'Phòng', 'Khách', 'Tổng tiền', 'Thanh toán', 'Trạng thái'];
+    const header = [
+      "Mã đơn",
+      "Hạng phòng",
+      "Check-in",
+      "Check-out",
+      "Số đêm",
+      "Phòng",
+      "Khách",
+      "Tổng tiền",
+      "Thanh toán",
+      "Trạng thái",
+    ];
     const lines = bookings.map((booking) => [
       booking.code,
       booking.roomType.name,
@@ -123,30 +148,36 @@ export default function StaffBookingsPage() {
       bookingStatusLabels[booking.status].label,
     ]);
     const csv = [header, ...lines]
-      .map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(','))
-      .join('\n');
-    const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
+      .map((row) =>
+        row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(","),
+      )
+      .join("\n");
+    const blob = new Blob([`\uFEFF${csv}`], {
+      type: "text/csv;charset=utf-8;",
+    });
     const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
+    const link = document.createElement("a");
     link.href = url;
-    link.download = `stayreco-bookings-${hotelId ?? 'hotel'}.csv`;
+    link.download = `stayreco-bookings-${hotelId ?? "hotel"}.csv`;
     link.click();
     URL.revokeObjectURL(url);
   };
 
   const clearFilters = () => {
-    setTab('all');
-    setSearch('');
-    setPayment('all');
-    setSort('check-in-asc');
-    setCheckInFrom('');
-    setCheckInTo('');
+    setTab("all");
+    setSearch("");
+    setPayment("all");
+    setSort("check-in-asc");
+    setCheckInFrom("");
+    setCheckInTo("");
     setPage(1);
   };
 
   const activeFilters = [
-    tab !== 'all' ? STATUS_TABS.find((item) => item.id === tab)?.label : null,
-    payment !== 'all' ? PAYMENT_OPTIONS.find((item) => item.value === payment)?.label : null,
+    tab !== "all" ? STATUS_TABS.find((item) => item.id === tab)?.label : null,
+    payment !== "all"
+      ? PAYMENT_OPTIONS.find((item) => item.value === payment)?.label
+      : null,
     checkInFrom ? `Từ ${formatCalendarDate(checkInFrom)}` : null,
     checkInTo ? `Đến ${formatCalendarDate(checkInTo)}` : null,
   ].filter(Boolean);
@@ -167,7 +198,8 @@ export default function StaffBookingsPage() {
             Danh sách đặt phòng
           </h1>
           <p className="mt-0.5 text-xs text-muted-foreground lg:text-sm">
-            {hotel?.summary.name ?? 'Khách sạn của bạn'} · chỉ đọc, cần quyền BOOKING hoặc REFUND
+            {hotel?.summary.name ?? "Khách sạn của bạn"} · chỉ đọc, cần quyền
+            BOOKING hoặc REFUND
           </p>
         </div>
 
@@ -179,7 +211,7 @@ export default function StaffBookingsPage() {
                 Tổng đơn khớp bộ lọc
               </span>
               <span className="text-xs font-bold text-foreground">
-                {meta?.total ?? (isLoading ? '…' : bookings.length)} đơn
+                {meta?.total ?? (isLoading ? "…" : bookings.length)} đơn
               </span>
             </div>
           </div>
@@ -207,8 +239,8 @@ export default function StaffBookingsPage() {
               }}
               className={`flex items-center gap-2 whitespace-nowrap rounded-lg px-3.5 py-2 text-xs font-semibold transition-colors ${
                 tab === item.id
-                  ? 'bg-primary text-primary-foreground shadow-2xs'
-                  : 'bg-slate-100 text-muted-foreground hover:bg-slate-200/70 hover:text-foreground'
+                  ? "bg-primary text-primary-foreground shadow-2xs"
+                  : "bg-slate-100 text-muted-foreground hover:bg-slate-200/70 hover:text-foreground"
               }`}
             >
               {item.label}
@@ -260,15 +292,18 @@ export default function StaffBookingsPage() {
             <Select
               value={payment}
               onValueChange={(value) => {
-                if (typeof value === 'string') {
-                  setPayment(value as 'all' | PaymentStatus);
+                if (typeof value === "string") {
+                  setPayment(value as "all" | PaymentStatus);
                   resetPage();
                 }
               }}
             >
               <SelectTrigger className="h-11 w-full bg-slate-50 text-xs font-medium">
                 <SelectValue>
-                  {(value) => PAYMENT_OPTIONS.find((item) => item.value === value)?.label ?? PAYMENT_OPTIONS[0].label}
+                  {(value) =>
+                    PAYMENT_OPTIONS.find((item) => item.value === value)
+                      ?.label ?? PAYMENT_OPTIONS[0].label
+                  }
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
@@ -285,15 +320,18 @@ export default function StaffBookingsPage() {
             <Select
               value={sort}
               onValueChange={(value) => {
-                if (typeof value === 'string') {
-                  setSort(value as (typeof SORT_OPTIONS)[number]['value']);
+                if (typeof value === "string") {
+                  setSort(value as (typeof SORT_OPTIONS)[number]["value"]);
                   resetPage();
                 }
               }}
             >
               <SelectTrigger className="h-11 w-full bg-slate-50 text-xs font-medium">
                 <SelectValue>
-                  {(value) => SORT_OPTIONS.find((item) => item.value === value)?.label ?? SORT_OPTIONS[0].label}
+                  {(value) =>
+                    SORT_OPTIONS.find((item) => item.value === value)?.label ??
+                    SORT_OPTIONS[0].label
+                  }
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
@@ -309,9 +347,15 @@ export default function StaffBookingsPage() {
 
         {activeFilters.length > 0 && (
           <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
-            <span className="text-xs font-medium text-muted-foreground">Đang lọc:</span>
+            <span className="text-xs font-medium text-muted-foreground">
+              Đang lọc:
+            </span>
             {activeFilters.map((label) => (
-              <Badge key={label} variant="outline" className="bg-[#EAF2F7] text-[#1b4360]">
+              <Badge
+                key={label}
+                variant="outline"
+                className="bg-[#EAF2F7] text-[#1b4360]"
+              >
                 {label}
               </Badge>
             ))}
@@ -333,7 +377,11 @@ export default function StaffBookingsPage() {
               <AlertTitle>Không tải được danh sách đặt phòng</AlertTitle>
               <AlertDescription className="mt-1 flex flex-col items-start gap-3">
                 <span>{getApiErrorMessage(error)}</span>
-                <Button size="sm" variant="outline" onClick={() => void refetch()}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void refetch()}
+                >
                   Thử lại
                 </Button>
               </AlertDescription>
@@ -368,9 +416,13 @@ export default function StaffBookingsPage() {
                   {!isLoading &&
                     bookings.map((booking) => {
                       const status = bookingStatusLabels[booking.status];
-                      const paymentStatus = paymentStatusLabels[booking.paymentStatus];
+                      const paymentStatus =
+                        paymentStatusLabels[booking.paymentStatus];
                       return (
-                        <tr key={booking.id} className="transition-colors hover:bg-slate-50/70">
+                        <tr
+                          key={booking.id}
+                          className="transition-colors hover:bg-slate-50/70"
+                        >
                           <td className="py-3.5 pl-5 pr-3">
                             <div className="flex items-center gap-1.5">
                               <Link
@@ -398,7 +450,9 @@ export default function StaffBookingsPage() {
                           </td>
 
                           <td className="px-3 py-3.5">
-                            <span className="block font-semibold text-foreground">{booking.roomType.name}</span>
+                            <span className="block font-semibold text-foreground">
+                              {booking.roomType.name}
+                            </span>
                             <span className="text-[11px] text-muted-foreground">
                               {booking.hotel.name}
                             </span>
@@ -407,9 +461,12 @@ export default function StaffBookingsPage() {
                           <td className="px-3 py-3.5">
                             <span className="flex items-center gap-1.5 font-semibold text-foreground">
                               <CalendarDays className="size-3.5 text-muted-foreground" />
-                              {formatCalendarDate(booking.checkIn)} → {formatCalendarDate(booking.checkOut)}
+                              {formatCalendarDate(booking.checkIn)} →{" "}
+                              {formatCalendarDate(booking.checkOut)}
                             </span>
-                            <span className="text-[11px] text-muted-foreground">{booking.nights} đêm</span>
+                            <span className="text-[11px] text-muted-foreground">
+                              {booking.nights} đêm
+                            </span>
                           </td>
 
                           <td className="px-3 py-3.5 text-center">
@@ -426,13 +483,19 @@ export default function StaffBookingsPage() {
                           </td>
 
                           <td className="px-3 py-3.5 text-center">
-                            <Badge variant="outline" className={`text-[10px] font-semibold ${toneClasses[paymentStatus.tone]}`}>
+                            <Badge
+                              variant="outline"
+                              className={`text-[10px] font-semibold ${toneClasses[paymentStatus.tone]}`}
+                            >
                               {paymentStatus.label}
                             </Badge>
                           </td>
 
                           <td className="px-3 py-3.5 text-center">
-                            <Badge variant="outline" className={`text-[10px] font-semibold ${toneClasses[status.tone]}`}>
+                            <Badge
+                              variant="outline"
+                              className={`text-[10px] font-semibold ${toneClasses[status.tone]}`}
+                            >
                               {status.label}
                             </Badge>
                           </td>
@@ -440,13 +503,20 @@ export default function StaffBookingsPage() {
                           <td className="py-3.5 pr-5 pl-3 text-center">
                             <div className="flex items-center justify-center gap-1.5">
                               <Link href={`/staff/bookings/${booking.id}`}>
-                                <Button size="sm" variant="outline" className="h-8 text-[11px] font-semibold">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-8 text-[11px] font-semibold"
+                                >
                                   Chi tiết
                                 </Button>
                               </Link>
-                              {booking.paymentStatus === 'REFUND_PENDING' && (
+                              {booking.paymentStatus === "REFUND_PENDING" && (
                                 <Link href={`/staff/bookings/${booking.id}`}>
-                                  <Button size="sm" className="h-8 bg-[#934a33] text-[11px] font-semibold text-white hover:bg-[#7a341e]">
+                                  <Button
+                                    size="sm"
+                                    className="h-8 bg-[#934a33] text-[11px] font-semibold text-white hover:bg-[#7a341e]"
+                                  >
                                     Hoàn tiền
                                   </Button>
                                 </Link>
@@ -463,9 +533,18 @@ export default function StaffBookingsPage() {
             {!isLoading && bookings.length === 0 && (
               <div className="flex flex-col items-center gap-2 px-5 py-14 text-center">
                 <ReceiptText className="size-9 text-muted-foreground" />
-                <p className="text-sm font-semibold text-foreground">Không có đơn đặt phòng phù hợp</p>
-                <p className="text-xs text-muted-foreground">Thử đổi trạng thái, ngày hoặc từ khoá tìm kiếm.</p>
-                <Button size="sm" variant="outline" onClick={clearFilters} className="mt-2">
+                <p className="text-sm font-semibold text-foreground">
+                  Không có đơn đặt phòng phù hợp
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Thử đổi trạng thái, ngày hoặc từ khoá tìm kiếm.
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={clearFilters}
+                  className="mt-2"
+                >
                   Xoá bộ lọc
                 </Button>
               </div>
@@ -481,7 +560,7 @@ export default function StaffBookingsPage() {
               <span>
                 {meta && meta.total > 0
                   ? `Hiển thị ${(meta.page - 1) * meta.pageSize + 1} - ${Math.min(meta.page * meta.pageSize, meta.total)} trên ${meta.total} đơn`
-                  : 'Không có đơn nào'}
+                  : "Không có đơn nào"}
               </span>
               {meta && meta.totalPages > 1 && (
                 <Pagination

@@ -9,8 +9,8 @@ export default function PartnerLoyalty() {
       phase="Phase 4: Thân thiết, khuyến mãi & đánh giá"
       icon={UsersRound}
       upcoming={[
-        "Chương trình khách hàng thân thiết theo khách sạn",
-        "Thành viên và điểm thưởng",
+        "Giữ chân khách quen bằng điểm thưởng và hạng thành viên",
+        "Nhận biết khách quay lại để chăm sóc tốt hơn",
       ]}
     />
   );

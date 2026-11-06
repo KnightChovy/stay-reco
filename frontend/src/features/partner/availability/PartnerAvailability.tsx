@@ -1,14 +1,15 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { BedDouble, ChevronLeft, ChevronRight, SlidersHorizontal } from "lucide-react";
 import type { AvailabilityDay } from "@stayreco/shared";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { cn } from "@/lib/utils";
 import { useAvailability, useRoomTypes } from "../api/partner-queries";
 import {
+  DateInput,
   EmptyPanel,
   ErrorPanel,
   FormField,
@@ -79,6 +80,12 @@ function AvailabilityWorkspace({ hotelId }: { hotelId: string }) {
         icon={BedDouble}
         title="Chưa có loại phòng"
         description="Lịch khả dụng tính theo từng loại phòng. Hãy tạo loại phòng và phòng ở Kho phòng trước."
+        action={
+          <Link href="/partner/rooms" className={buttonVariants()}>
+            <BedDouble />
+            Tạo loại phòng
+          </Link>
+        }
       />
     );
   }
@@ -88,7 +95,7 @@ function AvailabilityWorkspace({ hotelId }: { hotelId: string }) {
     <PartnerPanel className="overflow-hidden p-0">
       <div className="flex flex-wrap items-end gap-3 border-b px-5 py-4">
         <FormField label="Từ ngày">
-          <Input type="date" value={from} onChange={(event) => event.target.value && setFrom(event.target.value)} />
+          <DateInput value={from} onChange={(value) => value && setFrom(value)} className="min-w-40" />
         </FormField>
         <FormField label="Hiển thị">
           <NativeSelect value={span} onChange={(event) => setSpan(Number(event.target.value) as (typeof SPANS)[number])}>

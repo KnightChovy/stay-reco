@@ -2,7 +2,14 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { ChevronRight, CircleAlert, CircleCheck, Info, TriangleAlert, type LucideIcon } from "lucide-react";
+import {
+  ChevronRight,
+  CircleAlert,
+  CircleCheck,
+  Info,
+  TriangleAlert,
+  type LucideIcon,
+} from "lucide-react";
 import {
   ACTION_ITEM_TYPES,
   SETUP_STEPS,
@@ -18,7 +25,10 @@ import { formatDate, formatDateTime } from "../lib/labels";
 
 const VISIBLE_ITEMS = 5;
 
-const severityStyles: Record<ActionItemSeverity, { icon: LucideIcon; className: string }> = {
+const severityStyles: Record<
+  ActionItemSeverity,
+  { icon: LucideIcon; className: string }
+> = {
   CRITICAL: { icon: CircleAlert, className: "bg-danger-soft text-danger" },
   WARNING: { icon: TriangleAlert, className: "bg-warning-soft text-warning" },
   INFO: { icon: Info, className: "bg-info-soft text-info" },
@@ -35,7 +45,11 @@ const setupStepLabels: Record<(typeof SETUP_STEPS)[number], string> = {
 const knownTypes = new Set<string>(ACTION_ITEM_TYPES);
 
 /** The backend sends codes and parameters; the wording and the target screen belong to the FE (§4.1). */
-function present(item: ActionItem): { title: string; detail?: string; href: string } {
+function present(item: ActionItem): {
+  title: string;
+  detail?: string;
+  href: string;
+} {
   switch (item.type) {
     case "VERIFICATION_NEEDS_REVISION":
       return {
@@ -76,7 +90,9 @@ function present(item: ActionItem): { title: string; detail?: string; href: stri
     case "NO_AVAILABILITY_DATES":
       return {
         title: `${item.count} ngày hết phòng do đóng bán`,
-        detail: item.params.dates.slice(0, 3).map(formatDate).join(", ") + (item.params.dates.length > 3 ? "…" : ""),
+        detail:
+          item.params.dates.slice(0, 3).map(formatDate).join(", ") +
+          (item.params.dates.length > 3 ? "…" : ""),
         href: "/partner/availability",
       };
     case "STAFF_INVITES_PENDING":
@@ -115,7 +131,10 @@ export function ActionItems({ hotelId }: { hotelId: string }) {
     [query.data],
   );
 
-  if (query.error) return <ErrorPanel error={query.error} onRetry={() => void query.refetch()} />;
+  if (query.error)
+    return (
+      <ErrorPanel error={query.error} onRetry={() => void query.refetch()} />
+    );
 
   const visible = showAll ? items : items.slice(0, VISIBLE_ITEMS);
 
@@ -123,7 +142,11 @@ export function ActionItems({ hotelId }: { hotelId: string }) {
     <PartnerPanel className="overflow-hidden p-0">
       <div className="flex items-center justify-between border-b px-5 py-4">
         <h2 className="font-bold text-primary">Việc cần làm</h2>
-        {items.length > 0 && <span className="text-xs font-semibold text-muted-foreground">{items.length} việc</span>}
+        {items.length > 0 && (
+          <span className="text-xs font-semibold text-muted-foreground">
+            {items.length} việc
+          </span>
+        )}
       </div>
       {query.isLoading ? (
         <div className="space-y-2 p-5">
@@ -143,15 +166,32 @@ export function ActionItems({ hotelId }: { hotelId: string }) {
               const { icon: Icon, className } = severityStyles[item.severity];
               return (
                 <li key={item.type}>
-                  <Link href={href} className="flex items-center gap-3 px-5 py-3 hover:bg-muted">
-                    <span className={cn("grid size-8 shrink-0 place-items-center rounded-lg", className)}>
+                  <Link
+                    href={href}
+                    className="flex items-center gap-3 px-5 py-3 hover:bg-muted"
+                  >
+                    <span
+                      className={cn(
+                        "grid size-8 shrink-0 place-items-center rounded-lg",
+                        className,
+                      )}
+                    >
                       <Icon size={16} />
                     </span>
                     <span className="min-w-0 flex-1">
-                      <strong className="block text-sm text-primary">{title}</strong>
-                      {detail && <span className="block truncate text-xs text-muted-foreground">{detail}</span>}
+                      <strong className="block text-sm text-primary">
+                        {title}
+                      </strong>
+                      {detail && (
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {detail}
+                        </span>
+                      )}
                     </span>
-                    <ChevronRight size={16} className="shrink-0 text-muted-foreground" />
+                    <ChevronRight
+                      size={16}
+                      className="shrink-0 text-muted-foreground"
+                    />
                   </Link>
                 </li>
               );
@@ -159,7 +199,11 @@ export function ActionItems({ hotelId }: { hotelId: string }) {
           </ul>
           {items.length > VISIBLE_ITEMS && (
             <div className="border-t px-5 py-2">
-              <Button variant="ghost" size="sm" onClick={() => setShowAll((value) => !value)}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowAll((value) => !value)}
+              >
                 {showAll ? "Thu gọn" : `Xem tất cả (${items.length})`}
               </Button>
             </div>

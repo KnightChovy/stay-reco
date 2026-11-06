@@ -1,13 +1,21 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { Save } from "lucide-react";
 import { roomConfigSchema, type Hotel, type RoomConfigInput } from "@stayreco/shared";
 import { Input } from "@/components/ui/input";
 import { getApiErrorMessage, getApiFieldErrors, validateWith, type FieldErrors } from "@/lib/api-error";
 import * as partnerService from "@/services/partner.service";
 import { partnerKeys, usePartnerMutation } from "../api/partner-queries";
-import { FormAlert, FormField, SubmitButton, toOptionalNumber, usePartnerHotel } from "../components";
+import {
+  countChanges,
+  FormAlert,
+  FormField,
+  savedMessage,
+  StickySaveBar,
+  toOptionalNumber,
+  usePartnerHotel,
+  useUnsavedChanges,
+} from "../components";
 import { formatMoney } from "../lib/labels";
 
 /** Required before any room can be created; `totalRooms` caps the number of rooms (ROOM_LIMIT_REACHED). */
@@ -20,9 +28,15 @@ export function RoomConfigForm({ hotel }: { hotel: Hotel }) {
 
   const mutation = usePartnerMutation((input: RoomConfigInput) => partnerService.setRoomConfig(hotel.id, input), {
     invalidate: () => [partnerKeys.hotel(hotel.id)],
-    successMessage: "Đã lưu cấu hình phòng.",
+    successMessage: () => savedMessage("cấu hình phòng"),
     errorNotice: false,
   });
+  const saved = {
+    totalRooms: hotel.roomConfig?.totalRooms.toString() ?? "",
+    basePrice: hotel.roomConfig?.basePrice.toString() ?? "",
+  };
+  const changes = canEdit ? countChanges({ totalRooms: totalRooms.trim(), basePrice: basePrice.trim() }, saved) : 0;
+  useUnsavedChanges(changes > 0);
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -84,14 +98,17 @@ export function RoomConfigForm({ hotel }: { hotel: Hotel }) {
         </FormField>
       </div>
       <FormAlert message={formError} />
-      {canEdit && (
-        <div className="flex justify-end">
-          <SubmitButton pending={mutation.isPending}>
-            <Save />
-            Lưu cấu hình
-          </SubmitButton>
-        </div>
-      )}
+      <StickySaveBar
+        changes={changes}
+        pending={mutation.isPending}
+        onDiscard={() => {
+          setTotalRooms(saved.totalRooms);
+          setBasePrice(saved.basePrice);
+          setErrors({});
+          setFormError(undefined);
+        }}
+        submitLabel="Lưu cấu hình"
+      />
     </form>
   );
 }

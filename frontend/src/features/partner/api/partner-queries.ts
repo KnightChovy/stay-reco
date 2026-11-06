@@ -45,7 +45,7 @@ export const partnerKeys = {
     [...partnerKeys.statsOf(hotelId), "occupancy-forecast", days] as const,
 };
 
-const catalogKeys = {
+export const catalogKeys = {
   amenities: ["catalog", "amenities"] as const,
   bedTypes: ["catalog", "bed-types"] as const,
 };

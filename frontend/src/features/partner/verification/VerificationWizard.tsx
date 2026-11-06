@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ChangeEvent, type FormEvent } from "react";
+import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import {
   Building2,
   Check,
@@ -45,6 +45,7 @@ import {
   toOptionalNumber,
   toOptionalText,
   usePartnerActions,
+  useUnsavedChanges,
 } from "../components";
 import { documentTypeLabels } from "../lib/labels";
 
@@ -170,11 +171,17 @@ export function VerificationWizard({
 }) {
   const { showNotice } = usePartnerActions();
   const [step, setStep] = useState(0);
-  const [values, setValues] = useState(() => initialValues(hotel, email, previous));
+  const [initial] = useState(() => initialValues(hotel, email, previous));
+  const [values, setValues] = useState(initial);
   const [documents, setDocuments] = useState<Partial<Record<DocumentType, DocumentSlot>>>({});
   const [commitment, setCommitment] = useState(false);
+  // Typed fields and uploaded files would be lost on leaving: the request is only stored when it is sent.
+  useUnsavedChanges(
+    JSON.stringify(values) !== JSON.stringify(initial) || Object.values(documents).some((slot) => slot?.fileId),
+  );
   const [errors, setErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string>();
+  const rootRef = useRef<HTMLDivElement>(null);
 
   const submit = usePartnerMutation(
     (input: SubmitVerificationInput) => partnerService.submitVerification(hotel.id, input),
@@ -254,17 +261,32 @@ export function VerificationWizard({
     }
   }
 
+  /** Brings the new step into view: on a long page the next step would otherwise start off screen. */
+  function goTo(index: number) {
+    setStep(index);
+    requestAnimationFrame(() => rootRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  }
+
+  function revealFirstError() {
+    requestAnimationFrame(() => {
+      const invalid = rootRef.current?.querySelector<HTMLElement>('[aria-invalid="true"], [role="alert"]');
+      invalid?.scrollIntoView({ behavior: "smooth", block: "center" });
+      if (invalid?.matches("input, textarea, select")) invalid.focus({ preventScroll: true });
+    });
+  }
+
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
     if (step < steps.length - 1) {
-      if (validateStep(step)) setStep(step + 1);
+      if (validateStep(step)) goTo(step + 1);
+      else revealFirstError();
       return;
     }
     setFormError(undefined);
     const result = validateWith(submitVerificationSchema, buildBody());
     if (result.errors) {
       setErrors(result.errors);
-      setStep(Math.min(...Object.keys(result.errors).map(stepOfField)));
+      goTo(Math.min(...Object.keys(result.errors).map(stepOfField)));
       return;
     }
     setErrors({});
@@ -278,9 +300,9 @@ export function VerificationWizard({
           showNotice(getApiErrorMessage(error), "error");
           onSubmitted();
         } else if (code === "VERIFICATION_DOCUMENTS_MISSING") {
-          setStep(2);
+          goTo(2);
         } else if (Object.keys(fieldErrors).length) {
-          setStep(Math.min(...Object.keys(fieldErrors).map(stepOfField)));
+          goTo(Math.min(...Object.keys(fieldErrors).map(stepOfField)));
         }
       },
     });
@@ -325,15 +347,19 @@ export function VerificationWizard({
   const requiredUploaded = REQUIRED_VERIFICATION_DOCUMENTS.filter((type) => documents[type]?.fileId).length;
 
   return (
-    <div className="space-y-5">
-      <PartnerPanel className="p-4">
-        <ol className="grid gap-2 md:grid-cols-4">
+    <div ref={rootRef} className="scroll-mt-24 space-y-5">
+      <PartnerPanel className="p-3 sm:p-4">
+        <p className="mb-2 px-1 text-xs font-semibold text-muted-foreground md:hidden">
+          Bước {step + 1}/{steps.length}: {current.title}
+        </p>
+        <ol className="grid grid-cols-4 gap-2">
           {steps.map((item, index) => (
             <li
               key={item.title}
               aria-current={index === step ? "step" : undefined}
+              aria-label={`Bước ${index + 1}: ${item.title}`}
               className={cn(
-                "flex items-center gap-3 rounded-xl p-3",
+                "flex items-center justify-center gap-3 rounded-xl p-2 md:justify-start md:p-3",
                 index === step
                   ? "bg-primary text-primary-foreground"
                   : index < step
@@ -344,12 +370,12 @@ export function VerificationWizard({
               <span
                 className={cn(
                   "grid size-8 shrink-0 place-items-center rounded-full text-xs font-bold",
-                  index === step ? "bg-card text-primary" : index < step ? "bg-success text-success-foreground" : "bg-card",
+                  index === step ? "bg-card text-primary" : index < step ? "bg-success text-white" : "bg-card",
                 )}
               >
                 {index < step ? <Check size={15} /> : index + 1}
               </span>
-              <div>
+              <div className="hidden min-w-0 md:block">
                 <strong className="block text-sm">{item.title}</strong>
                 <span className="text-[10px] opacity-75">{item.subtitle}</span>
               </div>
@@ -358,7 +384,8 @@ export function VerificationWizard({
         </ol>
       </PartnerPanel>
 
-      <PartnerPanel className="p-6">
+      {/* Visible overflow: Card clips by default, which would keep the sticky step buttons inside the panel. */}
+      <PartnerPanel className="overflow-visible! p-6">
         <form onSubmit={handleSubmit} noValidate>
           <div className="mb-6 flex gap-3">
             <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
@@ -473,22 +500,22 @@ export function VerificationWizard({
               <ReviewRow
                 title="Pháp nhân & người đại diện"
                 detail={`${values.legal.legalName} · MST ${values.legal.taxCode}`}
-                onEdit={() => setStep(0)}
+                onEdit={() => goTo(0)}
               />
               <ReviewRow
                 title="Tài khoản thụ hưởng"
                 detail={`${values.beneficiary.bankName} · ${values.beneficiary.accountHolder}`}
-                onEdit={() => setStep(0)}
+                onEdit={() => goTo(0)}
               />
               <ReviewRow
                 title="Cơ sở lưu trú"
                 detail={`${values.property.tradeName} · ${values.property.physicalRooms} phòng · ${values.property.licensedAddress}`}
-                onEdit={() => setStep(1)}
+                onEdit={() => goTo(1)}
               />
               <ReviewRow
                 title="Tài liệu"
                 detail={`${requiredUploaded}/${REQUIRED_VERIFICATION_DOCUMENTS.length} tài liệu bắt buộc${documents.OTHER?.fileId ? " · có chứng nhận hạng sao" : ""}`}
-                onEdit={() => setStep(2)}
+                onEdit={() => goTo(2)}
               />
               <label className="mt-2 flex items-start gap-3 rounded-xl bg-brand-accent-soft p-4 text-sm">
                 <Checkbox className="mt-0.5" checked={commitment} onCheckedChange={setCommitment} />
@@ -503,8 +530,9 @@ export function VerificationWizard({
             </div>
           )}
 
-          <div className="mt-7 flex items-center justify-between border-t pt-5">
-            <Button type="button" variant="outline" disabled={step === 0} onClick={() => setStep(step - 1)}>
+          {/* Sticks to the bottom of the viewport, so "Tiếp tục" stays at hand on a long step. */}
+          <div className="sticky bottom-0 z-10 -mx-6 -mb-6 mt-7 flex items-center justify-between rounded-b-xl border-t bg-card/95 px-6 py-4 backdrop-blur">
+            <Button type="button" variant="outline" disabled={step === 0} onClick={() => goTo(step - 1)}>
               <ChevronLeft />
               Quay lại
             </Button>
