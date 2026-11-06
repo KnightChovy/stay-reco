@@ -5,6 +5,7 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ApiExcludeController } from '@nestjs/swagger';
+import { API_PREFIX } from './app.setup';
 import { Public } from './common/decorators/public.decorator';
 import { ErrorCode } from './common/errors/error-code';
 import { PrismaService } from './prisma/prisma.service';
@@ -19,6 +20,17 @@ export class AppController {
   private readonly logger = new Logger(AppController.name);
 
   constructor(private readonly prisma: PrismaService) {}
+
+  /** The bare host address, e.g. the API URL opened in a browser: what this service is and where to probe it. */
+  @Public()
+  @Get()
+  root() {
+    return {
+      name: 'StayReco API',
+      status: 'running',
+      health: `/${API_PREFIX}/health`,
+    };
+  }
 
   /** 200 only when the database answers; otherwise 503 so the instance is taken out of rotation. */
   @Public()
