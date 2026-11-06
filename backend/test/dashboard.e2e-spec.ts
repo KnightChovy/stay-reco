@@ -1,4 +1,8 @@
-import type { BookingStatus, PaymentStatus } from '@stayreco/shared';
+import type {
+  BookingStatus,
+  HotelStatsBreakdown,
+  PaymentStatus,
+} from '@stayreco/shared';
 import { addDays, todayInVietnam } from '../src/common/http/calendar-date';
 import { createTestApp } from './helpers';
 
@@ -75,6 +79,9 @@ describe('Partner dashboard (e2e)', () => {
       rooms?: number;
       status: BookingStatus;
       createdAt: Date;
+      roomTypeId?: string;
+      promotionId?: string;
+      paymentMethod?: 'SEPAY' | 'WALLET';
       cancelledAt?: Date;
       paymentStatus?: PaymentStatus;
       arrivalTime?: string;
@@ -94,7 +101,8 @@ describe('Partner dashboard (e2e)', () => {
     const booking = await t.prisma.booking.create({
       data: {
         customerId,
-        roomTypeId: h.roomTypeId,
+        roomTypeId: o.roomTypeId ?? h.roomTypeId,
+        promotionId: o.promotionId ?? null,
         checkInDate: date(o.checkIn),
         checkOutDate: date(addDays(o.checkIn, o.prices.length)),
         numGuests: rooms * 2,
@@ -118,7 +126,7 @@ describe('Partner dashboard (e2e)', () => {
             taxAmount: 0,
             discountAmount: 0,
             totalAmount: total,
-            paymentMethod: 'SEPAY',
+            paymentMethod: o.paymentMethod ?? 'SEPAY',
             paymentStatus: o.paymentStatus ?? 'PAID',
           },
         },
@@ -337,6 +345,168 @@ describe('Partner dashboard (e2e)', () => {
       expect(sum('roomNightsAvailable')).toBe(60);
     });
 
+    it('breaks the period down by room type, source, status and payment method', async () => {
+      const roomType = async (name: string) =>
+        (
+          await t
+            .api()
+            .post(`/api/v1/hotels/${h.hotelId}/room-types`)
+            .set(auth(h.token))
+            .send({
+              name,
+              maxOccupancy: 2,
+              areaSqm: 40,
+              basePrice: 3000000,
+              beds: [{ bedTypeId: king, quantity: 1 }],
+            })
+            .expect(201)
+        ).body.data.id as string;
+      const suite = await roomType('Suite');
+      // A type with no rooms and no sales is still listed.
+      const family = await roomType('Family');
+      const room = await t
+        .api()
+        .post(`/api/v1/hotels/${h.hotelId}/rooms`)
+        .set(auth(h.token))
+        .send({ roomTypeId: suite, roomNumber: 'S1' })
+        .expect(201);
+      // Exists from 16 October: 16 nights available in October.
+      await t.prisma.room.update({
+        where: { roomId: room.body.data.id as string },
+        data: { createdAt: new Date('2026-10-16T00:00:00+07:00') },
+      });
+      const promotion = await t.prisma.promotion.create({
+        data: {
+          hotelId: h.hotelId,
+          name: 'Ưu đãi tháng 10',
+          discountType: 'PERCENTAGE',
+          discountValue: 10,
+        },
+      });
+      await book(h, {
+        roomTypeId: suite,
+        checkIn: '2026-10-20',
+        prices: [3000000, 3000000],
+        status: 'COMPLETED',
+        createdAt: new Date('2026-10-12T03:00:00Z'),
+        promotionId: promotion.promotionId,
+        paymentMethod: 'WALLET',
+      });
+
+      const query = 'from=2026-10-01&to=2026-10-31';
+      const res = await t
+        .api()
+        .get(`/api/v1/hotels/${h.hotelId}/stats/breakdown?${query}`)
+        .set(auth(h.token))
+        .expect(200);
+      const b = res.body.data;
+      expect(b.period).toEqual({
+        from: '2026-10-01',
+        to: '2026-10-31',
+        days: 31,
+      });
+      expect(b.byRoomType).toEqual([
+        {
+          roomTypeId: suite,
+          name: 'Suite',
+          rooms: 1,
+          roomNightsSold: 2,
+          roomNightsAvailable: 16,
+          occupancyRate: 12.5,
+          roomRevenue: 6000000,
+          adr: 3000000,
+        },
+        {
+          roomTypeId: h.roomTypeId,
+          name: 'Deluxe',
+          rooms: 2,
+          roomNightsSold: 6,
+          roomNightsAvailable: 60,
+          occupancyRate: 10,
+          roomRevenue: 5300000,
+          adr: 883333.33,
+        },
+        {
+          roomTypeId: family,
+          name: 'Family',
+          rooms: 0,
+          roomNightsSold: 0,
+          roomNightsAvailable: 0,
+          occupancyRate: null,
+          roomRevenue: 0,
+          adr: null,
+        },
+      ]);
+      // Created in October: the 2-room booking, the cancelled one, the no-show (00:30 on 1 October) and the suite.
+      expect(b.totals).toEqual({
+        rooms: 3,
+        roomNightsSold: 8,
+        roomNightsAvailable: 76,
+        occupancyRate: 10.5,
+        roomRevenue: 11300000,
+        adr: 1412500,
+        bookingsCreated: 4,
+      });
+      expect(b.bySource).toEqual([
+        { source: 'AI_RECOMMENDATION', bookings: 0, sharePercent: 0 },
+        { source: 'PROMOTION', bookings: 1, sharePercent: 25 },
+        { source: 'DIRECT', bookings: 3, sharePercent: 75 },
+      ]);
+      expect(b.byStatus).toEqual([
+        { status: 'CONFIRMED', bookings: 1, sharePercent: 25 },
+        { status: 'CHECKED_IN', bookings: 0, sharePercent: 0 },
+        { status: 'COMPLETED', bookings: 1, sharePercent: 25 },
+        { status: 'NO_SHOW', bookings: 1, sharePercent: 25 },
+        { status: 'CANCELLED', bookings: 1, sharePercent: 25 },
+      ]);
+      expect(b.byPaymentMethod).toEqual([
+        { method: 'SEPAY', bookings: 3, sharePercent: 75 },
+        { method: 'WALLET', bookings: 1, sharePercent: 25 },
+      ]);
+
+      // The totals are the overview's figures for the same period.
+      const overview = await t
+        .api()
+        .get(`/api/v1/hotels/${h.hotelId}/stats/overview?${query}`)
+        .set(auth(h.token))
+        .expect(200);
+      const p = overview.body.data.performance;
+      expect(b.totals).toMatchObject({
+        roomNightsSold: p.roomNightsSold.value,
+        roomNightsAvailable: p.roomNightsAvailable.value,
+        occupancyRate: p.occupancyRate.value,
+        roomRevenue: p.roomRevenue.value,
+        adr: p.adr.value,
+        bookingsCreated: p.bookingsCreated.value,
+      });
+    });
+
+    it('answers a period without bookings with zeros', async () => {
+      const res = await t
+        .api()
+        .get(
+          `/api/v1/hotels/${h.hotelId}/stats/breakdown?from=2026-06-01&to=2026-06-30`,
+        )
+        .set(auth(h.token))
+        .expect(200);
+      const b = res.body.data as HotelStatsBreakdown;
+      // The rooms only exist from 1 September.
+      expect(b.byRoomType).toEqual([
+        expect.objectContaining({
+          name: 'Deluxe',
+          roomNightsSold: 0,
+          roomNightsAvailable: 0,
+          occupancyRate: null,
+          roomRevenue: 0,
+          adr: null,
+        }),
+      ]);
+      expect(b.totals.bookingsCreated).toBe(0);
+      expect(b.bySource.map((s) => s.sharePercent)).toEqual([null, null, null]);
+      expect(b.byStatus).toHaveLength(5);
+      expect(b.byPaymentMethod).toEqual([]);
+    });
+
     it('defaults to the month to date and validates the period', async () => {
       const res = await t
         .api()
@@ -371,7 +541,11 @@ describe('Partner dashboard (e2e)', () => {
         'BOOKING',
         'REFUND',
       ]);
-      for (const path of ['stats/overview', 'stats/series']) {
+      for (const path of [
+        'stats/overview',
+        'stats/series',
+        'stats/breakdown',
+      ]) {
         const res = await t
           .api()
           .get(`/api/v1/hotels/${h.hotelId}/${path}`)
@@ -380,7 +554,12 @@ describe('Partner dashboard (e2e)', () => {
         expect(res.body.code).toBe('FORBIDDEN');
       }
       const other = await t.signIn('HOTEL_PARTNER', 'other@hotel.test');
-      for (const path of ['stats/overview', 'stats/today', 'action-items']) {
+      for (const path of [
+        'stats/overview',
+        'stats/breakdown',
+        'stats/today',
+        'action-items',
+      ]) {
         const res = await t
           .api()
           .get(`/api/v1/hotels/${h.hotelId}/${path}`)

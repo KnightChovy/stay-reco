@@ -115,6 +115,16 @@ export const PaymentStatus = {
 } as const;
 export type PaymentStatus = (typeof PaymentStatus)[keyof typeof PaymentStatus];
 
+/** How a booking was paid, stored on its invoice; only SEPAY is offered for now. */
+export const PaymentMethod = {
+  VNPAY: 'VNPAY',
+  SEPAY: 'SEPAY',
+  WALLET: 'WALLET',
+  CASH: 'CASH',
+  MIXED: 'MIXED',
+} as const;
+export type PaymentMethod = (typeof PaymentMethod)[keyof typeof PaymentMethod];
+
 /** What an in-app notification is about (the FE picks the icon). */
 export const NotificationType = {
   BOOKING: 'BOOKING',

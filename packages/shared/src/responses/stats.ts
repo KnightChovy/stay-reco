@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { BookingStatus, PaymentStatus } from '../enums';
+import { BookingStatus, PaymentMethod, PaymentStatus } from '../enums';
 import { STATS_GRANULARITIES } from '../schemas/stats';
 import { isoDateTime, responseSchemas } from './registry';
 
@@ -202,6 +202,69 @@ export const hotelStatsSeriesResponseSchema = z
   })
   .register(responseSchemas, { id: 'HotelStatsSeries' });
 export type HotelStatsSeries = z.infer<typeof hotelStatsSeriesResponseSchema>;
+
+// ── Breakdown ───────────────────────────────────────────────
+
+/** Where a booking came from, in priority order: a booking is counted once, under the first that applies. */
+export const BOOKING_SOURCES = ['AI_RECOMMENDATION', 'PROMOTION', 'DIRECT'] as const;
+export type BookingSource = (typeof BOOKING_SOURCES)[number];
+
+/** Current statuses a booking counted in `bookingsCreated` can have (paid, so never PENDING or EXPIRED). */
+export const CREATED_BOOKING_STATUSES = ['CONFIRMED', 'CHECKED_IN', 'COMPLETED', 'NO_SHOW', 'CANCELLED'] as const;
+
+const sharePercent = () =>
+  z.number().nullable().describe('bookings / bookingsCreated × 100, 1 decimal; null when bookingsCreated is 0.');
+
+export const roomTypeBreakdownResponseSchema = z
+  .object({
+    roomTypeId: z.uuid(),
+    name: z.string(),
+    rooms: z.number().int().describe('Rooms of the type now, whatever their status.'),
+    roomNightsSold: z.number().int(),
+    roomNightsAvailable: z.number().int(),
+    occupancyRate: z.number().nullable(),
+    roomRevenue: z.number(),
+    adr: z.number().nullable(),
+  })
+  .register(responseSchemas, { id: 'RoomTypeBreakdown', description: 'Performance of one room type in the period.' });
+export type RoomTypeBreakdown = z.infer<typeof roomTypeBreakdownResponseSchema>;
+
+export const hotelStatsBreakdownResponseSchema = z
+  .object({
+    generatedAt: generatedAt(),
+    period: statsPeriodResponseSchema,
+    byRoomType: z
+      .array(roomTypeBreakdownResponseSchema)
+      .describe('Every room type of the hotel, also without sales, by roomRevenue (highest first) then name.'),
+    totals: z
+      .object({
+        rooms: z.number().int(),
+        roomNightsSold: z.number().int(),
+        roomNightsAvailable: z.number().int(),
+        occupancyRate: z.number().nullable(),
+        roomRevenue: z.number(),
+        adr: z.number().nullable(),
+        bookingsCreated: z.number().int(),
+      })
+      .describe('The whole hotel: equal to the same fields of `stats/overview` for the period.'),
+    bySource: z
+      .array(z.object({ source: z.enum(BOOKING_SOURCES), bookings: z.number().int(), sharePercent: sharePercent() }))
+      .describe('Bookings created in the period by source, every source listed; the bookings add up to bookingsCreated.'),
+    byStatus: z
+      .array(
+        z.object({
+          status: z.enum(CREATED_BOOKING_STATUSES),
+          bookings: z.number().int(),
+          sharePercent: sharePercent(),
+        }),
+      )
+      .describe('Bookings created in the period by current status, every status listed.'),
+    byPaymentMethod: z
+      .array(z.object({ method: z.enum(PaymentMethod), bookings: z.number().int(), sharePercent: sharePercent() }))
+      .describe('Bookings created in the period by payment method, only the methods used, most used first.'),
+  })
+  .register(responseSchemas, { id: 'HotelStatsBreakdown' });
+export type HotelStatsBreakdown = z.infer<typeof hotelStatsBreakdownResponseSchema>;
 
 // ── Occupancy forecast ──────────────────────────────────────
 
