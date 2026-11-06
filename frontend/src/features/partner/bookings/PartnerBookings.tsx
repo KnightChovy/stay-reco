@@ -218,46 +218,46 @@ function BookingsWorkspace({ hotelId }: { hotelId: string }) {
           />
         </label>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <FormField label="Trạng thái">
-          <NativeSelect value={status} onChange={(event) => update(setStatus)(event.target.value)} className="w-full">
-            <NativeSelectOption value="">Tất cả</NativeSelectOption>
-            {Object.values(BookingStatus).map((value) => (
-              <NativeSelectOption key={value} value={value}>
-                {bookingStatusLabels[value].label}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
-        </FormField>
-        {tab === "all" ? (
-          <FormField label="Thanh toán">
-            <NativeSelect
-              value={paymentStatus}
-              onChange={(event) => update(setPaymentStatus)(event.target.value)}
-              className="w-full"
-            >
+          <FormField label="Trạng thái">
+            <NativeSelect value={status} onChange={(event) => update(setStatus)(event.target.value)} className="w-full">
               <NativeSelectOption value="">Tất cả</NativeSelectOption>
-              {Object.values(PaymentStatus).map((value) => (
+              {Object.values(BookingStatus).map((value) => (
                 <NativeSelectOption key={value} value={value}>
-                  {paymentStatusLabels[value].label}
+                  {bookingStatusLabels[value].label}
                 </NativeSelectOption>
               ))}
             </NativeSelect>
           </FormField>
-        ) : (
-          <div className="hidden lg:block" />
-        )}
-        <FormField label="Nhận phòng từ">
-          <DateInput value={checkInFrom} onChange={update(setCheckInFrom)} clearable />
-        </FormField>
-        <FormField label="Đến ngày" error={rangeInvalid ? "Ngày kết thúc không được trước ngày bắt đầu." : undefined}>
-          <DateInput
-            value={checkInTo}
-            min={checkInFrom || undefined}
-            onChange={update(setCheckInTo)}
-            clearable
-            invalid={rangeInvalid}
-          />
-        </FormField>
+          {tab === "all" ? (
+            <FormField label="Thanh toán">
+              <NativeSelect
+                value={paymentStatus}
+                onChange={(event) => update(setPaymentStatus)(event.target.value)}
+                className="w-full"
+              >
+                <NativeSelectOption value="">Tất cả</NativeSelectOption>
+                {Object.values(PaymentStatus).map((value) => (
+                  <NativeSelectOption key={value} value={value}>
+                    {paymentStatusLabels[value].label}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
+            </FormField>
+          ) : (
+            <div className="hidden lg:block" />
+          )}
+          <FormField label="Nhận phòng từ">
+            <DateInput value={checkInFrom} onChange={update(setCheckInFrom)} clearable />
+          </FormField>
+          <FormField label="Đến ngày" error={rangeInvalid ? "Ngày kết thúc không được trước ngày bắt đầu." : undefined}>
+            <DateInput
+              value={checkInTo}
+              min={checkInFrom || undefined}
+              onChange={update(setCheckInTo)}
+              clearable
+              invalid={rangeInvalid}
+            />
+          </FormField>
         </div>
       </div>
 

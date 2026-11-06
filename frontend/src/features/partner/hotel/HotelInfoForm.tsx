@@ -7,7 +7,6 @@ import {
   MapPin,
   Phone,
   Plus,
-  Save,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -34,12 +33,17 @@ import { useAuthStore } from "@/lib/auth-store";
 import * as partnerService from "@/services/partner.service";
 import { partnerKeys, usePartnerMutation } from "../api/partner-queries";
 import {
+  countChanges,
   FormAlert,
   FormField,
+  savedMessage,
+  StickySaveBar,
   SubmitButton,
+  TimeSelect,
   toOptionalNumber,
   toOptionalText,
   usePartnerHotel,
+  useUnsavedChanges,
 } from "../components";
 
 type HotelFormValues = {
@@ -113,6 +117,9 @@ export function HotelInfoForm({
   const isCreate = !hotel;
   // Creating does not depend on the selected hotel, where the partner may only be staff.
   const readOnly = isCreate ? isSuspended : !canEdit;
+  // Edits are compared with the stored hotel, which the save refetches, so a saved form is clean again.
+  const changes = hotel && !readOnly ? countChanges(values, toValues(hotel)) : 0;
+  useUnsavedChanges(changes > 0);
 
   const mutation = usePartnerMutation(
     (body: CreateHotelInput | UpdateHotelInput) =>
@@ -127,7 +134,7 @@ export function HotelInfoForm({
           : [partnerKeys.hotels()],
       successMessage: isCreate
         ? "Đã tạo khách sạn ở trạng thái bản nháp."
-        : "Đã lưu thông tin khách sạn.",
+        : () => savedMessage("thông tin khách sạn"),
       errorNotice: false,
       onSuccess: (saved) => {
         if (isCreate) selectHotel(saved.id);
@@ -190,7 +197,8 @@ export function HotelInfoForm({
     <form
       onSubmit={handleSubmit}
       noValidate
-      className="space-y-6 overflow-y-auto"
+      // No overflow here: a scrolling form would hold the sticky save bar inside itself instead of the viewport.
+      className="space-y-6"
     >
       <FormSection
         icon={Building2}
@@ -316,32 +324,44 @@ export function HotelInfoForm({
         description="Giờ mặc định áp dụng cho mọi đặt phòng."
       >
         <FormField label="Giờ nhận phòng" error={errors.checkInTime}>
-          <Input {...field("checkInTime")} type="time" />
+          <TimeSelect {...field("checkInTime")} emptyLabel="Chưa đặt" />
         </FormField>
         <FormField label="Giờ trả phòng" error={errors.checkOutTime}>
-          <Input {...field("checkOutTime")} type="time" />
+          <TimeSelect {...field("checkOutTime")} emptyLabel="Chưa đặt" />
         </FormField>
       </FormSection>
 
       <FormAlert message={formError} />
-      {!readOnly && (
-        <div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end">
-          {onCancel && (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onCancel}
-              disabled={mutation.isPending}
-            >
-              Huỷ
-            </Button>
+      {isCreate
+        ? !readOnly && (
+            <div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end">
+              {onCancel && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={onCancel}
+                  disabled={mutation.isPending}
+                >
+                  Huỷ
+                </Button>
+              )}
+              <SubmitButton pending={mutation.isPending}>
+                <Plus />
+                Tạo khách sạn
+              </SubmitButton>
+            </div>
+          )
+        : (
+            <StickySaveBar
+              changes={changes}
+              pending={mutation.isPending}
+              onDiscard={() => {
+                setValues(toValues(hotel));
+                setErrors({});
+                setFormError(undefined);
+              }}
+            />
           )}
-          <SubmitButton pending={mutation.isPending}>
-            {isCreate ? <Plus /> : <Save />}
-            {isCreate ? "Tạo khách sạn" : "Lưu thay đổi"}
-          </SubmitButton>
-        </div>
-      )}
     </form>
   );
 }

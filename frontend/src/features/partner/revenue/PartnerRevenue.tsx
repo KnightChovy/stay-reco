@@ -9,9 +9,9 @@ export default function PartnerRevenue() {
       phase="Phase 6: Báo cáo & quản trị"
       icon={ChartNoAxesCombined}
       upcoming={[
-        "Doanh thu theo kỳ sau phí nền tảng và hoàn tiền",
-        "Các kỳ đối soát và chứng từ",
-        "Dashboard số liệu cho đối tác",
+        "Biết chính xác số tiền thực nhận mỗi kỳ, sau phí nền tảng và hoàn tiền",
+        "Đối chiếu từng kỳ thanh toán và tải chứng từ cho kế toán",
+        "So sánh doanh thu giữa các tháng để lên kế hoạch giá",
       ]}
     />
   );

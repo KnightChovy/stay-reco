@@ -34,7 +34,6 @@ import {
   usePartnerActions,
   usePartnerHotel,
 } from '../components';
-import { HotelSetupChecklist } from '../hotel/HotelSetupChecklist';
 import {
   documentTypeLabels,
   formatDateTime,
@@ -184,7 +183,6 @@ function VerificationWorkspace({ hotelId }: { hotelId: string }) {
           )}
         </div>
         <aside className="space-y-5">
-          {hotel.status === 'DRAFT' && <HotelSetupChecklist hotel={hotel} />}
           {(hotel.status === 'DRAFT' || needsResubmit) && <PreparePanel />}
           <HistoryPanel requests={requests} />
         </aside>

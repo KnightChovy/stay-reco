@@ -1,12 +1,17 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { FolderPlus, Plus, Save } from "lucide-react";
+import { FolderPlus } from "lucide-react";
 import type { Hotel } from "@stayreco/shared";
 import { Button } from "@/components/ui/button";
 import * as partnerService from "@/services/partner.service";
 import { partnerKeys, usePartnerMutation } from "../api/partner-queries";
-import { SubmitButton, usePartnerHotel } from "../components";
+import {
+  savedMessage,
+  StickySaveBar,
+  usePartnerHotel,
+  useUnsavedChanges,
+} from "../components";
 import { AmenityDialog, type AmenityDialogMode } from "./AmenityDialog";
 import { AmenityPicker } from "./AmenityPicker";
 
@@ -23,12 +28,16 @@ export function HotelAmenitiesForm({ hotel }: { hotel: Hotel }) {
     (ids: string[]) => partnerService.setHotelAmenities(hotel.id, ids),
     {
       invalidate: () => [partnerKeys.hotel(hotel.id)],
-      successMessage: "Đã cập nhật tiện ích.",
+      successMessage: () => savedMessage("tiện ích"),
     },
   );
   const saved = new Set(hotel.amenities.map((amenity) => amenity.id));
-  const isDirty =
-    selected.length !== saved.size || selected.some((id) => !saved.has(id));
+  // Each amenity ticked or unticked since the last save is one change.
+  const changes = canEdit
+    ? selected.filter((id) => !saved.has(id)).length +
+      [...saved].filter((id) => !selected.includes(id)).length
+    : 0;
+  useUnsavedChanges(changes > 0);
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -63,19 +72,14 @@ export function HotelAmenitiesForm({ hotel }: { hotel: Hotel }) {
           disabled={!canEdit}
           onAdd={(category) => setDialog({ mode: "amenity", category })}
         />
-        {canEdit && (
-          <div className="flex items-center justify-end gap-3">
-            {isDirty && (
-              <span className="text-xs font-semibold text-warning">
-                Có thay đổi chưa lưu
-              </span>
-            )}
-            <SubmitButton pending={mutation.isPending}>
-              <Save />
-              Lưu tiện ích
-            </SubmitButton>
-          </div>
-        )}
+        <StickySaveBar
+          changes={changes}
+          pending={mutation.isPending}
+          onDiscard={() =>
+            setSelected(hotel.amenities.map((amenity) => amenity.id))
+          }
+          submitLabel="Lưu tiện ích"
+        />
       </form>
       {/* Outside the form: React submit events bubble through the dialog portal and would save the selection too. */}
       <AmenityDialog

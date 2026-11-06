@@ -1,11 +1,14 @@
 "use client";
 
 import { useIsFetching, useQueryClient } from "@tanstack/react-query";
-import { FileSpreadsheet, RefreshCw } from "lucide-react";
+import { ChartNoAxesCombined, FileSpreadsheet, RefreshCw } from "lucide-react";
+import type { HotelStatus } from "@stayreco/shared";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuthStore } from "@/lib/auth-store";
 import { partnerKeys, useHotel, useTodayStats } from "../api/partner-queries";
 import {
+  EmptyPanel,
   ErrorPanel,
   LoadingPanel,
   NoHotelPanel,
@@ -13,7 +16,7 @@ import {
   SuspendedBanner,
   usePartnerHotel,
 } from "../components";
-import { HotelSetupChecklist } from "../hotel/HotelSetupChecklist";
+import { OnboardingStrip } from "../hotel/OnboardingProgress";
 import { ActionItems } from "./ActionItems";
 import { formatTime } from "./format";
 import { OccupancyHeatmap } from "./OccupancyHeatmap";
@@ -35,6 +38,11 @@ function greeting() {
   return "Chào buổi tối";
 }
 
+/** A hotel that has never sold has no figures yet: the dashboard then shows the way to opening instead. */
+function isPreLaunch(status: HotelStatus) {
+  return status === "DRAFT" || status === "PENDING_VERIFICATION";
+}
+
 /** Partner dashboard (docs/api/partner-dashboard.md): every figure comes from the stats endpoints. */
 export default function PartnerDashboard() {
   const { hotel, hotels, isLoading, error, refetch, isSuspended } =
@@ -46,12 +54,15 @@ export default function PartnerDashboard() {
       <PartnerTitle
         title={userName ? `${greeting()}, ${userName}!` : `${greeting()}!`}
         description={
-          hotel
-            ? `Chúc bạn một ngày làm việc hiệu quả. Đây là tình hình hôm nay của ${hotel.name}.`
-            : "Chúc bạn một ngày làm việc hiệu quả."
+          !hotel
+            ? "Chúc bạn một ngày làm việc hiệu quả."
+            : isPreLaunch(hotel.status)
+              ? `Hoàn tất các bước dưới đây để ${hotel.name} bắt đầu nhận khách.`
+              : `Chúc bạn một ngày làm việc hiệu quả. Đây là tình hình hôm nay của ${hotel.name}.`
         }
         action={
-          hotel && (
+          hotel &&
+          !isPreLaunch(hotel.status) && (
             <>
               <RefreshStats hotelId={hotel.id} />
               {/* The export holds money figures, so it is owner only like the KPIs. */}
@@ -93,9 +104,8 @@ function RefreshStats({ hotelId }: { hotelId: string }) {
         </span>
       )}
       <Button
-        className={"cursor-pointer"}
+        className="h-9 cursor-pointer"
         variant="outline"
-        size="sm"
         disabled={fetching}
         onClick={() =>
           void queryClient.invalidateQueries({
@@ -111,18 +121,21 @@ function RefreshStats({ hotelId }: { hotelId: string }) {
 }
 
 /**
- * Placeholder until the backend publishes the dashboard Excel export: the button is shown but disabled.
+ * Placeholder until the backend publishes the dashboard Excel export: the button is shown but disabled, and says why.
  * TODO: wire it to the export endpoint once it is in docs/api/partner-dashboard.md.
  */
 function ExportExcelButton() {
   return (
-    // A disabled button gets no pointer events, so the hint sits on a wrapper.
-    <span title="Tính năng xuất Excel sẽ có khi backend hoàn thành API">
-      <Button size="sm" disabled>
-        <FileSpreadsheet />
-        Xuất Excel
-      </Button>
-    </span>
+    <Tooltip>
+      {/* A disabled button gets no pointer events, so the tooltip sits on a focusable wrapper. */}
+      <TooltipTrigger render={<span tabIndex={0} className="rounded-lg focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none" />}>
+        <Button className="h-9" disabled aria-describedby="export-excel-hint">
+          <FileSpreadsheet />
+          Xuất Excel
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent id="export-excel-hint">Sắp ra mắt: xuất báo cáo số liệu ra Excel</TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -136,17 +149,29 @@ function DashboardContent({
   const hotelQuery = useHotel(hotelId);
   const hotel = hotelQuery.data;
 
+  if (hotel && isPreLaunch(hotel.status)) {
+    // Before selling, every figure would be 0 or "—": show only what moves the hotel towards opening.
+    return (
+      <div className="space-y-6">
+        {hotel.status === "DRAFT" && <OnboardingStrip hotel={hotel} />}
+        <ActionItems hotelId={hotelId} />
+        <EmptyPanel
+          icon={ChartNoAxesCombined}
+          title="Số liệu kinh doanh sẽ hiện tại đây"
+          description={
+            hotel.status === "DRAFT"
+              ? "Doanh thu, công suất và khách sắp đến hiển thị khi khách sạn được duyệt và bắt đầu nhận booking."
+              : "Hồ sơ đang chờ thẩm định. Doanh thu, công suất và khách sắp đến hiển thị khi khách sạn được duyệt và bắt đầu nhận booking."
+          }
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      {/* ① What needs the partner now; the onboarding checklist stays next to it until the hotel is submitted. */}
-      {hotel?.status === "DRAFT" ? (
-        <section className="grid gap-6 xl:grid-cols-[1fr_300px]">
-          <ActionItems hotelId={hotelId} />
-          <HotelSetupChecklist hotel={hotel} />
-        </section>
-      ) : (
-        <ActionItems hotelId={hotelId} />
-      )}
+      {/* ① What needs the partner now. */}
+      <ActionItems hotelId={hotelId} />
 
       <TodaySummary hotelId={hotelId} />
 

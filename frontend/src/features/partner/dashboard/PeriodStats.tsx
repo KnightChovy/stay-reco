@@ -13,11 +13,10 @@ import {
   type StatsGranularity,
 } from "@stayreco/shared";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { StatsRangeParams } from "@/services/partner.service";
 import { useStatsOverview, useStatsSeries } from "../api/partner-queries";
-import { ErrorPanel, PartnerPanel } from "../components";
+import { DateInput, ErrorPanel, PartnerPanel } from "../components";
 import { addDays, todayInVietnam } from "../lib/dates";
 import { formatDate, formatMoney } from "../lib/labels";
 import { Delta, formatNumber, formatPercent } from "./format";
@@ -146,22 +145,21 @@ export function PeriodStats({ hotelId }: { hotelId: string }) {
         <PartnerPanel className="flex flex-wrap items-end gap-3 p-4">
           <label className="grid gap-1.5 text-xs font-semibold ">
             Từ ngày
-            <Input
-              type="date"
+            <DateInput
               value={custom.from ?? ""}
-              onChange={(event) =>
-                setCustom((value) => ({ ...value, from: event.target.value }))
-              }
+              max={today}
+              onChange={(from) => setCustom((value) => ({ ...value, from }))}
+              className="min-w-40"
             />
           </label>
           <label className="grid gap-1.5 text-xs font-semibold">
             Đến ngày
-            <Input
-              type="date"
+            <DateInput
               value={custom.to ?? ""}
-              onChange={(event) =>
-                setCustom((value) => ({ ...value, to: event.target.value }))
-              }
+              min={custom.from || undefined}
+              max={today}
+              onChange={(to) => setCustom((value) => ({ ...value, to }))}
+              className="min-w-40"
             />
           </label>
           {rangeError && (

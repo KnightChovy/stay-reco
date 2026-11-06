@@ -71,14 +71,21 @@ export function OccupancyHeatmap({ hotelId }: { hotelId: string }) {
               );
             })}
           </ol>
-          <ul className="mt-3 flex flex-wrap gap-3 text-[11px] text-muted-foreground">
-            {[...levels].reverse().map((level) => (
-              <li key={level.label} className="flex items-center gap-1.5">
-                <span className={cn("size-3 rounded-sm border border-primary/20", level.className)} />
-                {level.label}
-              </li>
-            ))}
-          </ul>
+          {/* A legend for a map with no colour would explain nothing; say why it is empty instead. */}
+          {query.data.days.some((day) => day.occupancyRate != null) ? (
+            <ul className="mt-3 flex flex-wrap gap-3 text-[11px] text-muted-foreground">
+              {[...levels].reverse().map((level) => (
+                <li key={level.label} className="flex items-center gap-1.5">
+                  <span className={cn("size-3 rounded-sm border border-primary/20", level.className)} />
+                  {level.label}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-3 text-xs text-muted-foreground">
+              Chưa có phòng mở bán để tính công suất. Lịch sẽ tô màu khi khách sạn có phòng và booking.
+            </p>
+          )}
         </>
       )}
     </PartnerPanel>

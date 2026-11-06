@@ -45,6 +45,7 @@ import {
   toOptionalNumber,
   toOptionalText,
   usePartnerActions,
+  useUnsavedChanges,
 } from "../components";
 import { documentTypeLabels } from "../lib/labels";
 
@@ -170,9 +171,14 @@ export function VerificationWizard({
 }) {
   const { showNotice } = usePartnerActions();
   const [step, setStep] = useState(0);
-  const [values, setValues] = useState(() => initialValues(hotel, email, previous));
+  const [initial] = useState(() => initialValues(hotel, email, previous));
+  const [values, setValues] = useState(initial);
   const [documents, setDocuments] = useState<Partial<Record<DocumentType, DocumentSlot>>>({});
   const [commitment, setCommitment] = useState(false);
+  // Typed fields and uploaded files would be lost on leaving: the request is only stored when it is sent.
+  useUnsavedChanges(
+    JSON.stringify(values) !== JSON.stringify(initial) || Object.values(documents).some((slot) => slot?.fileId),
+  );
   const [errors, setErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string>();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -378,7 +384,8 @@ export function VerificationWizard({
         </ol>
       </PartnerPanel>
 
-      <PartnerPanel className="p-6">
+      {/* Visible overflow: Card clips by default, which would keep the sticky step buttons inside the panel. */}
+      <PartnerPanel className="overflow-visible! p-6">
         <form onSubmit={handleSubmit} noValidate>
           <div className="mb-6 flex gap-3">
             <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
@@ -523,7 +530,8 @@ export function VerificationWizard({
             </div>
           )}
 
-          <div className="mt-7 flex items-center justify-between border-t pt-5">
+          {/* Sticks to the bottom of the viewport, so "Tiếp tục" stays at hand on a long step. */}
+          <div className="sticky bottom-0 z-10 -mx-6 -mb-6 mt-7 flex items-center justify-between rounded-b-xl border-t bg-card/95 px-6 py-4 backdrop-blur">
             <Button type="button" variant="outline" disabled={step === 0} onClick={() => goTo(step - 1)}>
               <ChevronLeft />
               Quay lại

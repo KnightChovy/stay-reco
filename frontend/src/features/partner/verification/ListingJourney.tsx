@@ -5,7 +5,7 @@ import { Check, TriangleAlert } from "lucide-react";
 import type { Hotel, VerificationRequest } from "@stayreco/shared";
 import { cn } from "@/lib/utils";
 import { PartnerPanel } from "../components";
-import { useHotelSetupSteps } from "../hotel/HotelSetupChecklist";
+import { useOnboardingSteps, type OnboardingStep } from "../hotel/OnboardingProgress";
 
 type StageState = "done" | "current" | "attention" | "todo";
 
@@ -20,11 +20,10 @@ type Stage = {
 function buildStages(
   hotel: Hotel,
   latest: VerificationRequest | undefined,
-  setupDone: number,
-  setupTotal: number,
+  setupMissing: OnboardingStep[],
 ): Stage[] {
   const isActive = hotel.status === "ACTIVE";
-  const setupComplete = setupDone === setupTotal || isActive;
+  const setupComplete = setupMissing.length === 0 || isActive;
   const submitted = !!latest || hotel.status !== "DRAFT";
   const reviewState: StageState =
     latest?.status === "APPROVED" || isActive
@@ -41,9 +40,9 @@ function buildStages(
       title: "Hoàn thiện thông tin",
       detail: setupComplete
         ? "Đã đủ thông tin"
-        : `${setupDone}/${setupTotal} mục đã xong`,
+        : `Thiếu: ${setupMissing.map((step) => step.short).join(", ")}`,
       state: setupComplete ? "done" : "todo",
-      href: setupComplete ? undefined : "/partner/hotel",
+      href: setupComplete ? undefined : setupMissing[0].href,
     },
     {
       title: "Gửi hồ sơ",
@@ -92,21 +91,21 @@ export function ListingJourney({
   hotel: Hotel;
   latest: VerificationRequest | undefined;
 }) {
-  const setupSteps = useHotelSetupSteps(hotel);
+  // The same 7 items as the progress strip of the other screens, so every screen gives one count.
+  const steps = useOnboardingSteps(hotel);
+  const doneCount = steps.filter((step) => step.done).length;
   const stages = buildStages(
     hotel,
     latest,
-    setupSteps.filter((step) => step.done).length,
-    setupSteps.length,
+    steps.filter((step) => !step.done && step.href !== "/partner/verification"),
   );
-  const doneCount = stages.filter((stage) => stage.state === "done").length;
 
   return (
     <PartnerPanel className="p-4 sm:p-5">
       <div className="mb-4 flex items-center justify-between gap-3">
         <h2 className="text-sm font-bold text-primary">Hành trình mở bán</h2>
         <span className="text-xs font-semibold text-muted-foreground">
-          {doneCount}/{stages.length} bước
+          Hồ sơ hoàn tất {doneCount}/{steps.length}
         </span>
       </div>
       <ol className="grid gap-3 sm:grid-cols-5 sm:gap-2">

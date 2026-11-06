@@ -21,7 +21,7 @@ import { getApiErrorMessage, getApiFieldErrors, validateWith, type FieldErrors }
 import { cn } from "@/lib/utils";
 import * as partnerService from "@/services/partner.service";
 import { partnerKeys, usePartnerMutation } from "../api/partner-queries";
-import { FormAlert, FormField, SubmitButton, toOptionalNumber } from "../components";
+import { DateInput, FormAlert, FormField, SubmitButton, toOptionalNumber } from "../components";
 import { adjustmentTypeLabels, dayOfWeekLabels, formatMoney, pricingRuleTypeLabels } from "../lib/labels";
 
 type RuleType = (typeof PRICING_RULE_TYPES)[number];
@@ -264,10 +264,21 @@ function PricingRuleForm({
           error={errors.validFrom}
           hint={values.ruleType === "SEASON" ? undefined : "Để trống để áp dụng mọi ngày."}
         >
-          <Input type="date" value={values.validFrom} onChange={(event) => set("validFrom", event.target.value)} />
+          <DateInput
+            value={values.validFrom}
+            onChange={(value) => set("validFrom", value)}
+            clearable={values.ruleType !== "SEASON"}
+            invalid={!!errors.validFrom}
+          />
         </FormField>
         <FormField label="Đến đêm (gồm cả đêm này)" required={values.ruleType === "SEASON"} error={errors.validTo}>
-          <Input type="date" value={values.validTo} onChange={(event) => set("validTo", event.target.value)} />
+          <DateInput
+            value={values.validTo}
+            min={values.validFrom || undefined}
+            onChange={(value) => set("validTo", value)}
+            clearable={values.ruleType !== "SEASON"}
+            invalid={!!errors.validTo}
+          />
         </FormField>
         <FormField label="Chỉ áp dụng vào" error={errors.dayOfWeek}>
           <NativeSelect value={values.dayOfWeek} onChange={(event) => set("dayOfWeek", event.target.value)} className="w-full">

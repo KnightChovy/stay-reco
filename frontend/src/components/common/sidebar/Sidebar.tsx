@@ -109,7 +109,7 @@ function NavItem({ item }: { item: SidebarItem }) {
           size="lg"
           disabled
           tooltip={`${item.label} (sắp có)`}
-          className={cn(navItemClassName, 'text-muted-foreground disabled:opacity-100')}
+          className={cn(navItemClassName, 'text-muted-foreground disabled:opacity-100!')}
         >
           <Icon strokeWidth={1.75} aria-hidden="true" />
           <span className={iconLabelClassName}>{item.label}</span>

@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { Hotel } from "@stayreco/shared";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -13,6 +12,7 @@ import {
   PartnerTitle,
   StatusBadge,
   SuspendedBanner,
+  useConfirmDiscard,
   usePartnerHotel,
 } from "../components";
 import { formatDateTime, hotelStatusLabels } from "../lib/labels";
@@ -21,7 +21,7 @@ import { CancellationPolicyForm } from "./CancellationPolicyForm";
 import { HotelImagesManager } from "./HotelImagesManager";
 import { HotelInfoForm } from "./HotelInfoForm";
 import { HotelPoliciesForm } from "./HotelPoliciesForm";
-import { HotelSetupChecklist } from "./HotelSetupChecklist";
+import { OnboardingStrip } from "./OnboardingProgress";
 import { RoomConfigForm } from "./RoomConfigForm";
 
 const tabs = [
@@ -85,17 +85,23 @@ function HotelDetail({ hotel }: { hotel: Hotel }) {
   const requested = searchParams.get("tab");
   const tab: HotelTab = isHotelTab(requested) ? requested : "info";
   const status = hotelStatusLabels[hotel.status];
+  const confirmDiscard = useConfirmDiscard();
 
   // The tab lives in the URL so other screens can link to it (e.g. the room limit error → ?tab=room-config).
+  // A tab's form unmounts when another tab opens, so unsaved edits are confirmed first.
   const setTab = (value: HotelTab) => {
+    if (value === tab || !confirmDiscard()) return;
     const params = new URLSearchParams(searchParams.toString());
     params.set("tab", value);
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   };
 
   return (
-    <section className="grid gap-6 xl:grid-cols-[1fr_300px]">
-      <PartnerPanel className="min-w-0 p-5">
+    // One column: the save bar of a long form stays at the bottom of the viewport with nothing below it.
+    <section className="space-y-5">
+      {hotel.status === "DRAFT" && <OnboardingStrip hotel={hotel} />}
+      {/* Card clips its content by default, which would also pin the sticky save bar inside it. */}
+      <PartnerPanel className="min-w-0 overflow-visible! p-5">
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <h2 className="text-lg font-bold text-primary">{hotel.name}</h2>
           <StatusBadge tone={status.tone}>{status.label}</StatusBadge>
@@ -133,30 +139,6 @@ function HotelDetail({ hotel }: { hotel: Hotel }) {
           </TabsContent>
         </Tabs>
       </PartnerPanel>
-      <HotelAside hotel={hotel} />
     </section>
-  );
-}
-
-function HotelAside({ hotel }: { hotel: Hotel }) {
-  return (
-    <aside className="space-y-5">
-      <HotelSetupChecklist hotel={hotel} />
-      {hotel.status === "DRAFT" && (
-        <PartnerPanel className="bg-primary p-5 text-primary-foreground">
-          <h2 className="font-bold">Sẵn sàng mở bán?</h2>
-          <p className="mt-2 text-sm text-primary-foreground/75">
-            Khách sạn chỉ hiển thị với khách sau khi StayReco duyệt hồ sơ xác
-            minh.
-          </p>
-          <Link
-            href="/partner/verification"
-            className="mt-4 inline-flex h-8 w-full items-center justify-center rounded-lg bg-card text-sm font-semibold text-primary hover:bg-card/90"
-          >
-            Gửi hồ sơ xác minh
-          </Link>
-        </PartnerPanel>
-      )}
-    </aside>
   );
 }

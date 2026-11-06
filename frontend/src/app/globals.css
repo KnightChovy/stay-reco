@@ -162,7 +162,8 @@
   --sr-background: #f7fafc;
   --sr-surface-hover: #f5f9fb;
   --sr-text: #233b4b;
-  --sr-text-secondary: #657b89;
+  /* #657b89 gave 4.42:1 on white, under WCAG AA (4.5:1) for the 12–13px captions that use it. */
+  --sr-text-secondary: #5a6b78;
   --sr-border-subtle: #dde8ef;
   --sr-border-control: #afc2ce;
   --sr-accent: #d47a52;
