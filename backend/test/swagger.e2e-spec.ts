@@ -69,7 +69,17 @@ describe('Swagger (e2e)', () => {
       );
       expect({ name, success: success.length }).toEqual({ name, success: 1 });
       const [status] = success;
-      if (status !== '204') {
+      const content = op.responses[status].content as Json | undefined;
+      const file = Object.entries(content ?? {}).find(
+        ([type]) => type !== 'application/json',
+      );
+      if (file) {
+        // A download: the file itself, never inside the envelope.
+        expect({ name, file: file[1] }).toEqual({
+          name,
+          file: { schema: { type: 'string', format: 'binary' } },
+        });
+      } else if (status !== '204') {
         expect({
           name,
           data: op.responses[status].content?.['application/json']?.schema

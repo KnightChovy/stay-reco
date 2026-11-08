@@ -62,6 +62,17 @@ export function ApiData(schema: z.ZodType, status: HttpStatus = HttpStatus.OK) {
   });
 }
 
+/** A file download: the body is the file itself (no envelope), saved under the name in `Content-Disposition`. */
+export function ApiFile(mimeType: string, description: string) {
+  return ApiResponse({
+    status: HttpStatus.OK,
+    description,
+    content: {
+      [mimeType]: { schema: { type: 'string', format: 'binary' } },
+    },
+  });
+}
+
 /** Paginated list: `data` is an array of the schema and `meta` holds page, pageSize, total, totalPages. */
 export function ApiPage(schema: z.ZodType) {
   return ApiResponse({

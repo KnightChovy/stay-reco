@@ -95,7 +95,7 @@ Role checks in the FE only drive navigation. The backend always re-checks permis
 
 ## 4. Response format (decided)
 
-Based on the `APIResponse` type the FE drafted (`frontend/src/types/response.type.ts`), extended with `meta` for lists and `code`/`details` for errors. Every endpoint uses this format, except **204** responses (no body).
+Based on the `APIResponse` type the FE drafted (`frontend/src/types/response.type.ts`), extended with `meta` for lists and `code`/`details` for errors. Every endpoint uses this format, except **204** responses (no body) and **file downloads** (the body is the file itself, e.g. `GET /hotels/:hotelId/stats/export` answers an `.xlsx` with `Content-Disposition: attachment; filename="..."`; its errors still use the error format of §4.2).
 
 ### 4.1 Success
 

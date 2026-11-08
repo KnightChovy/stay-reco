@@ -3,6 +3,7 @@ import type {
   HotelStatsBreakdown,
   PaymentStatus,
 } from '@stayreco/shared';
+import ExcelJS from 'exceljs';
 import { addDays, todayInVietnam } from '../src/common/http/calendar-date';
 import { createTestApp } from './helpers';
 
@@ -481,6 +482,101 @@ describe('Partner dashboard (e2e)', () => {
       });
     });
 
+    it('exports the same figures as an Excel workbook', async () => {
+      const res = await t
+        .api()
+        .get(
+          `/api/v1/hotels/${h.hotelId}/stats/export?from=2026-10-01&to=2026-10-31`,
+        )
+        .set(auth(h.token))
+        .buffer(true)
+        .parse((response, done) => {
+          const chunks: Buffer[] = [];
+          response.on('data', (c: Buffer) => chunks.push(c));
+          response.on('end', () => done(null, Buffer.concat(chunks)));
+        })
+        .expect(200);
+      expect(res.headers['content-type']).toBe(
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
+      expect(res.headers['content-disposition']).toBe(
+        'attachment; filename="StayReco_Riverside_2026-10-01_2026-10-31.xlsx"',
+      );
+
+      const book = new ExcelJS.Workbook();
+      await book.xlsx.load(res.body as ArrayBuffer);
+      expect(book.worksheets.map((s) => s.name)).toEqual([
+        'Tổng quan',
+        'Theo thời gian',
+        'Theo loại phòng',
+        'Danh sách đơn',
+        'Giao dịch ví',
+      ]);
+      /** Values of a sheet's row, from column 1. */
+      const row = (sheet: string, n: number) =>
+        (book.getWorksheet(sheet)!.getRow(n).values as unknown[]).slice(1);
+
+      // Overview table from row 8: header, then one line per KPI.
+      expect(row('Tổng quan', 9)).toEqual([
+        'Doanh thu phòng',
+        '₫',
+        5300000,
+        1200000,
+        341.7,
+        '%',
+      ]);
+      expect(row('Tổng quan', 12)).toEqual([
+        'Công suất phòng',
+        '%',
+        10,
+        1.7,
+        8.3,
+        'điểm %',
+      ]);
+      // A day per row for a 31-day period.
+      expect(book.getWorksheet('Theo thời gian')!.rowCount).toBe(32);
+      expect(row('Theo loại phòng', 2)).toEqual([
+        'Deluxe',
+        2,
+        6,
+        60,
+        10,
+        5300000,
+        883333.33,
+      ]);
+
+      // The paid bookings created in October, oldest first; the expired hold is left out.
+      const bookings = book.getWorksheet('Danh sách đơn')!;
+      expect(bookings.rowCount).toBe(4);
+      expect(
+        [2, 3, 4].map((n) => [
+          bookings.getCell(n, 11).value,
+          bookings.getCell(n, 15).value,
+        ]),
+      ).toEqual([
+        ['Không đến', 500000],
+        ['Đã huỷ', 900000],
+        ['Đã xác nhận', 6000000],
+      ]);
+      expect(bookings.getCell(4, 12).value).toBe('Đã thanh toán');
+      expect(bookings.getCell(4, 13).value).toBe('Chuyển khoản (SePay)');
+
+      // October's wallet movements (the 1 November one is not), then the net received = overview's.
+      const ledger = book.getWorksheet('Giao dịch ví')!;
+      expect(
+        [2, 3, 4, 5].map((n) => [
+          ledger.getCell(n, 2).value,
+          ledger.getCell(n, 5).value,
+        ]),
+      ).toEqual([
+        ['Khách thanh toán', 6000000],
+        ['Hoàn tiền', -300000],
+        ['Hoa hồng nền tảng', -100000],
+        ['Rút tiền', -1000000],
+      ]);
+      expect(ledger.getCell(7, 5).value).toBe(5600000);
+    });
+
     it('answers a period without bookings with zeros', async () => {
       const res = await t
         .api()
@@ -545,6 +641,7 @@ describe('Partner dashboard (e2e)', () => {
         'stats/overview',
         'stats/series',
         'stats/breakdown',
+        'stats/export',
       ]) {
         const res = await t
           .api()
