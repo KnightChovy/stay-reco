@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Controller, Get, Param, Query, StreamableFile } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
   actionItemListResponseSchema,
@@ -13,8 +13,13 @@ import {
   HotelAccessRequired,
 } from '../../common/hotel-access/hotel-access.guard';
 import type { HotelAccess } from '../../common/hotel-access/hotel-access.service';
-import { ApiAccess, ApiData } from '../../common/swagger/api-docs.decorators';
+import {
+  ApiAccess,
+  ApiData,
+  ApiFile,
+} from '../../common/swagger/api-docs.decorators';
 import { ActionItemsService } from './action-items.service';
+import { StatsExportService, XLSX_MIME } from './stats-export.service';
 import {
   OccupancyForecastQueryDto,
   StatsRangeQueryDto,
@@ -30,6 +35,7 @@ export class StatsController {
   constructor(
     private readonly stats: StatsService,
     private readonly actionItems: ActionItemsService,
+    private readonly exporter: StatsExportService,
   ) {}
 
   @ApiOperation({
@@ -103,6 +109,29 @@ export class StatsController {
     @Query() query: StatsRangeQueryDto,
   ) {
     return this.stats.breakdown(hotelId, query);
+  }
+
+  @ApiOperation({
+    summary: 'The dashboard of a period as an Excel file',
+    description:
+      'Sheets: overview with the previous period, the chart buckets, room types and booking splits, the bookings created in the period (with what the wallet recorded for each), and the wallet movements of the period with the net received. Same figures as `overview`, `series` and `breakdown`. `from` and `to` together (at most 366 days), or neither for the month to date.',
+  })
+  @HotelAccessRequired('owner-view')
+  @ApiFile(
+    XLSX_MIME,
+    'The workbook, named `StayReco_<hotel>_<from>_<to>.xlsx`.',
+  )
+  @Get('stats/export')
+  async export(
+    @Param('hotelId') hotelId: string,
+    @Query() query: StatsRangeQueryDto,
+  ) {
+    const file = await this.exporter.export(hotelId, query);
+    return new StreamableFile(file.content, {
+      type: XLSX_MIME,
+      disposition: `attachment; filename="${file.fileName}"`,
+      length: file.content.length,
+    });
   }
 
   @ApiOperation({

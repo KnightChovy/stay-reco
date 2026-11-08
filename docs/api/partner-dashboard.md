@@ -17,6 +17,7 @@ The dashboard answers the partner's questions, in this order (the top of the scr
 | 5 | How full am I in the coming weeks (should I change prices)? | 30-day occupancy heatmap | `GET /hotels/:hotelId/stats/occupancy-forecast` | ✅ |
 | 6 | Which room types / channels perform best? | Breakdown tables | `GET /hotels/:hotelId/stats/breakdown` | ✅ (2026-11-06) |
 | 7 | (Several hotels) Which hotel needs attention? | Portfolio table | `GET /me/hotels/stats` | later (§4.7) |
+| 8 | Can I keep the figures, or send them to my accountant? | "Xuất Excel" button | `GET /hotels/:hotelId/stats/export` | ✅ (2026-11-09) |
 
 Layout (desktop; on mobile the sections stack in the same order):
 
@@ -46,7 +47,7 @@ UX rules this API is designed for:
 |---|---|
 | Time zone | All day boundaries ("today", `from`/`to`, buckets) are computed in **Asia/Ho_Chi_Minh**. Timestamps in responses are ISO UTC. `date` columns (`check_in_date`, `room_calendars.date`) are already local dates. |
 | Period query | `from`, `to`: `YYYY-MM-DD`, both inclusive (api-guide §5), sent **together or not at all** (only one → `VALIDATION_ERROR`, field `to`). Default: from the 1st of the current month to today. `from > to` → `VALIDATION_ERROR` (field `to`). Future dates are allowed (bookings already on the books). |
-| Maximum range | `overview`, `breakdown`: 366 days. `series`: depends on `granularity` (§4.4). Over the limit → `VALIDATION_ERROR` (field `to`). |
+| Maximum range | `overview`, `breakdown`, `export`: 366 days. `series`: depends on `granularity` (§4.4). Over the limit → `VALIDATION_ERROR` (field `to`). |
 | Comparison period | The `n` days just before `from`, where `n` is the length of the period. Example: 2026-10-01..2026-10-21 is compared with 2026-09-10..2026-09-30. |
 | Money | VND as JSON numbers. Revenue, earnings, commission and refunds are sums of whole-dong amounts (BR-29); ADR and RevPAR are rounded half up to 2 decimals. |
 | Rates and averages | Percentages as numbers `0–100` with 1 decimal (`78.4`). The change of a rate is in **percentage points** (`deltaPoints` = value − previous, 1 decimal); the change of an amount, count or average is in **percent** (`deltaPercent` = (value − previous) / previous × 100, 1 decimal). Averages (stay length, lead time) have 1 decimal. |
@@ -103,6 +104,7 @@ The commission is never recomputed from the partner's current rate: the rate is 
 | GET | `/hotels/:hotelId/stats/series` | owner | `from?`, `to?`, `granularity?` | `HotelStatsSeries` |
 | GET | `/hotels/:hotelId/stats/occupancy-forecast` | member | `days?` (default 30, 7–90) | `OccupancyForecast` |
 | GET | `/hotels/:hotelId/stats/breakdown` | owner | `from?`, `to?` | `HotelStatsBreakdown` |
+| GET | `/hotels/:hotelId/stats/export` | owner | `from?`, `to?` | `.xlsx` file (no envelope) |
 
 Errors: `HOTEL_NOT_FOUND` (not the caller's hotel), `FORBIDDEN` (staff on an owner-only endpoint), `VALIDATION_ERROR` (bad dates, range too large, `granularity` / `days` / `arrivalsLimit` out of range). **No new error codes.**
 
@@ -306,6 +308,22 @@ Which room types and channels perform best in the period (owner only, `from?`/`t
 
 Not in the first release. For partners with 2 or more hotels: every hotel the partner owns, including `DRAFT` ones (with zeros), sorted by name, each with `roomRevenue`, `netEarnings`, `occupancyRate` (as `Metric`s), `avgRating` and `actionItems: { critical, warning }`, plus `totals` where `occupancyRate` is computed from the summed room nights, not as an average of hotel rates.
 
+### 4.8 `GET /hotels/:hotelId/stats/export`
+
+The dashboard of the period as an Excel workbook, for the owner and the accountant the owner sends it to (staff have no access, like every money figure). Same `from?`/`to?` as `overview` (366 days max). The body is the file, not the envelope: `Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`, `Content-Disposition: attachment; filename="StayReco_<hotel>_<from>_<to>.xlsx"` (hotel name without Vietnamese marks, other characters as `-`). Errors keep the JSON error format.
+
+Every figure comes from `overview`, `series` and `breakdown` computed at the same instant, so the file matches the screen. Money cells are numbers formatted `#,##0 ₫`, rates have 1 decimal, dates are `dd/mm/yyyy` and times are Vietnam time. Headers are in Vietnamese; list sheets freeze the header row and have filters.
+
+| Sheet | Content |
+|---|---|
+| **Tổng quan** | Hotel, period, comparison period, export time; then one line per KPI of `overview` (performance, cash, reviews): Chỉ số · Đơn vị · Kỳ này · Kỳ trước · Thay đổi · Thay đổi tính theo (`%` for amounts, counts and averages; `điểm %` for rates); then the wallet balances at export time (available, pending, reserved). |
+| **Theo thời gian** | One row per bucket of `series` with its default granularity: Từ ngày · Số ngày · Doanh thu phòng · Đêm đã bán · Đêm có thể bán · Công suất (%) · ADR · Số đơn · Số đơn huỷ · Thực nhận. |
+| **Theo loại phòng** | `breakdown.byRoomType` with a total line (Loại phòng · Số phòng · Đêm đã bán · Đêm có thể bán · Công suất (%) · Doanh thu phòng · ADR), then three small tables Số đơn · Tỷ lệ (%) by source, current status and payment method. |
+| **Danh sách đơn** | The bookings counted in `bookingsCreated` (paid, created in the period, cancelled later included), oldest first: Mã đơn · Ngày đặt · Tên khách · SĐT liên hệ · Loại phòng · Số phòng · Nhận phòng · Trả phòng · Số đêm · Số khách · Trạng thái đơn · Trạng thái thanh toán · Phương thức · Nguồn · Tổng tiền · Hoa hồng · Hoàn tiền · Thực nhận của đơn · Ngày huỷ. Commission, refunds and net come from the hotel wallet rows of the booking (all dates), never recomputed. |
+| **Giao dịch ví** | Every hotel wallet movement created in the period, oldest first (payouts and settlements included): Thời gian · Loại giao dịch · Mã đơn · Mô tả · Số tiền (±) · Số dư sau; then **Tổng thực nhận** = sum of the payment, commission, refund and adjustment rows, equal to `overview.cash.netEarnings`. |
+
+Not in the file: the late check-out fee (paid at the front desk, never through StayReco, money-rules §5.5) and the hotel's own costs, so it is a report of the revenue through StayReco, not a profit and loss statement.
+
 ## 5. Shared types (in `packages/shared`, before the backend code)
 
 | File | Content |
@@ -315,7 +333,7 @@ Not in the first release. For partners with 2 or more hotels: every hotel the pa
 
 ## 6. Backend notes
 
-- **Module**: `modules/stats` (`StatsController`, `StatsService`, an action-items service), hotel access as in the other hotel routes: `member` for action items, today and forecast; `owner-view` (owner only, allowed while suspended) for overview, series and breakdown.
+- **Module**: `modules/stats` (`StatsController`, `StatsService`, an action-items service), hotel access as in the other hotel routes: `member` for action items, today and forecast; `owner-view` (owner only, allowed while suspended) for overview, series, breakdown and export. The workbook is built with `exceljs` (MIT).
 - **Queries**: aggregate in SQL (`$queryRaw` with `generate_series` for the days and buckets, `jsonb_array_elements` over `nightly_prices`), never by loading bookings into memory. Day boundaries of `timestamptz` columns use `AT TIME ZONE 'Asia/Ho_Chi_Minh'`.
 - **Tenant** (PD3): `booking` has no `hotel_id`; hotel-scoped queries join through `room_type` (`room_type.hotel_id`), covered by the indexes below. Adding `booking.hotel_id` is reconsidered only if a measurement shows it is needed.
 - **Indexes** (one migration with the module): `booking(room_type_id, check_in_date)`, `booking(room_type_id, created_at)`, `wallet_transaction(wallet_id, created_at)`. `room_calendars` needs none: its unique `(room_id, date)` already serves a hotel's rooms over a date range. Reviews get `review(hotel_id, created_at)` with the loyalty phase.
@@ -341,6 +359,7 @@ Changes from FE's draft (2026-10-22), because of the booking data model: booking
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-11-09 | BE | `stats/export` built (§4.8): five-sheet workbook with the figures of `overview`, `series` and `breakdown`, the bookings created in the period and the wallet movements; downloads are sent without the envelope (api-guide §4) |
 | 2026-11-06 | BE | `stats/breakdown` built (§4.6): room types with the §3 figures adding up to `overview`, bookings created by source, current status and payment method with `sharePercent`; no new index (the dashboard indexes cover it) |
 | 2026-10-30 | BE | `OVERDUE_CHECKOUTS` and `CHANGE_REQUESTS_PENDING` sent; today's `checkedIn`, `checkedOut` and `inHouse` now real (check-in / check-out built) |
 | 2026-10-29 | BE | Action items `OVERDUE_CHECKOUTS` (staff `FRONT_DESK`) and `CHANGE_REQUESTS_PENDING` (staff `BOOKING`) added to the types, sent once check-out and change requests are built |
