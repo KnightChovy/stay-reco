@@ -115,6 +115,15 @@ export const PaymentStatus = {
 } as const;
 export type PaymentStatus = (typeof PaymentStatus)[keyof typeof PaymentStatus];
 
+/** How a promotion or voucher takes money off a stay (BR-06). */
+export const DiscountType = {
+  /** 0-100 % of the stay total, capped by the voucher's `maxDiscount` when there is one. */
+  PERCENTAGE: 'PERCENTAGE',
+  /** A flat amount in dong. */
+  FIXED_AMOUNT: 'FIXED_AMOUNT',
+} as const;
+export type DiscountType = (typeof DiscountType)[keyof typeof DiscountType];
+
 /** How a booking was paid, stored on its invoice; only SEPAY is offered for now. */
 export const PaymentMethod = {
   VNPAY: 'VNPAY',
