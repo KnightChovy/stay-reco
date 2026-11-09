@@ -3,6 +3,8 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   Patch,
   Post,
@@ -165,6 +167,7 @@ export class PromotionsController {
   )
   @Roles(UserRole.CUSTOMER)
   @Post('bookings/discount-quote')
+  @HttpCode(HttpStatus.OK)
   quote(@CurrentUser() user: AuthUser, @Body() dto: DiscountQuoteDto) {
     return this.stayDiscount.quote(user.accountId, dto);
   }

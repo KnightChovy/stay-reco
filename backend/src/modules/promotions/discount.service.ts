@@ -80,6 +80,10 @@ export class DiscountService {
   /**
    * Campaigns that apply by themselves: the hotel's own, plus the platform-wide ones (`hotel_id` null), that are
    * usable today and that the stay is large enough for.
+   *
+   * A campaign that has handed out personal codes is **not** one of them. Once a hotel issues vouchers under a
+   * campaign it is addressing chosen customers, so applying it to everyone as well would make those codes
+   * pointless. Until the schema has a column saying so, "has vouchers" is what marks a campaign as code-only.
    */
   private async automaticCandidates(
     hotelId: string,
@@ -87,7 +91,11 @@ export class DiscountService {
     today: string,
   ): Promise<Candidate[]> {
     const campaigns = await this.prisma.promotion.findMany({
-      where: { isActive: true, OR: [{ hotelId }, { hotelId: null }] },
+      where: {
+        isActive: true,
+        vouchers: { none: {} },
+        OR: [{ hotelId }, { hotelId: null }],
+      },
     });
     return campaigns
       .filter(
@@ -231,6 +239,13 @@ export class DiscountService {
     await tx.promotion.updateMany({
       where: { promotionId: booking.promotionId, currentUses: { gt: 0 } },
       data: { currentUses: { decrement: 1 } },
+    });
+    // `booking.voucher_id` is unique, so a dead booking holding the code would block the customer from spending it
+    // again. Clearing both also makes a second release a no-op. What the booking was charged stays on its invoice
+    // (`subtotal`, `discount_amount`) and in the audit log, so nothing about the discount is lost.
+    await tx.booking.update({
+      where: { bookingId },
+      data: { voucherId: null, promotionId: null },
     });
   }
 }
