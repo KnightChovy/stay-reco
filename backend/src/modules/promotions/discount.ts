@@ -1,3 +1,4 @@
+import { toCalendarDate } from '../../common/http/calendar-date';
 import { Prisma } from '../../generated/prisma/client';
 import { toWholeDong } from '../pricing/price-engine';
 
@@ -66,17 +67,15 @@ export function campaignUsable(
   today: string,
 ): boolean {
   if (!campaign.isActive) return false;
-  if (campaign.validFrom && today < toDateOnly(campaign.validFrom))
+  if (campaign.validFrom && today < toCalendarDate(campaign.validFrom))
     return false;
-  if (campaign.validTo && today > toDateOnly(campaign.validTo)) return false;
+  if (campaign.validTo && today > toCalendarDate(campaign.validTo))
+    return false;
   if (campaign.maxUses !== null && campaign.currentUses >= campaign.maxUses) {
     return false;
   }
   return true;
 }
-
-/** A `@db.Date` column as "YYYY-MM-DD"; it is stored at midnight UTC, so the ISO prefix is the calendar date. */
-export const toDateOnly = (date: Date) => date.toISOString().slice(0, 10);
 
 /**
  * Picks the discount the customer actually gets. Given the campaigns that apply by themselves and the one behind a
