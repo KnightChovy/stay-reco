@@ -45,6 +45,18 @@ const BED_TYPES = [
   { name: 'Sofa giường', description: 'Sofa kéo thành giường', capacity: 1 },
 ];
 
+/**
+ * The criteria a guest scores after a stay (BR-12), matching the review screen. The weights add up to 1, so the
+ * weighted average of the sub-ratings is the review's overall rating.
+ */
+const RATING_CRITERIA = [
+  { name: 'Vệ sinh & Tiện nghi phòng', description: 'Phòng sạch sẽ, trang thiết bị hoạt động tốt', weight: 0.25 },
+  { name: 'Vị trí', description: 'Thuận tiện đi lại, gần điểm tham quan', weight: 0.2 },
+  { name: 'Thái độ phục vụ', description: 'Lễ tân và nhân viên thân thiện, hỗ trợ nhanh', weight: 0.25 },
+  { name: 'Độ yên tĩnh', description: 'Không gian yên tĩnh, dễ ngủ', weight: 0.15 },
+  { name: 'Giá trị tương xứng chi phí', description: 'Chất lượng nhận được so với số tiền đã trả', weight: 0.15 },
+];
+
 /** Catalog tables have no unique name, so insert only the names that are missing (safe to re-run). */
 async function seedCatalog() {
   const amenityNames = new Set(
@@ -63,8 +75,16 @@ async function seedCatalog() {
   const bedTypes = BED_TYPES.filter((b) => !bedNames.has(b.name));
   await prisma.bedType.createMany({ data: bedTypes });
 
+  const criterionNames = new Set(
+    (await prisma.ratingCriterion.findMany({ select: { name: true } })).map(
+      (c) => c.name,
+    ),
+  );
+  const criteria = RATING_CRITERIA.filter((c) => !criterionNames.has(c.name));
+  await prisma.ratingCriterion.createMany({ data: criteria });
+
   console.log(
-    `Catalog: +${amenities.length} amenities, +${bedTypes.length} bed types`,
+    `Catalog: +${amenities.length} amenities, +${bedTypes.length} bed types, +${criteria.length} rating criteria`,
   );
 }
 
