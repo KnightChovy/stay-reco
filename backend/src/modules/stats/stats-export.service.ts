@@ -15,25 +15,19 @@ import type {
 import ExcelJS from 'exceljs';
 import {
   addDays,
+  fromCalendarDate as day,
   todayInVietnam,
   vietnamDateTime,
+  vietnamWallClock as vietnamClock,
 } from '../../common/http/calendar-date';
 import { toNumber } from '../../common/http/decimal';
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { resolvePeriod } from './stats-math';
-import { StatsService } from './stats.service';
+import { BOOKING_SOURCE, EARNINGS, StatsService } from './stats.service';
 
 export const XLSX_MIME =
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-
-/** Wallet rows that make up the net received (§3 of docs/api/partner-dashboard.md). */
-const EARNINGS: WalletTxnType[] = [
-  'BOOKING_PAYMENT',
-  'COMMISSION',
-  'REFUND',
-  'ADJUSTMENT',
-];
 
 const STATUS: Record<BookingStatus, string> = {
   PENDING: 'Chờ thanh toán',
@@ -81,10 +75,6 @@ const ONE = '0.0';
 const DATE = 'dd/mm/yyyy';
 const DATE_TIME = 'dd/mm/yyyy hh:mm';
 
-/** Shown in Excel as the Vietnam wall-clock time: Excel dates carry no time zone. */
-const vietnamClock = (at: Date) => new Date(at.getTime() + 7 * 3600_000);
-/** A `YYYY-MM-DD` date as an Excel date. */
-const day = (date: string) => new Date(`${date}T00:00:00Z`);
 const viDate = (date: string) => date.split('-').reverse().join('/');
 
 interface BookingRow {
@@ -161,9 +151,11 @@ export class StatsExportService {
     seriesSheet(book, series);
     breakdownSheet(book, breakdown);
     bookingsSheet(book, bookings);
-    ledgerSheet(book, ledger);
+    ledgerSheet(book, ledger, overview.cash.netEarnings.value);
 
-    const content = Buffer.from(await book.xlsx.writeBuffer());
+    // On Node exceljs already returns a Buffer: no copy then.
+    const raw = await book.xlsx.writeBuffer();
+    const content = Buffer.isBuffer(raw) ? raw : Buffer.from(raw);
     return {
       fileName: `StayReco_${slug(hotel.name)}_${period.from}_${period.to}.xlsx`,
       content,
@@ -174,14 +166,23 @@ export class StatsExportService {
   private bookings(hotelId: string, from: string, to: string) {
     const start = vietnamDateTime(from, '00:00');
     const end = vietnamDateTime(addDays(to, 1), '00:00');
+    // The ledger is read only for the period's bookings, not the hotel's whole history.
     return this.prisma.$queryRaw<BookingRow[]>`
-      WITH hotel_ledger AS (
+      WITH created AS (
+        SELECT b.booking_id
+        FROM booking b
+        JOIN room_type rt ON rt.room_type_id = b.room_type_id
+        WHERE rt.hotel_id = ${hotelId}::uuid
+          AND b.status NOT IN ('PENDING', 'EXPIRED')
+          AND b.created_at >= ${start} AND b.created_at < ${end}
+      ),
+      hotel_ledger AS (
         SELECT wt.booking_id,
           -coalesce(sum(wt.amount) FILTER (WHERE wt.type = 'COMMISSION'), 0) AS commission,
           -coalesce(sum(wt.amount) FILTER (WHERE wt.type = 'REFUND'), 0) AS refunds,
-          coalesce(sum(wt.amount) FILTER (WHERE wt.type IN ('BOOKING_PAYMENT', 'COMMISSION', 'REFUND', 'ADJUSTMENT')), 0) AS net
+          coalesce(sum(wt.amount) FILTER (WHERE wt.type IN ${EARNINGS}), 0) AS net
         FROM wallet_transaction wt JOIN wallet w ON w.wallet_id = wt.wallet_id
-        WHERE w.hotel_id = ${hotelId}::uuid AND wt.booking_id IS NOT NULL
+        WHERE w.hotel_id = ${hotelId}::uuid AND wt.booking_id IN (SELECT booking_id FROM created)
         GROUP BY wt.booking_id
       )
       SELECT i.invoice_number AS code, b.created_at AS "createdAt", b.guest_name AS "guestName",
@@ -189,21 +190,15 @@ export class StatsExportService {
         b.check_in_date::text AS "checkIn", b.check_out_date::text AS "checkOut",
         (b.check_out_date - b.check_in_date) AS nights, b.num_guests AS guests,
         b.status::text AS status, i.payment_status::text AS "paymentStatus", i.payment_method::text AS method,
-        CASE
-          WHEN b.recommendation_id IS NOT NULL THEN 'AI_RECOMMENDATION'
-          WHEN b.promotion_id IS NOT NULL OR b.voucher_id IS NOT NULL THEN 'PROMOTION'
-          ELSE 'DIRECT'
-        END AS source,
+        ${BOOKING_SOURCE} AS source,
         b.total_amount AS total,
         coalesce(l.commission, 0) AS commission, coalesce(l.refunds, 0) AS refunds, coalesce(l.net, 0) AS net,
         b.cancelled_at AS "cancelledAt"
-      FROM booking b
+      FROM created c
+      JOIN booking b ON b.booking_id = c.booking_id
       JOIN room_type rt ON rt.room_type_id = b.room_type_id
       LEFT JOIN invoice i ON i.booking_id = b.booking_id
       LEFT JOIN hotel_ledger l ON l.booking_id = b.booking_id
-      WHERE rt.hotel_id = ${hotelId}::uuid
-        AND b.status NOT IN ('PENDING', 'EXPIRED')
-        AND b.created_at >= ${start} AND b.created_at < ${end}
       ORDER BY b.created_at, b.booking_id`;
   }
 
@@ -356,7 +351,8 @@ function overviewSheet(
     top,
     [
       { header: 'Chỉ số', width: 34 },
-      { header: 'Đơn vị', width: 8 },
+      // Column B also holds the export time and the pending balance.
+      { header: 'Đơn vị', width: 18 },
       { header: 'Kỳ này', width: 18 },
       { header: 'Kỳ trước', width: 18 },
       { header: 'Thay đổi', width: 11, numFmt: ONE },
@@ -377,7 +373,7 @@ function overviewSheet(
     next + 1,
     [
       { header: 'Khả dụng', width: 34, numFmt: MONEY },
-      { header: 'Đang chờ', width: 8, numFmt: MONEY },
+      { header: 'Đang chờ', width: 18, numFmt: MONEY },
       { header: 'Đang giữ', width: 18, numFmt: MONEY },
     ],
     [[wallet.available, wallet.pending, wallet.reserved]],
@@ -533,10 +529,12 @@ function bookingsSheet(book: ExcelJS.Workbook, rows: BookingRow[]) {
   );
 }
 
-function ledgerSheet(book: ExcelJS.Workbook, rows: LedgerRow[]) {
-  const net = rows
-    .filter((r) => EARNINGS.includes(r.type))
-    .reduce((s, r) => s.plus(r.amount), new Prisma.Decimal(0));
+/** `net`: `overview.cash.netEarnings`, the same rows summed by the dashboard. */
+function ledgerSheet(
+  book: ExcelJS.Workbook,
+  rows: LedgerRow[],
+  net: number | null,
+) {
   const sheet = listSheet(
     book,
     'Giao dịch ví',
@@ -560,7 +558,7 @@ function ledgerSheet(book: ExcelJS.Workbook, rows: LedgerRow[]) {
   const total = sheet.getRow(rows.length + 3);
   total.getCell(4).value =
     'Tổng thực nhận (thanh toán, hoa hồng, hoàn tiền, điều chỉnh)';
-  total.getCell(5).value = toNumber(net);
+  total.getCell(5).value = net ?? 0;
   total.getCell(5).numFmt = MONEY;
   total.font = { bold: true };
 }

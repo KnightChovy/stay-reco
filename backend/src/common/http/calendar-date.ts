@@ -25,4 +25,11 @@ const VIETNAM_OFFSET_MS = 7 * 3_600_000;
 
 /** Today in Asia/Ho_Chi_Minh, where booking days are counted (money-rules §2.3). */
 export const todayInVietnam = (now = new Date()) =>
-  toCalendarDate(new Date(now.getTime() + VIETNAM_OFFSET_MS));
+  toCalendarDate(vietnamWallClock(now));
+
+/**
+ * The instant shifted so its UTC fields read as the Vietnam wall-clock time, for formats without a time zone
+ * (Excel cells).
+ */
+export const vietnamWallClock = (at: Date) =>
+  new Date(at.getTime() + VIETNAM_OFFSET_MS);

@@ -25,6 +25,8 @@ export function configureApp(app: INestApplication) {
   app.enableCors({
     origin: config.get('CORS_ORIGINS', { infer: true }),
     credentials: true,
+    // Lets the web read the file name of downloads (stats/export).
+    exposedHeaders: ['Content-Disposition'],
   });
   app.useGlobalPipes(createValidationPipe());
   // Response contract: { success, message, data, meta? } / { success: false, message, code, details? }

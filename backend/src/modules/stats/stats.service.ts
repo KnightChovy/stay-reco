@@ -43,7 +43,13 @@ import {
 /** Booking statuses that count as sold (decision PD2: no-shows included). */
 const SOLD = Prisma.sql`('CONFIRMED', 'CHECKED_IN', 'COMPLETED', 'NO_SHOW')`;
 /** Hotel wallet rows that make up the net received (payouts excluded). */
-const EARNINGS = Prisma.sql`('BOOKING_PAYMENT', 'COMMISSION', 'REFUND', 'ADJUSTMENT')`;
+export const EARNINGS = Prisma.sql`('BOOKING_PAYMENT', 'COMMISSION', 'REFUND', 'ADJUSTMENT')`;
+/** `BookingSource` of the booking aliased `b` (an AI suggestion wins over a promotion). */
+export const BOOKING_SOURCE = Prisma.sql`CASE
+          WHEN b.recommendation_id IS NOT NULL THEN 'AI_RECOMMENDATION'
+          WHEN b.promotion_id IS NOT NULL OR b.voucher_id IS NOT NULL THEN 'PROMOTION'
+          ELSE 'DIRECT'
+        END`;
 
 /** One day of performance and cash figures (docs/api/partner-dashboard.md §3). */
 interface DayRow {
@@ -617,11 +623,7 @@ export class StatsService {
     return this.prisma.$queryRaw<CreatedRow[]>`
       SELECT b.status::text AS status,
         i.payment_method::text AS method,
-        CASE
-          WHEN b.recommendation_id IS NOT NULL THEN 'AI_RECOMMENDATION'
-          WHEN b.promotion_id IS NOT NULL OR b.voucher_id IS NOT NULL THEN 'PROMOTION'
-          ELSE 'DIRECT'
-        END AS source,
+        ${BOOKING_SOURCE} AS source,
         count(*)::int AS n
       FROM booking b
       JOIN room_type rt ON rt.room_type_id = b.room_type_id
