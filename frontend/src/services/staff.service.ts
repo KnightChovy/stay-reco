@@ -1,5 +1,6 @@
 import { api } from "@/lib/axios";
 import type {
+  ActionItemList,
   AvailabilityDay,
   AvailabilityQuery,
   Booking,
@@ -10,6 +11,10 @@ import type {
   Hotel,
   HotelBookingsQuery,
   HotelSummary,
+  HotelTodayStats,
+  OccupancyForecast,
+  PricingRule,
+  RoomTypeListing,
   Room,
   RoomListQuery,
   ForwardRefundInput,
@@ -21,7 +26,6 @@ import type { APIResponse, PageMeta } from "@/types/response.type";
 
 /**
  * Endpoints a hotel staff member can call (docs/api/staff.md, docs/api/partner.md).
- * The booking list (`GET /hotels/:hotelId/bookings`) is not part of the API yet; when it arrives add it here.
  */
 
 export type RoomListParams = Partial<RoomListQuery>;
@@ -52,6 +56,23 @@ export async function getAvailability(hotelId: string, params: AvailabilityQuery
     params,
   });
   return data.data;
+}
+
+/** Read-only for staff (docs/api/staff.md); highest priority first. */
+export async function getPricingRules(hotelId: string) {
+  const { data } = await api.get<APIResponse<PricingRule[]>>(`/hotels/${hotelId}/pricing-rules`);
+  return data.data;
+}
+
+/**
+ * The price of each night of a stay for one room, as a guest booking today would pay it (the same price engine as the
+ * search). One call per room type instead of one `price-preview` per night.
+ */
+export async function getNightlyPrices(roomTypeId: string, checkIn: string, checkOut: string) {
+  const { data } = await api.get<APIResponse<RoomTypeListing>>(`/room-types/${roomTypeId}/listing`, {
+    params: { checkIn, checkOut, guests: 1, rooms: 1 },
+  });
+  return data.data.offer?.nightlyPrices ?? [];
 }
 
 /** Staff need the `BOOKING` or `REFUND` permission group; anyone else gets 403 or 404. */
@@ -132,5 +153,28 @@ export async function rejectBookingChange(bookingId: string, input: RejectChange
 /** Staff with `REFUND` forward the customer's refund request to the partner. */
 export async function forwardRefund(bookingId: string, input: ForwardRefundInput) {
   const { data } = await api.post<APIResponse<Booking>>(`/bookings/${bookingId}/forward-refund`, input);
+  return data.data;
+}
+
+// ── Dashboard (member access) ───────────────────────────────
+
+/** Things that need someone's attention (overdue check-outs, refund and change requests…). */
+export async function getActionItems(hotelId: string) {
+  const { data } = await api.get<APIResponse<ActionItemList>>(`/hotels/${hotelId}/action-items`);
+  return data.data;
+}
+
+/** Today at the hotel: arrivals, departures, in-house guests, rooms by status. */
+export async function getTodayStats(hotelId: string) {
+  const { data } = await api.get<APIResponse<HotelTodayStats>>(`/hotels/${hotelId}/stats/today`);
+  return data.data;
+}
+
+/** Occupancy of the next days. */
+export async function getOccupancyForecast(hotelId: string, days?: number) {
+  const { data } = await api.get<APIResponse<OccupancyForecast>>(
+    `/hotels/${hotelId}/stats/occupancy-forecast`,
+    { params: days ? { days } : undefined },
+  );
   return data.data;
 }

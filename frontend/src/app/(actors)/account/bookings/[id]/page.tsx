@@ -28,7 +28,8 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import type { BookingStatus, PaymentStatus } from '@stayreco/shared';
 import { getApiErrorMessage } from '@/lib/api-error';
-import { useBooking } from '@/features/booking/api/booking-queries';
+import { useBooking, useBookingVoucher } from '@/features/booking/api/booking-queries';
+import { VoucherQr } from '@/features/booking/components/VoucherQr';
 import { formatDate, formatDateTime, formatMoney } from '@/features/stays/lib/format';
 
 const FALLBACK_IMAGE =
@@ -52,6 +53,37 @@ const PAYMENT_STATUS: Record<PaymentStatus, string> = {
   REFUNDED: 'Đã hoàn tiền',
   FAILED: 'Thanh toán thất bại',
 };
+
+/** The voucher QR the front desk scans at check-in and check-out (`GET /bookings/:id/voucher`). */
+function CheckInQrCard({ bookingId, checkedIn }: { bookingId: string; checkedIn: boolean }) {
+  const voucherQuery = useBookingVoucher(bookingId);
+  const voucher = voucherQuery.data;
+
+  return (
+    <Card className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-md">
+      <div className="border-b border-slate-200/60 bg-[#013758] p-4 text-center text-white">
+        <QrCode className="mx-auto size-6" />
+        <h3 className="mt-1 text-sm font-bold">Mã QR check-in</h3>
+        <p className="text-[11px] text-white/70">
+          {checkedIn ? 'Đưa mã này cho lễ tân khi trả phòng' : 'Đưa mã này cho lễ tân khi nhận phòng'}
+        </p>
+      </div>
+      <div className="p-5">
+        {voucher ? (
+          <VoucherQr token={voucher.qrToken} code={voucher.code} />
+        ) : voucherQuery.isLoading ? (
+          <div className="flex items-center justify-center gap-2 py-10 text-xs text-slate-500">
+            <Loader2 className="size-4 animate-spin" /> Đang tạo mã QR…
+          </div>
+        ) : (
+          <p className="py-6 text-center text-xs text-slate-500">
+            {getApiErrorMessage(voucherQuery.error, 'Không tải được mã QR. Vui lòng thử lại sau.')}
+          </p>
+        )}
+      </div>
+    </Card>
+  );
+}
 
 export default function BookingDetailPage() {
   const params = useParams<{ id: string }>();
@@ -297,6 +329,7 @@ export default function BookingDetailPage() {
             </div>
 
             <aside className="space-y-6 lg:sticky lg:top-24 lg:col-span-4">
+              {canVoucher && <CheckInQrCard bookingId={booking.id} checkedIn={booking.status === 'CHECKED_IN'} />}
               <Card className="space-y-5 rounded-xl border border-slate-200/80 bg-white p-6 shadow-md">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                   <h3 className="text-base font-bold text-[#202B36]">Chi tiết thanh toán</h3>

@@ -1,585 +1,462 @@
 'use client';
 
-import React, { useState } from 'react';
 import Link from 'next/link';
+import { format } from 'date-fns';
+import { vi } from 'date-fns/locale';
+import {
+  AlertTriangle,
+  BedDouble,
+  ChevronRight,
+  CircleAlert,
+  CircleCheck,
+  Info,
+  Loader2,
+  LogIn,
+  LogOut,
+  QrCode,
+  RefreshCw,
+  Search,
+  UsersRound,
+  type LucideIcon,
+} from 'lucide-react';
+import type { ActionItem, ActionItemSeverity, HotelTodayStats, TodayArrival } from '@stayreco/shared';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
+import { getApiErrorMessage } from '@/lib/api-error';
+import { useStaffHotel } from '@/features/staff/components/StaffHotelProvider';
+import { useActionItems, useOccupancyForecast, useTodayStats } from '@/features/staff/api/staff-queries';
 import {
-  QrCode,
-  Search,
-  UserPlus,
-  LogIn,
-  LogOut,
-  Hotel,
-  Sparkles,
-  BedDouble,
-  CheckCircle2,
-  Clock,
-  MessageSquare,
-  MoreVertical,
-  CreditCard,
-  Headset,
-  Info,
-  Calendar,
-  Phone,
-  ChevronRight
-} from 'lucide-react';
+  bookingStatusLabels,
+  formatCalendarDate,
+  formatDateTime,
+  paymentStatusLabels,
+  roomStatusLabels,
+  toneClasses,
+} from '@/features/staff/lib/labels';
+
+const FORECAST_DAYS = 14;
 
 export default function StaffDashboardPage() {
-  const [activeTab, setActiveTab] = useState<'checkin' | 'checkout'>('checkin');
-  const [searchQuery, setSearchQuery] = useState('');
-
-  const checkInGuests = [
-    {
-      id: 'SR-261020-0842',
-      channel: 'StayReco App',
-      name: 'Nguyễn Minh Anh',
-      initials: 'NA',
-      phone: '0905 128 442',
-      tier: 'Elite Bạc',
-      roomType: 'Deluxe River View',
-      pkg: 'Gói linh hoạt ăn sáng Buffet',
-      arrivalTime: '14:00',
-      roomNum: 'P.608 (Tầng 6)',
-      roomStatus: 'Sạch & Kiểm duyệt',
-      paymentStatus: 'Đã thanh toán VNPay',
-      amount: '2.250.000 ₫',
-    },
-    {
-      id: 'SR-261020-0850',
-      channel: 'Booking.com',
-      name: 'Trần Thanh Lan',
-      initials: 'TL',
-      phone: '0912 456 789',
-      tier: 'Khách thông thường',
-      roomType: 'Superior Garden Twin',
-      pkg: 'Tiêu chuẩn không hoàn tiền',
-      arrivalTime: '12:30',
-      roomNum: 'Chưa gán phòng',
-      roomStatus: 'Ưu tiên tầng 2 hoặc 3',
-      paymentStatus: 'Thu tại quầy',
-      amount: '1.680.000 ₫',
-    },
-    {
-      id: 'SR-261020-0855',
-      channel: 'StayReco VIP',
-      name: 'Đỗ Quốc Khánh',
-      initials: 'DK',
-      phone: '0988 333 901',
-      tier: 'Elite Kim Cương',
-      roomType: 'Executive Riverside Suite',
-      pkg: 'Bao gồm trà chiều & Spa 60p',
-      arrivalTime: '11:15 (Sớm)',
-      roomNum: 'P.802 (Tầng 8)',
-      roomStatus: 'Welcome card đặt bàn',
-      paymentStatus: 'Thẻ tín dụng doanh nghiệp',
-      amount: '4.850.000 ₫',
-    },
-    {
-      id: 'SR-261020-0862',
-      channel: 'Agoda',
-      name: 'Vũ Hoàng Long',
-      initials: 'VL',
-      phone: '0934 991 228',
-      tier: 'Thành viên mới',
-      roomType: 'Deluxe City Corner',
-      pkg: 'Không gồm bữa sáng',
-      arrivalTime: '14:30',
-      roomNum: 'P.405 (Tầng 4)',
-      roomStatus: 'Đang làm phòng',
-      paymentStatus: 'Chờ cọc 500k',
-      amount: '1.950.000 ₫',
-    },
-    {
-      id: 'SR-261020-0870',
-      channel: 'Lễ tân Walk-in',
-      name: 'Phạm Thị Mai',
-      initials: 'PM',
-      phone: '0971 002 119',
-      tier: 'Elite Vàng',
-      roomType: 'Family Connecting Suite',
-      pkg: 'Bao gồm ăn sáng 4 người',
-      arrivalTime: '15:00',
-      roomNum: 'P.501-502',
-      roomStatus: 'Đã mở cửa thông',
-      paymentStatus: 'Chuyển khoản Vietcombank',
-      amount: '3.800.000 ₫',
-    },
-  ];
+  const { hotel, isLoading: hotelLoading } = useStaffHotel();
+  const hotelId = hotel?.summary.id;
+  const today = useTodayStats(hotelId);
 
   return (
     <div className="font-sans antialiased text-foreground">
       <main>
-        <div className="p-8 space-y-7 pb-16">
-          
-          {/* Top Operational Context & Action Command Bar */}
+        <div className="p-4 sm:p-8 space-y-7 pb-16">
+          {/* Header & quick actions */}
           <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-5 pt-2">
             <div className="space-y-1.5">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 tracking-wide">
                   <span className="size-1.5 rounded-full bg-emerald-600 animate-pulse" />
-                  Ca Sáng • 20/10/2026
+                  {today.data ? `Hôm nay • ${formatCalendarDate(today.data.date)}` : 'Hôm nay'}
                 </span>
-                <span className="text-muted-foreground text-xs font-mono">Bàn giao ca: 14:00</span>
+                {today.data && (
+                  <span className="text-muted-foreground text-xs font-mono">
+                    Cập nhật {formatDateTime(today.data.generatedAt)}
+                  </span>
+                )}
               </div>
               <h1 className="text-2xl lg:text-3xl font-bold tracking-tight text-primary">
                 Tổng quan ca làm việc — Lễ tân & Vận hành
               </h1>
               <p className="text-xs lg:text-sm text-muted-foreground max-w-2xl leading-relaxed">
-                Theo dõi tình hình nhận/trả phòng hôm nay, phòng chờ gán số và các yêu cầu khẩn cần xử lý kịp thời tại An Nhiên Riverside.
+                Theo dõi tình hình nhận/trả phòng hôm nay và các việc cần xử lý
+                {hotel ? ` tại ${hotel.summary.name}` : ''}.
               </p>
             </div>
 
-            {/* Quick Action Command Bar */}
             <div className="flex flex-wrap items-center gap-2.5 shrink-0">
               <Link href="/staff/check-in">
                 <Button className="h-11 px-4 bg-primary text-primary-foreground hover:bg-[#193b56] text-xs font-bold gap-2 shadow-xs">
                   <QrCode className="size-4" />
-                  <span>Quét QR Voucher</span>
+                  <span>Check-in / Quét QR</span>
+                </Button>
+              </Link>
+              <Link href="/staff/check-out">
+                <Button variant="outline" className="h-11 px-4 bg-white text-foreground hover:bg-slate-50 text-xs font-semibold gap-2 border-border shadow-2xs">
+                  <LogOut className="size-4 text-[#934a33]" />
+                  <span>Check-out</span>
                 </Button>
               </Link>
               <Link href="/staff/bookings">
                 <Button variant="outline" className="h-11 px-4 bg-white text-foreground hover:bg-slate-50 text-xs font-semibold gap-2 border-border shadow-2xs">
                   <Search className="size-4 text-primary" />
-                  <span>Tìm nhanh đặt phòng</span>
-                  <kbd className="px-1.5 py-0.5 text-[10px] font-mono bg-slate-100 rounded text-muted-foreground">⌘K</kbd>
-                </Button>
-              </Link>
-              <Link href="/staff/check-in">
-                <Button variant="outline" className="h-11 px-4 bg-white text-foreground hover:bg-slate-50 text-xs font-semibold gap-2 border-border shadow-2xs">
-                  <UserPlus className="size-4 text-[#934a33]" />
-                  <span>Tạo đặt phòng tại quầy</span>
+                  <span>Danh sách đặt phòng</span>
                 </Button>
               </Link>
             </div>
           </div>
 
-          {/* Operational KPI Metric Matrix (4 Cards) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-            {/* Card 1: Check-in */}
-            <Card className="p-5 bg-white border border-border rounded-xl shadow-2xs hover:shadow-xs transition-shadow space-y-3">
-              <div className="flex items-start justify-between">
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Khách nhận phòng</span>
-                <div className="size-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
-                  <LogIn className="size-4" />
-                </div>
-              </div>
-              <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-bold text-foreground">14</span>
-                <span className="text-xs text-muted-foreground font-medium">lượt dự kiến</span>
-              </div>
-              <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden flex">
-                <div className="bg-primary h-1.5 rounded-full" style={{ width: '28.5%' }} />
-              </div>
-              <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                <span className="flex items-center gap-1">
-                  <span className="size-1.5 rounded-full bg-primary" /> Đã nhận: <strong className="text-foreground">4</strong>
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="size-1.5 rounded-full bg-slate-300" /> Chờ nhận: <strong className="text-[#934a33]">10</strong>
-                </span>
-              </div>
+          {hotelLoading || today.isLoading ? (
+            <Card className="p-10 bg-white border border-border rounded-xl flex items-center justify-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="size-4 animate-spin" /> Đang tải số liệu hôm nay...
             </Card>
-
-            {/* Card 2: Check-out */}
-            <Card className="p-5 bg-white border border-border rounded-xl shadow-2xs hover:shadow-xs transition-shadow space-y-3">
-              <div className="flex items-start justify-between">
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Khách trả phòng</span>
-                <div className="size-8 rounded-lg bg-orange-100 text-[#934a33] flex items-center justify-center">
-                  <LogOut className="size-4" />
-                </div>
-              </div>
-              <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-bold text-foreground">12</span>
-                <span className="text-xs text-muted-foreground font-medium">lượt trong ngày</span>
-              </div>
-              <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden flex">
-                <div className="bg-emerald-600 h-1.5 rounded-full" style={{ width: '75%' }} />
-              </div>
-              <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                <span className="flex items-center gap-1">
-                  <span className="size-1.5 rounded-full bg-emerald-600" /> Đã xong: <strong className="text-foreground">9</strong>
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="size-1.5 rounded-full bg-[#934a33]" /> Đang đợi: <strong className="text-[#934a33]">3</strong>
-                </span>
-              </div>
+          ) : !hotelId ? (
+            <Card className="p-8 bg-white border border-border rounded-xl text-sm text-muted-foreground text-center">
+              Tài khoản chưa được gán khách sạn nào.
             </Card>
+          ) : today.isError || !today.data ? (
+            <ErrorCard
+              message={getApiErrorMessage(today.error, 'Không tải được số liệu hôm nay.')}
+              onRetry={() => void today.refetch()}
+            />
+          ) : (
+            <TodayKpis stats={today.data} />
+          )}
 
-            {/* Card 3: Room Occupancy */}
-            <Card className="p-5 bg-white border border-border rounded-xl shadow-2xs hover:shadow-xs transition-shadow space-y-3">
-              <div className="flex items-start justify-between">
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Công suất phòng</span>
-                <div className="size-8 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center">
-                  <Hotel className="size-4" />
-                </div>
-              </div>
-              <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-bold text-primary">88%</span>
-                <span className="text-xs text-muted-foreground font-medium">32 / 36 phòng</span>
-              </div>
-              <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
-                <div className="bg-primary h-1.5 rounded-full" style={{ width: '88%' }} />
-              </div>
-              <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                <span>Còn trống: <strong className="text-emerald-700 font-semibold">4 phòng sạch</strong></span>
-                <span className="text-muted-foreground">Đạt chỉ tiêu ca</span>
-              </div>
-            </Card>
-
-            {/* Card 4: AI Concierge & Direct Requests */}
-            <Card className="p-5 bg-white border border-border rounded-xl shadow-2xs hover:shadow-xs transition-shadow space-y-3">
-              <div className="flex items-start justify-between">
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Tin nhắn & AI duyệt</span>
-                <div className="size-8 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center">
-                  <Sparkles className="size-4" />
-                </div>
-              </div>
-              <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-bold text-[#934a33]">3</span>
-                <span className="text-xs text-muted-foreground font-medium">mục cần phản hồi</span>
-              </div>
-              <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
-                <div className="bg-[#934a33] h-1.5 rounded-full" style={{ width: '65%' }} />
-              </div>
-              <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                <span>2 tin hỏi view tầng cao</span>
-                <span className="text-[#934a33] font-semibold">1 đổi lịch</span>
-              </div>
-            </Card>
-          </div>
-
-          {/* Action-First Priority Queue Banner (Việc khẩn cần xử lý trong ca) */}
-          <Card className="bg-white border border-border rounded-xl shadow-2xs overflow-hidden">
-            <div className="px-5 py-3.5 bg-slate-50 border-b border-border flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <span className="size-2 rounded-full bg-red-500 animate-ping" />
-                <span className="text-xs font-bold uppercase tracking-wider text-foreground">
-                  Việc khẩn ưu tiên trong ca làm
-                </span>
-                <Badge className="bg-red-100 text-red-700 hover:bg-red-100 text-[10px] font-bold">
-                  3 cần xử lý
-                </Badge>
-              </div>
-              <span className="text-[11px] text-muted-foreground">Tự động cập nhật thời gian thực từ PMS</span>
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+            <div className="xl:col-span-2 space-y-6">
+              {today.data && <UpcomingArrivals arrivals={today.data.upcomingArrivals} />}
+              {hotelId && <OccupancyStrip hotelId={hotelId} />}
             </div>
-
-            <div className="divide-y divide-border">
-              {/* Item 1 */}
-              <div className="p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-slate-50/60 transition-colors">
-                <div className="flex items-start gap-3.5 min-w-0">
-                  <div className="size-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0 mt-0.5 font-bold">
-                    <BedDouble className="size-5" />
-                  </div>
-                  <div className="space-y-1 min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-mono text-xs font-bold text-primary">SR-261020-0842</span>
-                      <span className="text-xs font-bold text-foreground">Nguyễn Minh Anh</span>
-                      <Badge variant="outline" className="text-[10px] font-semibold">Elite Bạc</Badge>
-                      <span className="text-[11px] text-muted-foreground">• Deluxe River View (#608)</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                      Dự kiến đến lúc <strong className="text-foreground font-bold">14:00</strong> — Yêu cầu đặc biệt: Khách cần gối lông vũ tự nhiên, yên tĩnh, chuẩn bị trước trà thảo mộc chào mừng.
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
-                  <Link href="/staff/check-in">
-                    <Button className="h-9 px-3.5 bg-primary text-primary-foreground hover:bg-[#193b56] text-xs font-semibold gap-1.5 shadow-2xs">
-                      <CheckCircle2 className="size-4" /> Gán phòng & Chuẩn bị
-                    </Button>
-                  </Link>
-                  <Button variant="ghost" size="icon" className="size-9 text-muted-foreground hover:text-foreground">
-                    <MoreVertical className="size-4" />
-                  </Button>
-                </div>
-              </div>
-
-              {/* Item 2 */}
-              <div className="p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-slate-50/60 transition-colors">
-                <div className="flex items-start gap-3.5 min-w-0">
-                  <div className="size-9 rounded-lg bg-orange-100 text-[#934a33] flex items-center justify-center shrink-0 mt-0.5 font-bold">
-                    <Clock className="size-5" />
-                  </div>
-                  <div className="space-y-1 min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-mono text-xs font-bold text-primary">SR-261020-0791</span>
-                      <span className="text-xs font-bold text-foreground">Trần Văn Hoàng</span>
-                      <span className="text-[11px] text-muted-foreground">• Superior Garden (#204)</span>
-                      <Badge className="bg-orange-100 text-[#934a33] hover:bg-orange-100 text-[10px] font-bold">Trả phòng muộn</Badge>
-                    </div>
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                      Khách xin gia hạn trả phòng đến <strong className="text-foreground font-bold">13:00</strong> (quy định 12:00). Cần kiểm tra lượt đặt kế tiếp và chốt phụ phí gia hạn 150.000 ₫.
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
-                  <Link href="/staff/check-out">
-                    <Button variant="outline" className="h-9 px-3.5 text-xs font-semibold gap-1.5 border-border">
-                      <CreditCard className="size-4 text-[#934a33]" /> Xác nhận phụ phí
-                    </Button>
-                  </Link>
-                  <Button variant="ghost" size="icon" className="size-9 text-muted-foreground hover:text-foreground">
-                    <MoreVertical className="size-4" />
-                  </Button>
-                </div>
-              </div>
-
-              {/* Item 3 */}
-              <div className="p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-slate-50/60 transition-colors">
-                <div className="flex items-start gap-3.5 min-w-0">
-                  <div className="size-9 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0 mt-0.5 font-bold">
-                    <Headset className="size-5" />
-                  </div>
-                  <div className="space-y-1 min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-xs font-bold text-foreground">Khách trao đổi qua AI Concierge</span>
-                      <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100 text-[10px] font-bold">Cần xác nhận xe</Badge>
-                      <span className="text-[11px] text-muted-foreground">Chuyến bay VN128 hạ cánh 15:30</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                      Khách muốn đặt shuttle bus đón sân bay Đà Nẵng về khách sạn cho 2 người lớn kèm 2 kiện hành lý cồng kềnh.
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
-                  <Link href="/staff/inbox">
-                    <Button className="h-9 px-3.5 bg-primary text-primary-foreground hover:bg-[#193b56] text-xs font-semibold gap-1.5 shadow-2xs">
-                      <MessageSquare className="size-4" /> Tiếp nhận chat
-                    </Button>
-                  </Link>
-                  <Button variant="ghost" size="icon" className="size-9 text-muted-foreground hover:text-foreground">
-                    <MoreVertical className="size-4" />
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </Card>
-
-          {/* Primary Operations Split */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-7 items-start">
-            {/* Left Column: Master Tabs & Operational Guests Table */}
-            <div className="lg:col-span-8 space-y-4 min-w-0">
-              <Card className="bg-white border border-border shadow-2xs rounded-xl overflow-hidden">
-                {/* Tab Bar */}
-                <div className="p-3 bg-slate-50 border-b border-border flex flex-wrap items-center justify-between gap-3">
-                  <div className="inline-flex rounded-lg bg-slate-200/70 p-1 text-xs font-semibold">
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab('checkin')}
-                      className={`px-3.5 py-1.5 rounded-md text-xs font-semibold gap-2 flex items-center transition-all ${
-                        activeTab === 'checkin'
-                          ? 'bg-white text-primary shadow-2xs font-bold'
-                          : 'text-muted-foreground hover:text-foreground'
-                      }`}
-                    >
-                      <LogIn className="size-4" />
-                      <span>Hôm nay nhận phòng (Check-in)</span>
-                      <Badge className="bg-primary/10 text-primary font-bold text-[10px] px-1.5 py-0">14</Badge>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab('checkout')}
-                      className={`px-3.5 py-1.5 rounded-md text-xs font-semibold gap-2 flex items-center transition-all ${
-                        activeTab === 'checkout'
-                          ? 'bg-white text-primary shadow-2xs font-bold'
-                          : 'text-muted-foreground hover:text-foreground'
-                      }`}
-                    >
-                      <LogOut className="size-4" />
-                      <span>Hôm nay trả phòng (Check-out)</span>
-                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-medium">12</Badge>
-                    </button>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <div className="relative">
-                      <input
-                        type="text"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="Lọc theo tên, mã phòng..."
-                        className="h-8 pl-8 pr-3 text-xs rounded-lg bg-white text-foreground placeholder:text-muted-foreground border border-border focus:outline-none focus:ring-1 focus:ring-primary w-44 sm:w-56 shadow-2xs font-medium"
-                      />
-                      <Search className="size-3.5 text-muted-foreground absolute left-2.5 top-2.5" />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Data Table */}
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs text-foreground">
-                    <thead>
-                      <tr className="bg-slate-50 text-[11px] font-bold text-muted-foreground uppercase tracking-wider border-b border-border">
-                        <th className="py-3 px-4">Mã đơn</th>
-                        <th className="py-3 px-4">Khách hàng</th>
-                        <th className="py-3 px-4">Hạng phòng & Gói</th>
-                        <th className="py-3 px-3 text-center">Giờ đến</th>
-                        <th className="py-3 px-4">Phòng vật lý</th>
-                        <th className="py-3 px-4">Thanh toán</th>
-                        <th className="py-3 px-4 text-right">Thao tác</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                      {checkInGuests.map((guest) => (
-                        <tr key={guest.id} className="hover:bg-slate-50/60 transition-colors">
-                          <td className="py-3.5 px-4 font-mono font-bold text-primary whitespace-nowrap">
-                            <Link href={`/staff/bookings/${guest.id}`} className="hover:underline">
-                              {guest.id}
-                            </Link>
-                            <span className="block text-[10px] font-normal text-muted-foreground">Kênh: {guest.channel}</span>
-                          </td>
-                          <td className="py-3.5 px-4 min-w-[160px]">
-                            <div className="flex items-center gap-2">
-                              <div className="size-7 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-[10px]">
-                                {guest.initials}
-                              </div>
-                              <div>
-                                <div className="font-bold text-foreground">{guest.name}</div>
-                                <div className="text-[11px] text-muted-foreground font-mono">{guest.phone}</div>
-                              </div>
-                            </div>
-                            <div className="mt-1">
-                              <span className="inline-flex items-center gap-1 text-[10px] font-medium text-[#934a33]">
-                                ★ {guest.tier}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="py-3.5 px-4 min-w-[170px]">
-                            <div className="font-semibold text-foreground">{guest.roomType}</div>
-                            <div className="text-[11px] text-muted-foreground">{guest.pkg}</div>
-                          </td>
-                          <td className="py-3.5 px-3 text-center whitespace-nowrap">
-                            <span className="px-2 py-0.5 rounded-full text-[11px] font-mono font-semibold bg-slate-100 text-foreground">
-                              {guest.arrivalTime}
-                            </span>
-                          </td>
-                          <td className="py-3.5 px-4 whitespace-nowrap">
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-primary/10 text-primary">
-                              <BedDouble className="size-3.5" />
-                              {guest.roomNum}
-                            </span>
-                            <span className="block text-[10px] text-emerald-600 font-medium mt-0.5">{guest.roomStatus}</span>
-                          </td>
-                          <td className="py-3.5 px-4 whitespace-nowrap">
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                              <CheckCircle2 className="size-3 text-emerald-600" />
-                              {guest.paymentStatus}
-                            </span>
-                            <div className="text-[11px] font-mono font-bold text-foreground mt-0.5">{guest.amount}</div>
-                          </td>
-                          <td className="py-3.5 px-4 text-right whitespace-nowrap">
-                            <div className="inline-flex items-center gap-1.5">
-                              <Link href="/staff/check-in">
-                                <Button size="sm" className="h-8 px-3 bg-primary text-primary-foreground hover:bg-[#193b56] text-[11px] font-semibold">
-                                  Check-in
-                                </Button>
-                              </Link>
-                              <Link href={`/staff/bookings/${guest.id}`}>
-                                <Button size="sm" variant="ghost" className="size-8 p-0 text-muted-foreground hover:text-foreground">
-                                  <MoreVertical className="size-4" />
-                                </Button>
-                              </Link>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </Card>
-            </div>
-
-            {/* Right Column: Physical Room Inventory & Contacts */}
-            <div className="lg:col-span-4 space-y-6">
-              {/* Panel 1: Room Status Overview */}
-              <Card className="p-5 bg-white border border-border shadow-2xs rounded-xl space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Hotel className="size-5 text-primary" />
-                    <h2 className="text-sm font-bold text-foreground">Tình trạng phòng vật lý</h2>
-                  </div>
-                  <span className="text-[11px] font-mono font-semibold text-muted-foreground">Tổng 36 phòng</span>
-                </div>
-
-                <div className="space-y-1.5">
-                  <div className="flex h-3 w-full overflow-hidden rounded-full bg-slate-100">
-                    <div className="bg-emerald-600 h-full" style={{ width: '50%' }} title="Sạch: 18 phòng" />
-                    <div className="bg-[#934a33] h-full" style={{ width: '11.1%' }} title="Đang dọn: 4 phòng" />
-                    <div className="bg-primary h-full" style={{ width: '33.3%' }} title="Đang có khách: 12 phòng" />
-                    <div className="bg-slate-300 h-full" style={{ width: '5.6%' }} title="Bảo trì: 2 phòng" />
-                  </div>
-                  <div className="flex items-center justify-between text-[10px] text-muted-foreground px-0.5">
-                    <span>50% Sẵn sàng</span>
-                    <span>33% Có khách</span>
-                    <span>17% Dọn/Bảo trì</span>
-                  </div>
-                </div>
-
-                <div className="space-y-2 pt-1 text-xs">
-                  <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-50">
-                    <span className="flex items-center gap-2">
-                      <span className="size-2.5 rounded-full bg-emerald-600" /> Phòng sạch sẵn sàng
-                    </span>
-                    <span className="font-mono font-bold text-emerald-700">18 phòng</span>
-                  </div>
-                  <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-50">
-                    <span className="flex items-center gap-2">
-                      <span className="size-2.5 rounded-full bg-[#934a33]" /> Đang dọn dẹp (Housekeeping)
-                    </span>
-                    <span className="font-mono font-bold text-[#934a33]">04 phòng</span>
-                  </div>
-                  <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-50">
-                    <span className="flex items-center gap-2">
-                      <span className="size-2.5 rounded-full bg-primary" /> Đang có khách lưu trú
-                    </span>
-                    <span className="font-mono font-bold text-primary">12 phòng</span>
-                  </div>
-                </div>
-              </Card>
-
-              {/* Panel 2: Internal Contacts */}
-              <Card className="p-5 bg-white border border-border shadow-2xs rounded-xl space-y-4">
-                <div className="flex items-center justify-between border-b border-border pb-3">
-                  <div className="flex items-center gap-2">
-                    <Phone className="size-4 text-[#934a33]" />
-                    <h2 className="text-sm font-bold text-foreground">Liên hệ bộ phận nội bộ</h2>
-                  </div>
-                  <span className="size-2 rounded-full bg-emerald-500" />
-                </div>
-
-                <div className="space-y-3 text-xs">
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50">
-                    <div>
-                      <div className="font-bold text-foreground">Tổ Buồng phòng</div>
-                      <div className="text-[11px] text-muted-foreground">Giám sát: Cô Hoa (Ca 1)</div>
-                    </div>
-                    <span className="font-mono font-bold text-primary bg-primary/10 px-2 py-0.5 rounded">Ext: 102</span>
-                  </div>
-
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50">
-                    <div>
-                      <div className="font-bold text-foreground">Bếp & Nhà hàng Sen Vàng</div>
-                      <div className="text-[11px] text-muted-foreground">Bếp trưởng: Bùi Anh Tuấn</div>
-                    </div>
-                    <span className="font-mono font-bold text-primary bg-primary/10 px-2 py-0.5 rounded">Ext: 105</span>
-                  </div>
-
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50">
-                    <div>
-                      <div className="font-bold text-foreground">Hỗ trợ kỹ thuật StayReco</div>
-                      <div className="text-[11px] text-muted-foreground">Kênh ưu tiên 24/7</div>
-                    </div>
-                    <a href="tel:19006868" className="font-mono font-bold text-[#934a33] hover:underline">1900 6868</a>
-                  </div>
-                </div>
-              </Card>
+            <div className="space-y-6">
+              {hotelId && <ActionItemsCard hotelId={hotelId} />}
+              {today.data && <RoomStatusCard stats={today.data} />}
             </div>
           </div>
-
         </div>
       </main>
     </div>
+  );
+}
+
+function ErrorCard({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <Card className="p-5 bg-white border border-amber-200 rounded-xl flex items-center justify-between gap-3 text-sm">
+      <span className="flex items-center gap-2 text-amber-800">
+        <AlertTriangle className="size-4 shrink-0" /> {message}
+      </span>
+      <Button variant="outline" onClick={onRetry} className="h-8 text-xs gap-1.5 shrink-0">
+        <RefreshCw className="size-3.5" /> Thử lại
+      </Button>
+    </Card>
+  );
+}
+
+function percentOf(part: number, total: number) {
+  return total > 0 ? Math.min(100, Math.round((part / total) * 100)) : 0;
+}
+
+function TodayKpis({ stats }: { stats: HotelTodayStats }) {
+  const occupancy = stats.tonight.occupancyRate;
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      <KpiCard
+        title="Khách nhận phòng"
+        icon={LogIn}
+        iconClass="bg-primary/10 text-primary"
+        value={stats.arrivals.expected}
+        unit="lượt dự kiến"
+        progress={percentOf(stats.arrivals.checkedIn, stats.arrivals.expected)}
+        barClass="bg-primary"
+        left={['Đã nhận', stats.arrivals.checkedIn]}
+        right={['Chờ nhận', Math.max(0, stats.arrivals.expected - stats.arrivals.checkedIn)]}
+      />
+      <KpiCard
+        title="Khách trả phòng"
+        icon={LogOut}
+        iconClass="bg-orange-100 text-[#934a33]"
+        value={stats.departures.expected}
+        unit="lượt trong ngày"
+        progress={percentOf(stats.departures.checkedOut, stats.departures.expected)}
+        barClass="bg-emerald-600"
+        left={['Đã trả', stats.departures.checkedOut]}
+        right={['Chờ trả', Math.max(0, stats.departures.expected - stats.departures.checkedOut)]}
+      />
+      <KpiCard
+        title="Đang lưu trú"
+        icon={UsersRound}
+        iconClass="bg-sky-50 text-sky-700"
+        value={stats.inHouse.bookings}
+        unit="booking"
+        left={['Số khách', stats.inHouse.guests]}
+        right={['Giữ phòng', stats.holds.active]}
+      />
+      <KpiCard
+        title="Công suất đêm nay"
+        icon={BedDouble}
+        iconClass="bg-emerald-50 text-emerald-700"
+        value={occupancy == null ? '—' : `${occupancy}%`}
+        unit=""
+        progress={occupancy ?? 0}
+        barClass="bg-emerald-600"
+        left={['Đã bán', stats.tonight.roomsSold]}
+        right={['Còn trống', stats.tonight.roomsAvailable]}
+      />
+    </div>
+  );
+}
+
+function KpiCard({
+  title,
+  icon: Icon,
+  iconClass,
+  value,
+  unit,
+  progress,
+  barClass,
+  left,
+  right,
+}: {
+  title: string;
+  icon: LucideIcon;
+  iconClass: string;
+  value: number | string;
+  unit: string;
+  progress?: number;
+  barClass?: string;
+  left: [string, number];
+  right: [string, number];
+}) {
+  return (
+    <Card className="p-5 bg-white border border-border rounded-xl shadow-2xs space-y-3">
+      <div className="flex items-start justify-between">
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{title}</span>
+        <div className={cn('size-8 rounded-lg flex items-center justify-center', iconClass)}>
+          <Icon className="size-4" />
+        </div>
+      </div>
+      <div className="flex items-baseline gap-2">
+        <span className="text-3xl font-bold text-foreground">{value}</span>
+        {unit && <span className="text-xs text-muted-foreground font-medium">{unit}</span>}
+      </div>
+      {progress !== undefined && (
+        <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+          <div className={cn('h-1.5 rounded-full', barClass)} style={{ width: `${progress}%` }} />
+        </div>
+      )}
+      <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+        <span>
+          {left[0]}: <strong className="text-foreground">{left[1]}</strong>
+        </span>
+        <span>
+          {right[0]}: <strong className="text-[#934a33]">{right[1]}</strong>
+        </span>
+      </div>
+    </Card>
+  );
+}
+
+function UpcomingArrivals({ arrivals }: { arrivals: TodayArrival[] }) {
+  return (
+    <Card className="bg-white border border-border rounded-xl shadow-2xs overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+        <div>
+          <h2 className="text-sm font-bold text-foreground">Khách đến hôm nay chưa check-in</h2>
+          <p className="text-[11px] text-muted-foreground">Sắp xếp theo giờ đến dự kiến</p>
+        </div>
+        <Link href="/staff/check-in" className="text-xs font-semibold text-primary hover:underline flex items-center gap-1">
+          Mở quầy check-in <ChevronRight className="size-3.5" />
+        </Link>
+      </div>
+      {arrivals.length === 0 ? (
+        <p className="px-5 py-8 text-center text-xs text-muted-foreground">Không còn khách nào chờ check-in hôm nay.</p>
+      ) : (
+        <ul className="divide-y divide-border">
+          {arrivals.map((arrival) => {
+            const status = bookingStatusLabels[arrival.status];
+            const payment = paymentStatusLabels[arrival.paymentStatus];
+            return (
+              <li key={arrival.bookingId}>
+                <Link
+                  href={`/staff/bookings/${arrival.bookingId}`}
+                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-5 py-3.5 hover:bg-slate-50 transition-colors"
+                >
+                  <div className="min-w-0 space-y-0.5">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-bold text-foreground">{arrival.guestName}</span>
+                      <span className="text-[11px] font-mono text-muted-foreground">{arrival.code}</span>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground truncate">
+                      {arrival.roomTypeName} • {arrival.rooms} phòng • {arrival.nights} đêm
+                      {arrival.numGuests ? ` • ${arrival.numGuests} khách` : ''}
+                      {arrival.roomNumbers.length > 0 ? ` • P.${arrival.roomNumbers.join(', ')}` : ''}
+                    </p>
+                    {arrival.specialRequests && (
+                      <p className="text-[11px] text-[#934a33] truncate">Yêu cầu: {arrival.specialRequests}</p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-xs font-semibold text-foreground">{arrival.arrivalTime ?? '—'}</span>
+                    <Badge variant="outline" className={cn('text-[10px]', toneClasses[status.tone])}>
+                      {status.label}
+                    </Badge>
+                    <Badge variant="outline" className={cn('text-[10px]', toneClasses[payment.tone])}>
+                      {payment.label}
+                    </Badge>
+                  </div>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
+function RoomStatusCard({ stats }: { stats: HotelTodayStats }) {
+  const statuses = ['AVAILABLE', 'OCCUPIED', 'CLEANING', 'MAINTENANCE'] as const;
+  return (
+    <Card className="p-5 bg-white border border-border rounded-xl shadow-2xs space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-bold text-foreground">Tình trạng phòng</h2>
+        <span className="text-[11px] text-muted-foreground">{stats.rooms.total} phòng</span>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        {statuses.map((status) => {
+          const label = roomStatusLabels[status];
+          return (
+            <div key={status} className={cn('rounded-lg border px-3 py-2.5', toneClasses[label.tone])}>
+              <span className="text-[11px] font-semibold block">{label.label}</span>
+              <span className="text-xl font-bold">{stats.rooms[status]}</span>
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
+const severityStyles: Record<ActionItemSeverity, { icon: LucideIcon; className: string }> = {
+  CRITICAL: { icon: CircleAlert, className: 'text-red-600 bg-red-50' },
+  WARNING: { icon: AlertTriangle, className: 'text-amber-600 bg-amber-50' },
+  INFO: { icon: Info, className: 'text-sky-600 bg-sky-50' },
+};
+
+/** Items a front-desk staff member can act on; owner-only items (setup, verification, pricing…) are skipped. */
+function present(item: ActionItem): { title: string; detail?: string; href: string } | null {
+  switch (item.type) {
+    case 'OVERDUE_CHECKOUTS':
+      return {
+        title: `${item.count} booking quá giờ trả phòng`,
+        detail: 'Khách vẫn đang lưu trú sau giờ trả phòng.',
+        href: '/staff/check-out',
+      };
+    case 'REFUND_REQUESTS_PENDING':
+      return {
+        title: `${item.count} yêu cầu hoàn tiền chờ xử lý`,
+        detail: `Yêu cầu cũ nhất lúc ${formatDateTime(item.params.oldestAt)}`,
+        href: '/staff/bookings',
+      };
+    case 'CHANGE_REQUESTS_PENDING':
+      return {
+        title: `${item.count} yêu cầu đổi booking chờ xử lý`,
+        detail: `Yêu cầu cũ nhất lúc ${formatDateTime(item.params.oldestAt)}`,
+        href: '/staff/bookings',
+      };
+    case 'HIGH_DEMAND_DATES':
+      return {
+        title: `${item.count} ngày tới công suất từ ${item.params.threshold}%`,
+        detail: `Sớm nhất ${formatCalendarDate(item.params.firstDate)}.`,
+        href: '/staff/bookings',
+      };
+    default:
+      return null;
+  }
+}
+
+function ActionItemsCard({ hotelId }: { hotelId: string }) {
+  const query = useActionItems(hotelId);
+  const items = (query.data?.items ?? [])
+    .map((item) => ({ item, view: present(item) }))
+    .filter((entry): entry is { item: ActionItem; view: NonNullable<ReturnType<typeof present>> } => !!entry.view);
+
+  return (
+    <Card className="bg-white border border-border rounded-xl shadow-2xs overflow-hidden">
+      <div className="px-5 py-4 border-b border-border">
+        <h2 className="text-sm font-bold text-foreground">Việc cần xử lý</h2>
+        <p className="text-[11px] text-muted-foreground">Tự động cập nhật mỗi phút</p>
+      </div>
+      {query.isLoading ? (
+        <div className="px-5 py-6 flex items-center gap-2 text-xs text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" /> Đang tải...
+        </div>
+      ) : query.isError ? (
+        <div className="px-5 py-4 flex items-center justify-between gap-3 text-xs text-amber-800">
+          <span>{getApiErrorMessage(query.error, 'Không tải được danh sách việc cần xử lý.')}</span>
+          <Button variant="outline" className="h-7 text-[11px]" onClick={() => void query.refetch()}>
+            Thử lại
+          </Button>
+        </div>
+      ) : items.length === 0 ? (
+        <div className="px-5 py-6 flex items-center gap-2 text-xs text-emerald-700">
+          <CircleCheck className="size-4" /> Không có việc nào cần xử lý.
+        </div>
+      ) : (
+        <ul className="divide-y divide-border">
+          {items.map(({ item, view }) => {
+            const severity = severityStyles[item.severity];
+            const Icon = severity.icon;
+            return (
+              <li key={item.type}>
+                <Link href={view.href} className="flex items-start gap-3 px-5 py-3.5 hover:bg-slate-50 transition-colors">
+                  <span className={cn('size-7 rounded-lg flex items-center justify-center shrink-0', severity.className)}>
+                    <Icon className="size-4" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="text-xs font-semibold text-foreground block">{view.title}</span>
+                    {view.detail && <span className="text-[11px] text-muted-foreground block">{view.detail}</span>}
+                  </span>
+                  <ChevronRight className="size-4 text-muted-foreground shrink-0 mt-1.5" />
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
+function occupancyClass(rate: number | null) {
+  if (rate == null) return 'bg-slate-100 text-slate-500';
+  if (rate >= 90) return 'bg-red-100 text-red-800';
+  if (rate >= 70) return 'bg-amber-100 text-amber-800';
+  if (rate >= 40) return 'bg-emerald-100 text-emerald-800';
+  return 'bg-slate-50 text-slate-600';
+}
+
+function OccupancyStrip({ hotelId }: { hotelId: string }) {
+  const query = useOccupancyForecast(hotelId, FORECAST_DAYS);
+  return (
+    <Card className="p-5 bg-white border border-border rounded-xl shadow-2xs space-y-4">
+      <div>
+        <h2 className="text-sm font-bold text-foreground">Công suất {FORECAST_DAYS} ngày tới</h2>
+        <p className="text-[11px] text-muted-foreground">Số phòng đã đặt / phòng còn trống mỗi đêm</p>
+      </div>
+      {query.isLoading ? (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" /> Đang tải...
+        </div>
+      ) : query.isError || !query.data ? (
+        <div className="flex items-center justify-between gap-3 text-xs text-amber-800">
+          <span>{getApiErrorMessage(query.error, 'Không tải được dự báo công suất.')}</span>
+          <Button variant="outline" className="h-7 text-[11px]" onClick={() => void query.refetch()}>
+            Thử lại
+          </Button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-4 sm:grid-cols-7 gap-2">
+          {query.data.days.map((day) => (
+            <div
+              key={day.date}
+              className={cn('rounded-lg px-2 py-2 text-center', occupancyClass(day.occupancyRate))}
+              title={`${formatCalendarDate(day.date)}: ${day.booked} đã đặt, ${day.held} đang giữ, ${day.free} trống`}
+            >
+              <span className="text-[10px] font-semibold block">{format(new Date(`${day.date}T00:00:00`), 'EEEEEE', { locale: vi })}</span>
+              <span className="text-[10px] block">{formatCalendarDate(day.date).slice(0, 5)}</span>
+              <span className="text-sm font-bold block">{day.occupancyRate == null ? '—' : `${day.occupancyRate}%`}</span>
+              <span className="text-[10px] block">{day.free} trống</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
   );
 }

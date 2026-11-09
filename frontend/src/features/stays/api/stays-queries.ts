@@ -24,6 +24,8 @@ export function useHotelListing(hotelId: string | undefined, query: StayQuery) {
   return useQuery({
     queryKey: staysKeys.hotel(hotelId ?? "", query),
     queryFn: () => staysService.getHotelListing(hotelId!, query),
+    // Changing the stay keeps the page on screen while the new prices load.
+    placeholderData: keepPreviousData,
     enabled: !!hotelId,
   });
 }
@@ -32,6 +34,8 @@ export function useRoomTypeListing(roomTypeId: string | undefined, query: StayQu
   return useQuery({
     queryKey: staysKeys.roomType(roomTypeId ?? "", query),
     queryFn: () => staysService.getRoomTypeListing(roomTypeId!, query),
+    // Changing the stay keeps the page on screen while the new prices load.
+    placeholderData: keepPreviousData,
     enabled: !!roomTypeId,
   });
 }

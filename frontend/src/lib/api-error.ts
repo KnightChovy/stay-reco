@@ -16,6 +16,10 @@ const errorMessages: Record<string, string> = {
   INTERNAL_ERROR: "Máy chủ gặp sự cố. Vui lòng thử lại sau.",
   SERVICE_UNAVAILABLE: "Dịch vụ tạm thời gián đoạn, vui lòng thử lại.",
   AUTH_EMAIL_TAKEN: "Email này đã được sử dụng.",
+  AUTH_WRONG_PASSWORD: "Mật khẩu hiện tại không đúng.",
+  AUTH_SESSION_NOT_FOUND: "Phiên đăng nhập không còn tồn tại. Danh sách đã được tải lại.",
+  AUTH_TOKEN_INVALID: "Liên kết không hợp lệ hoặc đã hết hạn. Vui lòng liên hệ người đã mời bạn để gửi lại.",
+  AUTH_INVITATION_ACCEPTED: "Lời mời này đã được chấp nhận. Vui lòng đăng nhập.",
   HOTEL_NOT_FOUND: "Không tìm thấy khách sạn.",
   PARTNER_SUSPENDED: "Tài khoản đối tác đang bị tạm ngưng: bạn chỉ có thể xem dữ liệu, không thể tạo hoặc chỉnh sửa.",
   HOTEL_STATUS_CONFLICT: "Trạng thái hiện tại của khách sạn không cho phép thao tác này.",
@@ -52,6 +56,9 @@ const errorMessages: Record<string, string> = {
 /** Custom messages written in the shared zod schemas (packages/shared/src/schemas), also returned in `details`. */
 const schemaMessages: Record<string, string> = {
   "phone must be a valid phone number": "Số điện thoại không hợp lệ.",
+  "password must contain at least one letter and one number": "Mật khẩu phải có ít nhất một chữ cái và một chữ số.",
+  "at least one field is required": "Chưa có thay đổi nào để lưu.",
+  "dateOfBirth must be between 1900-01-01 and today": "Ngày sinh phải từ 01/01/1900 đến hôm nay.",
   "time must be HH:mm": "Giờ phải có dạng HH:mm.",
   "ids must be unique": "Danh sách có mục bị trùng.",
   "latitude and longitude must be sent together": "Nhập đủ cả vĩ độ và kinh độ.",

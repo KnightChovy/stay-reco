@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import type { BookingStatus, PaymentStatus } from "@stayreco/shared";
 import {
@@ -79,11 +80,25 @@ const SORT_OPTIONS = [
 const PAGE_SIZE = 10;
 
 export default function StaffBookingsPage() {
+  return (
+    <Suspense fallback={null}>
+      <StaffBookingsFromUrl />
+    </Suspense>
+  );
+}
+
+/** The header search opens `/staff/bookings?search=…`; a new search remounts the list with it. */
+function StaffBookingsFromUrl() {
+  const initialSearch = useSearchParams().get("search") ?? "";
+  return <StaffBookingsContent key={initialSearch} initialSearch={initialSearch} />;
+}
+
+function StaffBookingsContent({ initialSearch }: { initialSearch: string }) {
   const { hotel, isLoading: hotelLoading } = useStaffHotel();
   const hotelId = hotel?.summary.id;
 
   const [tab, setTab] = useState<StatusTab>("all");
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(initialSearch);
   const debouncedSearch = useDebounce(search);
   const [payment, setPayment] = useState<"all" | PaymentStatus>("all");
   const [sort, setSort] =

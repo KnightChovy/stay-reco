@@ -38,12 +38,22 @@ import { roleDashboardPaths, useAuthStore } from '@/lib/auth-store';
 import { useUnreadNotificationCount } from '@/features/notifications/api/notification-queries';
 import { NotificationBell } from '@/features/notifications/components/NotificationBell';
 
-const navigation = [
+const navigation: { href: string; label: string; badge?: string }[] = [
   { href: '/', label: 'Khám phá' },
+  // No promotions API yet (phase 4): the page says it is coming soon.
+  { href: '/promotions', label: 'Ưu đãi', badge: 'Sắp có' },
   { href: '/recommendations', label: 'Gợi ý cho bạn' },
   { href: '/assistant', label: 'Trợ lý AI' },
   { href: '/blog', label: 'Blog' },
 ];
+
+function NavBadge({ label }: { label: string }) {
+  return (
+    <span className="ml-1.5 rounded-full bg-amber-100 px-1.5 py-0.5 align-middle text-[10px] font-semibold text-amber-800">
+      {label}
+    </span>
+  );
+}
 
 function isNavigationItemActive(pathname: string, href: string) {
   return href === '/' ? pathname === '/' : pathname.startsWith(href);
@@ -129,6 +139,7 @@ export default function Header() {
               }`}
             >
               {item.label}
+              {item.badge && <NavBadge label={item.badge} />}
             </Link>
           ))}
         </nav>
@@ -402,6 +413,7 @@ export default function Header() {
                 }`}
               >
                 {item.label}
+                {item.badge && <NavBadge label={item.badge} />}
               </Link>
             ))}
             <div className="mt-2 grid grid-cols-2 gap-2 border-t border-border pt-3">

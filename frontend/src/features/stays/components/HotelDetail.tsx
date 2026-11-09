@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   BedDouble,
   Building2,
@@ -23,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { getApiErrorMessage } from "@/lib/api-error";
 import { useHotelListing } from "../api/stays-queries";
+import { StaySearchBar } from "./StaySearchBar";
 import { formatDate, formatDateTime, formatMoney } from "../lib/format";
 
 const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1200&q=80";
@@ -108,7 +110,8 @@ export function HotelDetail({
   hotelId: string;
   query: StayQuery;
 }) {
-  const { data, isLoading, error, refetch } = useHotelListing(hotelId, query);
+  const router = useRouter();
+  const { data, isLoading, isPlaceholderData, error, refetch } = useHotelListing(hotelId, query);
 
   if (isLoading) {
     return (
@@ -172,7 +175,7 @@ export function HotelDetail({
             </div>
           </div>
 
-          <div className="grid gap-5 p-5 sm:grid-cols-3">
+          <div className="grid gap-5 p-5 sm:grid-cols-2">
             <div className="rounded-xl bg-slate-50 p-3 text-xs">
               <span className="flex items-center gap-1.5 font-semibold text-muted-foreground"><Clock className="size-3.5" /> Nhận phòng</span>
               <span className="mt-1 block text-base font-bold text-foreground">{hotel.checkInTime ?? "14:00"}</span>
@@ -181,14 +184,24 @@ export function HotelDetail({
               <span className="flex items-center gap-1.5 font-semibold text-muted-foreground"><Clock className="size-3.5" /> Trả phòng</span>
               <span className="mt-1 block text-base font-bold text-foreground">{hotel.checkOutTime ?? "12:00"}</span>
             </div>
-            <div className="rounded-xl bg-slate-50 p-3 text-xs">
-              <span className="flex items-center gap-1.5 font-semibold text-muted-foreground"><CalendarDays className="size-3.5" /> Kỳ nghỉ</span>
-              <span className="mt-1 block text-sm font-bold text-foreground">
-                {formatDate(query.checkIn)} – {formatDate(query.checkOut)}
-              </span>
-              <span className="text-[11px] text-muted-foreground">{query.guests} khách · {query.rooms} phòng</span>
-            </div>
           </div>
+        </section>
+
+        <section className="mt-6" aria-label="Kỳ nghỉ">
+          <h2 className="mb-2 flex items-center gap-2 text-sm font-bold text-foreground">
+            <CalendarDays className="size-4 text-primary" /> Kỳ nghỉ của bạn
+            {isPlaceholderData && <Loader2 className="size-3.5 animate-spin text-muted-foreground" aria-label="Đang cập nhật giá" />}
+          </h2>
+          <StaySearchBar
+            key={staySearch(query)}
+            showDestination={false}
+            submitLabel="Cập nhật giá"
+            initialCheckIn={query.checkIn}
+            initialCheckOut={query.checkOut}
+            initialGuests={query.guests}
+            initialRooms={query.rooms}
+            onSearch={(params) => router.replace(`/hotels/${hotelId}?${staySearch(params)}`, { scroll: false })}
+          />
         </section>
 
         <div className="mt-6 grid items-start gap-6 lg:grid-cols-12">

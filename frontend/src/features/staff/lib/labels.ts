@@ -1,6 +1,14 @@
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
-import type { BookingStatus, HotelStatus, PaymentStatus, RoomStatus } from "@stayreco/shared";
+import type {
+  BookingStatus,
+  DayOfWeek,
+  HotelStatus,
+  PaymentStatus,
+  PriceRuleType,
+  PricingRule,
+  RoomStatus,
+} from "@stayreco/shared";
 
 export type StatusTone = "success" | "warning" | "danger" | "info" | "muted";
 
@@ -71,4 +79,30 @@ export function formatDateTime(iso: string | null | undefined) {
 
 export function weekdayLabel(date: string) {
   return format(new Date(`${date}T00:00:00`), "EEEE", { locale: vi });
+}
+
+export const priceRuleTypeLabels: Record<PriceRuleType, string> = {
+  BASE: "Giá gốc",
+  SEASON: "Theo mùa / ngày",
+  EARLY_BIRD: "Đặt sớm",
+  LAST_MINUTE: "Phút chót",
+};
+
+export const dayOfWeekLabels: Record<DayOfWeek, string> = {
+  MON: "Thứ 2",
+  TUE: "Thứ 3",
+  WED: "Thứ 4",
+  THU: "Thứ 5",
+  FRI: "Thứ 6",
+  SAT: "Thứ 7",
+  SUN: "Chủ nhật",
+};
+
+/** "-15%", "+200.000 ₫" or "= 5.500.000 ₫": how the rule changes the base price. */
+export function adjustmentLabel(rule: Pick<PricingRule, "adjustmentType" | "adjustmentValue">) {
+  const value = rule.adjustmentValue;
+  if (rule.adjustmentType === "SET_PRICE") return `= ${formatMoney(value)}`;
+  const sign = value > 0 ? "+" : "−";
+  const amount = Math.abs(value);
+  return rule.adjustmentType === "PERCENT" ? `${sign}${amount}%` : `${sign}${formatMoney(amount)}`;
 }
