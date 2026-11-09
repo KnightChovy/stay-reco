@@ -489,6 +489,7 @@ describe('Partner dashboard (e2e)', () => {
           `/api/v1/hotels/${h.hotelId}/stats/export?from=2026-10-01&to=2026-10-31`,
         )
         .set(auth(h.token))
+        .set('Origin', 'http://localhost:3001')
         .buffer(true)
         .parse((response, done) => {
           const chunks: Buffer[] = [];
@@ -501,6 +502,10 @@ describe('Partner dashboard (e2e)', () => {
       );
       expect(res.headers['content-disposition']).toBe(
         'attachment; filename="StayReco_Riverside_2026-10-01_2026-10-31.xlsx"',
+      );
+      // The web app (another origin) can read the file name.
+      expect(res.headers['access-control-expose-headers']).toBe(
+        'Content-Disposition',
       );
 
       const book = new ExcelJS.Workbook();

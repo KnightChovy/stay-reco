@@ -310,9 +310,9 @@ Not in the first release. For partners with 2 or more hotels: every hotel the pa
 
 ### 4.8 `GET /hotels/:hotelId/stats/export`
 
-The dashboard of the period as an Excel workbook, for the owner and the accountant the owner sends it to (staff have no access, like every money figure). Same `from?`/`to?` as `overview` (366 days max). The body is the file, not the envelope: `Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`, `Content-Disposition: attachment; filename="StayReco_<hotel>_<from>_<to>.xlsx"` (hotel name without Vietnamese marks, other characters as `-`). Errors keep the JSON error format.
+The dashboard of the period as an Excel workbook, for the owner and the accountant the owner sends it to (staff have no access, like every money figure). Same `from?`/`to?` as `overview` (366 days max). The body is the file, not the envelope: `Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`, `Content-Disposition: attachment; filename="StayReco_<hotel>_<from>_<to>.xlsx"` (hotel name without Vietnamese marks, other characters as `-`). Errors keep the JSON error format. The API exposes `Content-Disposition` to the web origins (CORS), so the web app can save the file under that name.
 
-Every figure comes from `overview`, `series` and `breakdown` computed at the same instant, so the file matches the screen. Money cells are numbers formatted `#,##0 ₫`, rates have 1 decimal, dates are `dd/mm/yyyy` and times are Vietnam time. Headers are in Vietnamese; list sheets freeze the header row and have filters.
+Every figure comes from `overview`, `series` and `breakdown` computed for the same moment, so the file matches the screen (the queries are not one database snapshot: a wallet movement written during the export may show in one sheet only). Money cells are numbers formatted `#,##0 ₫`, rates have 1 decimal, dates are `dd/mm/yyyy` and times are Vietnam time. Headers are in Vietnamese; list sheets freeze the header row and have filters.
 
 | Sheet | Content |
 |---|---|
