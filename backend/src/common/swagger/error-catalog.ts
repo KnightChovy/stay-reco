@@ -240,6 +240,26 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorInfo> = {
     status: 409,
     description: 'No change request is waiting',
   },
+  REVIEW_NOT_FOUND: {
+    status: 404,
+    description: "Review doesn't exist or belongs to another customer",
+  },
+  REVIEW_NOT_ALLOWED: {
+    status: 409,
+    description: 'The stay is not completed, so it cannot be reviewed yet',
+  },
+  REVIEW_ALREADY_EXISTS: {
+    status: 409,
+    description: 'The booking already has a review; one review per stay',
+  },
+  REVIEW_WINDOW_CLOSED: {
+    status: 409,
+    description: 'The review window closed (REVIEW_WINDOW_DAYS after check-out)',
+  },
+  RATING_CRITERION_NOT_FOUND: {
+    status: 404,
+    description: 'A sub-rating names a criterion that does not exist',
+  },
   NOTIFICATION_NOT_FOUND: {
     status: 404,
     description: "Notification doesn't exist or belongs to someone else",

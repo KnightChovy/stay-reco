@@ -121,6 +121,18 @@ export const ErrorCode = {
   /** Notification does not exist or belongs to someone else. */
   NOTIFICATION_NOT_FOUND: 'NOTIFICATION_NOT_FOUND',
 
+  // Reviews (BR-12)
+  /** The review does not exist, or belongs to another customer. */
+  REVIEW_NOT_FOUND: 'REVIEW_NOT_FOUND',
+  /** Writing a review for a stay that is not COMPLETED yet. */
+  REVIEW_NOT_ALLOWED: 'REVIEW_NOT_ALLOWED',
+  /** The booking already has a review; one review per stay. */
+  REVIEW_ALREADY_EXISTS: 'REVIEW_ALREADY_EXISTS',
+  /** The review window closed (REVIEW_WINDOW_DAYS after check-out). */
+  REVIEW_WINDOW_CLOSED: 'REVIEW_WINDOW_CLOSED',
+  /** A sub-rating names a criterion that does not exist. */
+  RATING_CRITERION_NOT_FOUND: 'RATING_CRITERION_NOT_FOUND',
+
   // Payments
   /** A webhook call (SePay) with a missing or wrong API key; nothing is processed. Not a client error to refresh. */
   INVALID_API_KEY: 'INVALID_API_KEY',

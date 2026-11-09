@@ -220,6 +220,11 @@ There is no `status` field in the body; the HTTP status is already available as 
 | `CHANGE_REQUEST_PENDING` | 409 | The booking already has a change request waiting | Show the waiting request |
 | `CHANGE_REQUEST_STATUS_CONFLICT` | 409 | Accepting or rejecting when no change request is waiting | Reload the booking |
 | `NOTIFICATION_NOT_FOUND` | 404 | Notification doesn't exist or belongs to someone else | Reload the list |
+| `REVIEW_NOT_FOUND` | 404 | Review doesn't exist or belongs to another customer | Reload the booking |
+| `REVIEW_NOT_ALLOWED` | 409 | The stay is not completed, so it cannot be reviewed yet | Hide the review button |
+| `REVIEW_ALREADY_EXISTS` | 409 | The booking already has a review; one review per stay | Open the existing review |
+| `REVIEW_WINDOW_CLOSED` | 409 | The review window closed (`REVIEW_WINDOW_DAYS` after check-out) | "Reviews close <n> days after check-out" |
+| `RATING_CRITERION_NOT_FOUND` | 404 | A sub-rating names a criterion that does not exist | Reload the criteria |
 
 Important: **refresh only when `status === 401` and `code === 'UNAUTHENTICATED'`.** Refreshing on the other 401 errors (`AUTH_INVALID_CREDENTIALS`, `AUTH_WRONG_PASSWORD`, `AUTH_REFRESH_TOKEN_INVALID`) causes infinite loops or unexpected sign-outs.
 
