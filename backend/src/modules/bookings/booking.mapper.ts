@@ -1,32 +1,38 @@
-import type { Booking, BookingPayment, BookingSummary } from '@stayreco/shared';
+import type {
+  Booking,
+  BookingItem,
+  BookingPayment,
+  BookingSummary,
+} from '@stayreco/shared';
 import { daysBetween } from '@stayreco/shared';
 import { toCalendarDate } from '../../common/http/calendar-date';
 import { toNumber } from '../../common/http/decimal';
 import type { Prisma } from '../../generated/prisma/client';
 import { fromTime } from '../hotels/hotel.mapper';
-import type { BookingHistory, StayRoom } from './booking-history';
+import type { BookingHistory } from './booking-history';
+
+/** The items of a booking in room type name order: the first one fills the deprecated single-type fields. */
+export const bookingItemsInclude = {
+  orderBy: [{ roomType: { name: 'asc' } }, { bookingItemId: 'asc' }],
+  include: { roomType: { select: { roomTypeId: true, name: true } } },
+} satisfies Prisma.Booking$itemsArgs;
 
 /** What a booking card needs (my trips, the hotel's booking list). */
 export const bookingSummaryInclude = {
   invoice: true,
-  roomType: {
+  hotel: {
     select: {
-      roomTypeId: true,
+      hotelId: true,
       name: true,
-      hotel: {
-        select: {
-          hotelId: true,
-          name: true,
-          city: true,
-          hotelImages: {
-            where: { isCover: true },
-            take: 1,
-            select: { imageUrl: true },
-          },
-        },
+      city: true,
+      hotelImages: {
+        where: { isCover: true },
+        take: 1,
+        select: { imageUrl: true },
       },
     },
   },
+  items: bookingItemsInclude,
 } satisfies Prisma.BookingInclude;
 
 export const bookingInclude = {
@@ -47,8 +53,26 @@ export type BookingWithDetails = Prisma.BookingGetPayload<{
   include: typeof bookingInclude;
 }>;
 
-/** `booking.nightly_prices`: the price of each night for one room, fixed at booking time (BR-09). */
+/** `booking_item.nightly_prices`: the price of each night for one room, fixed at booking time (BR-09). */
 export type NightlyPrices = { date: string; price: number }[];
+
+/** A room of the stay with its room type, for `assignedRooms`. */
+export interface AssignedRoom {
+  id: string;
+  roomNumber: string;
+  roomTypeId: string;
+}
+
+/** Rooms over every item of a booking. */
+export const roomsOf = (items: { numRooms: number }[]) =>
+  items.reduce((n, i) => n + i.numRooms, 0);
+
+const toItem = (i: BookingSummaryRow['items'][number]): BookingItem => ({
+  roomType: { id: i.roomType.roomTypeId, name: i.roomType.name },
+  rooms: i.numRooms,
+  subtotal: toNumber(i.subtotal),
+  nightlyPrices: i.nightlyPrices as NightlyPrices,
+});
 
 /** Builds the payment block for a PENDING booking; `null` once it is paid, expired or cancelled. */
 export type PaymentDetails = (input: {
@@ -61,23 +85,26 @@ export function toBookingSummary(b: BookingSummaryRow): BookingSummary {
   const invoice = b.invoice!;
   const checkIn = toCalendarDate(b.checkInDate);
   const checkOut = toCalendarDate(b.checkOutDate);
+  const items = b.items.map(toItem);
+  const rooms = roomsOf(b.items);
   return {
     id: b.bookingId,
     code: invoice.invoiceNumber,
     status: b.status,
     paymentStatus: invoice.paymentStatus,
     hotel: {
-      id: b.roomType.hotel.hotelId,
-      name: b.roomType.hotel.name,
-      city: b.roomType.hotel.city,
-      coverImageUrl: b.roomType.hotel.hotelImages[0]?.imageUrl ?? null,
+      id: b.hotel.hotelId,
+      name: b.hotel.name,
+      city: b.hotel.city,
+      coverImageUrl: b.hotel.hotelImages[0]?.imageUrl ?? null,
     },
-    roomType: { id: b.roomType.roomTypeId, name: b.roomType.name },
+    items,
+    roomType: items[0].roomType,
     checkIn,
     checkOut,
     nights: daysBetween(checkIn, checkOut),
-    rooms: b.numRooms,
-    guests: b.numGuests ?? b.numRooms,
+    rooms,
+    guests: b.numGuests ?? rooms,
     totalAmount: toNumber(b.totalAmount),
     createdAt: b.createdAt.toISOString(),
   };
@@ -94,7 +121,7 @@ export function toBooking(
   b: BookingWithDetails,
   paymentDetails: PaymentDetails,
   history: BookingHistory,
-  assignedRooms: StayRoom[],
+  assignedRooms: AssignedRoom[],
 ): Booking {
   const { cancelRequest, rejection, changeRequest, lateCheckout } = history;
   const invoice = b.invoice!;
@@ -120,7 +147,7 @@ export function toBooking(
     contactPhone: b.contactPhone,
     arrivalTime: fromTime(b.arrivalTime),
     specialRequests: b.specialRequests,
-    nightlyPrices: b.nightlyPrices as NightlyPrices,
+    nightlyPrices: summary.items[0].nightlyPrices,
     cancellation: {
       freeUntil: b.freeCancelUntil?.toISOString() ?? null,
       feePercent: toNumber(b.cancelFeePercent),

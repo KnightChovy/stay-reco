@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { lockRoomType } from '../../common/db/locks';
+import { lockRoomTypes } from '../../common/db/locks';
 import {
   addDays,
   fromCalendarDate,
@@ -56,9 +56,9 @@ export class NoShowService extends PeriodicJob {
       },
       select: {
         bookingId: true,
-        roomTypeId: true,
+        items: { select: { roomTypeId: true } },
         checkOutDate: true,
-        roomType: { select: { hotel: { select: { checkOutTime: true } } } },
+        hotel: { select: { checkOutTime: true } },
       },
     });
 
@@ -66,11 +66,14 @@ export class NoShowService extends PeriodicJob {
     for (const booking of due) {
       const checkOutAt = vietnamDateTime(
         toCalendarDate(booking.checkOutDate),
-        fromTime(booking.roomType.hotel.checkOutTime) ?? DEFAULT_CHECK_OUT_TIME,
+        fromTime(booking.hotel.checkOutTime) ?? DEFAULT_CHECK_OUT_TIME,
       );
       if (now < checkOutAt) continue;
       const done = await this.prisma.$transaction(async (tx) => {
-        await lockRoomType(tx, booking.roomTypeId);
+        await lockRoomTypes(
+          tx,
+          booking.items.map((i) => i.roomTypeId),
+        );
         return this.markIn(tx, booking.bookingId, null, now);
       });
       if (done) marked++;

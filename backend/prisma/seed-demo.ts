@@ -1287,15 +1287,21 @@ async function seedBookingDemo(prisma: PrismaClient, passwordHash: string) {
       const { bookingId } = await tx.booking.create({
         data: {
           customerId,
-          roomTypeId: rt.roomTypeId,
+          hotelId: rt.hotelId,
           checkInDate: fromCalendarDate(checkIn),
           checkOutDate: fromCalendarDate(checkOut),
           numGuests: 2,
-          numRooms: 1,
-          nightlyPrices: nights.map((date) => ({
-            date,
-            price: base.toNumber(),
-          })),
+          items: {
+            create: {
+              roomTypeId: rt.roomTypeId,
+              numRooms: 1,
+              nightlyPrices: nights.map((date) => ({
+                date,
+                price: base.toNumber(),
+              })),
+              subtotal: total,
+            },
+          },
           totalAmount: total,
           status: demo.status,
           guestName: DEMO_CUSTOMER.fullName,
@@ -1569,6 +1575,7 @@ async function createHistory(
   }
 
   const bookings: Prisma.BookingCreateManyInput[] = [];
+  const items: Prisma.BookingItemCreateManyInput[] = [];
   const invoices: Prisma.InvoiceCreateManyInput[] = [];
   const nights: Prisma.RoomCalendarsCreateManyInput[] = [];
   const entries: Prisma.WalletTransactionCreateManyInput[] = [];
@@ -1781,15 +1788,10 @@ async function createHistory(
           bookings.push({
             bookingId,
             customerId: guest.id,
-            roomTypeId: rt.roomTypeId,
+            hotelId: hotel.hotelId,
             checkInDate: fromCalendarDate(checkIn),
             checkOutDate: fromCalendarDate(checkOut),
             numGuests: Math.min(2, rt.maxOccupancy) * held.length,
-            numRooms: held.length,
-            nightlyPrices: Array.from({ length: count }, (_, i) => ({
-              date: addDays(checkIn, i),
-              price: base.toNumber(),
-            })),
             totalAmount: total,
             status,
             guestName: guest.fullName,
@@ -1800,6 +1802,16 @@ async function createHistory(
             cancelledAt,
             createdAt,
             updatedAt: cancelledAt ?? paidAt,
+          });
+          items.push({
+            bookingId,
+            roomTypeId: rt.roomTypeId,
+            numRooms: held.length,
+            nightlyPrices: Array.from({ length: count }, (_, i) => ({
+              date: addDays(checkIn, i),
+              price: base.toNumber(),
+            })),
+            subtotal: total,
           });
           invoices.push({
             bookingId,
@@ -1838,6 +1850,8 @@ async function createHistory(
         );
       for (const data of chunks(bookings))
         await tx.booking.createMany({ data });
+      for (const data of chunks(items))
+        await tx.bookingItem.createMany({ data });
       for (const data of chunks(invoices))
         await tx.invoice.createMany({ data });
       for (const data of chunks(nights))
@@ -1924,15 +1938,11 @@ const operationsSelect = {
   invoice: {
     select: { invoiceNumber: true, paymentStatus: true, paidAt: true },
   },
-  roomType: {
+  hotel: {
     select: {
-      hotel: {
-        select: {
-          hotelPartnerId: true,
-          checkInTime: true,
-          checkOutTime: true,
-        },
-      },
+      hotelPartnerId: true,
+      checkInTime: true,
+      checkOutTime: true,
     },
   },
   roomCalendars: {
@@ -1960,7 +1970,7 @@ async function runDemoOperations(
   const holdMs = Number(process.env.WALLET_HOLD_DAYS || 1) * DAY_MS;
   const rows = await prisma.booking.findMany({
     where: {
-      roomType: { hotel: { name: { in: hotelNames } } },
+      hotel: { name: { in: hotelNames } },
       customer: { userAccount: { email: { in: customerEmails } } },
       status: {
         in: ['CONFIRMED', 'CHECKED_IN', 'COMPLETED', 'NO_SHOW', 'CANCELLED'],
@@ -1995,7 +2005,7 @@ async function runDemoOperations(
   for (const b of rows) {
     const checkIn = toCalendarDate(b.checkInDate);
     const checkOut = toCalendarDate(b.checkOutDate);
-    const hotel = b.roomType.hotel;
+    const hotel = b.hotel;
     const paid = b.invoice?.paymentStatus === 'PAID';
     let status = b.status;
 

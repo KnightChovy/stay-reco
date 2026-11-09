@@ -50,7 +50,7 @@ export class PaymentConfirmationService {
         bookingId: true,
         invoiceNumber: true,
         totalAmount: true,
-        booking: { select: { roomType: { select: { hotelId: true } } } },
+        booking: { select: { hotelId: true } },
       },
     });
     if (!invoice) return { status: 'UNKNOWN_CODE' };
@@ -105,7 +105,7 @@ export class PaymentConfirmationService {
           });
           const wallet = await this.ledger.hotelWallet(
             tx,
-            invoice.booking.roomType.hotelId,
+            invoice.booking.hotelId,
           );
           await this.ledger.post(tx, {
             walletId: wallet.walletId,
