@@ -13,10 +13,14 @@ import type {
   ReviewListQuery,
   UpdateReviewInput,
 } from '@stayreco/shared';
+import type { AuthUser } from '../../common/decorators/current-user.decorator';
 import { ErrorCode } from '../../common/errors/error-code';
+import {
+  HotelAccessService,
+  isUuid,
+} from '../../common/hotel-access/hotel-access.service';
 import { Paginated } from '../../common/http/api-response';
 import { toNumber } from '../../common/http/decimal';
-import { isUuid } from '../../common/hotel-access/hotel-access.service';
 import { pageArgs } from '../../common/http/pagination';
 import type { Env } from '../../config/env';
 import { Prisma } from '../../generated/prisma/client';
@@ -51,6 +55,7 @@ export class ReviewsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService<Env, true>,
+    private readonly access: HotelAccessService,
   ) {}
 
   /** The criteria a guest scores, heaviest first so the review screen can show them in that order. */
@@ -262,19 +267,26 @@ export class ReviewsService {
     return toReview(review);
   }
 
-  /** The hotel hides a review from its public page, or shows it again. */
+  /**
+   * The hotel hides a review from its public page, or shows it again. Addressed by the review's own id, so the tenant
+   * check runs here (CONVENTIONS §5): a review of another hotel is simply not found.
+   */
   async setVisibility(
-    hotelId: string,
+    user: AuthUser,
     reviewId: string,
     isVisible: boolean,
   ): Promise<Review> {
-    const { count } = isUuid(reviewId)
-      ? await this.prisma.review.updateMany({
-          where: { reviewId, hotelId },
-          data: { isVisible },
+    const review = isUuid(reviewId)
+      ? await this.prisma.review.findUnique({
+          where: { reviewId },
+          select: { hotelId: true },
         })
-      : { count: 0 };
-    if (!count) throw notFound();
+      : null;
+    await this.access.assertResource(user, review?.hotelId, 'member', notFound);
+    await this.prisma.review.update({
+      where: { reviewId },
+      data: { isVisible },
+    });
     return toReview(
       await this.prisma.review.findUniqueOrThrow({
         where: { reviewId },

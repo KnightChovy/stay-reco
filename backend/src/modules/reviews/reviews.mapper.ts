@@ -22,9 +22,7 @@ export function displayName(fullName: string): string {
   return [...parts.slice(0, -1), `${last.charAt(0)}.`].join(' ');
 }
 
-const toSubRating = (
-  r: ReviewRow['userItemRatings'][number],
-): SubRating => ({
+const toSubRating = (r: ReviewRow['userItemRatings'][number]): SubRating => ({
   criterionId: r.ratingCriterionId,
   name: r.ratingCriterion.name,
   score: toNumber(r.score),
