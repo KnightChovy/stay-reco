@@ -10,6 +10,7 @@ Each endpoint is described **once**, on the page of the role that uses it most; 
 | [manager.md](./manager.md) | Platform manager (`PLATFORM_MANAGER`) | Verification queue, decisions, re-verification |
 | [customer.md](./customer.md) | Customer (`CUSTOMER`) | Search, booking, cancellation, change requests, notifications (every role) |
 | [partner-dashboard.md](./partner-dashboard.md) | Partner, hotel staff | Dashboard: action items, today, KPIs, chart, occupancy forecast (draft) |
+| [promotions.md](./promotions.md) | Customer, partner, hotel staff | Discount campaigns, personal voucher codes, the discount quote and what a booking is charged |
 
 How to read each endpoint table:
 
