@@ -5,7 +5,7 @@ import { Chip } from '@/components/ui/chip';
 import { Icon, type IconName } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
 import { colors } from '@/constants/theme';
-import { alerts, checkInGuests, refundRequests, type Tone } from '@/features/staff/data';
+import { alerts, type Tone } from '@/features/staff/data';
 import { Avatar, Card, StaffTabScreen, s } from '@/features/staff/ui';
 import { useAuthStore } from '@/stores/auth.store';
 
@@ -16,9 +16,9 @@ const groups: { title: string; items: Item[] }[] = [
   {
     title: 'Tác vụ vận hành',
     items: [
-      { icon: 'key', label: 'Check-in & Gán phòng', href: '/staff/check-in', badge: checkInGuests.length, tone: 'neutral' },
+      { icon: 'key', label: 'Check-in & Gán phòng', href: '/staff/check-in' },
       { icon: 'logout', label: 'Check-out', href: '/staff/check-out' },
-      { icon: 'currency_exchange', label: 'Hoàn tiền & Chính sách', href: '/staff/refunds', badge: refundRequests.filter((r) => r.status === 'Chờ thẩm định').length, tone: 'secondary' },
+      { icon: 'currency_exchange', label: 'Yêu cầu hoàn tiền', href: '/staff/refunds' },
       { icon: 'warning', label: 'Cảnh báo nghiệp vụ', href: '/staff/alerts', badge: alerts.filter((a) => a.status !== 'Đã giải quyết').length, tone: 'danger' },
     ],
   },

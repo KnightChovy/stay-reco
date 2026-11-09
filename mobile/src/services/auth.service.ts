@@ -7,6 +7,7 @@ import type {
   LoginInput,
   RegisterCustomerInput,
   RegisterResult,
+  UpdateProfileInput,
   VerifyEmailInput,
 } from "@stayreco/shared";
 import { apiService } from "./ApiService";
@@ -50,4 +51,10 @@ export const logout = async (): Promise<void> => {
 /** Giữ phiên trên máy này, đăng xuất các thiết bị khác. */
 export const changePassword = async (payload: ChangePasswordInput): Promise<void> => {
   await apiService.post("/auth/change-password", payload);
+};
+
+/** Field của role khác trả VALIDATION_ERROR: customer chỉ gửi fullName, phone, dateOfBirth, gender, nationality. */
+export const updateProfile = async (payload: UpdateProfileInput): Promise<Account> => {
+  const { data } = await apiService.patch<APIResponse<Account>>("/me/profile", payload);
+  return data.data;
 };

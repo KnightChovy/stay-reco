@@ -234,12 +234,16 @@ export function StaffScreen({ title, right, footer, children }: { title: string;
   );
 }
 
+/** Khách sạn đang trực: giống StaffHotelProvider bên web, lấy khách sạn đầu tiên nhân viên được phân công. */
+export function useStaffHotel() {
+  const { data, isPending, isError } = useQuery({ queryKey: ['staff', 'hotels'], queryFn: getMyHotels });
+  return { hotel: data?.[0], hotelId: data?.[0]?.id, isPending, isError };
+}
+
 /** Màn tab: header khách sạn đang trực + nội dung cuộn chừa chỗ cho tab bar. */
 export function StaffTabScreen({ children }: { children: ReactNode }) {
   const insets = useSafeAreaInsets();
-  // Web (StaffHotelProvider) cũng lấy khách sạn đầu tiên nhân viên được phân công.
-  const { data, isPending, isError } = useQuery({ queryKey: ['staff', 'hotels'], queryFn: getMyHotels });
-  const hotel = data?.[0];
+  const { hotel, isPending, isError } = useStaffHotel();
   return (
     <View style={s.screen}>
       <View style={[s.between, s.hotelBar, { paddingTop: insets.top + 10 }]}>

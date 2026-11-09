@@ -1,94 +1,8 @@
-// Dữ liệu mẫu chép từ frontend/src/app/(actors)/staff/*: web cũng đang dùng mock cho các màn này.
-// shortcut: toàn bộ là dữ liệu tĩnh, thay bằng API front-desk/hotel-bookings khi web nối backend.
+// Dữ liệu mẫu cho các màn chưa có backend: inbox, chat, cảnh báo, marketing (phase 5).
 import type { ComponentProps } from 'react';
 import type { Chip } from '@/components/ui/chip';
 
 export type Tone = NonNullable<ComponentProps<typeof Chip>['tone']>;
-
-export const shift = { label: 'Ca Sáng • 20/10/2026', handover: 'Bàn giao ca: 14:00' };
-
-export const dashboardStats = {
-  checkIn: { total: 14, done: 4, waiting: 10 },
-  checkOut: { total: 12, done: 9, waiting: 3 },
-  occupancy: { used: 32, total: 36, percent: 88, cleanFree: 4 },
-  messages: { total: 3, note: '2 tin hỏi view tầng cao · 1 đổi lịch' },
-};
-
-export const urgentTasks = [
-  { id: 'SR-261020-0842', title: 'Nguyễn Minh Anh · Elite Bạc', sub: 'Deluxe River View (#608) · 14:00', tag: 'Khách trao đổi qua AI Concierge', tone: 'secondary' as Tone, icon: 'smart_toy' as const },
-  { id: 'SR-261020-0791', title: 'Trần Văn Hoàng', sub: 'Superior Garden (#204) · 13:00', tag: 'Trả phòng muộn', tone: 'warning' as Tone, icon: 'schedule' as const },
-  { id: 'SR-261020-0791', title: 'Cần xác nhận xe', sub: 'Chuyến bay VN128 hạ cánh 15:30', tag: 'Đưa đón', tone: 'primary' as Tone, icon: 'directions_car' as const },
-];
-
-export const checkInGuests = [
-  { id: 'SR-261020-0842', channel: 'StayReco App', name: 'Nguyễn Minh Anh', initials: 'NA', tier: 'Elite Bạc', roomType: 'Deluxe River View', pkg: 'Gói linh hoạt ăn sáng Buffet', arrivalTime: '14:00', roomNum: 'P.608 (Tầng 6)', roomStatus: 'Sạch & Kiểm duyệt', paymentStatus: 'Đã thanh toán VNPay', amount: '2.250.000 ₫' },
-  { id: 'SR-261020-0850', channel: 'Booking.com', name: 'Trần Thanh Lan', initials: 'TL', tier: 'Khách thông thường', roomType: 'Superior Garden Twin', pkg: 'Tiêu chuẩn không hoàn tiền', arrivalTime: '12:30', roomNum: 'Chưa gán phòng', roomStatus: 'Ưu tiên tầng 2 hoặc 3', paymentStatus: 'Thu tại quầy', amount: '1.680.000 ₫' },
-  { id: 'SR-261020-0855', channel: 'StayReco VIP', name: 'Đỗ Quốc Khánh', initials: 'DK', tier: 'Elite Kim Cương', roomType: 'Executive Riverside Suite', pkg: 'Bao gồm trà chiều & Spa 60p', arrivalTime: '11:15 (Sớm)', roomNum: 'P.802 (Tầng 8)', roomStatus: 'Welcome card đặt bàn', paymentStatus: 'Thẻ tín dụng doanh nghiệp', amount: '4.850.000 ₫' },
-  { id: 'SR-261020-0862', channel: 'Agoda', name: 'Vũ Hoàng Long', initials: 'VL', tier: 'Thành viên mới', roomType: 'Deluxe City Corner', pkg: 'Không gồm bữa sáng', arrivalTime: '14:30', roomNum: 'P.405 (Tầng 4)', roomStatus: 'Đang làm phòng', paymentStatus: 'Chờ cọc 500k', amount: '1.950.000 ₫' },
-  { id: 'SR-261020-0870', channel: 'Lễ tân Walk-in', name: 'Phạm Thị Mai', initials: 'PM', tier: 'Elite Vàng', roomType: 'Family Connecting Suite', pkg: 'Bao gồm ăn sáng 4 người', arrivalTime: '15:00', roomNum: 'P.501-502', roomStatus: 'Đã mở cửa thông', paymentStatus: 'Chuyển khoản Vietcombank', amount: '3.800.000 ₫' },
-];
-
-export const roomStatus = [
-  { label: 'Sẵn sàng', count: 18, color: '#2e7d55' },
-  { label: 'Có khách', count: 12, color: '#234e70' },
-  { label: 'Đang dọn', count: 4, color: '#e0a43a' },
-  { label: 'Bảo trì', count: 2, color: '#ba1a1a' },
-];
-
-export const departments = [
-  { name: 'Tổ Buồng phòng', sub: 'Giám sát: Cô Hoa (Ca 1)', ext: 'Ext: 102' },
-  { name: 'Bếp & Nhà hàng Sen Vàng', sub: 'Bếp trưởng: Bùi Anh Tuấn', ext: 'Ext: 105' },
-  { name: 'Hỗ trợ kỹ thuật StayReco', sub: 'Kênh ưu tiên 24/7', ext: '1900 6868' },
-];
-
-export type BookingAction = 'checkin' | 'assign' | 'welcome' | 'service' | 'checkout';
-export type BookingFilter = 'all' | 'pending' | 'arriving' | 'staying' | 'completed' | 'cancelled';
-
-export const bookingFilters: { key: BookingFilter; label: string; count: number }[] = [
-  { key: 'all', label: 'Tất cả', count: 48 },
-  { key: 'pending', label: 'Chờ xác nhận', count: 2 },
-  { key: 'arriving', label: 'Sắp đến hôm nay', count: 14 },
-  { key: 'staying', label: 'Đang lưu trú', count: 12 },
-  { key: 'completed', label: 'Đã hoàn tất', count: 18 },
-  { key: 'cancelled', label: 'Đã hủy & Hoàn tiền', count: 2 },
-];
-
-export const bookings: {
-  id: string; time: string; channel: string; guestName: string; initials: string; phone: string; tier: string;
-  roomType: string; pkg: string; stayDates: string; roomNum: string; roomNote: string; amount: string;
-  paymentStatus: string; status: string; tone: Tone; action: BookingAction;
-}[] = [
-  { id: 'SR-261020-0842', time: 'Đặt lúc 08:32 sáng', channel: 'StayReco App', guestName: 'Nguyễn Minh Anh', initials: 'NM', phone: '0905 *** 882', tier: 'Elite Bạc', roomType: 'Deluxe River View', pkg: 'Gói linh hoạt ăn sáng Buffet', stayDates: '20/10 → 22/10/2026', roomNum: 'P.608 (Tầng 6)', roomNote: 'Sạch & Kiểm duyệt', amount: '2.250.000 ₫', paymentStatus: 'Đã thanh toán VNPay', status: 'Sẵn sàng Check-in', tone: 'tertiary', action: 'checkin' },
-  { id: 'SR-261020-0841', time: 'Đặt lúc 08:15 sáng', channel: 'Booking.com', guestName: 'Trần Quốc Bảo', initials: 'TB', phone: '0912 *** 450', tier: 'Khách thông thường', roomType: 'Superior Garden View', pkg: '2 người lớn • Giường đôi King', stayDates: '20/10 → 21/10/2026', roomNum: 'Chưa gán phòng', roomNote: 'Ưu tiên tầng 2 hoặc 3', amount: '980.000 ₫', paymentStatus: 'Đã thanh toán (Thẻ)', status: 'Đã xác nhận', tone: 'primary', action: 'assign' },
-  { id: 'SR-261020-0839', time: 'Đặt lúc 07:45 sáng', channel: 'StayReco VIP', guestName: 'Lê Thị Mai Hoa', initials: 'LH', phone: '0938 *** 999', tier: 'Elite Kim Cương', roomType: 'Riverside Suite Ban Công Lớn', pkg: '2 lớn, 1 trẻ em • Kèm ăn sáng', stayDates: '20/10 → 23/10/2026', roomNum: 'P.501 (Tầng 5)', roomNote: 'Sẵn sàng đón khách', amount: '5.550.000 ₫', paymentStatus: 'Đã thanh toán (Napas)', status: 'Sẵn sàng đón khách', tone: 'tertiary', action: 'welcome' },
-  { id: 'SR-261020-0835', time: 'Nhận phòng hôm qua', channel: 'Agoda', guestName: 'David Miller', initials: 'DM', phone: 'david.m@global.com', tier: 'Quốc tế', roomType: 'Deluxe River View', pkg: '1 khách • Yêu cầu tầng cao', stayDates: '19/10 → 21/10/2026', roomNum: 'P.604 (Tầng 6)', roomNote: 'Đang ở ngày thứ 2/2', amount: '2.500.000 ₫', paymentStatus: 'Visa Quốc tế', status: 'Đang lưu trú', tone: 'secondary', action: 'service' },
-  { id: 'SR-261020-0820', time: 'Đến hạn trả phòng', channel: 'Hotline', guestName: 'Hoàng Trọng Nghĩa', initials: 'HN', phone: '0977 *** 219', tier: 'Elite Vàng', roomType: 'Deluxe River View', pkg: '2 người lớn', stayDates: '18/10 → 20/10/2026', roomNum: 'P.602 (Tầng 6)', roomNote: 'Hết hạn ca này (12:00)', amount: '2.250.000 ₫', paymentStatus: 'Đã quyết toán phòng', status: 'Chờ Check-out', tone: 'warning', action: 'checkout' },
-];
-
-// Lọc theo trạng thái trên dữ liệu mẫu (web chỉ đổi tab, chưa lọc).
-export const bookingMatches: Record<BookingFilter, (a: BookingAction) => boolean> = {
-  all: () => true,
-  pending: () => false,
-  arriving: (a) => a === 'checkin' || a === 'assign' || a === 'welcome',
-  staying: (a) => a === 'service' || a === 'checkout',
-  completed: () => false,
-  cancelled: () => false,
-};
-
-export const checkInRooms = [
-  { id: 'P.608', floor: 'Tầng 6', type: 'Deluxe Ocean King', status: 'Sẵn sàng (Đã dọn dẹp)', ready: true, score: '98% trùng hợp' },
-  { id: 'P.610', floor: 'Tầng 6', type: 'Deluxe Ocean King', status: 'Sẵn sàng (Đã dọn dẹp)', ready: true },
-  { id: 'P.702', floor: 'Tầng 7', type: 'Deluxe Ocean King', status: 'Đang kiểm tra chất lượng', ready: false },
-  { id: 'P.504', floor: 'Tầng 5', type: 'Deluxe Ocean Twin', status: 'Sẵn sàng (Đã dọn dẹp)', ready: true },
-];
-
-export const checkInDeposit = 1000000;
-
-export const extraCharges = [
-  { id: 1, name: 'Nước khoáng Evian 500ml (Minibar)', qty: 1, price: 75000 },
-  { id: 2, name: 'Phí Trả phòng Muộn (Late Checkout +2h)', qty: 1, price: 300000 },
-  { id: 3, name: 'Dịch vụ giặt ủi áo sơ mi', qty: 1, price: 150000 },
-];
 
 export type Conversation = {
   id: string; guestName: string; avatar: string; channel: 'Booking.com' | 'Agoda' | 'Direct Chat' | 'Zalo';
@@ -115,18 +29,6 @@ export const staffReply =
   'Chào anh Hoàng, Lễ tân đã nhận được phản hồi và rất tiếc vì sự cố này. Em đang kiểm tra ngay với bộ phận kỹ thuật ạ.';
 export const aiSuggestedResponse =
   'Chào anh Hoàng, StayReco xin lỗi chân thành về sự cố điều hòa tại P.402 làm ảnh hưởng giấc ngủ của anh. Lễ tân đã cử Kỹ thuật viên Nguyễn Văn Bình mang quạt êm sang hỗ trợ kiểm tra ngay lập tức. Khách sạn xin gửi tặng anh 1 Voucher trải nghiệm Spa / Ăn sáng bồi thường ạ!';
-
-export type RefundStatus = 'Chờ thẩm định' | 'Đã duyệt hoàn tiền' | 'Từ chối';
-export type RefundRequest = {
-  id: string; bookingId: string; guestName: string; roomType: string; totalPaid: number; requestedRefund: number;
-  reason: string; policyComplianceScore: number; systemRecommendation: string; status: RefundStatus; createdAt: string;
-};
-
-export const refundRequests: RefundRequest[] = [
-  { id: 'RF-901', bookingId: 'BK-8840', guestName: 'Trần Đức Nam', roomType: 'Executive Suite Ocean View', totalPaid: 5000000, requestedRefund: 4000000, reason: 'Hủy chuyến do hoãn chuyến bay (Có xác nhận từ hãng)', policyComplianceScore: 92, systemRecommendation: 'Hoàn 80% (Trừ 20% phí)', status: 'Chờ thẩm định', createdAt: '14/10/2026 09:30' },
-  { id: 'RF-902', bookingId: 'BK-8835', guestName: 'Lê Mỹ Duyên', roomType: 'Deluxe Ocean King', totalPaid: 3200000, requestedRefund: 3200000, reason: 'Bão lớn tại miền Trung - Lý do bất khả kháng', policyComplianceScore: 100, systemRecommendation: 'Duyệt 100%', status: 'Đã duyệt hoàn tiền', createdAt: '13/10/2026 15:45' },
-  { id: 'RF-903', bookingId: 'BK-8829', guestName: 'Vũ Hoàng Bách', roomType: 'Superior Garden Twin', totalPaid: 1800000, requestedRefund: 1800000, reason: 'Thay đổi kế hoạch cá nhân trước 12h check-in', policyComplianceScore: 40, systemRecommendation: 'Không hợp lệ', status: 'Chờ thẩm định', createdAt: '14/10/2026 08:15' },
-];
 
 export type Priority = 'khẩn cấp' | 'cao' | 'bình thường';
 export type IncidentAlert = {
