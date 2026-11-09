@@ -1,6 +1,7 @@
 import type {
   BookingStatus,
   HotelStatsBreakdown,
+  HotelStatsOverview,
   PaymentStatus,
 } from '@stayreco/shared';
 import ExcelJS from 'exceljs';
@@ -486,6 +487,113 @@ describe('Partner dashboard (e2e)', () => {
         adr: p.adr.value,
         bookingsCreated: p.bookingsCreated.value,
       });
+    });
+
+    it('adds up the room types of one booking in the figures and the export', async () => {
+      const query = 'from=2026-10-01&to=2026-10-31';
+      const figures = async () => {
+        const [o, b] = await Promise.all([
+          t
+            .api()
+            .get(`/api/v1/hotels/${h.hotelId}/stats/overview?${query}`)
+            .set(auth(h.token))
+            .expect(200),
+          t
+            .api()
+            .get(`/api/v1/hotels/${h.hotelId}/stats/breakdown?${query}`)
+            .set(auth(h.token))
+            .expect(200),
+        ]);
+        const p = (o.body.data as HotelStatsOverview).performance;
+        const types = (b.body.data as HotelStatsBreakdown).byRoomType;
+        return {
+          sold: p.roomNightsSold.value ?? 0,
+          revenue: p.roomRevenue.value ?? 0,
+          created: p.bookingsCreated.value ?? 0,
+          types: Object.fromEntries(
+            types.map((r) => [r.name, [r.roomNightsSold, r.roomRevenue]]),
+          ),
+        };
+      };
+      const suite = (
+        await t
+          .api()
+          .post(`/api/v1/hotels/${h.hotelId}/room-types`)
+          .set(auth(h.token))
+          .send({
+            name: 'Suite',
+            maxOccupancy: 2,
+            areaSqm: 40,
+            basePrice: 3000000,
+            beds: [{ bedTypeId: king, quantity: 1 }],
+          })
+          .expect(201)
+      ).body.data.id as string;
+      const before = await figures();
+
+      // One booking of 1 Deluxe and 1 Suite, 2 nights from 5 October.
+      const booking = await book(h, {
+        checkIn: '2026-10-05',
+        prices: [1000000, 1000000],
+        status: 'COMPLETED',
+        createdAt: new Date('2026-10-03T03:00:00Z'),
+      });
+      await t.prisma.bookingItem.create({
+        data: {
+          bookingId: booking.bookingId,
+          roomTypeId: suite,
+          numRooms: 1,
+          nightlyPrices: [
+            { date: '2026-10-05', price: 3000000 },
+            { date: '2026-10-06', price: 3000000 },
+          ],
+          subtotal: 6000000,
+        },
+      });
+      await t.prisma.booking.update({
+        where: { bookingId: booking.bookingId },
+        data: {
+          totalAmount: 8000000,
+          invoice: { update: { subtotal: 8000000, totalAmount: 8000000 } },
+        },
+      });
+
+      const after = await figures();
+      expect({
+        sold: after.sold - before.sold,
+        revenue: after.revenue - before.revenue,
+        created: after.created - before.created,
+        deluxe: after.types.Deluxe.map((x, i) => x - before.types.Deluxe[i]),
+        suite: after.types.Suite,
+      }).toEqual({
+        sold: 4,
+        revenue: 8000000,
+        created: 1,
+        deluxe: [2, 2000000],
+        suite: [2, 6000000],
+      });
+
+      const res = await t
+        .api()
+        .get(`/api/v1/hotels/${h.hotelId}/stats/export?${query}`)
+        .set(auth(h.token))
+        .buffer(true)
+        .parse((response, done) => {
+          const chunks: Buffer[] = [];
+          response.on('data', (c: Buffer) => chunks.push(c));
+          response.on('end', () => done(null, Buffer.concat(chunks)));
+        })
+        .expect(200);
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(res.body as ArrayBuffer);
+      const sheet = workbook.getWorksheet('Danh sách đơn')!;
+      const line = [...Array(sheet.rowCount).keys()]
+        .map((i) => sheet.getRow(i + 1))
+        .find((r) => r.getCell(15).value === 8000000)!;
+      expect([line.getCell(5).value, line.getCell(6).value]).toEqual([
+        '1× Deluxe, 1× Suite',
+        2,
+      ]);
     });
 
     it('exports the same figures as an Excel workbook', async () => {

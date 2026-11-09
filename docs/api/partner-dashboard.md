@@ -175,7 +175,7 @@ The day in Asia/Ho_Chi_Minh, live. Read by owners and staff; contains **no money
 
 - `tonight.roomsSold` = rooms of the hotel with a `BOOKED` row for tonight; `roomsAvailable` = rooms not in `MAINTENANCE` minus rooms `BLOCKED` tonight; `occupancyRate` = sold / available × 100, `null` when available is 0.
 - `checkedIn`, `checkedOut` and `inHouse` count the bookings checked in and out at the front desk. An early check-out counts on the booking's check-out date, not on the day the guest left.
-- `upcomingArrivals`: today's arrivals still `CONFIRMED`, sorted by `arrivalTime` (empty last) then booking time; at most `arrivalsLimit`. The full list is the bookings screen (`GET /hotels/:hotelId/bookings`).
+- `upcomingArrivals`: today's arrivals still `CONFIRMED` (`roomTypeName` lists the room types of the booking, `"Deluxe, Suite"`; `rooms` is over every type), sorted by `arrivalTime` (empty last) then booking time; at most `arrivalsLimit`. The full list is the bookings screen (`GET /hotels/:hotelId/bookings`).
 
 ### 4.3 `GET /hotels/:hotelId/stats/overview`
 
@@ -319,7 +319,7 @@ Every figure comes from `overview`, `series` and `breakdown` computed for the sa
 | **Tổng quan** | Hotel, period, comparison period, export time; then one line per KPI of `overview` (performance, cash, reviews): Chỉ số · Đơn vị · Kỳ này · Kỳ trước · Thay đổi · Thay đổi tính theo (`%` for amounts, counts and averages; `điểm %` for rates); then the wallet balances at export time (available, pending, reserved). |
 | **Theo thời gian** | One row per bucket of `series` with its default granularity: Từ ngày · Số ngày · Doanh thu phòng · Đêm đã bán · Đêm có thể bán · Công suất (%) · ADR · Số đơn · Số đơn huỷ · Thực nhận. |
 | **Theo loại phòng** | `breakdown.byRoomType` with a total line (Loại phòng · Số phòng · Đêm đã bán · Đêm có thể bán · Công suất (%) · Doanh thu phòng · ADR), then three small tables Số đơn · Tỷ lệ (%) by source, current status and payment method. |
-| **Danh sách đơn** | The bookings counted in `bookingsCreated` (paid, created in the period, cancelled later included), oldest first: Mã đơn · Ngày đặt · Tên khách · SĐT liên hệ · Loại phòng · Số phòng · Nhận phòng · Trả phòng · Số đêm · Số khách · Trạng thái đơn · Trạng thái thanh toán · Phương thức · Nguồn · Tổng tiền · Hoa hồng · Hoàn tiền · Thực nhận của đơn · Ngày huỷ. Commission, refunds and net come from the hotel wallet rows of the booking (all dates), never recomputed. |
+| **Danh sách đơn** | The bookings counted in `bookingsCreated` (paid, created in the period, cancelled later included), oldest first: Mã đơn · Ngày đặt · Tên khách · SĐT liên hệ · Loại phòng (`2× Deluxe, 1× Suite`) · Số phòng (over every type) · Nhận phòng · Trả phòng · Số đêm · Số khách · Trạng thái đơn · Trạng thái thanh toán · Phương thức · Nguồn · Tổng tiền · Hoa hồng · Hoàn tiền · Thực nhận của đơn · Ngày huỷ. Commission, refunds and net come from the hotel wallet rows of the booking (all dates), never recomputed. |
 | **Giao dịch ví** | Every hotel wallet movement created in the period, oldest first (payouts and settlements included): Thời gian · Loại giao dịch · Mã đơn · Mô tả · Số tiền (±) · Số dư sau; then **Tổng thực nhận** = sum of the payment, commission, refund and adjustment rows, equal to `overview.cash.netEarnings`. |
 
 Not in the file: the late check-out fee (paid at the front desk, never through StayReco, money-rules §5.5) and the hotel's own costs, so it is a report of the revenue through StayReco, not a profit and loss statement.
