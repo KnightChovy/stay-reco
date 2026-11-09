@@ -28,7 +28,7 @@ Sources: the SRS business rules (Report 3, section 5.1, BR-01 to BR-29), the pre
 
 Final price of a booking = sum of the nightly prices (from the pricing rules) − promotion or voucher discount − value of loyalty points used (BR-05, BR-06). It is never below 0, includes VAT and the service fee, is paid in full when booking and does not change afterwards.
 
-Promotions and vouchers are built (phase 4): the final price = sum of the nightly prices × number of rooms, minus **one** discount. A booking takes a promotion **or** a voucher, never both, and gets whichever saves more; a campaign that has issued personal codes stops applying to everyone. The discount is capped by the voucher's `maxDiscount`, never exceeds the subtotal (a stay may reach 0 but never below), and is rounded half up to whole dong. Loyalty points, the third subtraction, are not built yet. See [api/promotions.md](./api/promotions.md).
+Promotions and vouchers are built (phase 4): the final price = sum of the nightly prices × number of rooms, minus **one** discount. A booking takes a promotion **or** a voucher, never both, and gets whichever saves more; a campaign that has issued personal codes stops applying to everyone. The discount is capped by the voucher's `maxDiscount`, never exceeds the subtotal (a stay may reach 0 but never below), and is rounded half up to whole dong. Loyalty points are the third subtraction and are built too (BR-11): one platform-wide programme, points earned at check-out on what the stay was **actually paid**, and spent at the programme's point value. They stack on top of the discount, are capped at what the stay still owes, and points beyond that stay on the balance. See [api/loyalty.md](./api/loyalty.md). See [api/promotions.md](./api/promotions.md).
 
 ### 2.2 Pricing rules
 
@@ -213,7 +213,7 @@ Per BR-20, only when: the booking was already refunded or the request is a dupli
 
 ## 9. Not built yet, or still open
 
-- Loyalty points (BR-11): phase 4, not built yet. Promotions and vouchers (BR-06) are built; see §2.1.
+- Promotions, vouchers and loyalty points (BR-06, BR-11) are built; see §2.1.
 - Paying with the customer wallet, withdrawing it: phase 4.
 - Partner withdrawals (BR-22): phase 6. The holding period set by an admin: phase 6.
 
@@ -235,3 +235,4 @@ Per BR-20, only when: the booking was already refunded or the request is a dupli
 | 2026-10-29 | Settlement also covers cancelled bookings: the money the hotel keeps as the fee becomes available `WALLET_HOLD_DAYS` after the cancellation, with no commission |
 | 2026-10-31 | Late check-out fee (§5.5): hotel policy (grace, cutoff, two percents of the last night's price), the policy at check-out applies, staff may lower it with a reason, paid at the front desk outside the wallets and commission |
 | 2026-11-09 | Promotions and vouchers (§2.1, BR-06): one discount per booking, a promotion or a voucher and never both, the larger of the two; a campaign that issued codes no longer applies automatically; capped by `maxDiscount`, never more than the stay, whole dong; the code is given back when a hold expires unpaid or the booking is cancelled |
+| 2026-11-10 | Loyalty points (§2.1, BR-11): one platform-wide programme, earned at check-out on the amount actually paid, spent as the third subtraction after the discount, capped at what the stay owes, whole dong; points come back when a booking never becomes a stay |

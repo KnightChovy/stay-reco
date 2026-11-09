@@ -11,6 +11,7 @@ Each endpoint is described **once**, on the page of the role that uses it most; 
 | [customer.md](./customer.md) | Customer (`CUSTOMER`) | Search, booking, cancellation, change requests, notifications (every role) |
 | [partner-dashboard.md](./partner-dashboard.md) | Partner, hotel staff | Dashboard: action items, today, KPIs, chart, occupancy forecast (draft) |
 | [promotions.md](./promotions.md) | Customer, partner, hotel staff | Discount campaigns, personal voucher codes, the discount quote and what a booking is charged |
+| [loyalty.md](./loyalty.md) | Customer | Loyalty points: the balance and tier, earning at check-out, spending on a booking, the points history |
 
 How to read each endpoint table:
 
