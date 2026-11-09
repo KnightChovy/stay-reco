@@ -43,6 +43,17 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError<{ code?: string; message?: string }>) => {
+    // File downloads ask for a blob, so their JSON error body arrives as a Blob too: read it back, so the refresh
+    // below and the error helpers see the `code` like for any other request.
+    const body: unknown = error.response?.data;
+    if (error.response && body instanceof Blob && body.type.includes("json")) {
+      try {
+        error.response.data = JSON.parse(await body.text());
+      } catch {
+        // Not JSON after all: keep the Blob, the caller falls back to a generic message.
+      }
+    }
+
     const originalRequest = error.config as
       | (InternalAxiosRequestConfig & { _retry?: boolean })
       | undefined;

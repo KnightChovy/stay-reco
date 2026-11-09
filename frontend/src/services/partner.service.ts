@@ -8,11 +8,14 @@ import type {
   Booking,
   BookingSummary,
   CancellationPolicyInput,
+  CheckOutInput,
+  CheckOutQuote,
   CreateHotelInput,
   CreatePricingRuleInput,
   HotelBookingsQuery,
   PricePreview,
   PricingRule,
+  RejectChangeInput,
   UpdateAvailabilityInput,
   UpdatePricingRuleInput,
   CreateRoomInput,
@@ -503,6 +506,32 @@ export async function rejectRefund(bookingId: string, reason: string) {
   return data.data;
 }
 
+// ── Front desk and change requests (the owner may do them too) ──
+
+/** UC39: what checking out now means (early check-out, late fee to collect at the desk, amount paid). */
+export async function getCheckOutQuote(bookingId: string) {
+  const { data } = await api.get<APIResponse<CheckOutQuote>>(`/bookings/${bookingId}/check-out-quote`);
+  return data.data;
+}
+
+/** UC39: CHECKED_IN → COMPLETED, rooms to CLEANING. Without `lateFee` the fee of the hotel policy is recorded. */
+export async function checkOutBooking(bookingId: string, input: CheckOutInput = {}) {
+  const { data } = await api.post<APIResponse<Booking>>(`/bookings/${bookingId}/check-out`, input);
+  return data.data;
+}
+
+/** UC43: the booking takes the guest details the customer asked for. */
+export async function acceptBookingChange(bookingId: string) {
+  const { data } = await api.post<APIResponse<Booking>>(`/bookings/${bookingId}/accept-change`);
+  return data.data;
+}
+
+/** UC43: the booking keeps its details; the reason is emailed to the customer. */
+export async function rejectBookingChange(bookingId: string, input: RejectChangeInput) {
+  const { data } = await api.post<APIResponse<Booking>>(`/bookings/${bookingId}/reject-change`, input);
+  return data.data;
+}
+
 // ── Dashboard (docs/api/partner-dashboard.md) ───────────────
 
 /** `from` and `to` together, or neither for the month to date. */
@@ -550,6 +579,29 @@ export async function getStatsSeries(
     { params },
   );
   return data.data;
+}
+
+/** `filename="..."` of a Content-Disposition header, when the browser lets us read it. */
+function attachmentName(disposition: unknown) {
+  if (typeof disposition !== "string") return undefined;
+  return /filename="?([^";]+)"?/i.exec(disposition)?.[1];
+}
+
+/**
+ * Owner only. The dashboard of the period as an .xlsx workbook (the body is the file, not the envelope). `fileName` is
+ * the server's name when the Content-Disposition header is exposed to this origin.
+ */
+export async function exportStats(hotelId: string, params: StatsRangeParams) {
+  const response = await api.get<Blob>(`/hotels/${hotelId}/stats/export`, {
+    params,
+    responseType: "blob",
+    // Builds several sheets from the whole period, so it can take longer than a JSON read.
+    timeout: 60_000,
+  });
+  return {
+    file: response.data,
+    fileName: attachmentName(response.headers["content-disposition"]),
+  };
 }
 
 export async function getOccupancyForecast(hotelId: string, days?: number) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Eye, Search, X } from "lucide-react";
 import {
@@ -9,14 +9,25 @@ import {
   PaymentStatus,
   type BookingSummary,
 } from "@stayreco/shared";
-import { TableCommon, TablePagination, type CommonTableColumn } from "@/components/common/table";
+import {
+  TableCommon,
+  TablePagination,
+  type CommonTableColumn,
+} from "@/components/common/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import {
+  NativeSelect,
+  NativeSelectOption,
+} from "@/components/ui/native-select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useDebounce } from "@/hooks/use-debounce";
 import type { HotelBookingsParams } from "@/services/partner.service";
-import { useHotelBookings, useRefundQueueCount } from "../api/partner-queries";
+import {
+  useActionItem,
+  useHotelBookings,
+  useRefundQueueCount,
+} from "../api/partner-queries";
 import {
   DateInput,
   ErrorPanel,
@@ -35,6 +46,7 @@ import {
   formatDateTime,
   formatMoney,
   paymentStatusLabels,
+  type StatusTone,
 } from "../lib/labels";
 import { BookingDetailDialog } from "./BookingDetailDialog";
 
@@ -46,10 +58,39 @@ const sortLabels: Record<(typeof HOTEL_BOOKING_SORTS)[number], string> = {
   "created-desc": "Mới đặt nhất",
 };
 
-type BookingTab = "all" | "refunds";
+type BookingTab = "all" | "refunds" | "changes";
+
+const bookingStatuses = new Set<string>(Object.values(BookingStatus));
+
+function statusFromUrl(value: string | null) {
+  return value && bookingStatuses.has(value) ? value : "";
+}
+
+function useOverdueBookingIds(hotelId: string) {
+  const item = useActionItem(hotelId, "OVERDUE_CHECKOUTS");
+  return useMemo(() => new Set(item?.params.bookingIds), [item]);
+}
+
+function currentStatus(
+  booking: BookingSummary,
+  { overdue, changePending }: { overdue: boolean; changePending: boolean },
+): { label: string; tone: StatusTone } {
+  if (overdue) return { label: "Quá giờ trả phòng", tone: "danger" };
+  if (booking.paymentStatus === "REFUND_PENDING")
+    return paymentStatusLabels.REFUND_PENDING;
+  if (changePending)
+    return { label: "Chờ duyệt đổi thông tin", tone: "warning" };
+  if (booking.paymentStatus === "FAILED") return paymentStatusLabels.FAILED;
+  return bookingStatusLabels[booking.status];
+}
+
+function tabFromUrl(value: string | null): BookingTab {
+  return value === "refunds" || value === "changes" ? value : "all";
+}
 
 export default function PartnerBookings() {
-  const { hotel, hotels, isLoading, error, refetch, isSuspended } = usePartnerHotel();
+  const { hotel, hotels, isLoading, error, refetch, isSuspended } =
+    usePartnerHotel();
 
   return (
     <div className="space-y-6">
@@ -72,10 +113,11 @@ export default function PartnerBookings() {
 }
 
 function BookingsWorkspace({ hotelId }: { hotelId: string }) {
-  // `?tab=refunds` opens the refund queue (link of the dashboard's action items).
   const searchParams = useSearchParams();
-  const [tab, setTab] = useState<BookingTab>(searchParams.get("tab") === "refunds" ? "refunds" : "all");
-  // `?search=` comes from the header search box; a new header search replaces the box's text.
+  const [tab, setTab] = useState<BookingTab>(() =>
+    tabFromUrl(searchParams.get("tab")),
+  );
+
   const searchParam = searchParams.get("search") ?? "";
   const [search, setSearch] = useState(searchParam);
   const [shownSearchParam, setShownSearchParam] = useState(searchParam);
@@ -83,15 +125,23 @@ function BookingsWorkspace({ hotelId }: { hotelId: string }) {
     setShownSearchParam(searchParam);
     setSearch(searchParam);
   }
-  const [status, setStatus] = useState("");
+  // `?status=CHECKED_IN&open=<id>` comes from the dashboard's "quá giờ trả phòng" item.
+  const [status, setStatus] = useState(() =>
+    statusFromUrl(searchParams.get("status")),
+  );
   const [paymentStatus, setPaymentStatus] = useState("");
   const [checkInFrom, setCheckInFrom] = useState("");
   const [checkInTo, setCheckInTo] = useState("");
-  const [sort, setSort] = useState<(typeof HOTEL_BOOKING_SORTS)[number]>("check-in-asc");
+  const [sort, setSort] =
+    useState<(typeof HOTEL_BOOKING_SORTS)[number]>("check-in-asc");
   const [page, setPage] = useState(1);
-  const [openId, setOpenId] = useState<string>();
+  const [openId, setOpenId] = useState<string | undefined>(
+    () => searchParams.get("open") ?? undefined,
+  );
   const debouncedSearch = useDebounce(search.trim());
   const refundQueue = useRefundQueueCount(hotelId);
+  const changeRequests = useActionItem(hotelId, "CHANGE_REQUESTS_PENDING");
+  const overdueIds = useOverdueBookingIds(hotelId);
   const rangeInvalid = !!checkInFrom && !!checkInTo && checkInTo < checkInFrom;
 
   const params: HotelBookingsParams = {
@@ -102,7 +152,13 @@ function BookingsWorkspace({ hotelId }: { hotelId: string }) {
     status: status ? [status as BookingStatus] : undefined,
     // The refund queue is the bookings whose invoice is waiting for the partner's decision.
     paymentStatus:
-      tab === "refunds" ? ["REFUND_PENDING"] : paymentStatus ? [paymentStatus as PaymentStatus] : undefined,
+      tab === "refunds"
+        ? ["REFUND_PENDING"]
+        : tab === "all" && paymentStatus
+          ? [paymentStatus as PaymentStatus]
+          : undefined,
+    // Bookings with a change request waiting for the hotel (api: `changeRequest=PENDING`).
+    changeRequest: tab === "changes" ? "PENDING" : undefined,
     checkInFrom: checkInFrom || undefined,
     // An inverted range is shown as a field error instead of being sent (the API would answer VALIDATION_ERROR).
     checkInTo: checkInTo && !rangeInvalid ? checkInTo : undefined,
@@ -111,10 +167,18 @@ function BookingsWorkspace({ hotelId }: { hotelId: string }) {
   const meta = bookingsQuery.data?.meta;
 
   // Every filter change starts again from the first page.
-  const update = <T,>(setter: (value: T) => void) => (value: T) => {
-    setter(value);
-    setPage(1);
-  };
+  const update =
+    <T,>(setter: (value: T) => void) =>
+    (value: T) => {
+      setter(value);
+      setPage(1);
+    };
+
+  // A refund, an overdue check-out or a change request waits for the partner: the row's button says so.
+  const needsAction = (booking: BookingSummary) =>
+    booking.paymentStatus === "REFUND_PENDING" ||
+    overdueIds.has(booking.id) ||
+    tab === "changes";
 
   const columns: CommonTableColumn<BookingSummary>[] = [
     {
@@ -123,11 +187,17 @@ function BookingsWorkspace({ hotelId }: { hotelId: string }) {
       cell: (booking) => (
         <div>
           <strong className="block text-primary">{booking.code}</strong>
-          <span className="text-xs text-muted-foreground">Đặt {formatDateTime(booking.createdAt)}</span>
+          <span className="text-xs text-muted-foreground">
+            Đặt {formatDateTime(booking.createdAt)}
+          </span>
         </div>
       ),
     },
-    { id: "roomType", header: "Loại phòng", cell: (booking) => booking.roomType.name },
+    {
+      id: "roomType",
+      header: "Loại phòng",
+      cell: (booking) => booking.roomType.name,
+    },
     {
       id: "stay",
       header: "Lưu trú",
@@ -137,7 +207,8 @@ function BookingsWorkspace({ hotelId }: { hotelId: string }) {
             {formatDate(booking.checkIn)} – {formatDate(booking.checkOut)}
           </span>
           <span className="text-xs text-muted-foreground">
-            {booking.nights} đêm · {booking.rooms} phòng · {booking.guests} khách
+            {booking.nights} đêm · {booking.rooms} phòng · {booking.guests}{" "}
+            khách
           </span>
         </div>
       ),
@@ -146,36 +217,47 @@ function BookingsWorkspace({ hotelId }: { hotelId: string }) {
       id: "total",
       header: "Tổng tiền",
       align: "right",
-      cell: (booking) => <strong className="text-primary">{formatMoney(booking.totalAmount)}</strong>,
+      cell: (booking) => (
+        <strong className="text-primary">
+          {formatMoney(booking.totalAmount)}
+        </strong>
+      ),
     },
     {
       id: "status",
       header: "Trạng thái",
-      cell: (booking) => (
-        <div className="flex flex-col gap-1">
-          <StatusBadge tone={bookingStatusLabels[booking.status].tone}>
-            {bookingStatusLabels[booking.status].label}
-          </StatusBadge>
-          <StatusBadge tone={paymentStatusLabels[booking.paymentStatus].tone}>
-            {paymentStatusLabels[booking.paymentStatus].label}
-          </StatusBadge>
-        </div>
-      ),
+      cell: (booking) => {
+        const { label, tone } = currentStatus(booking, {
+          overdue: overdueIds.has(booking.id),
+          changePending: tab === "changes",
+        });
+        return <StatusBadge tone={tone}>{label}</StatusBadge>;
+      },
     },
     {
       id: "actions",
       header: <span className="sr-only">Thao tác</span>,
       align: "right",
       cell: (booking) => (
-        <Button variant={booking.paymentStatus === "REFUND_PENDING" ? "default" : "outline"} size="sm" onClick={() => setOpenId(booking.id)}>
+        <Button
+          variant={needsAction(booking) ? "default" : "outline"}
+          size="sm"
+          onClick={() => setOpenId(booking.id)}
+        >
           <Eye />
-          {booking.paymentStatus === "REFUND_PENDING" ? "Xử lý" : "Xem"}
+          {needsAction(booking) ? "Xử lý" : "Xem chi tiết"}
         </Button>
       ),
     },
   ];
 
-  const filtered = !!(debouncedSearch || status || paymentStatus || checkInFrom || checkInTo);
+  const filtered = !!(
+    debouncedSearch ||
+    status ||
+    paymentStatus ||
+    checkInFrom ||
+    checkInTo
+  );
 
   function clearFilters() {
     setSearch("");
@@ -189,7 +271,10 @@ function BookingsWorkspace({ hotelId }: { hotelId: string }) {
   return (
     <PartnerPanel className="overflow-hidden p-0">
       <div className="border-b px-5 pt-4">
-        <Tabs value={tab} onValueChange={(value) => update(setTab)(value as BookingTab)}>
+        <Tabs
+          value={tab}
+          onValueChange={(value) => update(setTab)(value as BookingTab)}
+        >
           <TabsList variant="line">
             <TabsTrigger value="all">Tất cả booking</TabsTrigger>
             <TabsTrigger value="refunds">
@@ -197,6 +282,14 @@ function BookingsWorkspace({ hotelId }: { hotelId: string }) {
               {refundQueue.count > 0 && (
                 <span className="ml-1 rounded-full bg-warning-soft px-1.5 text-[11px] font-bold text-warning">
                   {refundQueue.count}
+                </span>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="changes">
+              Yêu cầu đổi thông tin
+              {!!changeRequests && (
+                <span className="ml-1 rounded-full bg-warning-soft px-1.5 text-[11px] font-bold text-warning">
+                  {changeRequests.count}
                 </span>
               )}
             </TabsTrigger>
@@ -208,7 +301,10 @@ function BookingsWorkspace({ hotelId }: { hotelId: string }) {
         {/* The search is the main control, so it gets its own row; the filters narrow it below. */}
         <label className="relative block">
           <span className="sr-only">Tìm kiếm booking</span>
-          <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Search
+            size={16}
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+          />
           <Input
             value={search}
             onChange={(event) => update(setSearch)(event.target.value)}
@@ -219,7 +315,11 @@ function BookingsWorkspace({ hotelId }: { hotelId: string }) {
         </label>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <FormField label="Trạng thái">
-            <NativeSelect value={status} onChange={(event) => update(setStatus)(event.target.value)} className="w-full">
+            <NativeSelect
+              value={status}
+              onChange={(event) => update(setStatus)(event.target.value)}
+              className="w-full"
+            >
               <NativeSelectOption value="">Tất cả</NativeSelectOption>
               {Object.values(BookingStatus).map((value) => (
                 <NativeSelectOption key={value} value={value}>
@@ -232,7 +332,9 @@ function BookingsWorkspace({ hotelId }: { hotelId: string }) {
             <FormField label="Thanh toán">
               <NativeSelect
                 value={paymentStatus}
-                onChange={(event) => update(setPaymentStatus)(event.target.value)}
+                onChange={(event) =>
+                  update(setPaymentStatus)(event.target.value)
+                }
                 className="w-full"
               >
                 <NativeSelectOption value="">Tất cả</NativeSelectOption>
@@ -247,9 +349,20 @@ function BookingsWorkspace({ hotelId }: { hotelId: string }) {
             <div className="hidden lg:block" />
           )}
           <FormField label="Nhận phòng từ">
-            <DateInput value={checkInFrom} onChange={update(setCheckInFrom)} clearable />
+            <DateInput
+              value={checkInFrom}
+              onChange={update(setCheckInFrom)}
+              clearable
+            />
           </FormField>
-          <FormField label="Đến ngày" error={rangeInvalid ? "Ngày kết thúc không được trước ngày bắt đầu." : undefined}>
+          <FormField
+            label="Đến ngày"
+            error={
+              rangeInvalid
+                ? "Ngày kết thúc không được trước ngày bắt đầu."
+                : undefined
+            }
+          >
             <DateInput
               value={checkInTo}
               min={checkInFrom || undefined}
@@ -267,14 +380,20 @@ function BookingsWorkspace({ hotelId }: { hotelId: string }) {
           <span className="text-muted-foreground" aria-live="polite">
             {meta ? (
               <>
-                <strong className="text-foreground">{meta.total}</strong> booking
+                <strong className="text-foreground">{meta.total}</strong>{" "}
+                booking
               </>
             ) : (
               "Đang tải..."
             )}
           </span>
           {filtered && (
-            <Button type="button" variant="ghost" size="sm" onClick={clearFilters}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={clearFilters}
+            >
               <X />
               Xoá bộ lọc
             </Button>
@@ -284,7 +403,11 @@ function BookingsWorkspace({ hotelId }: { hotelId: string }) {
           Sắp xếp
           <NativeSelect
             value={sort}
-            onChange={(event) => setSort(event.target.value as (typeof HOTEL_BOOKING_SORTS)[number])}
+            onChange={(event) =>
+              setSort(
+                event.target.value as (typeof HOTEL_BOOKING_SORTS)[number],
+              )
+            }
             className="min-w-52"
           >
             {HOTEL_BOOKING_SORTS.map((value) => (
@@ -298,7 +421,10 @@ function BookingsWorkspace({ hotelId }: { hotelId: string }) {
 
       {bookingsQuery.error ? (
         <div className="p-5">
-          <ErrorPanel error={bookingsQuery.error} onRetry={() => void bookingsQuery.refetch()} />
+          <ErrorPanel
+            error={bookingsQuery.error}
+            onRetry={() => void bookingsQuery.refetch()}
+          />
         </div>
       ) : (
         <div className="overflow-x-auto">
@@ -310,9 +436,11 @@ function BookingsWorkspace({ hotelId }: { hotelId: string }) {
             emptyMessage={
               tab === "refunds"
                 ? "Không có yêu cầu hoàn tiền nào đang chờ."
-                : filtered
-                  ? "Không có booking nào khớp bộ lọc."
-                  : "Khách sạn chưa có booking nào."
+                : tab === "changes"
+                  ? "Không có yêu cầu đổi thông tin nào đang chờ."
+                  : filtered
+                    ? "Không có booking nào khớp bộ lọc."
+                    : "Khách sạn chưa có booking nào."
             }
             className="rounded-none border-0"
             tableClassName="min-w-[860px]"
@@ -320,10 +448,19 @@ function BookingsWorkspace({ hotelId }: { hotelId: string }) {
         </div>
       )}
       {meta && meta.total > 0 && (
-        <TablePagination page={meta.page} pageSize={meta.pageSize} total={meta.total} onPageChange={setPage} />
+        <TablePagination
+          page={meta.page}
+          pageSize={meta.pageSize}
+          total={meta.total}
+          onPageChange={setPage}
+        />
       )}
 
-      <BookingDetailDialog bookingId={openId} hotelId={hotelId} onOpenChange={(open) => !open && setOpenId(undefined)} />
+      <BookingDetailDialog
+        bookingId={openId}
+        hotelId={hotelId}
+        onOpenChange={(open) => !open && setOpenId(undefined)}
+      />
     </PartnerPanel>
   );
 }

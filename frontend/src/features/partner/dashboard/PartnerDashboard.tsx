@@ -1,10 +1,9 @@
 "use client";
 
 import { useIsFetching, useQueryClient } from "@tanstack/react-query";
-import { ChartNoAxesCombined, FileSpreadsheet, RefreshCw } from "lucide-react";
+import { ChartNoAxesCombined, RefreshCw } from "lucide-react";
 import type { HotelStatus } from "@stayreco/shared";
 import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuthStore } from "@/lib/auth-store";
 import { partnerKeys, useHotel, useTodayStats } from "../api/partner-queries";
 import {
@@ -62,13 +61,7 @@ export default function PartnerDashboard() {
         }
         action={
           hotel &&
-          !isPreLaunch(hotel.status) && (
-            <>
-              <RefreshStats hotelId={hotel.id} />
-              {/* The export holds money figures, so it is owner only like the KPIs. */}
-              {hotel.myRole === "OWNER" && <ExportExcelButton />}
-            </>
-          )
+          !isPreLaunch(hotel.status) && <RefreshStats hotelId={hotel.id} />
         }
       />
       {isSuspended && <SuspendedBanner />}
@@ -82,6 +75,7 @@ export default function PartnerDashboard() {
         <DashboardContent
           key={hotel.id}
           hotelId={hotel.id}
+          hotelName={hotel.name}
           isOwner={hotel.myRole === "OWNER"}
         />
       )}
@@ -104,7 +98,7 @@ function RefreshStats({ hotelId }: { hotelId: string }) {
         </span>
       )}
       <Button
-        className="h-9 cursor-pointer"
+        className="h-9"
         variant="outline"
         disabled={fetching}
         onClick={() =>
@@ -120,30 +114,13 @@ function RefreshStats({ hotelId }: { hotelId: string }) {
   );
 }
 
-/**
- * Placeholder until the backend publishes the dashboard Excel export: the button is shown but disabled, and says why.
- * TODO: wire it to the export endpoint once it is in docs/api/partner-dashboard.md.
- */
-function ExportExcelButton() {
-  return (
-    <Tooltip>
-      {/* A disabled button gets no pointer events, so the tooltip sits on a focusable wrapper. */}
-      <TooltipTrigger render={<span tabIndex={0} className="rounded-lg focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none" />}>
-        <Button className="h-9" disabled aria-describedby="export-excel-hint">
-          <FileSpreadsheet />
-          Xuất Excel
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent id="export-excel-hint">Sắp ra mắt: xuất báo cáo số liệu ra Excel</TooltipContent>
-    </Tooltip>
-  );
-}
-
 function DashboardContent({
   hotelId,
+  hotelName,
   isOwner,
 }: {
   hotelId: string;
+  hotelName: string;
   isOwner: boolean;
 }) {
   const hotelQuery = useHotel(hotelId);
@@ -175,8 +152,8 @@ function DashboardContent({
 
       <TodaySummary hotelId={hotelId} />
 
-      {/* Money and period KPIs are owner only: the API answers 403 to staff. */}
-      {isOwner && <PeriodStats hotelId={hotelId} />}
+      {/* Money and period KPIs (and their Excel export) are owner only: the API answers 403 to staff. */}
+      {isOwner && <PeriodStats hotelId={hotelId} hotelName={hotelName} />}
 
       <section className="grid items-start gap-6 xl:grid-cols-2">
         <OccupancyHeatmap hotelId={hotelId} />
