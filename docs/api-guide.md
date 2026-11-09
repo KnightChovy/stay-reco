@@ -220,6 +220,12 @@ There is no `status` field in the body; the HTTP status is already available as 
 | `CHANGE_REQUEST_PENDING` | 409 | The booking already has a change request waiting | Show the waiting request |
 | `CHANGE_REQUEST_STATUS_CONFLICT` | 409 | Accepting or rejecting when no change request is waiting | Reload the booking |
 | `NOTIFICATION_NOT_FOUND` | 404 | Notification doesn't exist or belongs to someone else | Reload the list |
+| `VOUCHER_NOT_FOUND` | 404 | The discount code doesn't exist or belongs to another customer | "Mã không hợp lệ" |
+| `VOUCHER_ALREADY_USED` | 409 | The voucher was already used on another booking | "Mã đã được sử dụng" |
+| `VOUCHER_EXPIRED` | 409 | The voucher, or the campaign behind it, is past its end date | "Mã đã hết hạn" |
+| `VOUCHER_NOT_APPLICABLE` | 409 | Below the campaign's minimum amount, or another hotel | Show the minimum, or which hotel it is for |
+| `PROMOTION_NOT_FOUND` | 404 | The promotion doesn't exist or belongs to another hotel | Reload the list |
+| `PROMOTION_NOT_ACTIVE` | 409 | Switched off, outside its dates, or out of uses | Reload the promotion |
 
 Important: **refresh only when `status === 401` and `code === 'UNAUTHENTICATED'`.** Refreshing on the other 401 errors (`AUTH_INVALID_CREDENTIALS`, `AUTH_WRONG_PASSWORD`, `AUTH_REFRESH_TOKEN_INVALID`) causes infinite loops or unexpected sign-outs.
 

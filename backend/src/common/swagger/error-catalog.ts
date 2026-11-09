@@ -240,6 +240,32 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorInfo> = {
     status: 409,
     description: 'No change request is waiting',
   },
+  VOUCHER_NOT_FOUND: {
+    status: 404,
+    description: "Discount code doesn't exist or belongs to another customer",
+  },
+  VOUCHER_ALREADY_USED: {
+    status: 409,
+    description: 'The voucher was already used on another booking',
+  },
+  VOUCHER_EXPIRED: {
+    status: 409,
+    description: 'The voucher, or the campaign behind it, is past its end date',
+  },
+  VOUCHER_NOT_APPLICABLE: {
+    status: 409,
+    description:
+      "The stay is below the campaign's minimum amount, or is at another hotel",
+  },
+  PROMOTION_NOT_FOUND: {
+    status: 404,
+    description: "Promotion doesn't exist or belongs to another hotel",
+  },
+  PROMOTION_NOT_ACTIVE: {
+    status: 409,
+    description:
+      'The campaign is switched off, outside its dates, or has run out of uses',
+  },
   NOTIFICATION_NOT_FOUND: {
     status: 404,
     description: "Notification doesn't exist or belongs to someone else",
