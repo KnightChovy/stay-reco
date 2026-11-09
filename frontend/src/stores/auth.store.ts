@@ -36,6 +36,8 @@ type AuthState = {
   login: (email: string, password: string) => Promise<AuthResult>;
   register: (input: { name: string; email: string; password: string }) => Promise<RegisterResult>;
   verifyEmail: (input: { email: string; code: string }) => Promise<AuthResult>;
+  /** Invited staff / platform manager: set a password from the emailed link and sign in. */
+  acceptInvitation: (input: { token: string; password: string }) => Promise<AuthResult>;
   logout: () => Promise<void>;
   setUser: (user: AuthUser | null) => void;
   setAccessToken: (token: string | null) => void;
@@ -121,6 +123,10 @@ function getErrorMessage(error: unknown): string {
       return message || 'Dữ liệu không hợp lệ. Vui lòng kiểm tra lại thông tin.';
     case 'AUTH_TOKEN_INVALID':
       return 'Liên kết xác thực hoặc mã token không hợp lệ hoặc đã hết hạn.';
+    case 'AUTH_INVITATION_ACCEPTED':
+      return 'Lời mời này đã được chấp nhận trước đó. Vui lòng đăng nhập.';
+    case 'TOO_MANY_REQUESTS':
+      return 'Bạn thao tác quá nhanh. Vui lòng thử lại sau ít phút.';
     default:
       return message || 'Đã có lỗi xảy ra. Vui lòng kiểm tra kết nối và thử lại.';
   }
@@ -194,6 +200,24 @@ export const useAuthStore = create<AuthState>()(
       verifyEmail: async ({ email, code }) => {
         try {
           const res = await authService.verifyEmail({ email, code });
+          const user = accountToAuthUser(res.data.account);
+          const accessToken = res.data.accessToken;
+
+          setWindowAccessToken(accessToken);
+          set({ user, accessToken });
+          return { success: true, user };
+        } catch (err) {
+          return {
+            success: false,
+            message: getErrorMessage(err),
+            code: getErrorCode(err),
+          };
+        }
+      },
+
+      acceptInvitation: async ({ token, password }) => {
+        try {
+          const res = await authService.acceptInvitation({ token, password });
           const user = accountToAuthUser(res.data.account);
           const accessToken = res.data.accessToken;
 

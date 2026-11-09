@@ -9,6 +9,7 @@ import { CalendarDays, MapPin, Search, Users } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import {
   buildSearchHref,
   dateInput,
@@ -31,6 +32,9 @@ type StaySearchBarProps = {
   initialGuests?: number;
   initialRooms?: number;
   onSearch?: (params: StaySearchParams) => void;
+  /** Hotel and room type pages change only the stay, so they hide the destination. */
+  showDestination?: boolean;
+  submitLabel?: string;
 };
 
 const inputClass =
@@ -44,6 +48,8 @@ export function StaySearchBar({
   initialGuests,
   initialRooms,
   onSearch,
+  showDestination = true,
+  submitLabel = 'Tìm khách sạn',
 }: StaySearchBarProps) {
   const router = useRouter();
   const fallback = defaultStay(1, 2);
@@ -60,7 +66,7 @@ export function StaySearchBar({
   });
 
   const nights = nightsBetween(checkIn, checkOut);
-  const disabled = nights <= 0 || !destination.trim();
+  const disabled = nights <= 0 || (showDestination && !destination.trim());
 
   const handleRangeSelect = (next: DateRange | undefined) => {
     // A click after a complete range normally extends it; treat it as a new check-in instead.
@@ -108,19 +114,28 @@ export function StaySearchBar({
 
   return (
     <div className="rounded-2xl border border-gray-200/80 bg-white p-1.5 shadow-[0_8px_30px_rgba(20,45,66,0.08)]">
-      <div className="grid grid-cols-1 divide-y divide-gray-100 sm:grid-cols-2 sm:divide-y-0 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1.55fr)_minmax(0,0.95fr)_auto] lg:divide-x">
-        <label className="group flex min-w-0 flex-col gap-1 rounded-xl px-3 py-2 transition-colors hover:bg-gray-50">
-          <span className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
-            <MapPin className="size-3" /> Điểm đến
-          </span>
-          <input
-            type="text"
-            value={destination}
-            onChange={(event) => setDestination(event.target.value)}
-            className={inputClass}
-            placeholder="Thành phố, khách sạn…"
-          />
-        </label>
+      <div
+        className={cn(
+          'grid grid-cols-1 divide-y divide-gray-100 sm:grid-cols-2 sm:divide-y-0 lg:divide-x',
+          showDestination
+            ? 'lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1.55fr)_minmax(0,0.95fr)_auto]'
+            : 'lg:grid-cols-[minmax(0,1.55fr)_minmax(0,0.95fr)_auto]',
+        )}
+      >
+        {showDestination && (
+          <label className="group flex min-w-0 flex-col gap-1 rounded-xl px-3 py-2 transition-colors hover:bg-gray-50">
+            <span className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+              <MapPin className="size-3" /> Điểm đến
+            </span>
+            <input
+              type="text"
+              value={destination}
+              onChange={(event) => setDestination(event.target.value)}
+              className={inputClass}
+              placeholder="Thành phố, khách sạn…"
+            />
+          </label>
+        )}
 
         <Popover>
           <PopoverTrigger className="group flex min-w-0 flex-col gap-1 rounded-xl px-3 py-2 text-left transition-colors hover:bg-gray-50 focus-visible:outline-hidden">
@@ -186,7 +201,7 @@ export function StaySearchBar({
             className="h-full min-h-11 w-full gap-2 whitespace-nowrap rounded-xl bg-[#14344d] px-5 text-[13px] font-semibold text-white shadow-xs hover:bg-[#0f283b]"
           >
             <Search className="size-4 shrink-0" />
-            <span>Tìm khách sạn</span>
+            <span>{submitLabel}</span>
           </Button>
         </div>
       </div>

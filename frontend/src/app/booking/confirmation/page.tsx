@@ -9,7 +9,6 @@ import {
   ArrowRight,
   Calendar,
   CheckCircle2,
-  Download,
   Loader2,
   Mail,
   MapPin,
@@ -24,14 +23,11 @@ import { Badge } from '@/components/ui/badge';
 import { getApiErrorMessage } from '@/lib/api-error';
 import { useAuthStore } from '@/lib/auth-store';
 import { useBooking, useBookingVoucher } from '@/features/booking/api/booking-queries';
+import { VoucherQr } from '@/features/booking/components/VoucherQr';
 import { formatDate, formatDateTime, formatMoney } from '@/features/stays/lib/format';
 
 const FALLBACK_IMAGE =
   'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=800&q=80';
-
-function qrImage(token: string) {
-  return `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(token)}`;
-}
 
 function ConfirmationContent() {
   const searchParams = useSearchParams();
@@ -231,27 +227,10 @@ function ConfirmationContent() {
             <div className="flex flex-col items-center p-5">
               {voucher ? (
                 <>
-                  <div className="rounded-xl border border-slate-200 bg-white p-2">
-                    <Image
-                      src={qrImage(voucher.qrToken)}
-                      alt={`Mã QR voucher ${voucher.code}`}
-                      width={208}
-                      height={208}
-                      unoptimized
-                      className="size-52 object-contain"
-                    />
-                  </div>
-                  <p className="mt-3 font-mono text-sm font-bold text-[#013758]">{voucher.code}</p>
+                  <VoucherQr token={voucher.qrToken} code={voucher.code} className="w-full" />
                   <p className="mt-1 text-center text-[11px] text-slate-500">
                     {voucher.hotelName} · {voucher.roomTypeName}
                   </p>
-                  <a
-                    href={qrImage(voucher.qrToken)}
-                    download={`stayreco-voucher-${voucher.code}.png`}
-                    className="mt-4 inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-lg border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                  >
-                    <Download className="size-3.5" /> Tải voucher
-                  </a>
                 </>
               ) : voucherQuery.isLoading ? (
                 <div className="flex items-center gap-2 py-10 text-xs text-slate-500">

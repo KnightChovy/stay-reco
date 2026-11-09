@@ -17,6 +17,7 @@ import {
   ShieldCheck,
   UserCheck,
   Users,
+  ScanLine,
 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -24,6 +25,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { getApiErrorCode, getApiErrorMessage } from '@/lib/api-error';
+import { QrScannerDialog } from '@/features/staff/components/QrScannerDialog';
 import { useStaffHotel } from '@/features/staff/components/StaffHotelProvider';
 import {
   useBookingLookup,
@@ -44,6 +46,7 @@ export default function StaffCheckInPage() {
   const hotelId = hotel?.summary.id;
 
   const [input, setInput] = useState('');
+  const [scannerOpen, setScannerOpen] = useState(false);
   const [lookupQuery, setLookupQuery] = useState<{ code?: string; qrToken?: string } | null>(null);
   const [chosenRooms, setChosenRooms] = useState<string[] | null>(null);
 
@@ -67,8 +70,8 @@ export default function StaffCheckInPage() {
   const selectedRooms = chosenRooms ?? defaultSelectedRooms;
   const roomsReady = !!booking && selectedRooms.length === booking.rooms;
 
-  const submitLookup = () => {
-    const value = input.trim();
+  const submitLookup = (raw: string = input) => {
+    const value = raw.trim();
     if (!value) return;
     setChosenRooms(null);
     checkIn.reset();
@@ -134,14 +137,29 @@ export default function StaffCheckInPage() {
             />
           </div>
           <Button
-            onClick={submitLookup}
+            onClick={() => submitLookup()}
             disabled={!input.trim() || lookup.isLoading}
             className="h-11 gap-1.5 bg-[#934a33] px-5 text-sm font-semibold text-white hover:bg-[#7b3e2b]"
           >
             {lookup.isLoading ? <Loader2 className="size-4 animate-spin" /> : <QrCode className="size-4" />}
             Tìm đơn
           </Button>
+          <Button
+            variant="outline"
+            onClick={() => setScannerOpen(true)}
+            className="h-11 gap-1.5 border-[#934a33]/40 px-5 text-sm font-semibold text-[#934a33] hover:bg-[#934a33]/5"
+          >
+            <ScanLine className="size-4" /> Quét QR
+          </Button>
         </div>
+        <QrScannerDialog
+          open={scannerOpen}
+          onOpenChange={setScannerOpen}
+          onResult={(token) => {
+            setInput(token);
+            submitLookup(token);
+          }}
+        />
         <p className="mt-2 text-[11px] text-slate-500">
           Có thể nhập mã không dấu gạch, ví dụ <span className="font-mono">SR2610311234</span>. Token QR lấy từ
           voucher điện tử của khách.

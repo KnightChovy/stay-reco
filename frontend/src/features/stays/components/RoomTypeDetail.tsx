@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   BedDouble,
@@ -23,6 +24,7 @@ import { Badge } from "@/components/ui/badge";
 import { getApiErrorMessage } from "@/lib/api-error";
 import { useHotelListing, useRoomTypeListing } from "../api/stays-queries";
 import { formatDate, formatDateTime, formatMoney } from "../lib/format";
+import { StaySearchBar } from "./StaySearchBar";
 
 const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1200&q=80";
 
@@ -39,12 +41,19 @@ export function RoomTypeDetail({
   roomTypeId: string;
   query: StayQuery;
 }) {
+  const router = useRouter();
   const roomQuery = useRoomTypeListing(roomTypeId, query);
   const hotelQuery = useHotelListing(hotelId, query);
 
   const available = roomQuery.data?.offer?.available ?? query.rooms;
   const maxRooms = Math.max(1, Math.min(8, available));
   const [rooms, setRooms] = useState(() => Math.max(1, query.rooms));
+  // A new stay from the editor below resets the room count to the one it asked for.
+  const [roomsFromQuery, setRoomsFromQuery] = useState(query.rooms);
+  if (roomsFromQuery !== query.rooms) {
+    setRoomsFromQuery(query.rooms);
+    setRooms(Math.max(1, query.rooms));
+  }
 
   if (roomQuery.isLoading) {
     return (
@@ -142,6 +151,27 @@ export function RoomTypeDetail({
               {roomType.description && (
                 <p className="mt-4 text-sm leading-relaxed text-muted-foreground">{roomType.description}</p>
               )}
+            </section>
+
+            <section aria-label="Kỳ nghỉ">
+              <h2 className="mb-2 flex items-center gap-2 text-sm font-bold text-foreground">
+                <CalendarDays className="size-4 text-primary" /> Đổi ngày hoặc số khách
+                {roomQuery.isPlaceholderData && (
+                  <Loader2 className="size-3.5 animate-spin text-muted-foreground" aria-label="Đang cập nhật giá" />
+                )}
+              </h2>
+              <StaySearchBar
+                key={staySearch(query)}
+                showDestination={false}
+                submitLabel="Cập nhật giá"
+                initialCheckIn={query.checkIn}
+                initialCheckOut={query.checkOut}
+                initialGuests={query.guests}
+                initialRooms={query.rooms}
+                onSearch={(params) =>
+                  router.replace(`/hotels/${hotelId}/rooms/${roomTypeId}?${staySearch(params)}`, { scroll: false })
+                }
+              />
             </section>
 
             <section className="rounded-2xl border border-border bg-white p-6 shadow-2xs">

@@ -2,6 +2,10 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { formatDistanceToNow } from 'date-fns';
+import { vi } from 'date-fns/locale';
+import { changePasswordSchema, type SessionInfo } from '@stayreco/shared';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import AppBreadcrumb from '@/components/common/breadcrumb/AppBreadcrumb';
@@ -12,7 +16,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import {
-  Lock,
   ShieldCheck,
   Eye,
   EyeOff,
@@ -22,29 +25,86 @@ import {
   Laptop,
   Mail,
   Phone,
-  AlertTriangle,
+  Loader2,
   LogOut,
-  Download,
   KeyRound,
-  ShieldAlert
+  AlertTriangle,
 } from 'lucide-react';
+import {
+  useChangePassword,
+  useLogoutAll,
+  useMe,
+  useRevokeSession,
+  useSessions,
+} from '@/features/account/api/account-queries';
+import { getApiErrorMessage, getApiFieldErrors, validateWith, type FieldErrors } from '@/lib/api-error';
+import { useAuthStore } from '@/lib/auth-store';
+
+/** "Chrome trên macOS" from a user agent; good enough to recognise one's own devices. */
+function describeDevice(userAgent: string | null) {
+  if (!userAgent) return { label: 'Thiết bị không xác định', mobile: false };
+  const ua = userAgent;
+  const browser = /Edg\//.test(ua)
+    ? 'Edge'
+    : /OPR\//.test(ua)
+      ? 'Opera'
+      : /Chrome\//.test(ua)
+        ? 'Chrome'
+        : /Firefox\//.test(ua)
+          ? 'Firefox'
+          : /Safari\//.test(ua)
+            ? 'Safari'
+            : /okhttp|Dart|Expo|CFNetwork/i.test(ua)
+              ? 'Ứng dụng StayReco'
+              : 'Trình duyệt';
+  const os = /iPhone|iPad/.test(ua)
+    ? 'iOS'
+    : /Android/.test(ua)
+      ? 'Android'
+      : /Mac OS X|Macintosh/.test(ua)
+        ? 'macOS'
+        : /Windows/.test(ua)
+          ? 'Windows'
+          : /Linux/.test(ua)
+            ? 'Linux'
+            : null;
+  return {
+    label: os ? `${browser} trên ${os}` : browser,
+    mobile: /iPhone|iPad|Android|Mobile/.test(ua),
+  };
+}
+
+function lastUsed(session: SessionInfo) {
+  return formatDistanceToNow(new Date(session.lastUsedAt), { addSuffix: true, locale: vi });
+}
 
 export default function SecurityPage() {
+  const router = useRouter();
+  const logout = useAuthStore((state) => state.logout);
+  const me = useMe();
+  const sessions = useSessions();
+  const changePassword = useChangePassword();
+  const revokeSession = useRevokeSession();
+  const logoutAll = useLogoutAll();
+
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showCurrent, setShowCurrent] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [sessionError, setSessionError] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Validation rules
+  // Validation rules (the backend requires at least 8 characters with a letter and a digit)
   const hasMinLength = newPassword.length >= 8;
-  const hasUpperAndNum = /[A-Z]/.test(newPassword) && /[0-9]/.test(newPassword);
-  const hasSpecial = /[!@#$%^&*(),.?":{}|<>]/.test(newPassword);
+  const hasLetterAndNum = /[A-Za-z]/.test(newPassword) && /[0-9]/.test(newPassword);
+  const hasSpecial = /[^A-Za-z0-9]/.test(newPassword);
   const isMatch = newPassword.length > 0 && newPassword === confirmPassword;
 
-  const strengthScore = [hasMinLength, hasUpperAndNum, hasSpecial, isMatch].filter(Boolean).length;
+  const strengthScore = [hasMinLength, hasLetterAndNum, hasSpecial, isMatch].filter(Boolean).length;
 
   const getStrengthLabel = () => {
     if (!newPassword) return 'Chưa nhập';
@@ -54,18 +114,70 @@ export default function SecurityPage() {
     return 'Rất mạnh';
   };
 
-  const handlePasswordSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!isMatch) {
-      alert('Mật khẩu xác nhận không khớp!');
-      return;
-    }
-    setToastMessage('Mật khẩu của bạn đã được cập nhật thành công!');
-    setCurrentPassword('');
-    setNewPassword('');
-    setConfirmPassword('');
+  const showToast = (message: string) => {
+    setToastMessage(message);
     setTimeout(() => setToastMessage(null), 3500);
   };
+
+  const handlePasswordSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (changePassword.isPending) return;
+    setPasswordError(null);
+
+    const parsed = validateWith(changePasswordSchema, { currentPassword, newPassword });
+    const errors: FieldErrors = { ...(parsed.errors ?? {}) };
+    if (!isMatch) errors.confirmPassword = 'Mật khẩu xác nhận chưa khớp.';
+    if (newPassword && newPassword === currentPassword) {
+      errors.newPassword = 'Mật khẩu mới phải khác mật khẩu hiện tại.';
+    }
+    if (Object.keys(errors).length > 0 || !parsed.data) {
+      setFieldErrors(errors);
+      return;
+    }
+
+    changePassword.mutate(parsed.data, {
+      onSuccess: () => {
+        setFieldErrors({});
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+        showToast('Mật khẩu đã được cập nhật. Các thiết bị khác đã được đăng xuất.');
+      },
+      onError: (err) => {
+        const fields = getApiFieldErrors(err);
+        setFieldErrors(fields);
+        setPasswordError(getApiErrorMessage(err));
+      },
+    });
+  };
+
+  const handleRevoke = (sessionId: string) => {
+    setSessionError(null);
+    revokeSession.mutate(sessionId, {
+      onSuccess: () => showToast('Đã đăng xuất thiết bị.'),
+      onError: (err) => {
+        setSessionError(getApiErrorMessage(err));
+        void sessions.refetch();
+      },
+    });
+  };
+
+  const handleLogoutAll = () => {
+    if (!window.confirm('Đăng xuất khỏi tất cả thiết bị, kể cả thiết bị này?')) return;
+    setSessionError(null);
+    logoutAll.mutate(undefined, {
+      onSuccess: async () => {
+        await logout();
+        router.replace('/login');
+      },
+      onError: (err) => setSessionError(getApiErrorMessage(err)),
+    });
+  };
+
+  const account = me.data;
+  const sessionList = sessions.data ?? [];
+  const currentSession = sessionList.find((session) => session.current);
+  const otherSessions = sessionList.filter((session) => !session.current);
 
   return (
     <div className="flex min-h-screen flex-col bg-background font-sans antialiased text-foreground">
@@ -131,7 +243,7 @@ export default function SecurityPage() {
                 </div>
               </div>
 
-              <form onSubmit={handlePasswordSubmit} className="space-y-5">
+              <form onSubmit={handlePasswordSubmit} className="space-y-5" noValidate>
                 {/* Current Password */}
                 <div className="space-y-1.5">
                   <div className="flex justify-between items-center">
@@ -155,11 +267,13 @@ export default function SecurityPage() {
                     <button
                       type="button"
                       onClick={() => setShowCurrent(!showCurrent)}
+                      aria-label={showCurrent ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                     >
                       {showCurrent ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                     </button>
                   </div>
+                  <FieldError message={fieldErrors.currentPassword} />
                 </div>
 
                 {/* New & Confirm */}
@@ -181,11 +295,13 @@ export default function SecurityPage() {
                       <button
                         type="button"
                         onClick={() => setShowNew(!showNew)}
+                        aria-label={showNew ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
                         className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                       >
                         {showNew ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                       </button>
                     </div>
+                    <FieldError message={fieldErrors.newPassword} />
                   </div>
 
                   <div className="space-y-1.5">
@@ -205,11 +321,13 @@ export default function SecurityPage() {
                       <button
                         type="button"
                         onClick={() => setShowConfirm(!showConfirm)}
+                        aria-label={showConfirm ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
                         className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                       >
                         {showConfirm ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                       </button>
                     </div>
+                    <FieldError message={fieldErrors.confirmPassword} />
                   </div>
                 </div>
 
@@ -239,11 +357,11 @@ export default function SecurityPage() {
                     <div className={`flex items-center gap-1.5 ${hasMinLength ? 'text-emerald-600 font-semibold' : 'text-muted-foreground'}`}>
                       <Check className="size-3.5" /> Tối thiểu 8 ký tự
                     </div>
-                    <div className={`flex items-center gap-1.5 ${hasUpperAndNum ? 'text-emerald-600 font-semibold' : 'text-muted-foreground'}`}>
-                      <Check className="size-3.5" /> Chữ hoa (A-Z) & chữ số (0-9)
+                    <div className={`flex items-center gap-1.5 ${hasLetterAndNum ? 'text-emerald-600 font-semibold' : 'text-muted-foreground'}`}>
+                      <Check className="size-3.5" /> Có chữ cái & chữ số (0-9)
                     </div>
                     <div className={`flex items-center gap-1.5 ${hasSpecial ? 'text-emerald-600 font-semibold' : 'text-muted-foreground'}`}>
-                      <Check className="size-3.5" /> Ký tự đặc biệt (!@#$%)
+                      <Check className="size-3.5" /> Ký tự đặc biệt (khuyến nghị)
                     </div>
                     <div className={`flex items-center gap-1.5 ${isMatch ? 'text-emerald-600 font-semibold' : 'text-muted-foreground'}`}>
                       <Check className="size-3.5" /> Khớp với mật khẩu mới
@@ -251,26 +369,38 @@ export default function SecurityPage() {
                   </div>
                 </div>
 
+                {passwordError && (
+                  <p className="rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-700" role="alert">
+                    {passwordError}
+                  </p>
+                )}
+
                 <div className="pt-2 flex justify-end">
                   <Button
                     type="submit"
+                    disabled={changePassword.isPending}
                     className="h-11 px-8 bg-primary text-primary-foreground hover:bg-[#193b56] font-bold text-xs sm:text-sm gap-2 shadow-sm"
                   >
-                    <CheckCircle2 className="size-4" /> Cập nhật mật khẩu mới
+                    {changePassword.isPending ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="size-4" />
+                    )}
+                    {changePassword.isPending ? 'Đang cập nhật...' : 'Cập nhật mật khẩu mới'}
                   </Button>
                 </div>
               </form>
             </Card>
 
-            {/* CARD 2: Auth Methods */}
+            {/* CARD 2: Contact methods */}
             <Card className="p-6 sm:p-8 bg-white border border-border shadow-xs rounded-2xl space-y-6">
               <div className="flex items-center gap-3 pb-4 border-b border-border">
                 <div className="size-9 rounded-lg bg-orange-100 text-[#934a33] flex items-center justify-center font-bold">
                   <Smartphone className="size-5" />
                 </div>
                 <div>
-                  <h2 className="text-base sm:text-lg font-bold text-foreground">Trạng thái xác thực & Phương thức bảo mật</h2>
-                  <p className="text-xs text-muted-foreground">Dùng nhận mã OTP đặt phòng và cảnh báo đăng nhập</p>
+                  <h2 className="text-base sm:text-lg font-bold text-foreground">Thông tin xác thực & liên hệ</h2>
+                  <p className="text-xs text-muted-foreground">Email đăng nhập và số điện thoại của tài khoản</p>
                 </div>
               </div>
 
@@ -282,17 +412,17 @@ export default function SecurityPage() {
                     </div>
                     <div>
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-xs sm:text-sm font-bold text-foreground">minhanh.nguyen@email.vn</span>
-                        <Badge className="bg-emerald-50 text-emerald-700 hover:bg-emerald-50 text-[10px]">
-                          Đã xác minh
-                        </Badge>
+                        <span className="text-xs sm:text-sm font-bold text-foreground">{account?.email ?? '—'}</span>
+                        {account &&
+                          (account.emailVerified ? (
+                            <Badge className="bg-emerald-50 text-emerald-700 hover:bg-emerald-50 text-[10px]">Đã xác minh</Badge>
+                          ) : (
+                            <Badge className="bg-amber-50 text-amber-700 hover:bg-amber-50 text-[10px]">Chưa xác minh</Badge>
+                          ))}
                       </div>
-                      <p className="text-[11px] text-muted-foreground mt-0.5">Địa chỉ nhận E-Voucher và hóa đơn VAT</p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">Địa chỉ đăng nhập, nhận E-Voucher và hóa đơn</p>
                     </div>
                   </div>
-                  <Button variant="outline" className="h-9 text-xs font-semibold shrink-0">
-                    Đổi email
-                  </Button>
                 </div>
 
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-slate-50 rounded-xl border border-border gap-3">
@@ -301,18 +431,17 @@ export default function SecurityPage() {
                       <Phone className="size-5" />
                     </div>
                     <div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-xs sm:text-sm font-bold text-foreground">+84 0912 345 678</span>
-                        <Badge className="bg-emerald-50 text-emerald-700 hover:bg-emerald-50 text-[10px]">
-                          Đã xác minh OTP
-                        </Badge>
-                      </div>
-                      <p className="text-[11px] text-muted-foreground mt-0.5">SĐT nhận mã xác nhận SMS</p>
+                      <span className="text-xs sm:text-sm font-bold text-foreground">
+                        {account?.phone ?? 'Chưa có số điện thoại'}
+                      </span>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">Khách sạn liên hệ khi cần hỗ trợ lưu trú</p>
                     </div>
                   </div>
-                  <Button variant="outline" className="h-9 text-xs font-semibold shrink-0">
-                    Cập nhật SĐT
-                  </Button>
+                  <Link href="/account/profile">
+                    <Button variant="outline" className="h-9 text-xs font-semibold shrink-0">
+                      Cập nhật SĐT
+                    </Button>
+                  </Link>
                 </div>
               </div>
             </Card>
@@ -329,40 +458,56 @@ export default function SecurityPage() {
                 </div>
               </div>
 
-              <div className="p-4 bg-slate-50 rounded-xl border border-border space-y-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className="size-10 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                      <Laptop className="size-5" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h4 className="text-xs sm:text-sm font-bold text-foreground">Chrome trên macOS</h4>
-                        <Badge className="bg-emerald-50 text-emerald-700 hover:bg-emerald-50 text-[10px]">
-                          Phiên hiện tại
-                        </Badge>
-                      </div>
-                      <p className="text-[11px] text-muted-foreground mt-0.5">
-                        Đà Nẵng, Việt Nam • IP: 118.69.192.83
-                      </p>
-                    </div>
-                  </div>
+              {sessions.isLoading ? (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Loader2 className="size-4 animate-spin" /> Đang tải danh sách thiết bị...
                 </div>
-
-                <div className="pt-2 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
-                  <div className="flex items-center gap-3">
-                    <Smartphone className="size-4 text-muted-foreground" />
-                    <span>StayReco iOS App • iPhone 15 Pro (Hội An, 3 ngày trước)</span>
-                  </div>
-                  <Button variant="ghost" className="h-7 text-[11px] text-red-600 hover:text-red-700 hover:bg-red-50">
-                    Đăng xuất
+              ) : sessions.isError ? (
+                <div className="flex items-center justify-between gap-3 p-4 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-800">
+                  <span className="flex items-center gap-2">
+                    <AlertTriangle className="size-4" />
+                    {getApiErrorMessage(sessions.error, 'Không tải được danh sách thiết bị.')}
+                  </span>
+                  <Button variant="outline" className="h-8 text-xs" onClick={() => void sessions.refetch()}>
+                    Thử lại
                   </Button>
                 </div>
-              </div>
+              ) : (
+                <div className="p-4 bg-slate-50 rounded-xl border border-border space-y-3">
+                  {currentSession && <SessionRow session={currentSession} />}
+                  {otherSessions.length === 0 ? (
+                    <p className="pt-2 border-t border-border text-xs text-muted-foreground">
+                      Không có thiết bị nào khác đang đăng nhập.
+                    </p>
+                  ) : (
+                    otherSessions.map((session) => (
+                      <div key={session.id} className="pt-2 border-t border-border">
+                        <SessionRow
+                          session={session}
+                          onRevoke={() => handleRevoke(session.id)}
+                          revoking={revokeSession.isPending && revokeSession.variables === session.id}
+                        />
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+
+              {sessionError && (
+                <p className="rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-700" role="alert">
+                  {sessionError}
+                </p>
+              )}
 
               <div className="flex justify-end pt-2">
-                <Button variant="outline" className="h-10 text-xs font-semibold text-red-600 border-red-200 hover:bg-red-50 gap-2">
-                  <LogOut className="size-4" /> Đăng xuất khỏi tất cả thiết bị khác
+                <Button
+                  variant="outline"
+                  onClick={handleLogoutAll}
+                  disabled={logoutAll.isPending}
+                  className="h-10 text-xs font-semibold text-red-600 border-red-200 hover:bg-red-50 gap-2"
+                >
+                  {logoutAll.isPending ? <Loader2 className="size-4 animate-spin" /> : <LogOut className="size-4" />}
+                  Đăng xuất khỏi tất cả thiết bị
                 </Button>
               </div>
             </Card>
@@ -374,7 +519,7 @@ export default function SecurityPage() {
 
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-primary text-primary-foreground px-5 py-3.5 rounded-xl shadow-xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5">
+        <div role="status" className="fixed bottom-6 right-6 z-50 bg-primary text-primary-foreground px-5 py-3.5 rounded-xl shadow-xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5">
           <CheckCircle2 className="size-5 text-emerald-400 shrink-0" />
           <div>
             <h4 className="text-xs sm:text-sm font-bold">Cập nhật thành công!</h4>
@@ -384,6 +529,58 @@ export default function SecurityPage() {
       )}
 
       <Footer />
+    </div>
+  );
+}
+
+function FieldError({ message }: { message?: string }) {
+  if (!message) return null;
+  return (
+    <span className="text-[11px] text-red-600 block" role="alert">
+      {message}
+    </span>
+  );
+}
+
+function SessionRow({
+  session,
+  onRevoke,
+  revoking,
+}: {
+  session: SessionInfo;
+  onRevoke?: () => void;
+  revoking?: boolean;
+}) {
+  const device = describeDevice(session.userAgent);
+  const Icon = device.mobile ? Smartphone : Laptop;
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center gap-3 min-w-0">
+        <div className="size-10 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0">
+          <Icon className="size-5" />
+        </div>
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h4 className="text-xs sm:text-sm font-bold text-foreground">{device.label}</h4>
+            {session.current && (
+              <Badge className="bg-emerald-50 text-emerald-700 hover:bg-emerald-50 text-[10px]">Phiên hiện tại</Badge>
+            )}
+          </div>
+          <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
+            {session.ip ? `IP: ${session.ip} • ` : ''}Hoạt động {lastUsed(session)}
+          </p>
+        </div>
+      </div>
+      {onRevoke && (
+        <Button
+          variant="ghost"
+          onClick={onRevoke}
+          disabled={revoking}
+          className="h-7 shrink-0 text-[11px] text-red-600 hover:text-red-700 hover:bg-red-50"
+        >
+          {revoking ? <Loader2 className="size-3.5 animate-spin" /> : 'Đăng xuất'}
+        </Button>
+      )}
     </div>
   );
 }

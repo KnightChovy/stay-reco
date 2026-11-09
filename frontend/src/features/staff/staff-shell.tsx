@@ -1,12 +1,27 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { usePathname } from 'next/navigation';
-import { AlertTriangle, BadgePercent, CalendarDays, Inbox, KeyRound, LayoutDashboard, LineChart, LogOut, ReceiptText, Sparkles } from 'lucide-react';
+import { usePathname, useRouter } from 'next/navigation';
+import {
+  AlertTriangle,
+  BadgePercent,
+  BedDouble,
+  CalendarDays,
+  CalendarRange,
+  Inbox,
+  KeyRound,
+  LayoutDashboard,
+  LineChart,
+  LogOut,
+  ReceiptText,
+  Sparkles,
+} from 'lucide-react';
 import Navbar from '@/components/common/navbar/Navbar';
 import Sidebar, { SidebarProvider, type SidebarItem } from '@/components/common/sidebar/Sidebar';
 import { SidebarInset } from '@/components/ui/sidebar';
 import { useAuthStore } from '@/lib/auth-store';
+import { NotificationBell } from '@/features/notifications/components/NotificationBell';
+import { useActionItems } from './api/staff-queries';
 import { useStaffHotel } from './components/StaffHotelProvider';
 import { hotelStatusLabels } from './lib/labels';
 
@@ -15,9 +30,12 @@ const navigation: Omit<SidebarItem, 'isActive'>[] = [
   { href: '/staff/bookings', label: 'Danh sách đặt phòng', icon: ReceiptText, section: 'TÁC VỤ VẬN HÀNH' },
   { href: '/staff/check-in', label: 'Check-in & Gán phòng', icon: KeyRound, section: 'TÁC VỤ VẬN HÀNH' },
   { href: '/staff/check-out', label: 'Check-out', icon: LogOut, section: 'TÁC VỤ VẬN HÀNH' },
-  { href: '/staff/inbox', label: 'Hộp thư & Khiếu nại', icon: Inbox, badge: 2, section: 'TÁC VỤ VẬN HÀNH' },
+  { href: '/staff/rooms', label: 'Tình trạng phòng', icon: BedDouble, section: 'TÁC VỤ VẬN HÀNH' },
+  { href: '/staff/availability', label: 'Phòng trống & Giá', icon: CalendarRange, section: 'TÁC VỤ VẬN HÀNH' },
   { href: '/staff/refunds', label: 'Hoàn tiền & Chính sách', icon: BadgePercent, section: 'TÁC VỤ VẬN HÀNH' },
-  { href: '/staff/alerts', label: 'Cảnh báo nghiệp vụ', icon: AlertTriangle, badge: 1, section: 'TÁC VỤ VẬN HÀNH' },
+  // Inbox and alerts are still sample screens (no API yet), so they carry no count.
+  { href: '/staff/inbox', label: 'Hộp thư & Khiếu nại', icon: Inbox, section: 'TÁC VỤ VẬN HÀNH' },
+  { href: '/staff/alerts', label: 'Cảnh báo nghiệp vụ', icon: AlertTriangle, section: 'TÁC VỤ VẬN HÀNH' },
   { href: '/staff/marketing/content', label: 'Thư viện nội dung AI', icon: Sparkles, section: 'NỘI DUNG & MARKETING' },
   { href: '/staff/marketing/calendar', label: 'Lịch đăng & Kết nối kênh', icon: CalendarDays, section: 'NỘI DUNG & MARKETING' },
   { href: '/staff/marketing/analytics', label: 'Hiệu quả tiếp thị', icon: LineChart, section: 'NỘI DUNG & MARKETING' },
@@ -25,10 +43,20 @@ const navigation: Omit<SidebarItem, 'isActive'>[] = [
 
 export function StaffShell({ children }: Readonly<{ children: ReactNode }>) {
   const pathname = usePathname();
+  const router = useRouter();
   const user = useAuthStore((state) => state.user);
   const { hotel } = useStaffHotel();
+  const actionItems = useActionItems(hotel?.summary.id);
+  const countOf = (type: string) => actionItems.data?.items.find((item) => item.type === type)?.count;
+  // Real counts from GET /hotels/:id/action-items, refreshed with the dashboard.
+  const badges: Record<string, number | undefined> = {
+    '/staff/refunds': countOf('REFUND_REQUESTS_PENDING'),
+    '/staff/check-out': countOf('OVERDUE_CHECKOUTS'),
+    '/staff/bookings': countOf('CHANGE_REQUESTS_PENDING'),
+  };
   const items = navigation.map((item) => ({
     ...item,
+    badge: badges[item.href] || item.badge,
     isActive: pathname === item.href || pathname.startsWith(`${item.href}/`),
   }));
   const hotelName = hotel?.summary.name ?? 'Chưa có khách sạn';
@@ -57,8 +85,12 @@ export function StaffShell({ children }: Readonly<{ children: ReactNode }>) {
             role: 'Nhân viên khách sạn',
             avatarUrl: user?.avatarUrl,
           }}
-          notificationCount={2}
-          searchPlaceholder="Tìm đặt phòng, khách lưu trú hoặc phòng..."
+          notifications={<NotificationBell allHref={null} />}
+          // The bookings list is the searchable list (code or guest name), so the header search opens it.
+          searchPlaceholder="Tìm mã booking hoặc tên khách"
+          onSearch={(query) => {
+            if (query) router.push(`/staff/bookings?search=${encodeURIComponent(query)}`);
+          }}
           showSidebarTrigger
           profileHref="/staff/dashboard"
         />
