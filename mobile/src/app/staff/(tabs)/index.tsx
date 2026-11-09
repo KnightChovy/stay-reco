@@ -1,4 +1,4 @@
-import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Pressable, View } from 'react-native';
 import { router, type Href } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import type { ActionItem } from '@stayreco/shared';
@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
 import { Icon, type IconName } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
-import { colors, radius } from '@/constants/theme';
+import { colors } from '@/constants/theme';
 import type { Tone } from '@/features/staff/data';
 import { Avatar, Card, Grid, KV, Section, Stat, StaffTabScreen, accent, s, useStaffHotel } from '@/features/staff/ui';
 import { bookingStatusLabel, formatDate } from '@/lib/stay';
@@ -20,9 +20,9 @@ const quick: { icon: IconName; label: string; href: Href }[] = [
 
 // Chỉ các mục staff xử lý được trên mobile; mục khác (thiết lập, xác minh…) là việc của chủ khách sạn.
 const actionLabels: Partial<Record<ActionItem['type'], { icon: IconName; label: string; href: Href }>> = {
-  OVERDUE_CHECKOUTS: { icon: 'schedule', label: 'Khách quá giờ trả phòng', href: '/staff/check-out' },
+  OVERDUE_CHECKOUTS: { icon: 'schedule', label: 'Khách quá giờ trả phòng', href: '/staff/bookings?filter=CHECKED_IN' },
   REFUND_REQUESTS_PENDING: { icon: 'currency_exchange', label: 'Yêu cầu hoàn tiền đang chờ', href: '/staff/refunds' },
-  CHANGE_REQUESTS_PENDING: { icon: 'edit_note', label: 'Yêu cầu đổi thông tin đang chờ', href: '/staff/bookings' },
+  CHANGE_REQUESTS_PENDING: { icon: 'edit_note', label: 'Yêu cầu đổi thông tin đang chờ', href: '/staff/bookings?filter=CHANGES' },
 };
 const severityTone: Record<ActionItem['severity'], Tone> = { CRITICAL: 'danger', WARNING: 'warning', INFO: 'neutral' };
 
@@ -56,10 +56,10 @@ export default function StaffDashboardScreen() {
         <Text variant="h1">Tổng quan ca làm</Text>
       </View>
 
-      <View style={styles.quickRow}>
+      <View className="flex-row gap-2.5">
         {quick.map((q) => (
-          <Pressable key={q.label} accessibilityRole="button" onPress={() => router.push(q.href)} style={styles.quick}>
-            <View style={styles.quickIcon}>
+          <Pressable key={q.label} accessibilityRole="button" onPress={() => router.push(q.href)} className="flex-1 items-center gap-2 rounded-lg border border-surface-container bg-surface-container-lowest px-1.5 py-3.5">
+            <View className="h-11 w-11 items-center justify-center rounded-[14px] bg-surface-container-low">
               <Icon name={q.icon} color={colors.primary} />
             </View>
             <Text variant="caption" weight="semibold" center>
@@ -87,8 +87,8 @@ export default function StaffDashboardScreen() {
               icon="bed"
               label="Công suất đêm nay"
               value={t!.tonight.occupancyRate === null ? '—' : `${Math.round(t!.tonight.occupancyRate)}%`}
-              unit={`${t!.tonight.roomsSold} phòng đã bán`}
-              foot={`Còn trống: ${t!.tonight.roomsAvailable} phòng`}
+              unit={`${t!.tonight.roomsSold}/${t!.tonight.roomsAvailable} phòng đã bán`}
+              foot={`Còn trống: ${t!.tonight.roomsAvailable - t!.tonight.roomsSold} phòng`}
               tint="#2e7d55"
             />
             <Stat icon="groups" label="Đang lưu trú" value={`${t!.inHouse.guests}`} unit="khách" foot={`${t!.inHouse.bookings} đơn`} tint={colors.primaryContainer} />
@@ -97,15 +97,15 @@ export default function StaffDashboardScreen() {
           {tasks.length > 0 && (
             <>
               <Section title="Cần xử lý ngay" />
-              <Card style={styles.list}>
+              <Card style={{ gap: 0, paddingVertical: 4 }}>
                 {tasks.map((item, i) => {
                   const a = actionLabels[item.type]!;
                   return (
-                    <Pressable key={item.type} accessibilityRole="button" onPress={() => router.push(a.href)} style={[styles.task, i > 0 && styles.topLine]}>
-                      <View style={styles.taskIcon}>
+                    <Pressable key={item.type} accessibilityRole="button" onPress={() => router.push(a.href)} className={`flex-row items-center gap-3 py-3 ${i > 0 ? 'border-t border-surface-container-high' : ''}`}>
+                      <View className="h-9 w-9 items-center justify-center rounded-[10px] bg-surface-container-low">
                         <Icon name={a.icon} size={18} color={colors.primary} />
                       </View>
-                      <Text variant="small" weight="semibold" style={s.flex}>
+                      <Text variant="small" weight="semibold" className={s.flex}>
                         {a.label}
                       </Text>
                       <Chip label={`${item.count}`} tone={severityTone[item.severity]} />
@@ -124,9 +124,9 @@ export default function StaffDashboardScreen() {
           ) : (
             t!.upcomingArrivals.map((g) => (
               <Card key={g.bookingId}>
-                <View style={s.row}>
+                <View className={s.row}>
                   <Avatar text={initials(g.guestName)} />
-                  <View style={s.flex}>
+                  <View className={s.flex}>
                     <Text variant="label" weight="bold">
                       {g.guestName}
                     </Text>
@@ -146,12 +146,12 @@ export default function StaffDashboardScreen() {
                 <KV label="Hạng phòng" value={`${g.roomTypeName} · ${g.rooms} phòng · ${g.nights} đêm`} />
                 <KV label="Phòng đang giữ" value={g.roomNumbers.join(', ') || 'Chưa gán'} strong />
                 {!!g.specialRequests && <Text variant="caption">Yêu cầu: {g.specialRequests}</Text>}
-                <View style={s.row}>
-                  <Button label="Chi tiết" variant="secondary" style={s.flex} onPress={() => router.push({ pathname: '/staff/bookings/[id]', params: { id: g.bookingId } })} />
+                <View className={s.row}>
+                  <Button label="Chi tiết" variant="secondary" className={s.flex} onPress={() => router.push({ pathname: '/staff/bookings/[id]', params: { id: g.bookingId } })} />
                   <Button
                     label="Check-in"
                     leadingIcon="key"
-                    style={[s.flex, { backgroundColor: accent }]}
+                    className={s.flex} style={{ backgroundColor: accent }}
                     onPress={() => router.push({ pathname: '/staff/check-in', params: { code: g.code } })}
                   />
                 </View>
@@ -165,16 +165,16 @@ export default function StaffDashboardScreen() {
               Tổng {t!.rooms.total} phòng
             </Text>
             {t!.rooms.total > 0 && (
-              <View style={styles.bar}>
+              <View className="h-2.5 flex-row gap-0.5 overflow-hidden rounded-full">
                 {roomLegend.map((r) => (
                   <View key={r.key} style={{ flex: t!.rooms[r.key], backgroundColor: r.color }} />
                 ))}
               </View>
             )}
             {roomLegend.map((r) => (
-              <View key={r.key} style={s.row}>
-                <View style={[styles.legend, { backgroundColor: r.color }]} />
-                <Text variant="small" color={colors.onSurfaceVariant} style={s.flex}>
+              <View key={r.key} className={s.row}>
+                <View className="h-2.5 w-2.5 rounded-[3px]" style={{ backgroundColor: r.color }} />
+                <Text variant="small" color={colors.onSurfaceVariant} className={s.flex}>
                   {r.label}
                 </Text>
                 <Text variant="small" weight="bold">
@@ -188,25 +188,3 @@ export default function StaffDashboardScreen() {
     </StaffTabScreen>
   );
 }
-
-const styles = StyleSheet.create({
-  quickRow: { flexDirection: 'row', gap: 10 },
-  quick: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 14,
-    paddingHorizontal: 6,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surfaceContainerLowest,
-    borderWidth: 1,
-    borderColor: colors.surfaceContainer,
-  },
-  quickIcon: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceContainerLow },
-  list: { gap: 0, paddingVertical: 4 },
-  task: { flexDirection: 'row', gap: 12, paddingVertical: 12, alignItems: 'center' },
-  topLine: { borderTopWidth: 1, borderTopColor: colors.surfaceContainerHigh },
-  taskIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceContainerLow },
-  bar: { flexDirection: 'row', height: 10, borderRadius: radius.full, overflow: 'hidden', gap: 2 },
-  legend: { width: 10, height: 10, borderRadius: 3 },
-});

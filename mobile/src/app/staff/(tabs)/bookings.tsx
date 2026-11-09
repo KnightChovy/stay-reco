@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
-import { router } from 'expo-router';
+import { ActivityIndicator, Pressable, View } from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import type { BookingStatus } from '@stayreco/shared';
 import { Button } from '@/components/ui/button';
@@ -8,16 +8,18 @@ import { Chip } from '@/components/ui/chip';
 import { Icon } from '@/components/ui/icon';
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
-import { colors, radius } from '@/constants/theme';
+import { colors } from '@/constants/theme';
 import { Card, FilterChips, StaffTabScreen, accent, s, useStaffHotel } from '@/features/staff/ui';
-import { bookingStatusLabel, formatDate, formatVnd } from '@/lib/stay';
+import { bookingStatusLabel, dateInput, formatDate, formatVnd } from '@/lib/stay';
 import { getHotelBookings } from '@/services/staff.service';
 
-type Filter = 'all' | BookingStatus;
+// `CHANGES`: đơn có yêu cầu đổi thông tin chờ khách sạn duyệt.
+type Filter = 'all' | 'CHANGES' | BookingStatus;
 const filters: { key: Filter; label: string }[] = [
   { key: 'all', label: 'Tất cả' },
   { key: 'CONFIRMED', label: 'Sắp đến' },
   { key: 'CHECKED_IN', label: 'Đang ở' },
+  { key: 'CHANGES', label: 'Chờ duyệt đổi' },
   { key: 'PENDING', label: 'Chờ thanh toán' },
   { key: 'COMPLETED', label: 'Hoàn tất' },
   { key: 'CANCELLED', label: 'Đã hủy' },
@@ -25,7 +27,13 @@ const filters: { key: Filter; label: string }[] = [
 
 export default function StaffBookingsScreen() {
   const { hotelId } = useStaffHotel();
-  const [filter, setFilter] = useState<Filter>('all');
+  // Mục "Cần xử lý ngay" trên dashboard mở thẳng vào bộ lọc tương ứng (`?filter=CHANGES`).
+  const { filter: initial } = useLocalSearchParams<{ filter?: Filter }>();
+  const [filter, setFilter] = useState<Filter>(initial ?? 'all');
+  // Tab vẫn mounted khi quay lại, nên đổi bộ lọc theo param mỗi lần được mở bằng link mới.
+  useEffect(() => {
+    if (initial && filters.some((f) => f.key === initial)) setFilter(initial);
+  }, [initial]);
   const [query, setQuery] = useState('');
   const [search, setSearch] = useState('');
   // Chờ người dùng ngừng gõ rồi mới gọi API.
@@ -34,7 +42,15 @@ export default function StaffBookingsScreen() {
     return () => clearTimeout(t);
   }, [query]);
 
-  const params = { status: filter === 'all' ? undefined : [filter], search: search || undefined, pageSize: 50 };
+  // Đơn sắp đến / đang ở: gần nhất trước; tất cả, hoàn tất, đã hủy: mới nhất trước.
+  const upcoming = filter === 'CONFIRMED' || filter === 'CHECKED_IN' || filter === 'PENDING' || filter === 'CHANGES';
+  const params = {
+    status: filter === 'all' || filter === 'CHANGES' ? undefined : [filter],
+    changeRequest: filter === 'CHANGES' ? ('PENDING' as const) : undefined,
+    search: search || undefined,
+    sort: upcoming ? ('check-in-asc' as const) : ('check-in-desc' as const),
+    pageSize: 50,
+  };
   // shortcut: chỉ tải 50 đơn đầu, đủ cho ca trực; thêm phân trang khi khách sạn có nhiều đơn hơn.
   const { data, isPending, isError, refetch } = useQuery({
     queryKey: ['staff', 'bookings', hotelId, params],
@@ -72,13 +88,13 @@ export default function StaffBookingsScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={`Đơn ${b.code}`}
                 onPress={() => router.push({ pathname: '/staff/bookings/[id]', params: { id: b.id } })}
-                style={styles.press}
+                className="gap-2"
               >
-                <View style={s.between}>
+                <View className={s.between}>
                   <Text variant="label" weight="bold">
                     #{b.code}
                   </Text>
-                  <View style={s.row}>
+                  <View className={s.row}>
                     <Chip label={bookingStatusLabel[b.status]} tone={b.status === 'CHECKED_IN' ? 'tertiary' : b.status === 'CONFIRMED' ? 'primary' : 'neutral'} />
                     <Icon name="chevron_right" size={18} color={colors.outline} />
                   </View>
@@ -86,8 +102,8 @@ export default function StaffBookingsScreen() {
                 <Text variant="caption" color={colors.onSurfaceVariant}>
                   {b.roomType.name} · {b.rooms} phòng · {b.guests} khách
                 </Text>
-                <View style={styles.box}>
-                  <Text variant="caption" weight="semibold" style={s.flex}>
+                <View className="flex-row gap-2 rounded-md bg-surface-container-low p-2.5">
+                  <Text variant="caption" weight="semibold" className={s.flex}>
                     {formatDate(b.checkIn)} → {formatDate(b.checkOut)} ({b.nights} đêm)
                   </Text>
                   <Text variant="caption" weight="bold">
@@ -95,7 +111,7 @@ export default function StaffBookingsScreen() {
                   </Text>
                 </View>
               </Pressable>
-              {b.status === 'CONFIRMED' && b.paymentStatus === 'PAID' && (
+              {b.status === 'CONFIRMED' && b.paymentStatus === 'PAID' && b.checkIn <= dateInput() && (
                 <Button label="Check-in" size="sm" style={{ backgroundColor: accent }} onPress={() => router.push({ pathname: '/staff/check-in', params: { code: b.code } })} />
               )}
               {b.status === 'CHECKED_IN' && (
@@ -108,8 +124,3 @@ export default function StaffBookingsScreen() {
     </StaffTabScreen>
   );
 }
-
-const styles = StyleSheet.create({
-  press: { gap: 8 },
-  box: { flexDirection: 'row', gap: 8, padding: 10, borderRadius: radius.md, backgroundColor: colors.surfaceContainerLow },
-});

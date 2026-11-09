@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { AppHeader } from '@/components/layout/AppHeader';
@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
 import { Icon, type IconName } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
-import { colors, radius, shadow } from '@/constants/theme';
+import { colors } from '@/constants/theme';
 import { images } from '@/lib/mock-data';
 import { useAuthStore } from '@/stores/auth.store';
 
@@ -74,9 +74,9 @@ export default function AccountScreen() {
 
   if (!account) {
     return (
-      <View style={styles.screen}>
+      <View className="flex-1 bg-surface">
         <AppHeader subtitle="Hồ sơ cá nhân" />
-        <View style={[styles.card, styles.guest]}>
+        <View className="gap-3.5 rounded-lg bg-surface-container-lowest p-4 shadow-card m-4 items-center">
           {hydrating ? (
             <Text variant="small" color={colors.onSurfaceVariant} center>
               Đang tải hồ sơ...
@@ -95,19 +95,19 @@ export default function AccountScreen() {
   }
 
   return (
-    <View style={styles.screen}>
+    <View className="flex-1 bg-surface">
       <AppHeader subtitle="Hồ sơ cá nhân" />
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.card}>
-          <View style={styles.row}>
+      <ScrollView contentContainerClassName="gap-4 p-4 pb-[120px]" showsVerticalScrollIndicator={false}>
+        <View className="gap-3.5 rounded-lg bg-surface-container-lowest p-4 shadow-card">
+          <View className="flex-row items-center gap-2">
             <View>
-              <Image source={account.avatarUrl ?? images.avatar} style={styles.avatar} contentFit="cover" />
-              <View style={styles.avatarBadge}>
+              <Image source={account.avatarUrl ?? images.avatar} className="h-[76px] w-[76px] rounded-full" contentFit="cover" />
+              <View className="absolute -bottom-0.5 -right-0.5 h-[26px] w-[26px] items-center justify-center rounded-full border-2 border-white bg-tertiary-container">
                 <Icon name="verified" size={14} color={colors.white} />
               </View>
             </View>
-            <View style={[styles.flex, styles.gap4]}>
-              <View style={styles.wrapRow}>
+            <View className="flex-1 gap-1">
+              <View className="flex-row flex-wrap items-center gap-2">
                 <Text variant="h3" weight="bold">
                   {account.fullName}
                 </Text>
@@ -116,16 +116,16 @@ export default function AccountScreen() {
               <Text variant="caption" color={colors.onSurfaceVariant}>
                 {account.email}
               </Text>
-              <View style={styles.row}>
+              <View className="flex-row items-center gap-2">
                 <Button label="Chỉnh sửa hồ sơ" leadingIcon="edit" variant="muted" size="sm" onPress={editProfile} />
                 <Button label="Đổi ảnh" variant="ghost" size="sm" onPress={editProfile} />
               </View>
             </View>
           </View>
 
-          <View style={styles.elite}>
-            <View style={styles.between}>
-              <View style={styles.row}>
+          <View className="gap-2.5 rounded-lg bg-primary-container p-4">
+            <View className="flex-row items-center justify-between gap-2">
+              <View className="flex-row items-center gap-2">
                 <Icon name="stars" size={22} color={colors.secondaryContainer} />
                 <View>
                   <Text variant="caption" weight="semibold" color={colors.onPrimaryContainer}>
@@ -138,10 +138,10 @@ export default function AccountScreen() {
               </View>
               <Chip label="Cấp 2/4" tone="neutral" />
             </View>
-            <View style={styles.progress}>
-              <View style={styles.progressFill} />
+            <View className="h-1.5 rounded-[3px] bg-white/20">
+              <View className="h-1.5 w-[62%] rounded-[3px] bg-secondary-container" />
             </View>
-            <View style={styles.between}>
+            <View className="flex-row items-center justify-between gap-2">
               <Text variant="caption" color={colors.primaryFixed}>
                 Còn 550 điểm để lên{' '}
                 <Text variant="caption" weight="bold" color={colors.white}>
@@ -152,14 +152,14 @@ export default function AccountScreen() {
                 62%
               </Text>
             </View>
-            <View style={styles.between}>
+            <View className="flex-row items-center justify-between gap-2">
               <Text variant="h2" color={colors.white}>
                 2.450{' '}
                 <Text variant="small" color={colors.primaryFixed}>
                   StayMiles
                 </Text>
               </Text>
-              <Pressable style={styles.redeem}>
+              <Pressable className="flex-row items-center gap-1.5 rounded-md bg-secondary px-3.5 py-2">
                 <Icon name="featured_seasonal_and_gifts" size={18} color={colors.white} />
                 <Text variant="small" weight="bold" color={colors.white}>
                   Đổi quà
@@ -169,10 +169,10 @@ export default function AccountScreen() {
           </View>
         </View>
 
-        <View style={styles.row}>
+        <View className="flex-row items-center gap-2">
           {stats.map((s) => (
-            <View key={s.label} style={styles.stat}>
-              <View style={[styles.statIcon, { backgroundColor: s.bg }]}>
+            <View key={s.label} className="flex-1 items-center gap-1 rounded-lg bg-surface-container-lowest py-3.5 shadow-card">
+              <View className="h-9 w-9 items-center justify-center rounded-full" style={{ backgroundColor: s.bg }}>
                 <Icon name={s.icon} size={18} color={s.fg} />
               </View>
               <Text variant="h2" color={s.fg === colors.primaryContainer ? colors.onSurface : s.fg}>
@@ -185,9 +185,9 @@ export default function AccountScreen() {
           ))}
         </View>
 
-        <View style={styles.card}>
-          <View style={styles.between}>
-            <View style={styles.row}>
+        <View className="gap-3.5 rounded-lg bg-surface-container-lowest p-4 shadow-card">
+          <View className="flex-row items-center justify-between gap-2">
+            <View className="flex-row items-center gap-2">
               <Icon name="badge" size={20} color={colors.primaryContainer} />
               <Text variant="label" weight="bold">
                 Hồ sơ định danh cá nhân
@@ -196,12 +196,12 @@ export default function AccountScreen() {
             <Chip label="Khớp CCCD" tone="tertiary" />
           </View>
           {identity.map((f) => (
-            <View key={f.label} style={styles.field}>
-              <Text variant="small" color={colors.onSurfaceVariant} style={styles.flex}>
+            <View key={f.label} className="flex-row items-center justify-between gap-3">
+              <Text variant="small" color={colors.onSurfaceVariant} className="flex-1">
                 {f.label}
               </Text>
-              <View style={[styles.row, styles.fieldValue]}>
-                <Text variant="small" weight="semibold" style={styles.shrink}>
+              <View className="flex-row items-center gap-2 max-w-[68%] shrink flex-wrap justify-end">
+                <Text variant="small" weight="semibold" className="shrink">
                   {f.value}
                 </Text>
                 {f.badge && <Chip label={f.badge} tone="tertiary" />}
@@ -211,11 +211,11 @@ export default function AccountScreen() {
           <Button label="Chỉnh sửa thông tin cá nhân" leadingIcon="edit_note" variant="muted" onPress={editProfile} />
         </View>
 
-        <View style={styles.card}>
-          <View style={styles.between}>
-            <View style={[styles.row, styles.shrink]}>
+        <View className="gap-3.5 rounded-lg bg-surface-container-lowest p-4 shadow-card">
+          <View className="flex-row items-center justify-between gap-2">
+            <View className="flex-row items-center gap-2 shrink">
               <Icon name="tune" size={20} color={colors.primaryContainer} />
-              <Text variant="label" weight="bold" style={styles.shrink}>
+              <Text variant="label" weight="bold" className="shrink">
                 Cấu hình gợi ý & Gu du lịch StayReco
               </Text>
             </View>
@@ -224,7 +224,7 @@ export default function AccountScreen() {
           <Text variant="small" color={colors.onSurfaceVariant}>
             Hệ thống cá nhân hóa phòng nghỉ theo sở thích lưu trú của riêng bạn:
           </Text>
-          <View style={styles.wrapRow}>
+          <View className="flex-row flex-wrap items-center gap-2">
             {tastes.map((t) => (
               <Chip key={t.label} label={t.label} icon={t.icon} tone="neutral" />
             ))}
@@ -233,23 +233,23 @@ export default function AccountScreen() {
             label="Tùy chỉnh gợi ý du lịch"
             leadingIcon="auto_awesome"
             variant="ghost"
-            style={styles.tinted}
+            style={{ backgroundColor: colors.surfaceContainerLow }}
             onPress={() => router.push('/assistant')}
           />
         </View>
 
-        <View style={[styles.card, styles.menu]}>
+        <View className="gap-3.5 rounded-lg bg-surface-container-lowest p-4 shadow-card" style={{ paddingVertical: 4, gap: 0 }}>
           {menu.map((m, i) => (
             <Pressable
               key={m.title}
               accessibilityRole="button"
               onPress={m.href ? () => router.push(m.href!) : undefined}
-              style={[styles.menuItem, i > 0 && styles.menuDivider]}
+              className={`flex-row items-center gap-3 py-3 ${i > 0 ? 'border-t border-surface-container-high' : ''}`}
             >
-              <View style={[styles.menuIcon, { backgroundColor: m.bg }]}>
+              <View className="h-10 w-10 items-center justify-center rounded-full" style={{ backgroundColor: m.bg }}>
                 <Icon name={m.icon} size={20} color={m.fg} />
               </View>
-              <View style={styles.flex}>
+              <View className="flex-1">
                 <Text variant="small" weight="semibold">
                   {m.title}
                 </Text>
@@ -262,9 +262,9 @@ export default function AccountScreen() {
           ))}
         </View>
 
-        <View style={styles.privacy}>
+        <View className="flex-row gap-2.5 rounded-md bg-surface-container p-3.5">
           <Icon name="shield_with_heart" size={18} color={colors.primaryContainer} />
-          <Text variant="caption" color={colors.onSurfaceVariant} style={styles.flex}>
+          <Text variant="caption" color={colors.onSurfaceVariant} className="flex-1">
             Dữ liệu định danh được mã hóa chuẩn SSL 256-bit và bảo mật theo Nghị định bảo vệ dữ liệu cá nhân Việt Nam.
           </Text>
         </View>
@@ -274,7 +274,7 @@ export default function AccountScreen() {
           accessibilityState={{ disabled: signingOut }}
           disabled={signingOut}
           onPress={signOut}
-          style={[styles.logout, signingOut && { opacity: 0.5 }]}
+          className="min-h-[52px] flex-row items-center justify-center gap-2 rounded-md bg-secondary-fixed" style={signingOut && { opacity: 0.5 }}
         >
           <Icon name="logout" size={18} color={colors.secondary} />
           <Text variant="label" weight="bold" color={colors.secondary}>
@@ -285,69 +285,3 @@ export default function AccountScreen() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.surface },
-  content: { padding: 16, gap: 16, paddingBottom: 120 },
-  flex: { flex: 1 },
-  shrink: { flexShrink: 1 },
-  gap4: { gap: 4 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  wrapRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
-  between: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  card: { padding: 16, gap: 14, borderRadius: radius.lg, backgroundColor: colors.surfaceContainerLowest, ...shadow.card },
-  avatar: { width: 76, height: 76, borderRadius: 38 },
-  avatarBadge: {
-    position: 'absolute',
-    right: -2,
-    bottom: -2,
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.tertiaryContainer,
-    borderWidth: 2,
-    borderColor: colors.white,
-  },
-  elite: { padding: 16, gap: 10, borderRadius: radius.lg, backgroundColor: colors.primaryContainer },
-  progress: { height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.2)' },
-  progressFill: { width: '62%', height: 6, borderRadius: 3, backgroundColor: colors.secondaryContainer },
-  redeem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: radius.md,
-    backgroundColor: colors.secondary,
-  },
-  stat: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 4,
-    paddingVertical: 14,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surfaceContainerLowest,
-    ...shadow.card,
-  },
-  statIcon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  fieldValue: { flexShrink: 1, maxWidth: '68%', flexWrap: 'wrap', justifyContent: 'flex-end' },
-  field: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  tinted: { backgroundColor: colors.surfaceContainerLow },
-  menu: { paddingVertical: 4, gap: 0 },
-  menuItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
-  menuDivider: { borderTopWidth: 1, borderTopColor: colors.surfaceContainerHigh },
-  menuIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  privacy: { flexDirection: 'row', gap: 10, padding: 14, borderRadius: radius.md, backgroundColor: colors.surfaceContainer },
-  guest: { margin: 16, alignItems: 'center' },
-  logout: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    minHeight: 52,
-    borderRadius: radius.md,
-    backgroundColor: colors.secondaryFixed,
-  },
-});

@@ -1,22 +1,22 @@
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
 import { Icon } from '@/components/ui/icon';
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
-import { colors, fonts, radius } from '@/constants/theme';
+import { colors } from '@/constants/theme';
 import { aiPolish, draftBody, draftTitle, promoOffers, tones } from '@/features/staff/data';
 import { Avatar, Card, StaffScreen, accent, s, success } from '@/features/staff/ui';
 
 function Choice({ label, options, value, onChange }: { label: string; options: string[]; value: string; onChange: (v: string) => void }) {
   return (
-    <View style={styles.choice}>
+    <View className="gap-2">
       <Text variant="label" weight="semibold">
         {label}
       </Text>
-      <View style={s.wrap}>
+      <View className={s.wrap}>
         {options.map((o) => (
           <Chip key={o} label={o} tone={o === value ? 'selected' : 'outline'} onPress={() => onChange(o)} />
         ))}
@@ -52,13 +52,13 @@ export default function StaffMarketingEditorScreen() {
       title="Soạn & duyệt nội dung AI"
       footer={
         <>
-          <Button label="Thư viện" variant="secondary" style={s.flex} onPress={() => router.back()} />
-          <Button label="Duyệt & lên lịch" leadingIcon="check_circle" style={[s.flex, { backgroundColor: accent }]} onPress={() => router.push('/staff/marketing/calendar')} />
+          <Button label="Thư viện" variant="secondary" className={s.flex} onPress={() => router.back()} />
+          <Button label="Duyệt & lên lịch" leadingIcon="check_circle" className={s.flex} style={{ backgroundColor: accent }} onPress={() => router.push('/staff/marketing/calendar')} />
         </>
       }
     >
       <Card>
-        <View style={s.row}>
+        <View className={s.row}>
           <Icon name="smart_toy" size={18} color={accent} />
           <Text variant="h3">Cấu hình gợi ý AI</Text>
         </View>
@@ -67,17 +67,17 @@ export default function StaffMarketingEditorScreen() {
       </Card>
 
       <Card>
-        <View style={s.between}>
+        <View className={s.between}>
           <Text variant="h3">Nội dung</Text>
           <Chip label="Đã lưu tự động" icon="cloud_done" tone="tertiary" />
         </View>
         <Input label="Tiêu đề bài viết (Headline)" value={title} onChangeText={setTitle} />
-        <View style={styles.choice}>
+        <View className="gap-2">
           <Text variant="label" weight="semibold">
             Nội dung chi tiết (Caption)
           </Text>
-          <TextInput value={body} onChangeText={setBody} multiline accessibilityLabel="Nội dung chi tiết" style={styles.area} />
-          <View style={s.between}>
+          <TextInput value={body} onChangeText={setBody} multiline accessibilityLabel="Nội dung chi tiết" className="min-h-40 rounded-md border border-surface-container-high bg-surface-container-lowest p-3.5 font-be-regular text-sm leading-[21px] text-on-surface" />
+          <View className={s.between}>
             <Text variant="caption" color={colors.onSurfaceVariant}>
               {length} ký tự
             </Text>
@@ -86,7 +86,7 @@ export default function StaffMarketingEditorScreen() {
             </Text>
           </View>
         </View>
-        <View style={s.wrap}>
+        <View className={s.wrap}>
           <Button label="Rút ngắn" leadingIcon="auto_awesome" variant="muted" size="sm" disabled={generating} onPress={() => polish('short')} />
           <Button label="Hấp dẫn hơn" leadingIcon="auto_awesome" variant="muted" size="sm" disabled={generating} onPress={() => polish('engaging')} />
           <Button label="Thêm Emoji & Hashtag" leadingIcon="auto_awesome" variant="muted" size="sm" disabled={generating} onPress={() => polish('emoji')} />
@@ -96,7 +96,7 @@ export default function StaffMarketingEditorScreen() {
 
       <Text variant="h3">Xem trước bài đăng</Text>
       <Card>
-        <View style={s.row}>
+        <View className={s.row}>
           <Avatar text="A" size={36} bg={colors.primary} fg={colors.onPrimary} />
           <View>
             <Text variant="small" weight="bold">
@@ -112,7 +112,7 @@ export default function StaffMarketingEditorScreen() {
         </Text>
         <Text variant="small">{body}</Text>
         <Chip label={promo} icon="card_giftcard" tone="secondary" />
-        <View style={s.between}>
+        <View className={s.between}>
           <Text variant="caption" color={colors.onSurfaceVariant}>
             142 Thích
           </Text>
@@ -127,20 +127,3 @@ export default function StaffMarketingEditorScreen() {
     </StaffScreen>
   );
 }
-
-const styles = StyleSheet.create({
-  choice: { gap: 8 },
-  area: {
-    minHeight: 160,
-    padding: 14,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.surfaceContainerHigh,
-    backgroundColor: colors.surfaceContainerLowest,
-    fontFamily: fonts.regular,
-    fontSize: 14,
-    lineHeight: 21,
-    color: colors.onSurface,
-    textAlignVertical: 'top',
-  },
-});

@@ -39,19 +39,4 @@ export const fonts = {
 
 export const radius = { sm: 4, md: 10, lg: 16, xl: 24, full: 9999 };
 
-export const shadow = {
-  card: {
-    shadowColor: '#202b36',
-    shadowOpacity: 0.06,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
-  },
-  floating: {
-    shadowColor: '#202b36',
-    shadowOpacity: 0.12,
-    shadowRadius: 28,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 8,
-  },
-};
+// Bóng đổ: class `shadow-card` / `shadow-floating` trong tailwind.config.ts.

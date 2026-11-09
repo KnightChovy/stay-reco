@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
 import { Icon, type IconName } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
-import { colors, fonts, radius, shadow } from '@/constants/theme';
+import { colors } from '@/constants/theme';
 import { images } from '@/lib/mock-data';
 
 const context: { label: string; icon: IconName }[] = [
@@ -26,8 +26,8 @@ const firstQuestion =
 
 function UserBubble({ text }: { text: string }) {
   return (
-    <View style={styles.userWrap}>
-      <View style={styles.userBubble}>
+    <View className="items-end">
+      <View className="max-w-[85%] rounded-xl rounded-br-sm bg-primary p-3.5">
         <Text variant="body" weight="medium" color={colors.white}>
           {text}
         </Text>
@@ -49,19 +49,19 @@ export default function AssistantScreen() {
   };
 
   return (
-    <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView className="flex-1 bg-surface" behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <AppHeader subtitle="Trợ Lý AI" />
-      <View style={styles.botBar}>
-        <View style={styles.row}>
-          <View style={styles.botAvatar}>
+      <View className="flex-row items-center justify-between px-4 py-1.5">
+        <View className="flex-row items-center gap-1.5">
+          <View className="h-10 w-10 items-center justify-center rounded-full bg-primary-container">
             <Icon name="auto_awesome" size={20} color={colors.white} />
           </View>
           <View>
             <Text variant="label" weight="bold" color={colors.primary}>
               StayReco Intelligence
             </Text>
-            <View style={styles.row}>
-              <View style={styles.online} />
+            <View className="flex-row items-center gap-1.5">
+              <View className="h-2 w-2 rounded-full bg-[#35a35a]" />
               <Text variant="caption" color={colors.onSurfaceVariant}>
                 Sẵn sàng 24/7
               </Text>
@@ -70,25 +70,25 @@ export default function AssistantScreen() {
         </View>
         <Button label="Gặp lễ tân" leadingIcon="support_agent" variant="muted" size="sm" />
       </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.ctxWrap} contentContainerStyle={styles.ctx}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} className="shrink-0 grow-0" contentContainerClassName="gap-2 px-4 py-2">
         {context.map((c, i) => (
           <Chip key={c.label} label={c.label} icon={c.icon} tone={i === 0 ? 'selected' : 'neutral'} />
         ))}
       </ScrollView>
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <Chip label="Hôm nay, 14:32" tone="neutral" style={styles.selfCenter} />
+      <ScrollView contentContainerClassName="gap-3 p-4 pb-6" showsVerticalScrollIndicator={false}>
+        <Chip label="Hôm nay, 14:32" tone="neutral" style={{ alignSelf: 'center' }} />
         <UserBubble text={firstQuestion} />
-        <Text variant="caption" color={colors.onSurfaceVariant} style={styles.alignRight}>
+        <Text variant="caption" color={colors.onSurfaceVariant} className="text-right">
           14:32 · Đã xem
         </Text>
 
-        <View style={styles.botRow}>
-          <View style={styles.botAvatarSm}>
+        <View className="flex-row gap-2.5">
+          <View className="h-8 w-8 items-center justify-center rounded-full bg-primary-container">
             <Icon name="auto_awesome" size={16} color={colors.white} />
           </View>
-          <View style={[styles.flex, styles.gap12]}>
-            <View style={styles.botBubble}>
+          <View className="flex-1 gap-3">
+            <View className="rounded-xl rounded-tl-sm bg-surface-container-lowest p-3.5 shadow-card">
               <Text variant="body">
                 Chào bạn{' '}
                 <Text variant="body" weight="bold" color={colors.primary}>
@@ -99,23 +99,23 @@ export default function AssistantScreen() {
               </Text>
             </View>
 
-            <View style={styles.hotelCard}>
-              <View style={styles.cover}>
-                <Image source={images.aiCard} style={StyleSheet.absoluteFill} contentFit="cover" />
-                <View style={styles.coverOverlay} />
-                <View style={[styles.pill, styles.topLeft]}>
+            <View className="overflow-hidden rounded-lg bg-surface-container-lowest shadow-card">
+              <View className="h-[170px] justify-end">
+                <Image source={images.aiCard} className="absolute inset-0" contentFit="cover" />
+                <View className="absolute inset-0 bg-black/30" />
+                <View className="absolute flex-row items-center gap-1 rounded-full px-2.5 py-1 left-2.5 top-2.5 bg-white/[0.92]">
                   <Icon name="verified" size={14} color={colors.secondary} />
                   <Text variant="caption" weight="bold">
                     Phù hợp 98%
                   </Text>
                 </View>
-                <View style={[styles.pill, styles.topRight, styles.darkPill]}>
+                <View className="absolute flex-row items-center gap-1 rounded-full px-2.5 py-1 right-2.5 top-2.5 bg-black/[0.55]">
                   <Icon name="star" size={14} color="#f5c04a" />
                   <Text variant="caption" weight="bold" color={colors.white}>
                     4.8 (340)
                   </Text>
                 </View>
-                <View style={styles.coverText}>
+                <View className="p-3">
                   <Text variant="caption" weight="semibold" color={colors.white}>
                     BOUTIQUE HOTEL · HẢI CHÂU
                   </Text>
@@ -124,9 +124,9 @@ export default function AssistantScreen() {
                   </Text>
                 </View>
               </View>
-              <View style={styles.hotelBody}>
-                <View style={styles.between}>
-                  <View style={styles.row}>
+              <View className="gap-2.5 p-3.5">
+                <View className="flex-row items-center justify-between gap-2">
+                  <View className="flex-row items-center gap-1.5">
                     <Icon name="king_bed" size={16} color={colors.primaryContainer} />
                     <Text variant="small" weight="semibold">
                       Phòng Deluxe River View
@@ -134,22 +134,22 @@ export default function AssistantScreen() {
                   </View>
                   <Chip label="32m² · Tầng cao" tone="neutral" />
                 </View>
-                <View style={styles.row}>
-                  <View style={styles.feature}>
+                <View className="flex-row items-center gap-1.5">
+                  <View className="flex-1 flex-row items-center gap-1.5 rounded-md bg-surface-container-low p-2">
                     <Icon name="balcony" size={16} color={colors.onSurfaceVariant} />
-                    <Text variant="caption" numberOfLines={1} style={styles.shrink}>
+                    <Text variant="caption" numberOfLines={1} className="shrink">
                       Ban công sông Hàn
                     </Text>
                   </View>
-                  <View style={styles.feature}>
+                  <View className="flex-1 flex-row items-center gap-1.5 rounded-md bg-surface-container-low p-2">
                     <Icon name="volume_off" size={16} color={colors.onSurfaceVariant} />
-                    <Text variant="caption" numberOfLines={1} style={styles.shrink}>
+                    <Text variant="caption" numberOfLines={1} className="shrink">
                       Cách âm 2 lớp chống ồn
                     </Text>
                   </View>
                 </View>
-                <View style={[styles.between, styles.priceBox]}>
-                  <View style={styles.flex}>
+                <View className="flex-row items-center justify-between gap-2 rounded-md bg-surface-container-low p-3">
+                  <View className="flex-1">
                     <Text variant="h3" weight="bold" color={colors.primary}>
                       1.125.000 ₫{' '}
                       <Text variant="caption" color={colors.onSurfaceVariant}>
@@ -177,9 +177,9 @@ export default function AssistantScreen() {
               </View>
             </View>
 
-            <View style={styles.tip}>
+            <View className="flex-row gap-2 rounded-md bg-surface-container-low p-3">
               <Icon name="tips_and_updates" size={18} color={colors.onSurfaceVariant} />
-              <Text variant="small" color={colors.onSurfaceVariant} style={styles.flex}>
+              <Text variant="small" color={colors.onSurfaceVariant} className="flex-1">
                 Khách sạn cách cầu Rồng 700m nhưng nằm trong hẻm phong cách resort, đảm bảo yên tĩnh tuyệt đối về đêm cho 2
                 bạn.
               </Text>
@@ -194,15 +194,15 @@ export default function AssistantScreen() {
           <UserBubble key={`${i}-${t}`} text={t} />
         ))}
 
-        <View style={styles.gap8}>
-          <View style={styles.row}>
+        <View className="gap-2">
+          <View className="flex-row items-center gap-1.5">
             <Icon name="psychology_alt" size={16} color={colors.onSurfaceVariant} />
             <Text variant="small" color={colors.onSurfaceVariant}>
               Gợi ý câu hỏi nhanh:
             </Text>
           </View>
           {suggestions.map((s) => (
-            <Pressable key={s} onPress={() => send(s)} style={styles.suggestion}>
+            <Pressable key={s} onPress={() => send(s)} className="flex-row items-center self-start gap-2 rounded-full bg-surface-container-lowest px-3.5 py-2 shadow-card">
               <Text variant="small" weight="medium" color={colors.primary}>
                 {s}
               </Text>
@@ -212,8 +212,8 @@ export default function AssistantScreen() {
         </View>
       </ScrollView>
 
-      <View style={[styles.composer, { marginBottom: Math.max(insets.bottom, 12) + 84 }]}>
-        <Pressable accessibilityLabel="Ghi âm" style={styles.iconBtn}>
+      <View className="mx-4 flex-row items-center gap-1.5 rounded-xl bg-surface-container-lowest p-1.5 shadow-floating" style={{ marginBottom: Math.max(insets.bottom, 12) + 84 }}>
+        <Pressable accessibilityLabel="Ghi âm" className="h-10 w-10 items-center justify-center">
           <Icon name="mic" size={22} color={colors.onSurfaceVariant} />
         </Pressable>
         <TextInput
@@ -223,133 +223,12 @@ export default function AssistantScreen() {
           placeholder="Nhập câu hỏi về chỗ nghỉ, dịch vụ..."
           placeholderTextColor={colors.outline}
           accessibilityLabel="Nhập câu hỏi"
-          style={styles.composerInput}
+          className="flex-1 py-2.5 font-be-regular text-[15px] text-on-surface"
         />
-        <Pressable accessibilityLabel="Gửi" onPress={() => send(draft)} style={styles.sendBtn}>
+        <Pressable accessibilityLabel="Gửi" onPress={() => send(draft)} className="h-11 w-11 items-center justify-center rounded-md bg-primary">
           <Icon name="send" size={20} color={colors.white} />
         </Pressable>
       </View>
     </KeyboardAvoidingView>
   );
 }
-
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.surface },
-  content: { padding: 16, gap: 12, paddingBottom: 24 },
-  flex: { flex: 1 },
-  shrink: { flexShrink: 1 },
-  gap8: { gap: 8 },
-  gap12: { gap: 12 },
-  selfCenter: { alignSelf: 'center' },
-  alignRight: { textAlign: 'right' },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  between: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  botBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-  },
-  botAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.primaryContainer,
-  },
-  online: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#35a35a' },
-  ctxWrap: { flexGrow: 0, flexShrink: 0 },
-  ctx: { gap: 8, paddingHorizontal: 16, paddingVertical: 8 },
-  userWrap: { alignItems: 'flex-end' },
-  userBubble: {
-    maxWidth: '85%',
-    padding: 14,
-    borderRadius: radius.xl,
-    borderBottomRightRadius: radius.sm,
-    backgroundColor: colors.primary,
-  },
-  botRow: { flexDirection: 'row', gap: 10 },
-  botAvatarSm: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.primaryContainer,
-  },
-  botBubble: {
-    padding: 14,
-    borderRadius: radius.xl,
-    borderTopLeftRadius: radius.sm,
-    backgroundColor: colors.surfaceContainerLowest,
-    ...shadow.card,
-  },
-  hotelCard: { borderRadius: radius.lg, overflow: 'hidden', backgroundColor: colors.surfaceContainerLowest, ...shadow.card },
-  cover: { height: 170, justifyContent: 'flex-end' },
-  coverOverlay: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.3)' },
-  coverText: { padding: 12 },
-  pill: {
-    position: 'absolute',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: radius.full,
-    backgroundColor: 'rgba(255,255,255,0.92)',
-  },
-  darkPill: { backgroundColor: 'rgba(0,0,0,0.55)' },
-  topLeft: { top: 10, left: 10 },
-  topRight: { top: 10, right: 10 },
-  hotelBody: { padding: 14, gap: 10 },
-  feature: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    padding: 8,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceContainerLow,
-  },
-  priceBox: { padding: 12, borderRadius: radius.md, backgroundColor: colors.surfaceContainerLow },
-  tip: {
-    flexDirection: 'row',
-    gap: 8,
-    padding: 12,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceContainerLow,
-  },
-  suggestion: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    gap: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: radius.full,
-    backgroundColor: colors.surfaceContainerLowest,
-    ...shadow.card,
-  },
-  composer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginHorizontal: 16,
-    padding: 6,
-    borderRadius: radius.xl,
-    backgroundColor: colors.surfaceContainerLowest,
-    ...shadow.floating,
-  },
-  iconBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  composerInput: { flex: 1, fontFamily: fonts.regular, fontSize: 15, color: colors.onSurface, paddingVertical: 10 },
-  sendBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.primary,
-  },
-});

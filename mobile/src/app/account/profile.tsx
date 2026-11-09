@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Icon, type IconName } from '@/components/ui/icon';
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
-import { colors, radius, shadow } from '@/constants/theme';
+import { colors } from '@/constants/theme';
 import { images } from '@/lib/mock-data';
 import { formatDate } from '@/lib/stay';
 import { apiErrorMessage } from '@/services/ApiService';
@@ -32,9 +32,9 @@ function parseDate(input: string): string | null | undefined {
 
 function SectionTitle({ icon, title }: { icon: IconName; title: string }) {
   return (
-    <View style={styles.sectionTitle}>
+    <View className="mt-1 flex-row items-center gap-2">
       <Icon name={icon} size={20} color={colors.secondary} />
-      <Text variant="label" weight="bold" style={[styles.flex, styles.tracking]}>
+      <Text variant="label" weight="bold" className="flex-1 tracking-[0.8px]">
         {title}
       </Text>
     </View>
@@ -78,9 +78,9 @@ export default function EditProfileScreen() {
 
   if (!account) {
     return (
-      <View style={styles.screen}>
+      <View className="flex-1 bg-surface">
         <ScreenHeader title="Chỉnh sửa hồ sơ cá nhân" />
-        <View style={styles.content}>
+        <View className="gap-4 p-4 pb-8">
           <Text variant="body" center>
             Vui lòng đăng nhập để chỉnh sửa hồ sơ.
           </Text>
@@ -91,11 +91,11 @@ export default function EditProfileScreen() {
   }
 
   return (
-    <View style={styles.screen}>
+    <View className="flex-1 bg-surface">
       <ScreenHeader title="Chỉnh sửa hồ sơ cá nhân" />
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-        <View style={[styles.card, styles.center]}>
-          <Image source={account.avatarUrl ?? images.avatar} style={styles.avatar} contentFit="cover" />
+      <ScrollView contentContainerClassName="gap-4 p-4 pb-8" showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+        <View className="gap-4 rounded-lg bg-surface-container-lowest p-4 shadow-card items-center">
+          <Image source={account.avatarUrl ?? images.avatar} className="h-24 w-24 rounded-full" contentFit="cover" />
           <Text variant="h2">{fullName || account.fullName}</Text>
           <Text variant="small" color={colors.onSurfaceVariant}>
             Thành viên từ {new Date(account.createdAt).toLocaleDateString('vi-VN', { month: '2-digit', year: 'numeric' })}
@@ -103,16 +103,16 @@ export default function EditProfileScreen() {
         </View>
 
         <SectionTitle icon="badge" title="THÔNG TIN CÁ NHÂN" />
-        <View style={styles.card}>
+        <View className="gap-4 rounded-lg bg-surface-container-lowest p-4 shadow-card">
           <Input label="Họ và tên đầy đủ *" icon="person" placeholder="Nhập họ và tên" autoComplete="name" value={fullName} onChangeText={setFullName} />
           <Input label="Số điện thoại" icon="call" placeholder="0912345678" keyboardType="phone-pad" autoComplete="tel" value={phone} onChangeText={setPhone} />
-          <View style={styles.gap6}>
+          <View className="gap-1.5">
             <Text variant="label" weight="semibold">
               Email
             </Text>
-            <View style={styles.readonly}>
+            <View className="min-h-[52px] flex-row items-center gap-2.5 rounded-md bg-surface-container-low px-3.5">
               <Icon name="mail" size={18} color={colors.outline} />
-              <Text variant="body" numberOfLines={1} style={styles.flex}>
+              <Text variant="body" numberOfLines={1} className="flex-1">
                 {account.email}
               </Text>
               <Icon name="lock" size={18} color={colors.outline} />
@@ -123,7 +123,7 @@ export default function EditProfileScreen() {
         {isCustomer && (
           <>
             <SectionTitle icon="hotel" title="THÔNG TIN BỔ SUNG" />
-            <View style={styles.card}>
+            <View className="gap-4 rounded-lg bg-surface-container-lowest p-4 shadow-card">
               <Input
                 label="Ngày sinh"
                 icon="cake"
@@ -132,11 +132,11 @@ export default function EditProfileScreen() {
                 value={birthday}
                 onChangeText={setBirthday}
               />
-              <View style={styles.gap6}>
+              <View className="gap-1.5">
                 <Text variant="label" weight="semibold">
                   Giới tính
                 </Text>
-                <View style={styles.row}>
+                <View className="flex-row items-center gap-2">
                   {genders.map((g) => {
                     const selected = g.key === gender;
                     return (
@@ -145,7 +145,7 @@ export default function EditProfileScreen() {
                         accessibilityRole="radio"
                         accessibilityState={{ selected }}
                         onPress={() => setGender(selected ? null : g.key)}
-                        style={[styles.radio, selected && styles.radioSelected]}
+                        className={`min-h-11 flex-1 flex-row items-center justify-center gap-1.5 rounded-md ${selected ? 'bg-primary-fixed' : ''}`}
                       >
                         <Icon name={selected ? 'radio_button_checked' : 'radio_button_unchecked'} size={18} color={selected ? colors.primary : colors.outline} />
                         <Text variant="small" weight={selected ? 'semibold' : 'regular'}>
@@ -161,60 +161,20 @@ export default function EditProfileScreen() {
           </>
         )}
 
+      </ScrollView>
+
+      <View className="gap-2.5 border-t border-surface-container-high bg-surface-container-lowest px-4 pt-2.5" style={{ paddingBottom: insets.bottom + 12 }}>
+        {/* Lỗi đặt cạnh nút Lưu: trong vùng cuộn thì bị khuất dưới thanh này. */}
         {!!error && (
           <Text variant="small" color={colors.error}>
             {error}
           </Text>
         )}
-      </ScrollView>
-
-      <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
-        <View style={styles.row}>
+        <View className="flex-row items-center gap-2">
           <Button label="Hủy bỏ" variant="muted" onPress={() => router.back()} />
-          <Button label={save.isPending ? 'Đang lưu…' : 'Lưu thay đổi'} leadingIcon="check" size="lg" style={styles.flex} disabled={save.isPending} onPress={submit} />
+          <Button label={save.isPending ? 'Đang lưu…' : 'Lưu thay đổi'} leadingIcon="check" size="lg" className="flex-1" disabled={save.isPending} onPress={submit} />
         </View>
       </View>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.surface },
-  content: { padding: 16, gap: 16, paddingBottom: 32 },
-  flex: { flex: 1 },
-  gap6: { gap: 6 },
-  center: { alignItems: 'center' },
-  tracking: { letterSpacing: 0.8 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  card: { padding: 16, gap: 16, borderRadius: radius.lg, backgroundColor: colors.surfaceContainerLowest, ...shadow.card },
-  avatar: { width: 96, height: 96, borderRadius: 48 },
-  sectionTitle: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
-  readonly: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    minHeight: 52,
-    paddingHorizontal: 14,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceContainerLow,
-  },
-  radio: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    minHeight: 44,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceContainerLow,
-  },
-  radioSelected: { backgroundColor: colors.primaryFixed },
-  bottomBar: {
-    gap: 10,
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    backgroundColor: colors.surfaceContainerLowest,
-    borderTopWidth: 1,
-    borderTopColor: colors.surfaceContainerHigh,
-  },
-});

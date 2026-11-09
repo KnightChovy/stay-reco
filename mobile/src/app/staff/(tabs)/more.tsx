@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { router, type Href } from 'expo-router';
 import { Chip } from '@/components/ui/chip';
 import { Icon, type IconName } from '@/components/ui/icon';
@@ -41,11 +41,11 @@ const groups: { title: string; items: Item[] }[] = [
 
 function Row({ icon, label, onPress, right, color = colors.onSurface, iconBg = colors.surfaceContainerLow }: { icon: IconName; label: string; onPress: () => void; right?: ReactNode; color?: string; iconBg?: string }) {
   return (
-    <Pressable accessibilityRole="button" onPress={onPress} style={styles.row}>
-      <View style={[styles.icon, { backgroundColor: iconBg }]}>
+    <Pressable accessibilityRole="button" onPress={onPress} className="min-h-14 flex-row items-center gap-3">
+      <View className="h-10 w-10 items-center justify-center rounded-xl" style={{ backgroundColor: iconBg }}>
         <Icon name={icon} size={20} color={color === colors.onSurface ? colors.primary : color} />
       </View>
-      <Text variant="label" weight="semibold" color={color} style={s.flex}>
+      <Text variant="label" weight="semibold" color={color} className={s.flex}>
         {label}
       </Text>
       {right}
@@ -68,9 +68,9 @@ export default function StaffMoreScreen() {
   return (
     <StaffTabScreen>
       <Card>
-        <View style={s.row}>
+        <View className={s.row}>
           <Avatar text={(account?.fullName ?? 'S').trim()[0].toUpperCase()} size={52} bg={colors.primary} fg={colors.onPrimary} />
-          <View style={s.flex}>
+          <View className={s.flex}>
             <Text variant="h3" weight="bold">
               {account?.fullName ?? 'Nhân viên'}
             </Text>
@@ -82,19 +82,19 @@ export default function StaffMoreScreen() {
       </Card>
 
       {groups.map((g) => (
-        <View key={g.title} style={styles.group}>
-          <Text variant="caption" weight="bold" color={colors.onSurfaceVariant} style={[s.upper, styles.groupTitle]}>
+        <View key={g.title} className="gap-1.5">
+          <Text variant="caption" weight="bold" color={colors.onSurfaceVariant} className={`pl-1 ${s.upper}`}>
             {g.title}
           </Text>
-          <Card style={styles.list}>
+          <Card style={{ gap: 0, paddingVertical: 4 }}>
             {g.items.map((i, idx) => (
-              <View key={i.label} style={idx > 0 && styles.topLine}>
+              <View key={i.label} className={`${idx > 0 ? 'border-t border-surface-container-high' : ''}`}>
                 <Row
                   icon={i.icon}
                   label={i.label}
                   onPress={() => router.push(i.href)}
                   right={
-                    <View style={s.row}>
+                    <View className={s.row}>
                       {!!i.badge && <Chip label={`${i.badge}`} tone={i.tone} />}
                       <Icon name="chevron_right" size={18} color={colors.outline} />
                     </View>
@@ -103,7 +103,7 @@ export default function StaffMoreScreen() {
               </View>
             ))}
             {g.title === 'Tài khoản' && (
-              <View style={styles.topLine}>
+              <View className="border-t border-surface-container-high">
                 <Row icon="logout" label={signingOut ? 'Đang đăng xuất…' : 'Đăng xuất'} onPress={() => void signOut()} color={colors.error} iconBg={colors.errorContainer} />
               </View>
             )}
@@ -113,12 +113,3 @@ export default function StaffMoreScreen() {
     </StaffTabScreen>
   );
 }
-
-const styles = StyleSheet.create({
-  group: { gap: 6 },
-  groupTitle: { paddingLeft: 4 },
-  list: { gap: 0, paddingVertical: 4 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56 },
-  icon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  topLine: { borderTopWidth: 1, borderTopColor: colors.surfaceContainerHigh },
-});

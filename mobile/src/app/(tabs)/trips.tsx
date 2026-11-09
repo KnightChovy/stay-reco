@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
@@ -10,7 +10,7 @@ import { Chip } from '@/components/ui/chip';
 import { Icon } from '@/components/ui/icon';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
-import { colors, radius, shadow } from '@/constants/theme';
+import { colors, radius } from '@/constants/theme';
 import { images } from '@/lib/mock-data';
 import { bookingStatusLabel, formatDate, formatVnd } from '@/lib/stay';
 import { getMyBookings } from '@/services/bookings.service';
@@ -28,11 +28,11 @@ const tabLabels: Record<Tab, string> = {
 /** Giữ chỗ cùng bố cục với TripCard trong lúc chờ danh sách đơn. */
 function TripCardSkeleton() {
   return (
-    <View style={styles.card}>
-      <View style={[styles.between, styles.pad]}>
-        <View style={styles.row}>
+    <View className="overflow-hidden rounded-lg bg-surface-container-lowest shadow-card">
+      <View className="flex-row items-center justify-between gap-2 p-4">
+        <View className="flex-row items-center gap-1.5">
           <Skeleton width={40} height={40} radius={radius.md} />
-          <View style={styles.skeletonLines}>
+          <View className="gap-1.5">
             <Skeleton width={110} height={10} />
             <Skeleton width={130} height={16} />
           </View>
@@ -40,11 +40,11 @@ function TripCardSkeleton() {
         <Skeleton width={90} height={26} radius={radius.full} />
       </View>
       <Skeleton height={200} radius={0} />
-      <View style={[styles.pad, styles.body]}>
+      <View className="p-4 gap-3">
         <Skeleton width="70%" height={20} />
         <Skeleton width="35%" />
         <Skeleton height={44} radius={radius.md} />
-        <View style={styles.between}>
+        <View className="flex-row items-center justify-between gap-2">
           <Skeleton width={60} height={12} />
           <Skeleton width={120} height={20} />
         </View>
@@ -57,10 +57,10 @@ function TripCardSkeleton() {
 function TripCard({ booking }: { booking: BookingSummary }) {
   const hasVoucher = booking.status === 'CONFIRMED' || booking.status === 'CHECKED_IN';
   return (
-    <View style={styles.card}>
-      <View style={[styles.between, styles.pad]}>
-        <View style={styles.row}>
-          <View style={styles.hotelIcon}>
+    <View className="overflow-hidden rounded-lg bg-surface-container-lowest shadow-card">
+      <View className="flex-row items-center justify-between gap-2 p-4">
+        <View className="flex-row items-center gap-1.5">
+          <View className="h-10 w-10 items-center justify-center rounded-md bg-primary-fixed">
             <Icon name="hotel" size={22} color={colors.primaryContainer} />
           </View>
           <View>
@@ -75,13 +75,13 @@ function TripCard({ booking }: { booking: BookingSummary }) {
         <Chip
           label={bookingStatusLabel[booking.status]}
           tone={booking.status === 'PENDING' ? 'secondary' : hasVoucher ? 'tertiary' : 'neutral'}
-          style={styles.shrink}
+          className="shrink"
         />
       </View>
 
       <View>
-        <Image source={booking.hotel.coverImageUrl ?? images.tripThumb} style={styles.cover} contentFit="cover" />
-        <View style={styles.dateTag}>
+        <Image source={booking.hotel.coverImageUrl ?? images.tripThumb} className="h-[200px] w-full" contentFit="cover" />
+        <View className="absolute bottom-3 left-3 flex-row items-center gap-1.5 rounded-md bg-black/[0.55] px-2.5 py-1.5">
           <Icon name="calendar_today" size={14} color={colors.white} />
           <Text variant="caption" weight="semibold" color={colors.white}>
             {formatDate(booking.checkIn)} - {formatDate(booking.checkOut)} ({booking.nights} đêm)
@@ -89,23 +89,23 @@ function TripCard({ booking }: { booking: BookingSummary }) {
         </View>
       </View>
 
-      <View style={[styles.pad, styles.body]}>
+      <View className="p-4 gap-3">
         <Text variant="h3">{booking.hotel.name}</Text>
-        <View style={styles.row}>
+        <View className="flex-row items-center gap-1.5">
           <Icon name="location_on" size={14} color={colors.onSurfaceVariant} />
           <Text variant="small" color={colors.onSurfaceVariant}>
             {booking.hotel.city}
           </Text>
         </View>
-        <View style={styles.stay}>
-          <View style={styles.row}>
+        <View className="gap-2.5 rounded-md bg-surface-container-low p-3">
+          <View className="flex-row items-center gap-1.5">
             <Icon name="bed" size={16} color={colors.primaryContainer} />
-            <Text variant="small" style={styles.shrink}>
+            <Text variant="small" className="shrink">
               {booking.roomType.name} • {booking.rooms} phòng • {booking.guests} khách
             </Text>
           </View>
         </View>
-        <View style={styles.between}>
+        <View className="flex-row items-center justify-between gap-2">
           <Text variant="caption" color={colors.onSurfaceVariant}>
             Tổng tiền
           </Text>
@@ -168,16 +168,16 @@ export default function TripsScreen() {
   });
 
   return (
-    <View style={styles.screen}>
+    <View className="flex-1 bg-surface">
       <AppHeader subtitle="Chuyến đi của tôi" />
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabsWrap} contentContainerStyle={styles.tabs}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} className="shrink-0 grow-0 border-b border-surface-container-high" contentContainerClassName="px-2">
         {MY_BOOKING_TABS.map((t) => (
           <Pressable
             key={t}
             accessibilityRole="tab"
             accessibilityState={{ selected: t === tab }}
             onPress={() => setTab(t)}
-            style={[styles.tab, t === tab && styles.tabActive]}
+            className={`border-b-2 px-3 py-3 ${t === tab ? 'border-b-primary' : 'border-b-transparent'}`}
           >
             <Text variant="label" weight={t === tab ? 'bold' : 'medium'} color={t === tab ? colors.primary : colors.onSurfaceVariant}>
               {tabLabels[t]}
@@ -187,11 +187,11 @@ export default function TripsScreen() {
         ))}
       </ScrollView>
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerClassName="gap-4 p-4 pb-[120px]" showsVerticalScrollIndicator={false}>
         {!account && hydrating ? (
           [0, 1].map((i) => <TripCardSkeleton key={i} />)
         ) : !account ? (
-          <View style={styles.state}>
+          <View className="items-center gap-3 py-6">
             <Text variant="small" color={colors.onSurfaceVariant} center>
               Đăng nhập để xem các chuyến đi của bạn.
             </Text>
@@ -200,14 +200,14 @@ export default function TripsScreen() {
         ) : isPending ? (
           [0, 1].map((i) => <TripCardSkeleton key={i} />)
         ) : isError ? (
-          <View style={styles.state}>
+          <View className="items-center gap-3 py-6">
             <Text variant="small" color={colors.onSurfaceVariant} center>
               Không tải được chuyến đi. Vui lòng kiểm tra kết nối.
             </Text>
             <Button label="Thử lại" leadingIcon="refresh" variant="secondary" size="sm" onPress={() => refetch()} />
           </View>
         ) : data.bookings.length === 0 ? (
-          <View style={styles.state}>
+          <View className="items-center gap-3 py-6">
             <Text variant="small" color={colors.onSurfaceVariant} center>
               Chưa có chuyến đi nào ở mục này.
             </Text>
@@ -220,42 +220,3 @@ export default function TripsScreen() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  state: { alignItems: 'center', gap: 12, paddingVertical: 24 },
-  screen: { flex: 1, backgroundColor: colors.surface },
-  content: { padding: 16, gap: 16, paddingBottom: 120 },
-  shrink: { flexShrink: 1 },
-  skeletonLines: { gap: 6 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  between: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  tabsWrap: { flexGrow: 0, flexShrink: 0, borderBottomWidth: 1, borderBottomColor: colors.surfaceContainerHigh },
-  tabs: { paddingHorizontal: 8 },
-  tab: { paddingHorizontal: 12, paddingVertical: 12, borderBottomWidth: 2, borderBottomColor: 'transparent' },
-  tabActive: { borderBottomColor: colors.primary },
-  card: { borderRadius: radius.lg, overflow: 'hidden', backgroundColor: colors.surfaceContainerLowest, ...shadow.card },
-  pad: { padding: 16 },
-  hotelIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.primaryFixed,
-  },
-  cover: { width: '100%', height: 200 },
-  dateTag: {
-    position: 'absolute',
-    left: 12,
-    bottom: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: radius.md,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-  },
-  body: { gap: 12 },
-  stay: { padding: 12, gap: 10, borderRadius: radius.md, backgroundColor: colors.surfaceContainerLow },
-});

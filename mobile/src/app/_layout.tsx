@@ -1,3 +1,5 @@
+import "../../global.css";
+import "@/lib/nativewind";
 import { useEffect } from "react";
 import { Stack } from "expo-router";
 import {

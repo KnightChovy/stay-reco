@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Alert, ScrollView, TextInput, View } from 'react-native';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -12,7 +12,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Icon, type IconName } from '@/components/ui/icon';
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
-import { colors, fonts, radius, shadow } from '@/constants/theme';
+import { colors } from '@/constants/theme';
 import { BookingProgress } from '@/features/booking/BookingProgress';
 import { PriceLine } from '@/features/booking/PriceLine';
 import { images } from '@/lib/mock-data';
@@ -23,9 +23,9 @@ import { useAuthStore } from '@/stores/auth.store';
 
 function CardTitle({ icon, title }: { icon: IconName; title: string }) {
   return (
-    <View style={styles.row}>
+    <View className="flex-row items-center gap-2">
       <Icon name={icon} size={20} color={colors.primaryContainer} />
-      <Text variant="label" weight="bold" style={styles.cardTitle}>
+      <Text variant="label" weight="bold" style={{ fontSize: 16, flexShrink: 1 }}>
         {title}
       </Text>
     </View>
@@ -102,9 +102,9 @@ export default function BookingInfoScreen() {
 
   if (!account) {
     return (
-      <View style={styles.screen}>
+      <View className="flex-1 bg-surface">
         <ScreenHeader title="Thông Tin Đặt Phòng" />
-        <View style={styles.state}>
+        <View className="flex-1 items-center justify-center gap-3 p-6">
           <Text variant="small" color={colors.onSurfaceVariant} center>
             {hydrating ? 'Đang tải...' : 'Vui lòng đăng nhập để đặt phòng.'}
           </Text>
@@ -116,9 +116,9 @@ export default function BookingInfoScreen() {
 
   if (!data || !room || !offer) {
     return (
-      <View style={styles.screen}>
+      <View className="flex-1 bg-surface">
         <ScreenHeader title="Thông Tin Đặt Phòng" />
-        <View style={styles.state}>
+        <View className="flex-1 items-center justify-center gap-3 p-6">
           <Text variant="small" color={colors.onSurfaceVariant} center>
             {data
               ? 'Hạng phòng này không còn mở bán cho ngày bạn chọn.'
@@ -137,36 +137,36 @@ export default function BookingInfoScreen() {
   const { hotel } = data;
 
   return (
-    <View style={styles.screen}>
+    <View className="flex-1 bg-surface">
       <ScreenHeader title="Thông Tin Đặt Phòng" />
       <BookingProgress current={1} />
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.card}>
-          <View style={styles.row}>
+      <ScrollView contentContainerClassName="gap-4 p-4 pb-8" showsVerticalScrollIndicator={false}>
+        <View className="gap-3 rounded-lg bg-surface-container-lowest p-4 shadow-card">
+          <View className="flex-row items-center gap-2">
             <View>
               <Image
                 source={room.roomType.images[0]?.url ?? hotel.images[0]?.url ?? images.bookingThumb}
-                style={styles.thumb}
+                className="h-[84px] w-[84px] rounded-md"
                 contentFit="cover"
               />
               {hotel.starRating != null && (
-                <View style={styles.thumbTag}>
+                <View className="absolute left-1.5 top-1.5 rounded-sm bg-primary-container px-1.5 py-0.5">
                   <Text variant="caption" weight="bold" color={colors.white}>
                     {hotel.starRating} Sao
                   </Text>
                 </View>
               )}
             </View>
-            <View style={[styles.flex, styles.gap4]}>
-              <View style={styles.row}>
+            <View className="flex-1 gap-1">
+              <View className="flex-row items-center gap-2">
                 <Icon name="location_on" size={14} color={colors.secondary} />
-                <Text variant="caption" color={colors.secondary} style={styles.flex}>
+                <Text variant="caption" color={colors.secondary} className="flex-1">
                   {hotel.city}
                 </Text>
               </View>
               <Text variant="h3">{hotel.name}</Text>
-              <View style={styles.row}>
+              <View className="flex-row items-center gap-2">
                 <Icon name="bed" size={14} color={colors.onSurfaceVariant} />
                 <Text variant="caption" color={colors.onSurfaceVariant}>
                   {room.roomType.name}
@@ -174,8 +174,8 @@ export default function BookingInfoScreen() {
               </View>
             </View>
           </View>
-          <View style={styles.dates}>
-            <View style={styles.flex}>
+          <View className="flex-row gap-3 rounded-md bg-surface-container-low p-3">
+            <View className="flex-1">
               <Text variant="caption" color={colors.onSurfaceVariant}>
                 Nhận phòng
               </Text>
@@ -184,7 +184,7 @@ export default function BookingInfoScreen() {
                 {formatDate(stay.checkIn)}
               </Text>
             </View>
-            <View style={styles.flex}>
+            <View className="flex-1">
               <Text variant="caption" color={colors.onSurfaceVariant}>
                 Trả phòng
               </Text>
@@ -197,8 +197,8 @@ export default function BookingInfoScreen() {
               </Text>
             </View>
           </View>
-          <View style={styles.between}>
-            <View style={styles.row}>
+          <View className="flex-row items-center justify-between gap-2">
+            <View className="flex-row items-center gap-2">
               <Icon name="group" size={18} color={colors.onSurfaceVariant} />
               <Text variant="small" color={colors.onSurfaceVariant}>
                 Số lượng khách:
@@ -210,7 +210,7 @@ export default function BookingInfoScreen() {
           </View>
         </View>
 
-        <View style={styles.card}>
+        <View className="gap-3 rounded-lg bg-surface-container-lowest p-4 shadow-card">
           <CardTitle icon="person_pin" title="Thông tin người liên hệ" />
           <Input label="Họ và tên khách" placeholder="Nhập họ và tên có dấu" value={name} onChangeText={setName} />
           <Input
@@ -225,7 +225,7 @@ export default function BookingInfoScreen() {
           </Text>
         </View>
 
-        <View style={styles.card}>
+        <View className="gap-3 rounded-lg bg-surface-container-lowest p-4 shadow-card">
           <CardTitle icon="hotel_class" title="Yêu cầu đặc biệt" />
           <TextInput
             multiline
@@ -235,11 +235,11 @@ export default function BookingInfoScreen() {
             placeholderTextColor={colors.outline}
             value={requests}
             onChangeText={setRequests}
-            style={styles.textarea}
+            className="min-h-20 rounded-md bg-surface-container-low p-3 font-be-regular text-sm text-on-surface"
           />
         </View>
 
-        <View style={styles.card}>
+        <View className="gap-3 rounded-lg bg-surface-container-lowest p-4 shadow-card">
           <Text variant="h3">Chi tiết giá</Text>
           {offer.nightlyPrices.map((n) => (
             <PriceLine
@@ -249,8 +249,8 @@ export default function BookingInfoScreen() {
             />
           ))}
           <PriceLine label="Thuế VAT & Phí phục vụ" value="Đã bao gồm" />
-          <View style={styles.divider} />
-          <View style={styles.between}>
+          <View className="h-px bg-surface-container-high" />
+          <View className="flex-row items-center justify-between gap-2">
             <Text variant="label" weight="bold">
               Tổng tiền thanh toán
             </Text>
@@ -260,9 +260,9 @@ export default function BookingInfoScreen() {
           </View>
         </View>
 
-        <View style={[styles.policy, styles.row]}>
+        <View className="flex-row items-center gap-2 rounded-lg bg-tertiary-fixed p-4">
           <Icon name="event_available" size={22} color={colors.tertiaryContainer} />
-          <View style={styles.flex}>
+          <View className="flex-1">
             <Text variant="small" weight="bold" color={colors.tertiary}>
               Chính sách hủy
             </Text>
@@ -274,9 +274,9 @@ export default function BookingInfoScreen() {
           </View>
         </View>
 
-        <View style={[styles.row, styles.terms]}>
+        <View className="flex-row items-center gap-2" style={{ alignItems: 'flex-start' }}>
           <Checkbox checked={agreed} onChange={setAgreed} />
-          <Text variant="caption" color={colors.onSurfaceVariant} style={styles.flex}>
+          <Text variant="caption" color={colors.onSurfaceVariant} className="flex-1">
             Tôi đã đọc và đồng ý với Điều khoản dịch vụ, chính sách lưu trú của {hotel.name} và quy chuẩn bảo mật StayReco.
           </Text>
         </View>
@@ -287,7 +287,7 @@ export default function BookingInfoScreen() {
         )}
       </ScrollView>
 
-      <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
+      <View className="flex-row items-center gap-3 border-t border-surface-container-high bg-surface-container-lowest px-4 pt-3" style={{ paddingBottom: insets.bottom + 12 }}>
         <View>
           <Text variant="caption" color={colors.onSurfaceVariant}>
             Tổng tiền ({nights} đêm)
@@ -300,7 +300,7 @@ export default function BookingInfoScreen() {
           label={submitting ? 'Đang giữ phòng...' : 'Giữ phòng & thanh toán'}
           leadingIcon="lock"
           size="sm"
-          style={[styles.flex, styles.cta]}
+          className="flex-1" style={{ minHeight: 52 }}
           disabled={!agreed || submitting}
           onPress={() => void submit(offer.total)}
         />
@@ -308,50 +308,3 @@ export default function BookingInfoScreen() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  state: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 24 },
-  screen: { flex: 1, backgroundColor: colors.surface },
-  content: { padding: 16, gap: 16, paddingBottom: 32 },
-  flex: { flex: 1 },
-  gap4: { gap: 4 },
-  cta: { minHeight: 52 },
-  cardTitle: { fontSize: 16, flexShrink: 1 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  between: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  card: { padding: 16, gap: 12, borderRadius: radius.lg, backgroundColor: colors.surfaceContainerLowest, ...shadow.card },
-  thumb: { width: 84, height: 84, borderRadius: radius.md },
-  thumbTag: {
-    position: 'absolute',
-    top: 6,
-    left: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: radius.sm,
-    backgroundColor: colors.primaryContainer,
-  },
-  dates: { flexDirection: 'row', padding: 12, gap: 12, borderRadius: radius.md, backgroundColor: colors.surfaceContainerLow },
-  textarea: {
-    minHeight: 80,
-    padding: 12,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceContainerLow,
-    fontFamily: fonts.regular,
-    fontSize: 14,
-    color: colors.onSurface,
-    textAlignVertical: 'top',
-  },
-  divider: { height: 1, backgroundColor: colors.surfaceContainerHigh },
-  policy: { padding: 16, borderRadius: radius.lg, backgroundColor: colors.tertiaryFixed, alignItems: 'flex-start' },
-  terms: { alignItems: 'flex-start' },
-  bottomBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    backgroundColor: colors.surfaceContainerLowest,
-    borderTopWidth: 1,
-    borderTopColor: colors.surfaceContainerHigh,
-  },
-});

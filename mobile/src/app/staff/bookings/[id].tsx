@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Booking, BookingStatus, PaymentStatus } from '@stayreco/shared';
@@ -39,7 +39,7 @@ const dateTime = (iso: string | null) => (iso ? new Date(iso).toLocaleString('vi
 
 function Message({ title, text, retry }: { title: string; text: string; retry?: () => void }) {
   return (
-    <Card style={styles.center}>
+    <Card className="items-center">
       <Icon name="verified_user" size={36} color={colors.outline} />
       <Text variant="h3" weight="bold" center>
         {title}
@@ -88,14 +88,14 @@ export default function StaffBookingDetailScreen() {
     <StaffScreen
       title={`#${b.code}`}
       footer={
-        b.status === 'CONFIRMED' ? (
-          <Button label="Bắt đầu check-in" leadingIcon="key" style={[s.flex, { backgroundColor: accent }]} onPress={() => router.push({ pathname: '/staff/check-in', params: { code: b.code } })} />
+        b.status === 'CONFIRMED' && b.paymentStatus === 'PAID' && b.checkIn <= dateInput() ? (
+          <Button label="Bắt đầu check-in" leadingIcon="key" className={s.flex} style={{ backgroundColor: accent }} onPress={() => router.push({ pathname: '/staff/check-in', params: { code: b.code } })} />
         ) : b.status === 'CHECKED_IN' ? (
-          <Button label="Check-out" leadingIcon="logout" style={[s.flex, { backgroundColor: accent }]} onPress={() => router.push({ pathname: '/staff/check-out', params: { code: b.code } })} />
+          <Button label="Check-out" leadingIcon="logout" className={s.flex} style={{ backgroundColor: accent }} onPress={() => router.push({ pathname: '/staff/check-out', params: { code: b.code } })} />
         ) : undefined
       }
     >
-      <View style={s.wrap}>
+      <View className={s.wrap}>
         <Chip label={bookingStatusLabel[b.status]} tone={statusTone[b.status]} />
         <Chip label={payment[b.paymentStatus].label} tone={payment[b.paymentStatus].tone} />
       </View>
@@ -108,7 +108,7 @@ export default function StaffBookingDetailScreen() {
         <KV label="Họ và tên khách" value={b.guestName} strong />
         <KV label="Số điện thoại" value={b.contactPhone} />
         <KV label="Giờ đến dự kiến" value={b.arrivalTime ?? 'Chưa cung cấp'} />
-        <View style={s.box}>
+        <View className={s.box}>
           <Text variant="small">{b.specialRequests || 'Khách không ghi yêu cầu đặc biệt.'}</Text>
         </View>
       </Card>
@@ -131,7 +131,7 @@ export default function StaffBookingDetailScreen() {
         {b.nightlyPrices.map((n) => (
           <KV key={n.date} label={formatDate(n.date)} value={formatVnd(n.price)} />
         ))}
-        <View style={s.divider} />
+        <View className={s.divider} />
         <KV label="Tổng tiền" value={formatVnd(b.totalAmount)} strong />
         <KV label="Miễn phí huỷ trước" value={b.cancellation.freeUntil ? dateTime(b.cancellation.freeUntil) : 'Không áp dụng'} />
         <KV label="Phí huỷ sau hạn" value={`${b.cancellation.feePercent}%`} />
@@ -160,15 +160,15 @@ export default function StaffBookingDetailScreen() {
           {b.changeRequest.changes.arrivalTime !== undefined && <KV label="Giờ đến" value={b.changeRequest.changes.arrivalTime ?? 'Xóa'} strong />}
           {b.changeRequest.changes.specialRequests !== undefined && <KV label="Yêu cầu đặc biệt" value={b.changeRequest.changes.specialRequests ?? 'Xóa'} strong />}
           <Input label="Lý do từ chối" placeholder="Bắt buộc khi từ chối" value={changeReason} onChangeText={setChangeReason} />
-          <View style={s.row}>
+          <View className={s.row}>
             <Button
               label="Từ chối"
               variant="secondary"
-              style={s.flex}
+              className={s.flex}
               disabled={!changeReason.trim() || action.isPending}
               onPress={() => action.mutate(() => rejectBookingChange(b.id, { reason: changeReason.trim() }))}
             />
-            <Button label="Chấp nhận" style={[s.flex, { backgroundColor: accent }]} disabled={action.isPending} onPress={() => action.mutate(() => acceptBookingChange(b.id))} />
+            <Button label="Chấp nhận" className={s.flex} style={{ backgroundColor: accent }} disabled={action.isPending} onPress={() => action.mutate(() => acceptBookingChange(b.id))} />
           </View>
         </Card>
       )}
@@ -203,9 +203,9 @@ export default function StaffBookingDetailScreen() {
           </Text>
         ) : (
           b.timeline.map((t, i) => (
-            <View key={`${t.at}-${i}`} style={s.row}>
-              <View style={styles.dot} />
-              <View style={s.flex}>
+            <View key={`${t.at}-${i}`} className={s.row}>
+              <View className="h-2 w-2 rounded bg-primary" />
+              <View className={s.flex}>
                 <Text variant="small" weight="semibold">
                   {t.event}
                 </Text>
@@ -220,8 +220,3 @@ export default function StaffBookingDetailScreen() {
     </StaffScreen>
   );
 }
-
-const styles = StyleSheet.create({
-  center: { alignItems: 'center' },
-  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.primary },
-});

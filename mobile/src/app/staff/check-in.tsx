@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Pressable, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
@@ -7,7 +7,7 @@ import { Chip } from '@/components/ui/chip';
 import { Icon } from '@/components/ui/icon';
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
-import { colors, radius } from '@/constants/theme';
+import { colors } from '@/constants/theme';
 import { Banner, Card, CardHead, KV, StaffScreen, SuccessSheet, accent, s, useStaffHotel } from '@/features/staff/ui';
 import { bookingStatusLabel, formatDate, formatVnd } from '@/lib/stay';
 import { apiErrorMessage } from '@/services/ApiService';
@@ -25,12 +25,12 @@ export default function StaffCheckInScreen() {
     queryKey: ['staff', 'lookup', hotelId, query],
     queryFn: () => lookupBooking(hotelId!, toLookup(query)),
     enabled: !!hotelId && !!query,
-    retry: false,
   });
   const booking = lookup.data;
   const checkIn = useMutation({
     mutationFn: (roomIds: string[]) => checkInBooking(booking!.id, { roomIds }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['staff'] }),
+    // Không await (để màn chuyển ngay sang trạng thái thành công) và bỏ qua 'room-options': đơn đã đổi trạng thái nên API đó trả 409.
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['staff'], predicate: (q) => q.queryKey[1] !== 'room-options' }),
   });
   const canCheckIn = booking?.status === 'CONFIRMED' && booking.paymentStatus === 'PAID';
   // Sau khi check-in xong đơn là CHECKED_IN, gọi lại room-options sẽ trả 409.
@@ -80,7 +80,7 @@ export default function StaffCheckInScreen() {
             leadingIcon="check_circle"
             size="lg"
             disabled={!ready || checkIn.isPending}
-            style={[s.flex, { backgroundColor: accent }]}
+            className={s.flex} style={{ backgroundColor: accent }}
             onPress={() => checkIn.mutate(selected)}
           />
         ) : undefined
@@ -117,7 +117,7 @@ export default function StaffCheckInScreen() {
               SĐT: {booking.contactPhone}
               {booking.arrivalTime ? ` · Đến khoảng ${booking.arrivalTime}` : ''}
             </Text>
-            <View style={s.box}>
+            <View className={s.box}>
               <KV label="Hạng phòng" value={booking.roomType.name} strong />
               <KV label="Lưu trú" value={`${booking.nights} đêm (${formatDate(booking.checkIn)} - ${formatDate(booking.checkOut)})`} />
               <KV label="Số khách / phòng" value={`${booking.guests} khách · ${booking.rooms} phòng`} />
@@ -155,10 +155,10 @@ export default function StaffCheckInScreen() {
                     accessibilityState={{ checked: on }}
                     accessibilityLabel={`Phòng ${r.roomNumber}`}
                     onPress={() => toggle(r.id)}
-                    style={[styles.room, on && styles.roomOn]}
+                    className={`flex-row items-center gap-2.5 rounded-lg p-3 ${on ? 'border-2 border-secondary bg-[#fbf3f0]' : 'border border-surface-container-high'}`}
                   >
                     <Icon name={on ? 'check_box' : 'check_box_outline_blank'} color={on ? accent : colors.outline} />
-                    <Text variant="label" weight="bold" style={s.flex}>
+                    <Text variant="label" weight="bold" className={s.flex}>
                       {r.roomNumber}
                     </Text>
                     {held && <Chip label="Đang giữ" tone="primary" />}
@@ -188,8 +188,3 @@ export default function StaffCheckInScreen() {
     </StaffScreen>
   );
 }
-
-const styles = StyleSheet.create({
-  room: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.surfaceContainerHigh },
-  roomOn: { borderWidth: 2, borderColor: accent, backgroundColor: '#fbf3f0' },
-});

@@ -1,17 +1,17 @@
-import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
-import { colors, radius } from '@/constants/theme';
+import { Pressable, View, type StyleProp, type ViewStyle } from 'react-native';
+import { colors } from '@/constants/theme';
 import { Icon, type IconName } from './icon';
 import { Text } from './text';
 
 const tones = {
-  primary: { bg: colors.primaryFixed, fg: colors.primaryContainer },
-  secondary: { bg: colors.secondaryFixed, fg: colors.onSecondaryContainer },
-  tertiary: { bg: colors.tertiaryFixed, fg: colors.onTertiaryFixedVariant },
-  neutral: { bg: colors.surfaceContainer, fg: colors.onSurfaceVariant },
-  selected: { bg: colors.primaryContainer, fg: colors.onPrimary },
-  outline: { bg: colors.surfaceContainerLowest, fg: colors.onSurfaceVariant },
-  warning: { bg: '#fff0d9', fg: '#7a4600' },
-  danger: { bg: colors.errorContainer, fg: '#8c0009' },
+  primary: { bg: 'bg-primary-fixed', fg: colors.primaryContainer },
+  secondary: { bg: 'bg-secondary-fixed', fg: colors.onSecondaryContainer },
+  tertiary: { bg: 'bg-tertiary-fixed', fg: colors.onTertiaryFixedVariant },
+  neutral: { bg: 'bg-surface-container', fg: colors.onSurfaceVariant },
+  selected: { bg: 'bg-primary-container', fg: colors.onPrimary },
+  outline: { bg: 'bg-surface-container-lowest border border-outline-variant', fg: colors.onSurfaceVariant },
+  warning: { bg: 'bg-[#fff0d9]', fg: '#7a4600' },
+  danger: { bg: 'bg-error-container', fg: '#8c0009' },
 };
 
 type Props = {
@@ -19,10 +19,11 @@ type Props = {
   icon?: IconName;
   tone?: keyof typeof tones;
   onPress?: () => void;
+  className?: string;
   style?: StyleProp<ViewStyle>;
 };
 
-export function Chip({ label, icon, tone = 'neutral', onPress, style: extra }: Props) {
+export function Chip({ label, icon, tone = 'neutral', onPress, className = '', style }: Props) {
   const t = tones[tone];
   const content = (
     <>
@@ -32,25 +33,14 @@ export function Chip({ label, icon, tone = 'neutral', onPress, style: extra }: P
       </Text>
     </>
   );
-  const style = [styles.chip, { backgroundColor: t.bg }, tone === 'outline' && styles.outline, extra];
+  const cls = `flex-row items-center self-start gap-1 px-2.5 py-[5px] rounded-full ${t.bg} ${className}`;
   return onPress ? (
-    <Pressable accessibilityRole="button" onPress={onPress} style={style}>
+    <Pressable accessibilityRole="button" onPress={onPress} className={cls} style={style}>
       {content}
     </Pressable>
   ) : (
-    <View style={style}>{content}</View>
+    <View className={cls} style={style}>
+      {content}
+    </View>
   );
 }
-
-const styles = StyleSheet.create({
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: radius.full,
-  },
-  outline: { borderWidth: 1, borderColor: colors.outlineVariant },
-});

@@ -44,7 +44,7 @@ export default function StaffRefundsScreen() {
         data.bookings.map((b) => (
           <Card key={b.id}>
             <Pressable accessibilityRole="button" accessibilityLabel={`Đơn ${b.code}`} onPress={() => router.push({ pathname: '/staff/bookings/[id]', params: { id: b.id } })} style={{ gap: 8 }}>
-              <View style={s.between}>
+              <View className={s.between}>
                 <Text variant="label" weight="bold" color={accent}>
                   #{b.code}
                 </Text>

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { Link, router } from 'expo-router';
 import { loginSchema } from '@stayreco/shared';
 import { BrandMark, ScreenHeader } from '@/components/layout/AppHeader';
@@ -8,7 +8,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Icon } from '@/components/ui/icon';
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
-import { colors, radius } from '@/constants/theme';
+import { colors } from '@/constants/theme';
 import { AuthSocialActions } from '@/features/auth/AuthSocialActions';
 import { useAuthStore } from '@/stores/auth.store';
 
@@ -37,31 +37,31 @@ export default function LoginScreen() {
   };
 
   return (
-    <View style={styles.screen}>
+    <View className="flex-1 bg-surface">
       <ScreenHeader title="Đăng nhập" />
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-        <View style={styles.brand}>
+      <ScrollView contentContainerClassName="gap-[18px] p-4 pb-10" keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        <View className="flex-row items-center gap-3">
           <BrandMark size={48} />
           <View>
             <Text variant="h2" color={colors.primary}>
               StayReco
             </Text>
-            <Text variant="caption" weight="semibold" color={colors.secondary} style={styles.tracking}>
+            <Text variant="caption" weight="semibold" color={colors.secondary} className="tracking-[1px]">
               BOUTIQUE HOSPITALITY
             </Text>
           </View>
         </View>
 
-        <View style={styles.gap8}>
+        <View className="gap-2">
           <Text variant="hero">Chào mừng bạn trở lại</Text>
           <Text variant="body" color={colors.onSurfaceVariant}>
             Tiếp tục hành trình khám phá những chốn nghỉ dưỡng boutique tinh tế và đậm bản sắc.
           </Text>
         </View>
 
-        <View style={styles.notice}>
+        <View className="flex-row gap-3 rounded-md bg-surface-container-low p-3.5">
           <Icon name="hub" size={20} color={colors.primaryContainer} />
-          <Text variant="small" color={colors.onSurfaceVariant} style={styles.flex}>
+          <Text variant="small" color={colors.onSurfaceVariant} className="flex-1">
             <Text variant="small" weight="bold" color={colors.primary}>
               Cổng truy cập đồng nhất:
             </Text>{' '}
@@ -105,7 +105,7 @@ export default function LoginScreen() {
           </Text>
         )}
 
-        <View style={styles.between}>
+        <View className="flex-row items-center justify-between gap-2">
           <Checkbox checked={remember} onChange={setRemember}>
             <Text variant="small">Ghi nhớ đăng nhập</Text>
           </Checkbox>
@@ -125,27 +125,27 @@ export default function LoginScreen() {
         />
         <AuthSocialActions />
 
-        <View style={styles.links}>
-          <Pressable onPress={() => router.push('/register')} style={styles.between}>
+        <View className="gap-3 rounded-lg bg-surface-container-lowest p-4">
+          <Pressable onPress={() => router.push('/register')} className="flex-row items-center justify-between gap-2">
             <Text variant="small" color={colors.onSurfaceVariant}>
               Chưa có tài khoản?
             </Text>
-            <View style={styles.row}>
+            <View className="flex-row items-center gap-1.5">
               <Text variant="small" weight="bold" color={colors.primary}>
                 Đăng ký ngay
               </Text>
               <Icon name="chevron_right" size={18} color={colors.primary} />
             </View>
           </Pressable>
-          <View style={styles.divider} />
-          <View style={styles.between}>
-            <View style={styles.row}>
+          <View className="h-px bg-surface-container-high" />
+          <View className="flex-row items-center justify-between gap-2">
+            <View className="flex-row items-center gap-1.5">
               <Icon name="apartment" size={18} color={colors.secondary} />
               <Text variant="small" color={colors.onSurfaceVariant}>
                 Dành cho chủ khách sạn
               </Text>
             </View>
-            <View style={styles.row}>
+            <View className="flex-row items-center gap-1.5">
               <Text variant="small" weight="bold" color={colors.secondary}>
                 Trở thành đối tác
               </Text>
@@ -154,7 +154,7 @@ export default function LoginScreen() {
           </View>
         </View>
 
-        <View style={[styles.row, styles.center]}>
+        <View className="flex-row items-center gap-1.5 justify-center">
           <Icon name="verified_user" size={16} color={colors.onSurfaceVariant} />
           <Text variant="caption" color={colors.onSurfaceVariant}>
             Mã hóa SSL 256-bit
@@ -174,24 +174,3 @@ export default function LoginScreen() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.surface },
-  content: { padding: 16, gap: 18, paddingBottom: 40 },
-  flex: { flex: 1 },
-  gap8: { gap: 8 },
-  center: { justifyContent: 'center' },
-  tracking: { letterSpacing: 1 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  between: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  brand: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  notice: {
-    flexDirection: 'row',
-    gap: 12,
-    padding: 14,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceContainerLow,
-  },
-  links: { padding: 16, gap: 12, borderRadius: radius.lg, backgroundColor: colors.surfaceContainerLowest },
-  divider: { height: 1, backgroundColor: colors.surfaceContainerHigh },
-});

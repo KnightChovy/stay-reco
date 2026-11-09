@@ -26,12 +26,12 @@ export default function StaffCheckOutScreen() {
     queryKey: ['staff', 'lookup', hotelId, query],
     queryFn: () => lookupBooking(hotelId!, toLookup(query)),
     enabled: !!hotelId && !!query,
-    retry: false,
   });
   const booking = lookup.data;
   const checkOut = useMutation({
     mutationFn: (input: CheckOutInput) => checkOutBooking(booking!.id, input),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['staff'] }),
+    // Không await (để màn chuyển ngay sang trạng thái thành công) và bỏ qua 'check-out-quote': đơn đã đổi trạng thái nên API đó trả 409.
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['staff'], predicate: (q) => q.queryKey[1] !== 'check-out-quote' }),
   });
   const canCheckOut = booking?.status === 'CHECKED_IN';
   const quote = useQuery({
@@ -69,7 +69,7 @@ export default function StaffCheckOutScreen() {
             leadingIcon="check_circle"
             size="lg"
             disabled={!quote.data || !feeValid || checkOut.isPending}
-            style={[s.flex, { backgroundColor: accent }]}
+            className={s.flex} style={{ backgroundColor: accent }}
             onPress={() => checkOut.mutate(lowered ? { lateFee: { amount: Number(fee), reason: reason.trim() } } : {})}
           />
         ) : undefined
@@ -98,7 +98,7 @@ export default function StaffCheckOutScreen() {
           <Text variant="label" weight="bold">
             {booking.guestName}
           </Text>
-          <View style={s.box}>
+          <View className={s.box}>
             <KV label="Phòng" value={booking.assignedRooms.map((r) => r.roomNumber).join(', ') || '—'} strong color={accent} />
             <KV label="Hạng phòng" value={booking.roomType.name} />
             <KV label="Lưu trú" value={`${formatDate(booking.checkIn)} - ${formatDate(booking.checkOut)} (${booking.nights} đêm)`} />

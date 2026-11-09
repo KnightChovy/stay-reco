@@ -1,7 +1,7 @@
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { Image } from 'expo-image';
 import { Text } from '@/components/ui/text';
-import { colors, radius, shadow } from '@/constants/theme';
+import { colors } from '@/constants/theme';
 
 const providers = [
   { name: 'Google', logo: require('@/assets/images/google-logo.svg') },
@@ -11,18 +11,18 @@ const providers = [
 // shortcut: nút đăng nhập mạng xã hội chỉ là UI, chưa nối OAuth.
 export function AuthSocialActions() {
   return (
-    <View style={styles.wrap}>
-      <View style={styles.dividerRow}>
-        <View style={styles.line} />
+    <View className="gap-4">
+      <View className="flex-row items-center gap-3">
+        <View className="h-px flex-1 bg-outline-variant" />
         <Text variant="caption" weight="medium" color={colors.onSurfaceVariant}>
           HOẶC TIẾP TỤC BẰNG
         </Text>
-        <View style={styles.line} />
+        <View className="h-px flex-1 bg-outline-variant" />
       </View>
-      <View style={styles.row}>
+      <View className="flex-row gap-3">
         {providers.map((p) => (
-          <Pressable key={p.name} accessibilityRole="button" style={styles.btn}>
-            <Image source={p.logo} style={styles.logo} contentFit="contain" />
+          <Pressable key={p.name} accessibilityRole="button" className="min-h-12 flex-1 flex-row items-center justify-center gap-2 rounded-md bg-surface-container-lowest shadow-card">
+            <Image source={p.logo} className="h-5 w-5" contentFit="contain" />
             <Text variant="label" weight="semibold">
               {p.name}
             </Text>
@@ -32,22 +32,3 @@ export function AuthSocialActions() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  wrap: { gap: 16 },
-  logo: { width: 20, height: 20 },
-  dividerRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  line: { flex: 1, height: 1, backgroundColor: colors.outlineVariant },
-  row: { flexDirection: 'row', gap: 12 },
-  btn: {
-    flex: 1,
-    minHeight: 48,
-    flexDirection: 'row',
-    gap: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceContainerLowest,
-    ...shadow.card,
-  },
-});

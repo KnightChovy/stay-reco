@@ -1,4 +1,4 @@
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 import { Chip } from '@/components/ui/chip';
 import { Text } from '@/components/ui/text';
 import { colors } from '@/constants/theme';
@@ -18,22 +18,22 @@ export default function StaffMarketingAnalyticsScreen() {
       <Banner icon="auto_awesome" tone="clay" title="AI Recommendation" text={aiRecommendation} />
 
       <Section title="Bài viết chuyển đổi cao nhất" />
-      <Card style={styles.list}>
+      <Card style={{ gap: 0, paddingVertical: 2 }}>
         {topPosts.map((p, i) => (
-          <View key={p.rank} style={[styles.item, i > 0 && styles.topLine]}>
-            <View style={[styles.rank, p.rank === 1 && styles.rankTop]}>
+          <View key={p.rank} className={`flex-row gap-3 py-3 ${i > 0 ? 'border-t border-surface-container-high' : ''}`}>
+            <View className={`h-7 w-7 items-center justify-center rounded-lg ${p.rank === 1 ? 'bg-primary' : 'bg-surface-container-low'}`}>
               <Text variant="small" weight="bold" color={p.rank === 1 ? colors.onPrimary : colors.primary}>
                 {p.rank}
               </Text>
             </View>
-            <View style={styles.body}>
+            <View className="flex-1 gap-1.5">
               <Text variant="small" weight="bold">
                 {p.title}
               </Text>
               <Text variant="caption" color={colors.onSurfaceVariant}>
                 {p.platform} · {p.clicks} clicks · {p.bookings} booking
               </Text>
-              <View style={styles.foot}>
+              <View className="flex-row items-center justify-between">
                 <Text variant="small" weight="bold">
                   {formatVnd(p.revenue)}
                 </Text>
@@ -46,13 +46,3 @@ export default function StaffMarketingAnalyticsScreen() {
     </StaffScreen>
   );
 }
-
-const styles = StyleSheet.create({
-  list: { gap: 0, paddingVertical: 2 },
-  item: { flexDirection: 'row', gap: 12, paddingVertical: 12 },
-  topLine: { borderTopWidth: 1, borderTopColor: colors.surfaceContainerHigh },
-  rank: { width: 28, height: 28, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceContainerLow },
-  rankTop: { backgroundColor: colors.primary },
-  body: { flex: 1, gap: 6 },
-  foot: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-});

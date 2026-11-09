@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { ScrollView, useWindowDimensions, View } from 'react-native';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
@@ -11,14 +11,14 @@ import { Chip } from '@/components/ui/chip';
 import { Icon, type IconName } from '@/components/ui/icon';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
-import { colors, radius, shadow } from '@/constants/theme';
+import { colors, radius } from '@/constants/theme';
 import { images } from '@/lib/mock-data';
 import { formatDate, formatVnd, nightsBetween, stayFromParams } from '@/lib/stay';
 import { hotelListingQuery } from '@/services/stays.service';
 
 function Meta({ icon, label }: { icon: IconName; label: string }) {
   return (
-    <View style={styles.metaItem}>
+    <View className="flex-row items-center gap-1">
       <Icon name={icon} size={16} color={colors.onSurfaceVariant} />
       <Text variant="small" color={colors.onSurfaceVariant}>
         {label}
@@ -31,35 +31,35 @@ function Meta({ icon, label }: { icon: IconName; label: string }) {
 function HotelDetailSkeleton({ bottomInset }: { bottomInset: number }) {
   return (
     <>
-      <ScrollView contentContainerStyle={styles.content} scrollEnabled={false}>
+      <ScrollView contentContainerClassName="pb-8" scrollEnabled={false}>
         <Skeleton height={280} radius={0} />
-        <View style={styles.section}>
+        <View className="mx-4 mt-5 gap-2.5">
           <Skeleton width={130} height={28} radius={radius.full} />
           <Skeleton width="80%" height={30} />
           <Skeleton width="60%" />
           <Skeleton />
           <Skeleton width="90%" />
         </View>
-        <View style={[styles.section, styles.panel, styles.dateRow]}>
+        <View className="mx-4 mt-5 flex-row items-center gap-3 rounded-lg bg-surface-container-low p-4">
           <Skeleton width={22} height={22} />
-          <View style={[styles.flex, styles.gap6]}>
+          <View className="flex-1 gap-1.5">
             <Skeleton width="65%" height={16} />
             <Skeleton width="85%" height={12} />
           </View>
         </View>
-        <View style={styles.section}>
+        <View className="mx-4 mt-5 gap-2.5">
           <Skeleton width={90} height={20} />
-          <View style={styles.amenities}>
+          <View className="flex-row flex-wrap gap-2">
             {[96, 110, 84, 120, 100].map((w, i) => (
               <Skeleton key={i} width={w} height={30} radius={radius.full} />
             ))}
           </View>
         </View>
-        <View style={styles.section}>
+        <View className="mx-4 mt-5 gap-2.5">
           <Skeleton width={110} height={20} />
-          <View style={styles.room}>
+          <View className="overflow-hidden rounded-lg bg-surface-container-lowest shadow-card">
             <Skeleton height={180} radius={0} />
-            <View style={styles.roomBody}>
+            <View className="gap-3 p-4">
               <Skeleton width="55%" height={20} />
               <Skeleton width="75%" />
               <Skeleton height={44} radius={radius.md} />
@@ -67,8 +67,8 @@ function HotelDetailSkeleton({ bottomInset }: { bottomInset: number }) {
           </View>
         </View>
       </ScrollView>
-      <View style={[styles.bottomBar, { paddingBottom: bottomInset + 12 }]}>
-        <View style={[styles.flex, styles.gap6]}>
+      <View className="flex-row items-center gap-3 border-t border-surface-container-high bg-surface-container-lowest px-4 pt-3 shadow-floating" style={{ paddingBottom: bottomInset + 12 }}>
+        <View className="flex-1 gap-1.5">
           <Skeleton width="60%" height={20} />
           <Skeleton width="75%" height={12} />
         </View>
@@ -84,18 +84,18 @@ function RoomCard({ room, nights, onBook }: { room: RoomTypeListing; nights: num
   const { roomType, offer } = room;
   const beds = roomType.beds.map((b) => `${b.quantity} ${b.name}`).join(', ');
   return (
-    <View style={styles.room}>
-      <Image source={roomType.images[0]?.url ?? images.roomDeluxe} style={styles.roomImage} contentFit="cover" />
+    <View className="overflow-hidden rounded-lg bg-surface-container-lowest shadow-card">
+      <Image source={roomType.images[0]?.url ?? images.roomDeluxe} className="h-[180px] w-full" contentFit="cover" />
       {offer && offer.available > 0 && offer.available <= 3 && (
-        <View style={styles.roomBadge}>
+        <View className="absolute left-3 top-3 rounded-sm bg-primary-container px-2.5 py-1">
           <Text variant="caption" weight="semibold" color={colors.white}>
             Chỉ còn {offer.available} phòng
           </Text>
         </View>
       )}
-      <View style={styles.roomBody}>
+      <View className="gap-3 p-4">
         <Text variant="h3">{roomType.name}</Text>
-        <View style={styles.metaWrap}>
+        <View className="flex-row flex-wrap gap-x-4 gap-y-1.5">
           <Meta icon="square_foot" label={`${roomType.areaSqm} m²`} />
           {!!beds && <Meta icon="king_bed" label={beds} />}
           <Meta icon="group" label={`Tối đa ${roomType.maxOccupancy} khách`} />
@@ -106,9 +106,9 @@ function RoomCard({ room, nights, onBook }: { room: RoomTypeListing; nights: num
           </Text>
         )}
         {offer && (
-          <View style={[styles.plan, bookable(room) && styles.planActive]}>
-            <View style={styles.between}>
-              <View style={styles.flex}>
+          <View className={`gap-2.5 rounded-md bg-surface-container-low p-3 ${bookable(room) ? 'border border-primary-fixed' : ''}`}>
+            <View className="flex-row items-center justify-between gap-2">
+              <View className="flex-1">
                 <Text variant="caption" color={colors.onSurfaceVariant}>
                   {offer.freeCancellationUntil
                     ? `Miễn phí hủy trước ${new Date(offer.freeCancellationUntil).toLocaleDateString('vi-VN')}`
@@ -118,7 +118,7 @@ function RoomCard({ room, nights, onBook }: { room: RoomTypeListing; nights: num
                   Tổng {nights} đêm: {formatVnd(offer.total)}
                 </Text>
               </View>
-              <View style={styles.alignEnd}>
+              <View className="items-end">
                 <Text variant="label" weight="bold">
                   {formatVnd(offer.perRoomTotal / nights)}
                 </Text>
@@ -153,12 +153,12 @@ export default function HotelDetailScreen() {
 
   if (!data) {
     return (
-      <View style={styles.screen}>
+      <View className="flex-1 bg-surface">
         <ScreenHeader title="Chi Tiết Nơi Lưu Trú" />
         {isPending ? (
           <HotelDetailSkeleton bottomInset={insets.bottom} />
         ) : (
-          <View style={styles.state}>
+          <View className="flex-1 items-center justify-center gap-2.5 p-6">
             {isError && (
               <>
                 <Text variant="small" color={colors.onSurfaceVariant} center>
@@ -178,9 +178,9 @@ export default function HotelDetailScreen() {
   const cheapest = roomTypes.filter(bookable).sort((a, b) => a.offer!.total - b.offer!.total)[0];
 
   return (
-    <View style={styles.screen}>
+    <View className="flex-1 bg-surface">
       <ScreenHeader title="Chi Tiết Nơi Lưu Trú" />
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerClassName="pb-8" showsVerticalScrollIndicator={false}>
         <View>
           <ScrollView
             horizontal
@@ -192,12 +192,12 @@ export default function HotelDetailScreen() {
               <Image key={uri} source={uri} style={{ width, height: 280 }} contentFit="cover" />
             ))}
           </ScrollView>
-          <View style={styles.dots}>
+          <View className="absolute bottom-3.5 left-4 flex-row gap-1.5">
             {gallery.map((uri, i) => (
-              <View key={uri} style={[styles.dot, i === page && styles.dotActive]} />
+              <View key={uri} className={`rounded-full ${i === page ? '-mt-px h-2 w-2 bg-white' : 'h-1.5 w-1.5 bg-white/60'}`} />
             ))}
           </View>
-          <View style={styles.photoCount}>
+          <View className="absolute bottom-3 right-4 flex-row items-center gap-1 rounded-full bg-black/[0.55] px-2.5 py-1">
             <Icon name="photo_library" size={14} color={colors.white} />
             <Text variant="caption" weight="medium" color={colors.white}>
               {page + 1}/{gallery.length} ảnh
@@ -205,14 +205,14 @@ export default function HotelDetailScreen() {
           </View>
         </View>
 
-        <View style={styles.section}>
+        <View className="mx-4 mt-5 gap-2.5">
           {hotel.starRating != null && (
-            <Chip label={`Khách sạn ${hotel.starRating} sao`} icon="hotel_class" tone="secondary" style={styles.selfStart} />
+            <Chip label={`Khách sạn ${hotel.starRating} sao`} icon="hotel_class" tone="secondary" className="self-start" />
           )}
           <Text variant="h1">{hotel.name}</Text>
-          <View style={styles.row}>
+          <View className="flex-row flex-wrap items-center gap-1.5">
             <Icon name="location_on" size={16} color={colors.secondary} />
-            <Text variant="small" color={colors.onSurfaceVariant} style={styles.flex}>
+            <Text variant="small" color={colors.onSurfaceVariant} className="flex-1">
               {hotel.address}, {hotel.city}
             </Text>
           </View>
@@ -223,9 +223,9 @@ export default function HotelDetailScreen() {
           )}
         </View>
 
-        <View style={[styles.section, styles.panel, styles.dateRow]}>
+        <View className="mx-4 mt-5 flex-row items-center gap-3 rounded-lg bg-surface-container-low p-4">
           <Icon name="calendar_month" size={22} color={colors.primaryContainer} />
-          <View style={styles.flex}>
+          <View className="flex-1">
             <Text variant="label" weight="bold">
               {formatDate(stay.checkIn)} – {formatDate(stay.checkOut)}
             </Text>
@@ -237,9 +237,9 @@ export default function HotelDetailScreen() {
         </View>
 
         {hotel.amenities.length > 0 && (
-          <View style={styles.section}>
+          <View className="mx-4 mt-5 gap-2.5">
             <Text variant="h3">Tiện ích</Text>
-            <View style={styles.amenities}>
+            <View className="flex-row flex-wrap gap-2">
               {hotel.amenities.map((a) => (
                 <Chip key={a.id} label={a.name} icon="check_circle" tone="neutral" />
               ))}
@@ -247,8 +247,8 @@ export default function HotelDetailScreen() {
           </View>
         )}
 
-        <View style={styles.section}>
-          <View style={styles.between}>
+        <View className="mx-4 mt-5 gap-2.5">
+          <View className="flex-row items-center justify-between gap-2">
             <Text variant="h3">Hạng phòng</Text>
             <Text variant="small" color={colors.onSurfaceVariant}>
               {roomTypes.length} lựa chọn
@@ -260,7 +260,7 @@ export default function HotelDetailScreen() {
         </View>
 
         {Object.keys(hotel.policies).length > 0 && (
-          <View style={[styles.section, styles.panel]}>
+          <View className="mx-4 mt-5 gap-2.5 rounded-lg bg-surface-container-low p-4">
             <Text variant="h3">Chính sách</Text>
             {Object.entries(hotel.policies).map(([key, text]) => (
               <Text key={key} variant="small" color={colors.onSurfaceVariant}>
@@ -272,8 +272,8 @@ export default function HotelDetailScreen() {
       </ScrollView>
 
       {cheapest && (
-        <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
-          <View style={styles.flex}>
+        <View className="flex-row items-center gap-3 border-t border-surface-container-high bg-surface-container-lowest px-4 pt-3 shadow-floating" style={{ paddingBottom: insets.bottom + 12 }}>
+          <View className="flex-1">
             <Text variant="h3" weight="bold" color={colors.primary}>
               Từ {formatVnd(cheapest.offer!.total)}
             </Text>
@@ -281,68 +281,9 @@ export default function HotelDetailScreen() {
               Tổng {nights} đêm · đã gồm thuế & phí
             </Text>
           </View>
-          <Button label="Đặt ngay" icon="arrow_forward" size="sm" style={styles.cta} onPress={() => book(cheapest.roomType.id)} />
+          <Button label="Đặt ngay" icon="arrow_forward" size="sm" style={{ minHeight: 48 }} onPress={() => book(cheapest.roomType.id)} />
         </View>
       )}
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  selfStart: { alignSelf: 'flex-start' },
-  state: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10, padding: 24 },
-  amenities: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  screen: { flex: 1, backgroundColor: colors.surface },
-  content: { paddingBottom: 32 },
-  flex: { flex: 1 },
-  gap6: { gap: 6 },
-  alignEnd: { alignItems: 'flex-end' },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
-  between: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  dots: { position: 'absolute', bottom: 14, left: 16, flexDirection: 'row', gap: 6 },
-  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.6)' },
-  dotActive: { backgroundColor: colors.white, width: 8, height: 8, borderRadius: 4, marginTop: -1 },
-  photoCount: {
-    position: 'absolute',
-    bottom: 12,
-    right: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: radius.full,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-  },
-  section: { marginHorizontal: 16, marginTop: 20, gap: 10 },
-  panel: { padding: 16, borderRadius: radius.lg, backgroundColor: colors.surfaceContainerLow },
-  dateRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  room: { borderRadius: radius.lg, overflow: 'hidden', backgroundColor: colors.surfaceContainerLowest, ...shadow.card },
-  roomImage: { width: '100%', height: 180 },
-  roomBadge: {
-    position: 'absolute',
-    top: 12,
-    left: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: radius.sm,
-    backgroundColor: colors.primaryContainer,
-  },
-  roomBody: { padding: 16, gap: 12 },
-  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  metaWrap: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 16, rowGap: 6 },
-  plan: { padding: 12, gap: 10, borderRadius: radius.md, backgroundColor: colors.surfaceContainerLow },
-  planActive: { borderWidth: 1, borderColor: colors.primaryFixed },
-  cta: { minHeight: 48 },
-  bottomBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    backgroundColor: colors.surfaceContainerLowest,
-    borderTopWidth: 1,
-    borderTopColor: colors.surfaceContainerHigh,
-    ...shadow.floating,
-  },
-});
