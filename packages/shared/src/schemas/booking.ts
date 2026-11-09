@@ -123,6 +123,8 @@ export const createBookingSchema = z
     /** Start of the one-hour arrival window, e.g. "14:00". */
     arrivalTime: timeSchema.optional(),
     specialRequests: z.string().trim().max(BOOKING_LIMITS.specialRequestsMax).optional(),
+    /** A discount code the customer typed; the backend applies it and checks `expectedTotal` against the result. */
+    code: z.string().trim().min(1).max(50).optional(),
     expectedTotal: moneySchema,
   })
   .superRefine(checkStay);

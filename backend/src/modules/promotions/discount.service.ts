@@ -174,7 +174,8 @@ export class DiscountService {
    *
    * The voucher is marked used and the campaign's counter raised in the same transaction as the booking, under
    * conditional updates: two bookings racing for the last use of a campaign, or for one voucher, cannot both win.
-   * Returns false when the race was lost, and the caller prices the booking without the discount.
+   * Returns false when the race was lost; the caller then answers BOOKING_PRICE_CHANGED, so a customer is never
+   * quietly charged more than the total it agreed to.
    */
   async consume(
     tx: Prisma.TransactionClient,

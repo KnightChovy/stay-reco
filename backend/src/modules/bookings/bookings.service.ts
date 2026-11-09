@@ -38,6 +38,9 @@ import {
   toTime,
 } from '../hotels/hotel.mapper';
 import { PriceEngine } from '../pricing/price-engine';
+import { AuditAction, AuditService } from '../audit/audit.service';
+import { DiscountService } from '../promotions/discount.service';
+import { payable } from '../promotions/stay-discount.service';
 import { roomTypeNotFound } from '../rooms/room-types.service';
 import { byRoomNumber } from '../rooms/rooms.service';
 import { bookableHotel, sellableRoomType } from '../stays/bookable';
@@ -97,6 +100,8 @@ export class BookingsService {
     private readonly engine: PriceEngine,
     private readonly holds: HoldExpiryService,
     private readonly sepay: SepayPayment,
+    private readonly discounts: DiscountService,
+    private readonly audit: AuditService,
     private readonly config: ConfigService<Env, true>,
   ) {}
 
@@ -106,6 +111,7 @@ export class BookingsService {
     const roomType = await this.prisma.roomType.findFirst({
       where: { roomTypeId, ...sellableRoomType, hotel: bookableHotel },
       select: {
+        hotelId: true,
         maxOccupancy: true,
         hotel: {
           select: {
@@ -117,6 +123,7 @@ export class BookingsService {
       },
     });
     if (!roomType) throw roomTypeNotFound();
+    const { hotelId } = roomType;
     if (guests > rooms * roomType.maxOccupancy) {
       throw validation(
         'guests',
@@ -128,7 +135,15 @@ export class BookingsService {
     const quote = (
       await this.engine.quote([roomTypeId], checkIn, checkOut)
     ).get(roomTypeId)!;
-    const total = quote.total.times(rooms);
+    const subtotal = quote.total.times(rooms);
+    // A promotion or the typed code comes off the stay, never both (BR-06, money-rules §2.1).
+    const discount = await this.discounts.forStay(
+      user.accountId,
+      hotelId,
+      subtotal,
+      input.code,
+    );
+    const total = payable(subtotal, discount);
     if (!total.equals(input.expectedTotal)) {
       throw new ConflictException({
         code: ErrorCode.BOOKING_PRICE_CHANGED,
@@ -165,10 +180,22 @@ export class BookingsService {
           });
         }
 
+        // Taken inside the booking's transaction: two bookings racing for one code, or for a campaign's last use,
+        // cannot both win. The loser is told the price changed rather than quietly paying more than it agreed to.
+        if (discount && !(await this.discounts.consume(tx, discount))) {
+          throw new ConflictException({
+            code: ErrorCode.BOOKING_PRICE_CHANGED,
+            message: 'The discount is no longer available',
+            details: [{ field: 'expectedTotal', message: subtotal.toString() }],
+          });
+        }
+
         const booking = await tx.booking.create({
           data: {
             customerId: user.accountId,
             roomTypeId,
+            promotionId: discount?.promotionId ?? null,
+            voucherId: discount?.voucherId ?? null,
             checkInDate: fromCalendarDate(checkIn),
             checkOutDate: fromCalendarDate(checkOut),
             numGuests: guests,
@@ -195,9 +222,9 @@ export class BookingsService {
           data: {
             bookingId: booking.bookingId,
             invoiceNumber: await this.unusedCode(tx, now),
-            subtotal: total,
+            subtotal,
             taxAmount: 0,
-            discountAmount: 0,
+            discountAmount: discount?.amount ?? 0,
             totalAmount: total,
             paymentMethod: 'SEPAY',
           },
@@ -229,6 +256,20 @@ export class BookingsService {
         return booking.bookingId;
       }),
     );
+    if (discount) {
+      await this.audit.log(
+        AuditAction.BOOKING_DISCOUNT_APPLIED,
+        user.accountId,
+        {},
+        {
+          bookingId,
+          kind: discount.kind,
+          promotionId: discount.promotionId,
+          code: discount.code,
+          amount: discount.amount,
+        },
+      );
+    }
     return this.load(bookingId);
   }
 
