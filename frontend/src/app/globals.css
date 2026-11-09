@@ -222,7 +222,8 @@
   --sr-background: #f8f9fc;
   --sr-surface-hover: #f7f8fc;
   --sr-text: #303951;
-  --sr-text-secondary: #6a748b;
+  /* #6a748b gave 4.26:1 on --muted and 4.45:1 on the page background, under WCAG AA (4.5:1). */
+  --sr-text-secondary: #5d6680;
   --sr-border-subtle: #e0e4ef;
   --sr-border-control: #b6bece;
   --sr-accent: #b28a45;
