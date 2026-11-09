@@ -50,11 +50,14 @@ const operationCopy = {
 export function OperationDialog({
   action,
   scope = 'An Nhiên Riverside Hotel',
+  demo = false,
   onClose,
   onComplete,
 }: {
   action: string;
   scope?: string;
+  /** The action has no API yet: say so in the dialog instead of claiming permissions and a saved result. */
+  demo?: boolean;
   onClose: () => void;
   onComplete: () => void;
 }) {
@@ -82,13 +85,18 @@ export function OperationDialog({
         </DialogHeader>
 
         <div className="grid gap-5 px-6 py-5">
+          {demo && (
+            <p role="note" className="rounded-xl bg-brand-accent-soft px-4 py-3 text-sm text-foreground">
+              <strong className="text-brand-accent">Bản minh hoạ.</strong> Biểu mẫu này mô phỏng thao tác; thông tin nhập vào sẽ không được lưu.
+            </p>
+          )}
           <div className="flex items-center justify-between rounded-xl border border-border/70 bg-card px-4 py-3">
             <div className="flex items-center gap-2 text-sm">
               <Building2 size={16} className="text-primary" />
               <span className="text-muted-foreground">Phạm vi áp dụng</span>
               <strong className="text-primary">{scope}</strong>
             </div>
-            <span className="flex items-center gap-1 text-xs font-medium text-success"><BadgeCheck size={14} />Đủ quyền thao tác</span>
+            {!demo && <span className="flex items-center gap-1 text-xs font-medium text-success"><BadgeCheck size={14} />Đủ quyền thao tác</span>}
           </div>
 
           {kind === 'booking' && (
