@@ -47,6 +47,7 @@ const errorMessages: Record<string, string> = {
   NO_SHOW_NOT_ALLOWED: "Chỉ có thể đánh dấu khách không đến sau ngày nhận phòng.",
   VOUCHER_INVALID: "Mã QR voucher không hợp lệ hoặc đã bị chỉnh sửa.",
   ROOM_STATUS_CONFLICT: "Trạng thái phòng đã thay đổi. Danh sách đã được tải lại.",
+  CHANGE_REQUEST_STATUS_CONFLICT: "Yêu cầu đổi thông tin đã được xử lý hoặc đã đóng. Booking đã được tải lại.",
 };
 
 /** Custom messages written in the shared zod schemas (packages/shared/src/schemas), also returned in `details`. */

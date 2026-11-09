@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { BedDouble, ChevronLeft, ChevronRight, SlidersHorizontal } from "lucide-react";
 import type { AvailabilityDay } from "@stayreco/shared";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { cn } from "@/lib/utils";
-import { useAvailability, useRoomTypes } from "../api/partner-queries";
+import { useActionItem, useAvailability, useRoomTypes } from "../api/partner-queries";
 import {
   DateInput,
   EmptyPanel,
@@ -55,10 +56,18 @@ function cellTone(day: AvailabilityDay) {
   return "bg-success-soft text-success";
 }
 
+const isCalendarDate = (value: string | null): value is string => !!value && /^\d{4}-\d{2}-\d{2}$/.test(value);
+
 function AvailabilityWorkspace({ hotelId }: { hotelId: string }) {
   const { canEdit } = usePartnerHotel();
-  const [from, setFrom] = useState(todayInVietnam);
-  const [span, setSpan] = useState<(typeof SPANS)[number]>(14);
+  // `?from=` comes from the dashboard's "ngày hết phòng do đóng bán" item: open on its first date, over 30 days so
+  // every date of the item (all within the next 30) is on screen.
+  const searchParams = useSearchParams();
+  const linkedFrom = searchParams.get("from");
+  const [from, setFrom] = useState(() => (isCalendarDate(linkedFrom) ? linkedFrom : todayInVietnam()));
+  const [span, setSpan] = useState<(typeof SPANS)[number]>(isCalendarDate(linkedFrom) ? 30 : 14);
+  const soldOut = useActionItem(hotelId, "NO_AVAILABILITY_DATES");
+  const soldOutDates = useMemo(() => new Set(soldOut?.params.dates), [soldOut]);
   const [roomTypeFilter, setRoomTypeFilter] = useState("");
   const [draft, setDraft] = useState<AvailabilityDraft>();
   const to = addDays(from, span - 1);
@@ -152,16 +161,20 @@ function AvailabilityWorkspace({ hotelId }: { hotelId: string }) {
                 </th>
                 {dates.map((date) => {
                   const weekday = weekdayOf(date);
+                  const isSoldOut = soldOutDates.has(date);
                   return (
                     <th
                       key={date}
+                      title={isSoldOut ? "Hết phòng do đóng bán" : undefined}
                       className={cn(
                         "min-w-14 border-b px-1 py-2 text-center font-semibold",
                         weekday === 0 || weekday === 6 ? "text-brand-accent" : "text-muted-foreground",
+                        isSoldOut && "bg-danger-soft",
                       )}
                     >
                       <span className="block">{weekdayShort[weekday]}</span>
                       <span className="block text-foreground">{date.slice(8, 10)}/{date.slice(5, 7)}</span>
+                      {isSoldOut && <span className="sr-only">, hết phòng do đóng bán</span>}
                     </th>
                   );
                 })}
