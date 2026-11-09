@@ -97,6 +97,7 @@ describe('Post-stay reviews (e2e)', () => {
     guestToken: string,
     staffToken: string,
     roomTypeId: string,
+    hotelId: string,
   ) => {
     const booking = await paidBooking(guestToken, roomTypeId);
     await t
@@ -111,6 +112,18 @@ describe('Post-stay reviews (e2e)', () => {
       .set(auth(staffToken))
       .send({})
       .expect(200);
+    // Check-out leaves the room CLEANING (UC39); housekeeping frees it, so the next guest of a test can check in.
+    const rooms = await t.prisma.room.findMany({
+      where: { status: 'CLEANING', roomType: { hotelId } },
+      select: { roomId: true },
+    });
+    for (const { roomId } of rooms) {
+      await t
+        .api()
+        .post(`/api/v1/rooms/${roomId}/clean`)
+        .set(auth(staffToken))
+        .expect(200);
+    }
     return booking;
   };
 
@@ -168,7 +181,12 @@ describe('Post-stay reviews (e2e)', () => {
     it('writes the review of a completed stay and computes the weighted overall rating', async () => {
       const h = await hotel();
       const guest = await t.signIn('CUSTOMER', 'guest@mail.test');
-      const booking = await completedStay(guest.token, h.token, h.roomTypeId);
+      const booking = await completedStay(
+        guest.token,
+        h.token,
+        h.roomTypeId,
+        h.hotelId,
+      );
 
       const res = await writeReview(guest.token, booking.id, {
         title: 'Phòng sạch',
@@ -197,7 +215,12 @@ describe('Post-stay reviews (e2e)', () => {
     it('also writes the scores into the user-item matrix the recommender reads', async () => {
       const h = await hotel();
       const guest = await t.signIn('CUSTOMER', 'guest@mail.test');
-      const booking = await completedStay(guest.token, h.token, h.roomTypeId);
+      const booking = await completedStay(
+        guest.token,
+        h.token,
+        h.roomTypeId,
+        h.hotelId,
+      );
 
       await writeReview(guest.token, booking.id, {
         content: 'Ổn, sẽ quay lại lần sau.',
@@ -220,30 +243,40 @@ describe('Post-stay reviews (e2e)', () => {
         content: 'Chưa ở mà đã đánh giá.',
         subRatings: allScores(5),
       }).expect(409);
-      expect(res.body.error.code).toBe('REVIEW_NOT_ALLOWED');
+      expect(res.body.code).toBe('REVIEW_NOT_ALLOWED');
     });
 
     it('allows one review per stay', async () => {
       const h = await hotel();
       const guest = await t.signIn('CUSTOMER', 'guest@mail.test');
-      const booking = await completedStay(guest.token, h.token, h.roomTypeId);
+      const booking = await completedStay(
+        guest.token,
+        h.token,
+        h.roomTypeId,
+        h.hotelId,
+      );
       const body = { content: 'Rất tốt, sạch sẽ.', subRatings: allScores(5) };
 
       await writeReview(guest.token, booking.id, body).expect(201);
       const res = await writeReview(guest.token, booking.id, body).expect(409);
-      expect(res.body.error.code).toBe('REVIEW_ALREADY_EXISTS');
+      expect(res.body.code).toBe('REVIEW_ALREADY_EXISTS');
     });
 
     it('refuses a partial set of criteria, so a guest cannot weight their own rating', async () => {
       const h = await hotel();
       const guest = await t.signIn('CUSTOMER', 'guest@mail.test');
-      const booking = await completedStay(guest.token, h.token, h.roomTypeId);
+      const booking = await completedStay(
+        guest.token,
+        h.token,
+        h.roomTypeId,
+        h.hotelId,
+      );
 
       const partial = await writeReview(guest.token, booking.id, {
         content: 'Chỉ chấm một tiêu chí thôi.',
         subRatings: [{ criterionId: criteria[0].id, score: 5 }],
       }).expect(409);
-      expect(partial.body.error.code).toBe('REVIEW_NOT_ALLOWED');
+      expect(partial.body.code).toBe('REVIEW_NOT_ALLOWED');
 
       const unknown = await writeReview(guest.token, booking.id, {
         content: 'Chấm một tiêu chí không tồn tại.',
@@ -255,26 +288,36 @@ describe('Post-stay reviews (e2e)', () => {
           },
         ],
       }).expect(404);
-      expect(unknown.body.error.code).toBe('RATING_CRITERION_NOT_FOUND');
+      expect(unknown.body.code).toBe('RATING_CRITERION_NOT_FOUND');
     });
 
     it("refuses someone else's booking without saying whether it exists", async () => {
       const h = await hotel();
       const guest = await t.signIn('CUSTOMER', 'guest@mail.test');
       const stranger = await t.signIn('CUSTOMER', 'stranger@mail.test');
-      const booking = await completedStay(guest.token, h.token, h.roomTypeId);
+      const booking = await completedStay(
+        guest.token,
+        h.token,
+        h.roomTypeId,
+        h.hotelId,
+      );
 
       const res = await writeReview(stranger.token, booking.id, {
         content: 'Đánh giá chuyến đi của người khác.',
         subRatings: allScores(5),
       }).expect(404);
-      expect(res.body.error.code).toBe('BOOKING_NOT_FOUND');
+      expect(res.body.code).toBe('BOOKING_NOT_FOUND');
     });
 
     it('refuses a stay whose review window has closed', async () => {
       const h = await hotel();
       const guest = await t.signIn('CUSTOMER', 'guest@mail.test');
-      const booking = await completedStay(guest.token, h.token, h.roomTypeId);
+      const booking = await completedStay(
+        guest.token,
+        h.token,
+        h.roomTypeId,
+        h.hotelId,
+      );
       // REVIEW_WINDOW_DAYS is 30 by default; a check-out a year ago is well past it.
       await t.prisma.$executeRaw`
         UPDATE booking SET check_out_date = check_out_date - 365
@@ -284,7 +327,7 @@ describe('Post-stay reviews (e2e)', () => {
         content: 'Đánh giá sau khi hết hạn.',
         subRatings: allScores(5),
       }).expect(409);
-      expect(res.body.error.code).toBe('REVIEW_WINDOW_CLOSED');
+      expect(res.body.code).toBe('REVIEW_WINDOW_CLOSED');
     });
   });
 
@@ -306,7 +349,12 @@ describe('Post-stay reviews (e2e)', () => {
         closesAt: null,
       });
 
-      const booking = await completedStay(guest.token, h.token, h.roomTypeId);
+      const booking = await completedStay(
+        guest.token,
+        h.token,
+        h.roomTypeId,
+        h.hotelId,
+      );
       const open = await t
         .api()
         .get(`/api/v1/bookings/${booking.id}/review-eligibility`)
@@ -336,7 +384,12 @@ describe('Post-stay reviews (e2e)', () => {
     it('lets the author edit, and recomputes the rating from the new scores', async () => {
       const h = await hotel();
       const guest = await t.signIn('CUSTOMER', 'guest@mail.test');
-      const booking = await completedStay(guest.token, h.token, h.roomTypeId);
+      const booking = await completedStay(
+        guest.token,
+        h.token,
+        h.roomTypeId,
+        h.hotelId,
+      );
       const review = await writeReview(guest.token, booking.id, {
         content: 'Đánh giá ban đầu của tôi.',
         subRatings: allScores(5),
@@ -368,7 +421,12 @@ describe('Post-stay reviews (e2e)', () => {
       const h = await hotel();
       const guest = await t.signIn('CUSTOMER', 'guest@mail.test');
       const stranger = await t.signIn('CUSTOMER', 'stranger@mail.test');
-      const booking = await completedStay(guest.token, h.token, h.roomTypeId);
+      const booking = await completedStay(
+        guest.token,
+        h.token,
+        h.roomTypeId,
+        h.hotelId,
+      );
       const review = await writeReview(guest.token, booking.id, {
         content: 'Đánh giá của riêng tôi.',
         subRatings: allScores(5),
@@ -380,7 +438,7 @@ describe('Post-stay reviews (e2e)', () => {
         .set(auth(stranger.token))
         .send({ content: 'Sửa đánh giá của người khác.' })
         .expect(404);
-      expect(res.body.error.code).toBe('REVIEW_NOT_FOUND');
+      expect(res.body.code).toBe('REVIEW_NOT_FOUND');
     });
   });
 
@@ -388,7 +446,12 @@ describe('Post-stay reviews (e2e)', () => {
     it('lets the hotel hide a review, which leaves the public list but not the author', async () => {
       const h = await hotel();
       const guest = await t.signIn('CUSTOMER', 'guest@mail.test');
-      const booking = await completedStay(guest.token, h.token, h.roomTypeId);
+      const booking = await completedStay(
+        guest.token,
+        h.token,
+        h.roomTypeId,
+        h.hotelId,
+      );
       const review = await writeReview(guest.token, booking.id, {
         content: 'Đánh giá sẽ bị ẩn.',
         subRatings: allScores(2),
@@ -426,7 +489,12 @@ describe('Post-stay reviews (e2e)', () => {
       const h = await hotel();
       const other = await hotel('other@hotel.test');
       const guest = await t.signIn('CUSTOMER', 'guest@mail.test');
-      const booking = await completedStay(guest.token, h.token, h.roomTypeId);
+      const booking = await completedStay(
+        guest.token,
+        h.token,
+        h.roomTypeId,
+        h.hotelId,
+      );
       const review = await writeReview(guest.token, booking.id, {
         content: 'Đánh giá của khách sạn này.',
         subRatings: allScores(5),
@@ -438,7 +506,7 @@ describe('Post-stay reviews (e2e)', () => {
         .set(auth(other.token))
         .send({ isVisible: false })
         .expect(404);
-      expect(res.body.error.code).toBe('REVIEW_NOT_FOUND');
+      expect(res.body.code).toBe('REVIEW_NOT_FOUND');
     });
   });
 
@@ -447,8 +515,18 @@ describe('Post-stay reviews (e2e)', () => {
       const h = await hotel();
       const low = await t.signIn('CUSTOMER', 'low@mail.test');
       const high = await t.signIn('CUSTOMER', 'high@mail.test');
-      const lowStay = await completedStay(low.token, h.token, h.roomTypeId);
-      const highStay = await completedStay(high.token, h.token, h.roomTypeId);
+      const lowStay = await completedStay(
+        low.token,
+        h.token,
+        h.roomTypeId,
+        h.hotelId,
+      );
+      const highStay = await completedStay(
+        high.token,
+        h.token,
+        h.roomTypeId,
+        h.hotelId,
+      );
 
       await writeReview(low.token, lowStay.id, {
         content: 'Phòng ồn, không như ảnh.',

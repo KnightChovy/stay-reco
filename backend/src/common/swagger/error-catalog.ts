@@ -254,7 +254,8 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorInfo> = {
   },
   REVIEW_WINDOW_CLOSED: {
     status: 409,
-    description: 'The review window closed (REVIEW_WINDOW_DAYS after check-out)',
+    description:
+      'The review window closed (REVIEW_WINDOW_DAYS after check-out)',
   },
   RATING_CRITERION_NOT_FOUND: {
     status: 404,
