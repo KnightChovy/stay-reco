@@ -220,6 +220,8 @@ There is no `status` field in the body; the HTTP status is already available as 
 | `CHANGE_REQUEST_PENDING` | 409 | The booking already has a change request waiting | Show the waiting request |
 | `CHANGE_REQUEST_STATUS_CONFLICT` | 409 | Accepting or rejecting when no change request is waiting | Reload the booking |
 | `NOTIFICATION_NOT_FOUND` | 404 | Notification doesn't exist or belongs to someone else | Reload the list |
+| `LOYALTY_PROGRAM_NOT_FOUND` | 404 | No loyalty programme is running | Hide the points section |
+| `LOYALTY_POINTS_INSUFFICIENT` | 409 | More points than the customer holds | Show the balance and re-quote |
 | `VOUCHER_NOT_FOUND` | 404 | The discount code doesn't exist or belongs to another customer | "Mã không hợp lệ" |
 | `VOUCHER_ALREADY_USED` | 409 | The voucher was already used on another booking | "Mã đã được sử dụng" |
 | `VOUCHER_EXPIRED` | 409 | The voucher, or the campaign behind it, is past its end date | "Mã đã hết hạn" |

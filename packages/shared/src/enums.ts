@@ -115,6 +115,15 @@ export const PaymentStatus = {
 } as const;
 export type PaymentStatus = (typeof PaymentStatus)[keyof typeof PaymentStatus];
 
+/** Loyalty tiers (BR-11), reached by lifetime points and never lost by spending them. */
+export const LoyaltyTier = {
+  MEMBER: 'MEMBER',
+  SILVER: 'SILVER',
+  GOLD: 'GOLD',
+  PLATINUM: 'PLATINUM',
+} as const;
+export type LoyaltyTier = (typeof LoyaltyTier)[keyof typeof LoyaltyTier];
+
 /** How a promotion or voucher takes money off a stay (BR-06). */
 export const DiscountType = {
   /** 0-100 % of the stay total, capped by the voucher's `maxDiscount` when there is one. */

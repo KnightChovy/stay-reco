@@ -266,6 +266,14 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorInfo> = {
     description:
       'The campaign is switched off, outside its dates, or has run out of uses',
   },
+  LOYALTY_PROGRAM_NOT_FOUND: {
+    status: 404,
+    description: 'No loyalty programme is running, so points cannot be used',
+  },
+  LOYALTY_POINTS_INSUFFICIENT: {
+    status: 409,
+    description: 'Spending more points than the customer holds',
+  },
   NOTIFICATION_NOT_FOUND: {
     status: 404,
     description: "Notification doesn't exist or belongs to someone else",
