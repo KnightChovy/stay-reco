@@ -27,6 +27,7 @@ import type { Env } from '../../config/env';
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditAction, AuditService } from '../audit/audit.service';
+import { round1, starBucket, weightedAverage } from './rating';
 import { reviewInclude, toReview } from './reviews.mapper';
 
 const DAY = 86_400_000;
@@ -156,15 +157,15 @@ export class ReviewsService {
       });
     }
 
-    let total = 0;
-    let weighted = 0;
-    for (const r of subRatings) {
-      const weight = weights.get(r.criterionId) ?? 0;
-      total += weight;
-      weighted += r.score * weight;
-    }
-    // Decimal(3, 1) in the database; rounded here so the stored value is what the client is told.
-    return new Prisma.Decimal((weighted / total).toFixed(1));
+    // Decimal(3, 1) in the database; rounded in `weightedAverage` so the stored value is what the client is told.
+    return new Prisma.Decimal(
+      weightedAverage(
+        subRatings.map((r) => ({
+          score: r.score,
+          weight: weights.get(r.criterionId) ?? 0,
+        })),
+      ),
+    );
   }
 
   /** The customer writes the one review of a completed stay. */
@@ -378,9 +379,8 @@ export class ReviewsService {
 
     const distribution = [1, 2, 3, 4, 5].map((star) => ({
       star,
-      // An overall of 4.4 counts as 4 stars; only 5.0 lands in the top bucket.
       count: overalls.filter(
-        (r) => Math.floor(toNumber(r.overallRating)) === star,
+        (r) => starBucket(toNumber(r.overallRating)) === star,
       ).length,
     }));
     const byCriterion = new Map(
@@ -436,9 +436,6 @@ async function writeSubRatings(
     });
   }
 }
-
-/** Ratings are shown with one decimal, like the Decimal(3, 1) column they come from. */
-const round1 = (value: number) => Number(value.toFixed(1));
 
 const ORDER_BY: Record<
   ReviewListQuery['sort'],
