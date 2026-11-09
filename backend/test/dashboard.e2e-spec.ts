@@ -102,13 +102,19 @@ describe('Partner dashboard (e2e)', () => {
     const booking = await t.prisma.booking.create({
       data: {
         customerId,
-        roomTypeId: o.roomTypeId ?? h.roomTypeId,
+        hotelId: h.hotelId,
         promotionId: o.promotionId ?? null,
         checkInDate: date(o.checkIn),
         checkOutDate: date(addDays(o.checkIn, o.prices.length)),
         numGuests: rooms * 2,
-        numRooms: rooms,
-        nightlyPrices: nights,
+        items: {
+          create: {
+            roomTypeId: o.roomTypeId ?? h.roomTypeId,
+            numRooms: rooms,
+            nightlyPrices: nights,
+            subtotal: total,
+          },
+        },
         totalAmount: total,
         status: o.status,
         guestName: `Khách ${++seq}`,

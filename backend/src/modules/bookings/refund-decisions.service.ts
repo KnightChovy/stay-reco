@@ -155,7 +155,7 @@ export class RefundDecisionsService extends PeriodicJob {
       select: {
         bookingId: true,
         checkInDate: true,
-        roomType: { select: { hotel: { select: { checkInTime: true } } } },
+        hotel: { select: { checkInTime: true } },
       },
     });
 
@@ -163,7 +163,7 @@ export class RefundDecisionsService extends PeriodicJob {
     for (const booking of pending) {
       const checkInAt = vietnamDateTime(
         toCalendarDate(booking.checkInDate),
-        fromTime(booking.roomType.hotel.checkInTime) ?? DEFAULT_CHECK_IN_TIME,
+        fromTime(booking.hotel.checkInTime) ?? DEFAULT_CHECK_IN_TIME,
       );
       if (now < checkInAt) continue;
       const { cancelRequest } = await loadBookingHistory(
@@ -218,17 +218,14 @@ export class RefundDecisionsService extends PeriodicJob {
       select: {
         customerId: true,
         invoice: { select: { invoiceNumber: true } },
-        roomType: { select: { hotelId: true } },
+        hotelId: true,
       },
     });
     await tx.roomCalendars.deleteMany({ where: { bookingId } });
     await closePendingChange(tx, bookingId, now);
 
     const code = booking.invoice!.invoiceNumber;
-    const hotelWallet = await this.ledger.hotelWallet(
-      tx,
-      booking.roomType.hotelId,
-    );
+    const hotelWallet = await this.ledger.hotelWallet(tx, booking.hotelId);
     const customerWallet = await this.ledger.customerWallet(
       tx,
       booking.customerId,
@@ -272,12 +269,12 @@ export class RefundDecisionsService extends PeriodicJob {
     const booking = isUuid(bookingId)
       ? await this.prisma.booking.findUnique({
           where: { bookingId },
-          select: { roomType: { select: { hotelId: true } } },
+          select: { hotelId: true },
         })
       : null;
     const access = await this.access.assertResource(
       user,
-      booking?.roomType.hotelId,
+      booking?.hotelId,
       level,
       bookingNotFound,
     );

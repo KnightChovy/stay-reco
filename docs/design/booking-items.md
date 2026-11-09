@@ -1,6 +1,6 @@
 # Bookings with several room types
 
-Status: **proposal**, waiting for the team (backend, web, mobile, AI). Nothing here is built yet.
+Status: **backend built** (2026-11-09); web and mobile still send and read the one-room-type fields kept for the transition (§4).
 
 Today a booking holds rooms of **one** room type: `booking.room_type_id`, `num_rooms` (1–8) and `nightly_prices`. A guest who wants 2 Deluxe and 1 Suite at the same hotel has to make two bookings, scan two QR codes and cancel them one by one. This came up at Review 2 (multi-room and group bookings).
 

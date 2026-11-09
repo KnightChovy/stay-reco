@@ -10,7 +10,7 @@ import type {
 } from '@stayreco/shared';
 import type { AuthUser } from '../../common/decorators/current-user.decorator';
 import type { RequestMeta } from '../../common/decorators/request-meta.decorator';
-import { lockRoomType } from '../../common/db/locks';
+import { lockRoomTypes } from '../../common/db/locks';
 import { ErrorCode } from '../../common/errors/error-code';
 import { toNumber } from '../../common/http/decimal';
 import { isUuid } from '../../common/hotel-access/hotel-access.service';
@@ -36,7 +36,7 @@ const notCancellable = (status: string) =>
 
 const cancellableSelect = {
   bookingId: true,
-  roomTypeId: true,
+  items: { select: { roomTypeId: true } },
   status: true,
   freeCancelUntil: true,
   cancelFeePercent: true,
@@ -91,7 +91,10 @@ export class BookingCancellationService {
     await this.prisma.$transaction(async (tx) => {
       // The lock check-in takes: a cancel and a check-in at once run one after the other, and the later one sees the
       // earlier one's result in the conditions below.
-      await lockRoomType(tx, booking.roomTypeId);
+      await lockRoomTypes(
+        tx,
+        booking.items.map((i) => i.roomTypeId),
+      );
       // Conditional on the state checked above, so two cancels at once, or a cancel racing the hotel, apply once.
       const stillCancellable = {
         status: 'CONFIRMED',

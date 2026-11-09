@@ -51,7 +51,7 @@ Customers find a hotel, see real prices and availability, book, pay by bank tran
 | P2 | Rooms taken off sale are `room_calendars` rows in `BLOCKED`; no extra table. |
 | P3 | Pricing rules extend the `price` table. One rule per night: the active matching rule with the highest priority, ties to the newest; no stacking (SRS 3.12.1). Days before check-in are counted in Asia/Ho_Chi_Minh. |
 | P4 | One cancellation policy per hotel: free-cancellation days N (0–30, or none) and a fee percent (0–100). The deadline is the hotel's check-in time (14:00 by default), N days before the check-in date. It is fixed on the booking with the commission rate. |
-| P5 | One booking holds 1–8 rooms of **one** room type. |
+| P5 | One booking holds 1–8 rooms of **one** room type. Since 2026-11-09: 1–5 room types of one hotel, 8 rooms in total ([design/booking-items.md](../design/booking-items.md)). |
 | P6 | The booking code is `invoice.invoice_number`, `SR-YYMMDD-XXXX`, and is the transfer content. |
 | P7 | SePay: a transfer confirms a booking only with the booking code in its content **and** the exact amount. Duplicate webhooks are ignored through the `wallet_transaction` idempotency key `sepay:<SePay transaction id>`. Unmatched or late transfers go to `audit_log` for manual handling. `invoice.vnpay_txn_ref` holds the SePay transaction id (column reused, not renamed). |
 | P8 | Money model (lecturer feedback): no payment or refund-request tables. Payment state = `invoice.payment_status`; every money movement = one `wallet_transaction`; the hotel's share goes to the hotel wallet's pending balance (BR-22). |
@@ -109,7 +109,7 @@ room_calendars:  (free) ──hold──► HELD ──paid──► BOOKED ─�
 | Item | Limit |
 |---|---|
 | Stay | 1–30 nights; check-in from today (Asia/Ho_Chi_Minh) to 365 days ahead |
-| Rooms per booking | 1–8, one room type |
+| Rooms per booking | 1–8 in total, over 1–5 room types of one hotel |
 | Guests | 1–30, at least one per room, at most rooms × `maxOccupancy` |
 | Search | destination ≤ 100 characters; at most 20 amenity filters |
 | Hold | 15 minutes; expiry job every minute |
@@ -151,6 +151,7 @@ room_calendars:  (free) ──hold──► HELD ──paid──► BOOKED ─�
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-11-09 | BE | Bookings with several room types built: `booking_item` and `booking.hotel_id` (migration `booking_items`, every existing booking becomes one item); `POST /bookings` takes `items`, the one-room-type body and fields stay during the transition |
 | 2026-11-09 | BE | API status `BE Done`. Bookings with several room types proposed in [design/booking-items.md](../design/booking-items.md) (not built; it will change the "1–8 rooms of one type" limit) |
 | 2026-10-27 | BE | Backend scope done; Definition of Done updated (SePay webhook tests ticked; end-to-end booking waits for FE integration and a real booking transfer) |
 | 2026-10-26 | BE | Demo seed: customer `customer@stayreco.local` with one booking per state, pricing rules and hotel cancellation policies for FE work (see getting-started) |

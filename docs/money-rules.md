@@ -28,7 +28,7 @@ Sources: the SRS business rules (Report 3, section 5.1, BR-01 to BR-29), the pre
 
 Final price of a booking = sum of the nightly prices (from the pricing rules) − promotion or voucher discount − value of loyalty points used (BR-05, BR-06). It is never below 0, includes VAT and the service fee, is paid in full when booking and does not change afterwards.
 
-Phase 2 has no promotions, vouchers or points (phase 4), so the final price = sum of the nightly prices × number of rooms.
+Phase 2 has no promotions, vouchers or points (phase 4), so the final price = sum of the nightly prices × number of rooms, added up over the room types of the booking (a booking holds 1–5 room types of one hotel since 2026-11-09).
 
 ### 2.2 Pricing rules
 

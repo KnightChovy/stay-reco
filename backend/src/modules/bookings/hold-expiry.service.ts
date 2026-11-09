@@ -28,7 +28,10 @@ export class HoldExpiryService extends PeriodicJob {
     return this.expireDue();
   }
 
-  /** Expires the due holds, of one room type when given; resolves to the number of bookings expired. */
+  /**
+   * Expires the due holds, of the bookings with a given room type when one is given; resolves to the number of
+   * bookings expired. Releasing a hold only frees rooms, so the other room types of such a booking need no lock.
+   */
   async expireDue(
     roomTypeId?: string,
     tx?: Prisma.TransactionClient,
@@ -37,7 +40,7 @@ export class HoldExpiryService extends PeriodicJob {
     const due = await db.booking.findMany({
       where: {
         status: 'PENDING',
-        roomTypeId,
+        items: roomTypeId ? { some: { roomTypeId } } : undefined,
         roomCalendars: {
           some: { status: 'HELD', holdExpiresAt: { lte: new Date() } },
         },

@@ -171,8 +171,7 @@ export class StatsExportService {
       WITH created AS (
         SELECT b.booking_id
         FROM booking b
-        JOIN room_type rt ON rt.room_type_id = b.room_type_id
-        WHERE rt.hotel_id = ${hotelId}::uuid
+        WHERE b.hotel_id = ${hotelId}::uuid
           AND b.status NOT IN ('PENDING', 'EXPIRED')
           AND b.created_at >= ${start} AND b.created_at < ${end}
       ),
@@ -186,7 +185,7 @@ export class StatsExportService {
         GROUP BY wt.booking_id
       )
       SELECT i.invoice_number AS code, b.created_at AS "createdAt", b.guest_name AS "guestName",
-        b.contact_phone AS "contactPhone", rt.name AS "roomType", b.num_rooms AS rooms,
+        b.contact_phone AS "contactPhone", items.label AS "roomType", items.rooms,
         b.check_in_date::text AS "checkIn", b.check_out_date::text AS "checkOut",
         (b.check_out_date - b.check_in_date) AS nights, b.num_guests AS guests,
         b.status::text AS status, i.payment_status::text AS "paymentStatus", i.payment_method::text AS method,
@@ -196,7 +195,13 @@ export class StatsExportService {
         b.cancelled_at AS "cancelledAt"
       FROM created c
       JOIN booking b ON b.booking_id = c.booking_id
-      JOIN room_type rt ON rt.room_type_id = b.room_type_id
+      -- "2× Deluxe, 1× Suite" and the rooms over every item.
+      JOIN LATERAL (
+        SELECT string_agg(bi.num_rooms || '× ' || rt.name, ', ' ORDER BY rt.name) AS label,
+          sum(bi.num_rooms)::int AS rooms
+        FROM booking_item bi JOIN room_type rt ON rt.room_type_id = bi.room_type_id
+        WHERE bi.booking_id = b.booking_id
+      ) items ON true
       LEFT JOIN invoice i ON i.booking_id = b.booking_id
       LEFT JOIN hotel_ledger l ON l.booking_id = b.booking_id
       ORDER BY b.created_at, b.booking_id`;

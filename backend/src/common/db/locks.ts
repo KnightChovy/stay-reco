@@ -20,3 +20,16 @@ export const lockRoomType = (
   roomTypeId: string,
 ) =>
   tx.$executeRaw`SELECT 1 FROM room_type WHERE room_type_id = ${roomTypeId}::uuid FOR UPDATE`;
+
+/**
+ * The room types of a booking, locked in id order so two transactions on the same types never wait on each other
+ * (docs/design/booking-items.md).
+ */
+export async function lockRoomTypes(
+  tx: Prisma.TransactionClient,
+  roomTypeIds: string[],
+) {
+  for (const id of [...new Set(roomTypeIds)].sort()) {
+    await lockRoomType(tx, id);
+  }
+}

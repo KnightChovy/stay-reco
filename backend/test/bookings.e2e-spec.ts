@@ -193,7 +193,7 @@ describe('Bookings with a hold (e2e)', () => {
       expect(tooMany.body.details).toEqual([
         {
           field: 'guests',
-          message: 'at most 2 guests in 1 rooms of this type',
+          message: 'at most 2 guests in the rooms of this booking',
         },
       ]);
 
@@ -231,6 +231,200 @@ describe('Bookings with a hold (e2e)', () => {
       expect(
         await t.prisma.roomCalendars.count({ where: { status: 'HELD' } }),
       ).toBe(2);
+    });
+  });
+
+  describe('POST /bookings with several room types', () => {
+    /** A second room type of the hotel: Suite, 1,500,000 a night, 3 guests, rooms 201… */
+    const suite = async (h: { token: string; hotelId: string }, rooms = 1) => {
+      const rt = await t
+        .api()
+        .post(`/api/v1/hotels/${h.hotelId}/room-types`)
+        .set(auth(h.token))
+        .send({
+          name: 'Suite',
+          maxOccupancy: 3,
+          areaSqm: 45,
+          basePrice: 1500000,
+          beds: [{ bedTypeId: king, quantity: 1 }],
+        })
+        .expect(201);
+      const roomTypeId = rt.body.data.id as string;
+      for (let n = 1; n <= rooms; n++) {
+        await t
+          .api()
+          .post(`/api/v1/hotels/${h.hotelId}/rooms`)
+          .set(auth(h.token))
+          .send({ roomTypeId, roomNumber: `20${n}` })
+          .expect(201);
+      }
+      return roomTypeId;
+    };
+
+    const items = (
+      list: { roomTypeId: string; rooms: number }[],
+      overrides: Record<string, unknown> = {},
+    ) => ({
+      items: list,
+      checkIn,
+      checkOut,
+      guests: 3,
+      guestName: 'Nguyễn Văn A',
+      contactPhone: '0905123456',
+      expectedTotal: 7000000,
+      ...overrides,
+    });
+
+    it('holds rooms of every room type in one booking, priced per type', async () => {
+      const h = await hotel(2);
+      const suiteId = await suite(h);
+      const customer = await t.signIn('CUSTOMER', 'guest@mail.test');
+
+      // 2 Deluxe × 2 nights × 1,000,000 + 1 Suite × 2 nights × 1,500,000; the Deluxe + Suite rooms take 7 guests.
+      const tooMany = await book(
+        customer.token,
+        items(
+          [
+            { roomTypeId: suiteId, rooms: 1 },
+            { roomTypeId: h.roomTypeId, rooms: 2 },
+          ],
+          { guests: 8 },
+        ),
+      ).expect(400);
+      expect(tooMany.body.details).toEqual([
+        {
+          field: 'guests',
+          message: 'at most 7 guests in the rooms of this booking',
+        },
+      ]);
+
+      const res = await book(
+        customer.token,
+        items([
+          { roomTypeId: suiteId, rooms: 1 },
+          { roomTypeId: h.roomTypeId, rooms: 2 },
+        ]),
+      ).expect(201);
+      const prices = (price: number) => [
+        { date: checkIn, price },
+        { date: day(31), price },
+      ];
+      expect(res.body.data).toMatchObject({
+        status: 'PENDING',
+        // In room type name order; the deprecated fields follow the first item.
+        items: [
+          {
+            roomType: { id: h.roomTypeId, name: 'Deluxe' },
+            rooms: 2,
+            subtotal: 4000000,
+            nightlyPrices: prices(1000000),
+          },
+          {
+            roomType: { id: suiteId, name: 'Suite' },
+            rooms: 1,
+            subtotal: 3000000,
+            nightlyPrices: prices(1500000),
+          },
+        ],
+        roomType: { id: h.roomTypeId, name: 'Deluxe' },
+        nightlyPrices: prices(1000000),
+        rooms: 3,
+        guests: 3,
+        totalAmount: 7000000,
+        payment: { amount: 7000000 },
+      });
+
+      const held = await t.prisma.roomCalendars.findMany({
+        where: { bookingId: res.body.data.id as string },
+        select: {
+          status: true,
+          priceOverride: true,
+          room: { select: { roomNumber: true } },
+        },
+      });
+      expect(
+        held
+          .map(
+            (n) =>
+              `${n.room.roomNumber} ${n.status} ${n.priceOverride?.toNumber()}`,
+          )
+          .sort(),
+      ).toEqual([
+        '101 HELD 1000000',
+        '101 HELD 1000000',
+        '102 HELD 1000000',
+        '102 HELD 1000000',
+        '201 HELD 1500000',
+        '201 HELD 1500000',
+      ]);
+    });
+
+    it('holds nothing when one room type runs out', async () => {
+      const h = await hotel(2);
+      const suiteId = await suite(h, 1);
+      const customer = await t.signIn('CUSTOMER', 'guest@mail.test');
+      const res = await book(
+        customer.token,
+        items(
+          [
+            { roomTypeId: h.roomTypeId, rooms: 1 },
+            { roomTypeId: suiteId, rooms: 2 },
+          ],
+          { expectedTotal: 8000000 },
+        ),
+      ).expect(409);
+      expect(res.body).toMatchObject({
+        code: 'ROOM_SOLD_OUT',
+        details: [{ field: 'items.1.rooms' }],
+      });
+      expect(await t.prisma.booking.count()).toBe(0);
+      expect(await t.prisma.roomCalendars.count()).toBe(0);
+    });
+
+    it('refuses both forms at once, a room type twice, more than 8 rooms and two hotels', async () => {
+      const h = await hotel(2);
+      const other = await hotel(1);
+      const suiteId = await suite(h);
+      const customer = await t.signIn('CUSTOMER', 'guest@mail.test');
+      const invalid = async (body: Record<string, unknown>, field: string) => {
+        const res = await book(customer.token, body).expect(400);
+        expect(res.body.code).toBe('VALIDATION_ERROR');
+        expect(res.body.details).toEqual([expect.objectContaining({ field })]);
+      };
+
+      await invalid(
+        {
+          ...booking(h.roomTypeId),
+          items: [{ roomTypeId: suiteId, rooms: 1 }],
+        },
+        'items',
+      );
+      await invalid(
+        items([
+          { roomTypeId: suiteId, rooms: 1 },
+          { roomTypeId: suiteId, rooms: 1 },
+        ]),
+        'items',
+      );
+      await invalid(
+        items(
+          [
+            { roomTypeId: h.roomTypeId, rooms: 5 },
+            { roomTypeId: suiteId, rooms: 4 },
+          ],
+          { guests: 9 },
+        ),
+        'items',
+      );
+
+      const res = await book(
+        customer.token,
+        items([
+          { roomTypeId: h.roomTypeId, rooms: 1 },
+          { roomTypeId: other.roomTypeId, rooms: 1 },
+        ]),
+      ).expect(404);
+      expect(res.body.code).toBe('ROOM_TYPE_NOT_FOUND');
     });
   });
 

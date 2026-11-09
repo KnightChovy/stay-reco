@@ -123,7 +123,7 @@ export class ActionItemsService {
   private async refundRequests(hotelId: string): Promise<Item[]> {
     const waiting = await this.prisma.booking.findMany({
       where: {
-        roomType: { hotelId },
+        hotelId,
         status: 'CONFIRMED',
         invoice: { paymentStatus: 'REFUND_PENDING' },
       },
@@ -158,7 +158,7 @@ export class ActionItemsService {
   private async overdueCheckouts(hotelId: string, now: Date): Promise<Item[]> {
     const staying = await this.prisma.booking.findMany({
       where: {
-        roomType: { hotelId },
+        hotelId,
         status: 'CHECKED_IN',
         checkOutDate: { lte: fromCalendarDate(todayInVietnam(now)) },
       },
@@ -166,7 +166,7 @@ export class ActionItemsService {
       select: {
         bookingId: true,
         checkOutDate: true,
-        roomType: { select: { hotel: { select: { checkOutTime: true } } } },
+        hotel: { select: { checkOutTime: true } },
       },
     });
     const overdue = staying.filter(
@@ -174,7 +174,7 @@ export class ActionItemsService {
         now >=
         vietnamDateTime(
           toCalendarDate(b.checkOutDate),
-          fromTime(b.roomType.hotel.checkOutTime) ?? DEFAULT_CHECK_OUT_TIME,
+          fromTime(b.hotel.checkOutTime) ?? DEFAULT_CHECK_OUT_TIME,
         ),
     );
     return overdue.length
