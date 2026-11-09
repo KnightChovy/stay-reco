@@ -28,7 +28,7 @@ Sources: the SRS business rules (Report 3, section 5.1, BR-01 to BR-29), the pre
 
 Final price of a booking = sum of the nightly prices (from the pricing rules) − promotion or voucher discount − value of loyalty points used (BR-05, BR-06). It is never below 0, includes VAT and the service fee, is paid in full when booking and does not change afterwards.
 
-Phase 2 has no promotions, vouchers or points (phase 4), so the final price = sum of the nightly prices × number of rooms.
+Promotions and vouchers are built (phase 4): the final price = sum of the nightly prices × number of rooms, minus **one** discount. A booking takes a promotion **or** a voucher, never both, and gets whichever saves more; a campaign that has issued personal codes stops applying to everyone. The discount is capped by the voucher's `maxDiscount`, never exceeds the subtotal (a stay may reach 0 but never below), and is rounded half up to whole dong. Loyalty points, the third subtraction, are not built yet. See [api/promotions.md](./api/promotions.md).
 
 ### 2.2 Pricing rules
 
@@ -213,7 +213,7 @@ Per BR-20, only when: the booking was already refunded or the request is a dupli
 
 ## 9. Not built yet, or still open
 
-- Promotions, vouchers, loyalty points (BR-06, BR-11): phase 4.
+- Loyalty points (BR-11): phase 4, not built yet. Promotions and vouchers (BR-06) are built; see §2.1.
 - Paying with the customer wallet, withdrawing it: phase 4.
 - Partner withdrawals (BR-22): phase 6. The holding period set by an admin: phase 6.
 
@@ -234,3 +234,4 @@ Per BR-20, only when: the booking was already refunded or the request is a dupli
 | 2026-10-29 | Hotel operations: commission at check-out and on no-shows (whole dong, a hotel / platform pair); the hotel keeps a no-show's payment; early check-out is not refunded; settlement of the net amount from pending to available `WALLET_HOLD_DAYS` (default 1 day) after check-out or no-show, as `SETTLEMENT` transactions |
 | 2026-10-29 | Settlement also covers cancelled bookings: the money the hotel keeps as the fee becomes available `WALLET_HOLD_DAYS` after the cancellation, with no commission |
 | 2026-10-31 | Late check-out fee (§5.5): hotel policy (grace, cutoff, two percents of the last night's price), the policy at check-out applies, staff may lower it with a reason, paid at the front desk outside the wallets and commission |
+| 2026-11-09 | Promotions and vouchers (§2.1, BR-06): one discount per booking, a promotion or a voucher and never both, the larger of the two; a campaign that issued codes no longer applies automatically; capped by `maxDiscount`, never more than the stay, whole dong; the code is given back when a hold expires unpaid or the booking is cancelled |
