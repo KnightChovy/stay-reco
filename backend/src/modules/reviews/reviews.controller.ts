@@ -20,6 +20,10 @@ import {
   CurrentUser,
 } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
+import {
+  ReqMeta,
+  type RequestMeta,
+} from '../../common/decorators/request-meta.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { ErrorCode } from '../../common/errors/error-code';
 import {
@@ -114,8 +118,9 @@ export class ReviewsController {
     @CurrentUser() user: AuthUser,
     @Param('id') id: string,
     @Body() dto: CreateReviewDto,
+    @ReqMeta() meta: RequestMeta,
   ) {
-    return this.reviews.create(user.accountId, id, dto);
+    return this.reviews.create(user.accountId, id, dto, meta);
   }
 
   @ApiOperation({
@@ -148,8 +153,9 @@ export class ReviewsController {
     @CurrentUser() user: AuthUser,
     @Param('id') id: string,
     @Body() dto: UpdateReviewDto,
+    @ReqMeta() meta: RequestMeta,
   ) {
-    return this.reviews.update(user.accountId, id, dto);
+    return this.reviews.update(user.accountId, id, dto, meta);
   }
 
   @ApiOperation({
@@ -164,7 +170,8 @@ export class ReviewsController {
     @CurrentUser() user: AuthUser,
     @Param('id') id: string,
     @Body() dto: ReviewVisibilityDto,
+    @ReqMeta() meta: RequestMeta,
   ) {
-    return this.reviews.setVisibility(user, id, dto.isVisible);
+    return this.reviews.setVisibility(user, id, dto.isVisible, meta);
   }
 }

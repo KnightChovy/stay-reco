@@ -14,6 +14,7 @@ import type {
   UpdateReviewInput,
 } from '@stayreco/shared';
 import type { AuthUser } from '../../common/decorators/current-user.decorator';
+import type { RequestMeta } from '../../common/decorators/request-meta.decorator';
 import { ErrorCode } from '../../common/errors/error-code';
 import {
   HotelAccessService,
@@ -25,6 +26,7 @@ import { pageArgs } from '../../common/http/pagination';
 import type { Env } from '../../config/env';
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AuditAction, AuditService } from '../audit/audit.service';
 import { reviewInclude, toReview } from './reviews.mapper';
 
 const DAY = 86_400_000;
@@ -56,6 +58,7 @@ export class ReviewsService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService<Env, true>,
     private readonly access: HotelAccessService,
+    private readonly audit: AuditService,
   ) {}
 
   /** The criteria a guest scores, heaviest first so the review screen can show them in that order. */
@@ -169,6 +172,7 @@ export class ReviewsService {
     customerId: string,
     bookingId: string,
     input: CreateReviewInput,
+    meta: RequestMeta = {},
     now = new Date(),
   ): Promise<Review> {
     const booking = await this.ownBooking(customerId, bookingId);
@@ -212,6 +216,12 @@ export class ReviewsService {
         include: reviewInclude,
       });
     });
+    await this.audit.log(AuditAction.REVIEW_CREATED, customerId, meta, {
+      reviewId: review.reviewId,
+      bookingId,
+      hotelId,
+      overallRating: toNumber(review.overallRating),
+    });
     return toReview(review);
   }
 
@@ -220,6 +230,7 @@ export class ReviewsService {
     customerId: string,
     reviewId: string,
     input: UpdateReviewInput,
+    meta: RequestMeta = {},
     now = new Date(),
   ): Promise<Review> {
     const existing = isUuid(reviewId)
@@ -264,6 +275,11 @@ export class ReviewsService {
         include: reviewInclude,
       });
     });
+    await this.audit.log(AuditAction.REVIEW_UPDATED, customerId, meta, {
+      reviewId,
+      changed: Object.keys(input),
+      overallRating: toNumber(review.overallRating),
+    });
     return toReview(review);
   }
 
@@ -275,6 +291,7 @@ export class ReviewsService {
     user: AuthUser,
     reviewId: string,
     isVisible: boolean,
+    meta: RequestMeta = {},
   ): Promise<Review> {
     const review = isUuid(reviewId)
       ? await this.prisma.review.findUnique({
@@ -287,6 +304,12 @@ export class ReviewsService {
       where: { reviewId },
       data: { isVisible },
     });
+    await this.audit.log(
+      AuditAction.REVIEW_VISIBILITY_CHANGED,
+      user.accountId,
+      meta,
+      { reviewId, hotelId: review!.hotelId, isVisible },
+    );
     return toReview(
       await this.prisma.review.findUniqueOrThrow({
         where: { reviewId },
