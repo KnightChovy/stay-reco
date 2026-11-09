@@ -17,7 +17,10 @@ import {
  */
 export const BOOKING_LIMITS = {
   maxNights: 30,
+  /** Rooms of a booking, over all its room types. */
   maxRooms: 8,
+  /** Room types of one booking (docs/design/booking-items.md). */
+  maxItems: 5,
   maxGuests: 30,
   maxDaysAhead: 365,
   holdMinutes: 15,
@@ -107,17 +110,33 @@ export type StayQuery = z.infer<typeof stayQuerySchema>;
 
 // ── Bookings ────────────────────────────────────────────────
 
+export const bookingItemInputSchema = z.strictObject({
+  roomTypeId: z.uuid(),
+  rooms: rooms(false),
+});
+export type BookingItemInput = z.infer<typeof bookingItemInputSchema>;
+
 /**
- * `POST /bookings`. `expectedTotal` is the total the customer saw; if the backend prices the stay differently it
- * answers BOOKING_PRICE_CHANGED with the new total (MSG13) and the client sends it again.
+ * `POST /bookings`. `items`: 1–5 room types of one hotel, at most 8 rooms in total. `roomTypeId` with `rooms`
+ * (default 1) is the older one-room-type form, still accepted while the apps switch; send one form, not both.
+ * `expectedTotal` is the total the customer saw; if the backend prices the stay differently it answers
+ * BOOKING_PRICE_CHANGED with the new total (MSG13) and the client sends it again.
  */
 export const createBookingSchema = z
   .strictObject({
-    roomTypeId: z.uuid(),
+    items: z
+      .array(bookingItemInputSchema)
+      .min(1)
+      .max(BOOKING_LIMITS.maxItems)
+      .refine((items) => new Set(items.map((i) => i.roomTypeId)).size === items.length, 'room types must be different')
+      .optional(),
+    /** @deprecated send `items`. */
+    roomTypeId: z.uuid().optional(),
+    /** @deprecated send `items`. */
+    rooms: rooms(false).optional(),
     checkIn: dateSchema,
     checkOut: dateSchema,
     guests: guests(false),
-    rooms: rooms(false).default(1),
     guestName: z.string().trim().min(1).max(BOOKING_LIMITS.guestNameMax),
     contactPhone: phoneSchema,
     /** Start of the one-hour arrival window, e.g. "14:00". */
@@ -125,8 +144,31 @@ export const createBookingSchema = z
     specialRequests: z.string().trim().max(BOOKING_LIMITS.specialRequestsMax).optional(),
     expectedTotal: moneySchema,
   })
-  .superRefine(checkStay);
+  .superRefine((v, ctx) => {
+    if (v.items && (v.roomTypeId || v.rooms !== undefined)) {
+      ctx.addIssue({ code: 'custom', path: ['items'], message: 'send either items or roomTypeId with rooms' });
+      return;
+    }
+    if (!v.items && !v.roomTypeId) {
+      ctx.addIssue({ code: 'custom', path: ['items'], message: 'Required' });
+      return;
+    }
+    const items = bookingItemsOf(v);
+    const total = items.reduce((n, i) => n + i.rooms, 0);
+    if (total > BOOKING_LIMITS.maxRooms) {
+      ctx.addIssue({ code: 'custom', path: ['items'], message: `at most ${BOOKING_LIMITS.maxRooms} rooms in total` });
+      return;
+    }
+    checkStay({ checkIn: v.checkIn, checkOut: v.checkOut, guests: v.guests, rooms: total }, ctx);
+  });
 export type CreateBookingInput = z.infer<typeof createBookingSchema>;
+
+/** The room types of a booking request, whichever form it was sent in. */
+export function bookingItemsOf(
+  input: Pick<CreateBookingInput, 'items' | 'roomTypeId' | 'rooms'>,
+): BookingItemInput[] {
+  return input.items ?? (input.roomTypeId ? [{ roomTypeId: input.roomTypeId, rooms: input.rooms ?? 1 }] : []);
+}
 
 /**
  * My trips tabs: `upcoming` = PENDING and CONFIRMED (not checked in yet), `staying` = CHECKED_IN, `completed` =

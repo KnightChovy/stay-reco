@@ -283,7 +283,7 @@ export class StatsService {
   ): Promise<HotelTodayStats> {
     const date = todayInVietnam(now);
     const day = fromCalendarDate(date);
-    const ofHotel = { roomType: { hotelId } };
+    const ofHotel = { hotelId };
     const roomOfHotel = { room: { roomType: { hotelId } } };
     const count = (where: Prisma.BookingWhereInput) =>
       this.prisma.booking.count({ where: { ...ofHotel, ...where } });
@@ -325,7 +325,7 @@ export class StatsService {
       }),
       this.prisma.room.groupBy({
         by: ['status'],
-        where: ofHotel,
+        where: { roomType: { hotelId } },
         _count: true,
       }),
       count({
@@ -349,13 +349,15 @@ export class StatsService {
           guestName: true,
           checkInDate: true,
           checkOutDate: true,
-          numRooms: true,
           numGuests: true,
           arrivalTime: true,
           status: true,
           specialRequests: true,
           invoice: { select: { invoiceNumber: true, paymentStatus: true } },
-          roomType: { select: { name: true } },
+          items: {
+            select: { numRooms: true, roomType: { select: { name: true } } },
+            orderBy: [{ roomType: { name: 'asc' } }, { bookingItemId: 'asc' }],
+          },
           roomCalendars: {
             where: { date: day },
             select: { room: { select: { roomNumber: true } } },
@@ -400,12 +402,12 @@ export class StatsService {
         bookingId: b.bookingId,
         code: b.invoice!.invoiceNumber,
         guestName: b.guestName,
-        roomTypeName: b.roomType.name,
+        roomTypeName: b.items.map((i) => i.roomType.name).join(', '),
         nights: daysBetween(
           toCalendarDate(b.checkInDate),
           toCalendarDate(b.checkOutDate),
         ),
-        rooms: b.numRooms,
+        rooms: b.items.reduce((n, i) => n + i.numRooms, 0),
         numGuests: b.numGuests,
         arrivalTime: fromTime(b.arrivalTime),
         roomNumbers: b.roomCalendars.map((c) => c.room.roomNumber),
@@ -503,8 +505,7 @@ export class StatsService {
         WHERE rt.hotel_id = ${hotelId}::uuid
       ),
       hotel_bookings AS (
-        SELECT b.* FROM booking b JOIN room_type rt ON rt.room_type_id = b.room_type_id
-        WHERE rt.hotel_id = ${hotelId}::uuid
+        SELECT b.* FROM booking b WHERE b.hotel_id = ${hotelId}::uuid
       ),
       existing AS (
         SELECT days.day, count(hr.room_id) AS rooms
@@ -519,9 +520,10 @@ export class StatsService {
       ),
       sold AS (
         SELECT (n->>'date')::date AS day,
-          sum(b.num_rooms) AS nights,
-          sum((n->>'price')::numeric * b.num_rooms) AS revenue
-        FROM hotel_bookings b CROSS JOIN LATERAL jsonb_array_elements(b.nightly_prices) AS n
+          sum(bi.num_rooms) AS nights,
+          sum((n->>'price')::numeric * bi.num_rooms) AS revenue
+        FROM hotel_bookings b JOIN booking_item bi ON bi.booking_id = b.booking_id
+          CROSS JOIN LATERAL jsonb_array_elements(bi.nightly_prices) AS n
         WHERE b.status IN ${SOLD}
           AND b.check_in_date <= ${to}::date AND b.check_out_date > ${from}::date
         GROUP BY 1
@@ -595,11 +597,12 @@ export class StatsService {
         GROUP BY 1
       ),
       sold AS (
-        SELECT b.room_type_id,
-          sum(b.num_rooms) AS nights,
-          sum((n->>'price')::numeric * b.num_rooms) AS revenue
-        FROM booking b JOIN types t ON t.room_type_id = b.room_type_id
-          CROSS JOIN LATERAL jsonb_array_elements(b.nightly_prices) AS n
+        SELECT bi.room_type_id,
+          sum(bi.num_rooms) AS nights,
+          sum((n->>'price')::numeric * bi.num_rooms) AS revenue
+        FROM booking b JOIN booking_item bi ON bi.booking_id = b.booking_id
+          JOIN types t ON t.room_type_id = bi.room_type_id
+          CROSS JOIN LATERAL jsonb_array_elements(bi.nightly_prices) AS n
         WHERE b.status IN ${SOLD}
           AND b.check_in_date <= ${to}::date AND b.check_out_date > ${from}::date
           AND (n->>'date')::date BETWEEN ${from}::date AND ${to}::date
@@ -626,9 +629,8 @@ export class StatsService {
         ${BOOKING_SOURCE} AS source,
         count(*)::int AS n
       FROM booking b
-      JOIN room_type rt ON rt.room_type_id = b.room_type_id
       LEFT JOIN invoice i ON i.booking_id = b.booking_id
-      WHERE rt.hotel_id = ${hotelId}::uuid
+      WHERE b.hotel_id = ${hotelId}::uuid
         AND b.status NOT IN ('PENDING', 'EXPIRED')
         AND b.created_at >= ${start} AND b.created_at < ${end}
       GROUP BY 1, 2, 3`;
@@ -650,8 +652,7 @@ export class StatsService {
       }[]
     >`
       WITH hotel_bookings AS (
-        SELECT b.* FROM booking b JOIN room_type rt ON rt.room_type_id = b.room_type_id
-        WHERE rt.hotel_id = ${hotelId}::uuid
+        SELECT b.* FROM booking b WHERE b.hotel_id = ${hotelId}::uuid
       ),
       reviews AS (
         SELECT overall_rating FROM review

@@ -202,7 +202,7 @@ There is no `status` field in the body; the HTTP status is already available as 
 | `UPLOAD_UNAVAILABLE` | 503 | File storage not configured or unreachable | "Upload is temporarily unavailable" |
 | `IMAGE_NOT_FOUND` | 404 | Image doesn't exist or belongs to a hotel the caller doesn't manage | Reload the image list |
 | `IMAGE_LIMIT_REACHED` | 409 | The hotel already has 30 images | "Delete an image before adding more" |
-| `ROOM_SOLD_OUT` | 409 | Not enough rooms of the type left for every night of the stay | MSG12, go back to the hotel page |
+| `ROOM_SOLD_OUT` | 409 | Not enough rooms of a room type left for every night of the stay; `details[0].field` names the booking item (`items.1.rooms`) | MSG12, go back to the hotel page |
 | `BOOKING_PRICE_CHANGED` | 409 | The total differs from `expectedTotal`; `details` holds the new total | MSG13, ask the customer to confirm the new total |
 | `BOOKING_NOT_FOUND` | 404 | Booking doesn't exist or the caller cannot see it | Reload the list |
 | `BOOKING_STATUS_CONFLICT` | 409 | The booking's status does not allow the action (cancel twice, voucher of a cancelled booking…) | Reload the booking |
@@ -214,7 +214,7 @@ There is no `status` field in the body; the HTTP status is already available as 
 | `VOUCHER_INVALID` | 400 | The voucher QR token was edited or is not a StayReco voucher | MSG20, ask for the booking code |
 | `CHECK_IN_NOT_OPEN` | 409 | Check-in before the check-in date, or on / after the check-out date | "Check-in is open from <check-in date>" |
 | `REFUND_DECISION_PENDING` | 409 | Check-in or no-show while a refund request waits for the hotel | "Decide the refund request first" |
-| `ROOM_NOT_ASSIGNABLE` | 409 | A chosen room is of another room type, not `AVAILABLE`, or taken on a remaining night | Reload the room options |
+| `ROOM_NOT_ASSIGNABLE` | 409 | A chosen room is of a room type not booked, not `AVAILABLE`, or taken on a remaining night, or a booked room type does not get its number of rooms | Reload the room options |
 | `NO_SHOW_NOT_ALLOWED` | 409 | Marking a no-show before the day after the check-in date | "Possible from <day after check-in>" |
 | `ROOM_STATUS_CONFLICT` | 409 | Marking a room cleaned when it is not `CLEANING` | Reload the room |
 | `CHANGE_REQUEST_PENDING` | 409 | The booking already has a change request waiting | Show the waiting request |

@@ -22,7 +22,6 @@ const detailsSelect = {
   bookingId: true,
   checkInDate: true,
   checkOutDate: true,
-  numRooms: true,
   numGuests: true,
   totalAmount: true,
   guestName: true,
@@ -34,31 +33,30 @@ const detailsSelect = {
   customer: {
     select: { userAccount: { select: { email: true, fullName: true } } },
   },
-  roomType: {
+  items: {
+    select: { numRooms: true, roomType: { select: { name: true } } },
+    orderBy: [{ roomType: { name: 'asc' } }, { bookingItemId: 'asc' }],
+  },
+  hotel: {
     select: {
       name: true,
-      hotel: {
+      checkInTime: true,
+      checkOutTime: true,
+      hotelProperties: lateCheckoutRowsSelect,
+      hotelPartnerId: true,
+      hotelPartner: {
+        select: { userAccount: { select: { email: true } } },
+      },
+      // The staff who handle refunds (slide 08) or bookings (change requests), only while their account is active.
+      hotelStaffs: {
+        where: {
+          permissions: { hasSome: ['REFUND', 'BOOKING'] },
+          userAccount: { status: 'ACTIVE' },
+        },
         select: {
-          name: true,
-          checkInTime: true,
-          checkOutTime: true,
-          hotelProperties: lateCheckoutRowsSelect,
-          hotelPartnerId: true,
-          hotelPartner: {
-            select: { userAccount: { select: { email: true } } },
-          },
-          // The staff who handle refunds (slide 08) or bookings (change requests), only while their account is active.
-          hotelStaffs: {
-            where: {
-              permissions: { hasSome: ['REFUND', 'BOOKING'] },
-              userAccount: { status: 'ACTIVE' },
-            },
-            select: {
-              hotelStaffId: true,
-              permissions: true,
-              userAccount: { select: { email: true } },
-            },
-          },
+          hotelStaffId: true,
+          permissions: true,
+          userAccount: { select: { email: true } },
         },
       },
     },
@@ -378,7 +376,7 @@ export class BookingMailer {
     lines: string[],
     type: NotificationType = 'BOOKING',
   ) {
-    const owner = b.roomType.hotel;
+    const owner = b.hotel;
     await this.notify(owner.hotelPartnerId, type, subject, lines, PARTNER_PATH);
     out.push({
       to: owner.hotelPartner.userAccount.email,
@@ -397,8 +395,8 @@ export class BookingMailer {
     type: NotificationType = 'BOOKING',
   ) {
     await this.toOwner(out, b, subject, lines, type);
-    const owner = b.roomType.hotel.hotelPartner.userAccount.email;
-    for (const s of b.roomType.hotel.hotelStaffs) {
+    const owner = b.hotel.hotelPartner.userAccount.email;
+    for (const s of b.hotel.hotelStaffs) {
       if (!s.permissions.includes(permission)) continue;
       await this.notify(s.hotelStaffId, type, subject, lines, staffPath(b));
       // A staff account sharing the owner's address gets the email once.
@@ -406,7 +404,7 @@ export class BookingMailer {
       out.push({
         to: s.userAccount.email,
         subject,
-        text: [`Khách sạn ${b.roomType.hotel.name}`, '', ...lines].join('\n'),
+        text: [`Khách sạn ${b.hotel.name}`, '', ...lines].join('\n'),
       });
     }
   }
@@ -462,20 +460,20 @@ const PARTNER_PATH = '/partner/bookings';
 function stay(b: Details) {
   const checkIn = toCalendarDate(b.checkInDate);
   const checkOut = toCalendarDate(b.checkOutDate);
+  const rooms = b.items.reduce((n, i) => n + i.numRooms, 0);
   return [
-    `Khách sạn: ${b.roomType.hotel.name}`,
-    `Loại phòng: ${b.roomType.name} × ${b.numRooms} phòng`,
+    `Khách sạn: ${b.hotel.name}`,
+    `Loại phòng: ${b.items.map((i) => `${i.roomType.name} × ${i.numRooms} phòng`).join(', ')}`,
     `Nhận phòng: ${day(checkIn)} – Trả phòng: ${day(checkOut)} (${daysBetween(checkIn, checkOut)} đêm)`,
-    `Số khách: ${b.numGuests ?? b.numRooms}`,
+    `Số khách: ${b.numGuests ?? rooms}`,
   ];
 }
 
 /** The hotel's late check-out policy in one line (L7), or nothing when checking out late is free. */
 function lateCheckoutLine(b: Details) {
-  const policy = lateCheckoutPolicyOf(b.roomType.hotel.hotelProperties);
+  const policy = lateCheckoutPolicyOf(b.hotel.hotelProperties);
   if (!policy) return [];
-  const checkOut =
-    fromTime(b.roomType.hotel.checkOutTime) ?? DEFAULT_CHECK_OUT_TIME;
+  const checkOut = fromTime(b.hotel.checkOutTime) ?? DEFAULT_CHECK_OUT_TIME;
   return [
     `Trả phòng sau ${checkOut}: miễn phí ${policy.graceMinutes} phút, sau đó ${policy.beforeCutoffPercent}% giá đêm cuối ` +
       `trước ${policy.cutoffTime} và ${policy.afterCutoffPercent}% từ ${policy.cutoffTime}; thanh toán tại khách sạn.`,
@@ -499,6 +497,6 @@ function changeLines(changes: GuestChanges) {
 function checkInMoment(b: Details) {
   return vietnamDateTime(
     toCalendarDate(b.checkInDate),
-    fromTime(b.roomType.hotel.checkInTime) ?? DEFAULT_CHECK_IN_TIME,
+    fromTime(b.hotel.checkInTime) ?? DEFAULT_CHECK_IN_TIME,
   );
 }

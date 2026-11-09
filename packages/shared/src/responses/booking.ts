@@ -148,6 +148,16 @@ export type HotelListing = z.infer<typeof hotelListingResponseSchema>;
 
 // ── Bookings ────────────────────────────────────────────────
 
+export const bookingItemResponseSchema = z
+  .object({
+    roomType: z.object({ id: z.uuid(), name: z.string() }),
+    rooms: z.number().int(),
+    subtotal: z.number().describe('Nightly prices × rooms, fixed at booking time.'),
+    nightlyPrices: z.array(nightlyPriceResponseSchema).describe('Price of one room per night, fixed at booking time.'),
+  })
+  .register(responseSchemas, { id: 'BookingItem', description: 'One room type of a booking.' });
+export type BookingItem = z.infer<typeof bookingItemResponseSchema>;
+
 export const bookingSummaryResponseSchema = z
   .object({
     id: z.uuid(),
@@ -155,11 +165,14 @@ export const bookingSummaryResponseSchema = z
     status: z.enum(BookingStatus),
     paymentStatus: z.enum(PaymentStatus),
     hotel: z.object({ id: z.uuid(), name: z.string(), city: z.string(), coverImageUrl: z.url().nullable() }),
-    roomType: z.object({ id: z.uuid(), name: z.string() }),
+    items: z.array(bookingItemResponseSchema).describe('1–5 room types of the hotel.'),
+    roomType: z
+      .object({ id: z.uuid(), name: z.string() })
+      .describe("Deprecated: the first item's room type, until the apps read `items`."),
     checkIn: calendarDate(),
     checkOut: calendarDate(),
     nights: z.number().int(),
-    rooms: z.number().int(),
+    rooms: z.number().int().describe('Rooms over every item.'),
     guests: z.number().int(),
     totalAmount: z.number(),
     createdAt: isoDateTime(),
@@ -190,7 +203,9 @@ export const bookingResponseSchema = bookingSummaryResponseSchema
     contactPhone: z.string(),
     arrivalTime: z.string().nullable().describe('"HH:mm", start of the one-hour arrival window.'),
     specialRequests: z.string().nullable(),
-    nightlyPrices: z.array(nightlyPriceResponseSchema).describe('Prices fixed at booking time.'),
+    nightlyPrices: z
+      .array(nightlyPriceResponseSchema)
+      .describe("Deprecated: the first item's prices, until the apps read `items`."),
     cancellation: z.object({
       freeUntil: isoDateTime().nullable().describe('null: no free cancellation.'),
       feePercent: z.number(),
@@ -209,7 +224,7 @@ export const bookingResponseSchema = bookingSummaryResponseSchema
     cancelReason: z.string().nullable(),
     cancelledAt: isoDateTime().nullable(),
     assignedRooms: z
-      .array(z.object({ id: z.uuid(), roomNumber: z.string() }))
+      .array(z.object({ id: z.uuid(), roomNumber: z.string(), roomTypeId: z.uuid() }))
       .describe(
         'Rooms of the stay: held at booking, replaced by the rooms assigned at check-in. Empty for the customer before check-in.',
       ),
@@ -245,7 +260,12 @@ export const bookingResponseSchema = bookingSummaryResponseSchema
 export type Booking = z.infer<typeof bookingResponseSchema>;
 
 export const roomOptionResponseSchema = z
-  .object({ id: z.uuid(), roomNumber: z.string(), status: z.enum(RoomStatus) })
+  .object({
+    id: z.uuid(),
+    roomNumber: z.string(),
+    status: z.enum(RoomStatus),
+    roomTypeId: z.uuid().describe('Check-in gives each booking item as many rooms of its type as it booked.'),
+  })
   .register(responseSchemas, { id: 'RoomOption' });
 export type RoomOption = z.infer<typeof roomOptionResponseSchema>;
 
@@ -254,7 +274,7 @@ export const roomOptionsResponseSchema = z
     held: z.array(roomOptionResponseSchema).describe('Rooms the booking holds now.'),
     available: z
       .array(roomOptionResponseSchema)
-      .describe('Other rooms of the booked type, AVAILABLE and free on every remaining night.'),
+      .describe('Other rooms of the booked types, AVAILABLE and free on every remaining night.'),
   })
   .register(responseSchemas, { id: 'RoomOptions', description: 'Rooms to assign at check-in (UC38, BR-10).' });
 export type RoomOptions = z.infer<typeof roomOptionsResponseSchema>;
@@ -272,7 +292,7 @@ export const checkOutQuoteResponseSchema = z
           .number()
           .int()
           .describe('Of the night price: the rate of the departure time, plus the full rate for each later day.'),
-        nightPrice: z.number().describe('Last night price × rooms, fixed at booking.'),
+        nightPrice: z.number().describe('Last night price × rooms over every item, fixed at booking.'),
       })
       .nullable()
       .describe('null: within the grace period, not late, or the hotel has no late check-out policy.'),
@@ -288,10 +308,11 @@ export const bookingVoucherResponseSchema = z
   .object({
     code: z.string(),
     hotelName: z.string(),
-    roomTypeName: z.string(),
+    items: z.array(z.object({ roomTypeName: z.string(), rooms: z.number().int() })),
+    roomTypeName: z.string().describe("Deprecated: the first item's room type, until the apps read `items`."),
     checkIn: calendarDate(),
     checkOut: calendarDate(),
-    rooms: z.number().int(),
+    rooms: z.number().int().describe('Rooms over every item.'),
     guests: z.number().int(),
     guestName: z.string(),
     amountPaid: z.number(),

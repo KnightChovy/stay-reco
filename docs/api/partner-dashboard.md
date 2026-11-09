@@ -71,7 +71,7 @@ Shared shapes:
 
 ## 3. Metric definitions (the contract BE implements)
 
-A booking counts as **sold** when `status ∈ {CONFIRMED, CHECKED_IN, COMPLETED, NO_SHOW}` (PD2: no-show nights count, the room was held and the hotel keeps the money). `PENDING` (payment hold), `EXPIRED` and `CANCELLED` are not sold. A booking holds `num_rooms` rooms (1–8) of one room type, and `nightly_prices` stores the price of one room for each night, fixed at booking time.
+A booking counts as **sold** when `status ∈ {CONFIRMED, CHECKED_IN, COMPLETED, NO_SHOW}` (PD2: no-show nights count, the room was held and the hotel keeps the money). `PENDING` (payment hold), `EXPIRED` and `CANCELLED` are not sold. A booking has 1–5 items (`booking_item`), one per room type: each holds `num_rooms` rooms and stores in `nightly_prices` the price of one room for each night, fixed at booking time. Room figures below are summed over the items.
 
 | Metric | Field | Definition |
 |---|---|---|
@@ -175,7 +175,7 @@ The day in Asia/Ho_Chi_Minh, live. Read by owners and staff; contains **no money
 
 - `tonight.roomsSold` = rooms of the hotel with a `BOOKED` row for tonight; `roomsAvailable` = rooms not in `MAINTENANCE` minus rooms `BLOCKED` tonight; `occupancyRate` = sold / available × 100, `null` when available is 0.
 - `checkedIn`, `checkedOut` and `inHouse` count the bookings checked in and out at the front desk. An early check-out counts on the booking's check-out date, not on the day the guest left.
-- `upcomingArrivals`: today's arrivals still `CONFIRMED`, sorted by `arrivalTime` (empty last) then booking time; at most `arrivalsLimit`. The full list is the bookings screen (`GET /hotels/:hotelId/bookings`).
+- `upcomingArrivals`: today's arrivals still `CONFIRMED` (`roomTypeName` lists the room types of the booking, `"Deluxe, Suite"`; `rooms` is over every type), sorted by `arrivalTime` (empty last) then booking time; at most `arrivalsLimit`. The full list is the bookings screen (`GET /hotels/:hotelId/bookings`).
 
 ### 4.3 `GET /hotels/:hotelId/stats/overview`
 
@@ -319,7 +319,7 @@ Every figure comes from `overview`, `series` and `breakdown` computed for the sa
 | **Tổng quan** | Hotel, period, comparison period, export time; then one line per KPI of `overview` (performance, cash, reviews): Chỉ số · Đơn vị · Kỳ này · Kỳ trước · Thay đổi · Thay đổi tính theo (`%` for amounts, counts and averages; `điểm %` for rates); then the wallet balances at export time (available, pending, reserved). |
 | **Theo thời gian** | One row per bucket of `series` with its default granularity: Từ ngày · Số ngày · Doanh thu phòng · Đêm đã bán · Đêm có thể bán · Công suất (%) · ADR · Số đơn · Số đơn huỷ · Thực nhận. |
 | **Theo loại phòng** | `breakdown.byRoomType` with a total line (Loại phòng · Số phòng · Đêm đã bán · Đêm có thể bán · Công suất (%) · Doanh thu phòng · ADR), then three small tables Số đơn · Tỷ lệ (%) by source, current status and payment method. |
-| **Danh sách đơn** | The bookings counted in `bookingsCreated` (paid, created in the period, cancelled later included), oldest first: Mã đơn · Ngày đặt · Tên khách · SĐT liên hệ · Loại phòng · Số phòng · Nhận phòng · Trả phòng · Số đêm · Số khách · Trạng thái đơn · Trạng thái thanh toán · Phương thức · Nguồn · Tổng tiền · Hoa hồng · Hoàn tiền · Thực nhận của đơn · Ngày huỷ. Commission, refunds and net come from the hotel wallet rows of the booking (all dates), never recomputed. |
+| **Danh sách đơn** | The bookings counted in `bookingsCreated` (paid, created in the period, cancelled later included), oldest first: Mã đơn · Ngày đặt · Tên khách · SĐT liên hệ · Loại phòng (`2× Deluxe, 1× Suite`) · Số phòng (over every type) · Nhận phòng · Trả phòng · Số đêm · Số khách · Trạng thái đơn · Trạng thái thanh toán · Phương thức · Nguồn · Tổng tiền · Hoa hồng · Hoàn tiền · Thực nhận của đơn · Ngày huỷ. Commission, refunds and net come from the hotel wallet rows of the booking (all dates), never recomputed. |
 | **Giao dịch ví** | Every hotel wallet movement created in the period, oldest first (payouts and settlements included): Thời gian · Loại giao dịch · Mã đơn · Mô tả · Số tiền (±) · Số dư sau; then **Tổng thực nhận** = sum of the payment, commission, refund and adjustment rows, equal to `overview.cash.netEarnings`. |
 
 Not in the file: the late check-out fee (paid at the front desk, never through StayReco, money-rules §5.5) and the hotel's own costs, so it is a report of the revenue through StayReco, not a profit and loss statement.
@@ -336,7 +336,7 @@ Not in the file: the late check-out fee (paid at the front desk, never through S
 - **Module**: `modules/stats` (`StatsController`, `StatsService`, an action-items service), hotel access as in the other hotel routes: `member` for action items, today and forecast; `owner-view` (owner only, allowed while suspended) for overview, series, breakdown and export. The workbook is built with `exceljs` (MIT).
 - **Queries**: aggregate in SQL (`$queryRaw` with `generate_series` for the days and buckets, `jsonb_array_elements` over `nightly_prices`), never by loading bookings into memory. Day boundaries of `timestamptz` columns use `AT TIME ZONE 'Asia/Ho_Chi_Minh'`.
 - **Tenant** (PD3): `booking` has no `hotel_id`; hotel-scoped queries join through `room_type` (`room_type.hotel_id`), covered by the indexes below. Adding `booking.hotel_id` is reconsidered only if a measurement shows it is needed.
-- **Indexes** (one migration with the module): `booking(room_type_id, check_in_date)`, `booking(room_type_id, created_at)`, `wallet_transaction(wallet_id, created_at)`. `room_calendars` needs none: its unique `(room_id, date)` already serves a hotel's rooms over a date range. Reviews get `review(hotel_id, created_at)` with the loyalty phase.
+- **Indexes** (one migration with the module): `booking(room_type_id, check_in_date)`, `booking(room_type_id, created_at)`, `wallet_transaction(wallet_id, created_at)`; since the booking items, `booking(hotel_id, check_in_date)`, `booking(hotel_id, created_at)` and `booking_item(room_type_id)`. `room_calendars` needs none: its unique `(room_id, date)` already serves a hotel's rooms over a date range. Reviews get `review(hotel_id, created_at)` with the loyalty phase.
 - **Tests** (e2e): a hotel with bookings across a month boundary, a multi-room booking, a cancellation with and without refund, an expired hold, a blocked room and a refund; every metric of §3 checked against hand-computed values; partner A gets `HOTEL_NOT_FOUND` for partner B's hotel; staff get `FORBIDDEN` on owner-only routes and only their action item types.
 - **Demo seed**: older bookings spread over a few months so the chart and the KPIs have values for screenshots.
 

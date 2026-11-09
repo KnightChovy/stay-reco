@@ -31,12 +31,12 @@ export async function chargeCommission(
       totalAmount: true,
       commissionRate: true,
       invoice: { select: { invoiceNumber: true } },
-      roomType: { select: { hotelId: true } },
+      hotelId: true,
     },
   });
   const commission = commissionOf(booking.totalAmount, booking.commissionRate);
   const description = `Commission on ${booking.invoice!.invoiceNumber}`;
-  const hotelWallet = await ledger.hotelWallet(tx, booking.roomType.hotelId);
+  const hotelWallet = await ledger.hotelWallet(tx, booking.hotelId);
   await ledger.post(tx, {
     walletId: hotelWallet.walletId,
     type: 'COMMISSION',

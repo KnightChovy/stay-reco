@@ -99,9 +99,9 @@ export const todayArrivalResponseSchema = z
     bookingId: z.uuid(),
     code: z.string(),
     guestName: z.string(),
-    roomTypeName: z.string(),
+    roomTypeName: z.string().describe("The booking's room types, comma separated."),
     nights: z.number().int(),
-    rooms: z.number().int(),
+    rooms: z.number().int().describe("Rooms over every room type of the booking."),
     numGuests: z.number().int().nullable(),
     arrivalTime: z.string().nullable().describe('Start of the arrival window, "HH:mm".'),
     roomNumbers: z

@@ -424,7 +424,8 @@ model BedType {
 model Booking {
   bookingId          String              @id @default(dbgenerated("gen_random_uuid()")) @map("booking_id") @db.Uuid
   customerId         String              @map("customer_id") @db.Uuid
-  roomTypeId         String              @map("room_type_id") @db.Uuid
+  /// The hotel of every item; kept even after the nights are released.
+  hotelId            String              @map("hotel_id") @db.Uuid
   hotelStaffId       String?             @map("hotel_staff_id") @db.Uuid
   voucherId          String?             @unique @map("voucher_id") @db.Uuid
   promotionId        String?             @map("promotion_id") @db.Uuid
@@ -433,10 +434,7 @@ model Booking {
   checkInDate        DateTime            @map("check_in_date") @db.Date
   checkOutDate       DateTime            @map("check_out_date") @db.Date
   numGuests          Int?                @map("num_guests")
-  /// Rooms of the one room type held or booked; kept after the nights are released.
-  numRooms           Int                 @map("num_rooms")
-  /// [{ date, price }] per room, fixed at booking time (BR-09); kept after the nights are released.
-  nightlyPrices      Json                @map("nightly_prices")
+  /// Sum of the item subtotals (minus discounts once promotions exist).
   totalAmount        Decimal             @map("total_amount") @db.Decimal(14, 2)
   currency           String              @default("VND") @db.VarChar(10)
   status             BookingStatus       @default(PENDING)
@@ -454,8 +452,8 @@ model Booking {
   createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
   customer           Customer            @relation(fields: [customerId], references: [customerId])
-  // Kept even after room_calendars rows are released (cancel / no-show), so the booking never loses its hotel.
-  roomType           RoomType            @relation(fields: [roomTypeId], references: [roomTypeId])
+  hotel              Hotel               @relation(fields: [hotelId], references: [hotelId])
+  items              BookingItem[]
   hotelStaff         HotelStaff?         @relation(fields: [hotelStaffId], references: [hotelStaffId])
   voucher            Voucher?            @relation(fields: [voucherId], references: [voucherId])
   promotion          Promotion?          @relation(fields: [promotionId], references: [promotionId])
@@ -468,11 +466,31 @@ model Booking {
   conversations      Conversation[]
   aiFunctionCalls    AiFunctionCall[]
 
-  // Hotel-scoped reads reach bookings through the room type: by stay date (bookings list, arrivals, dashboard
-  // figures) and by booking date (bookings created in a period).
-  @@index([roomTypeId, checkInDate])
-  @@index([roomTypeId, createdAt])
+  // Hotel-scoped reads: by stay date (bookings list, arrivals, dashboard figures) and by booking date (bookings
+  // created in a period).
+  @@index([hotelId, checkInDate])
+  @@index([hotelId, createdAt])
   @@map("booking")
+}
+
+/// One room type of a booking (docs/design/booking-items.md): 1–5 per booking, all of the booking's hotel.
+model BookingItem {
+  bookingItemId String   @id @default(dbgenerated("gen_random_uuid()")) @map("booking_item_id") @db.Uuid
+  bookingId     String   @map("booking_id") @db.Uuid
+  /// Kept even after room_calendars rows are released (cancel / no-show), so the item never loses its type.
+  roomTypeId    String   @map("room_type_id") @db.Uuid
+  /// Rooms of this type held or booked (1–8, at most 8 over the booking).
+  numRooms      Int      @map("num_rooms")
+  /// [{ date, price }] per room, fixed at booking time (BR-09).
+  nightlyPrices Json     @map("nightly_prices")
+  /// Sum of the nightly prices × num_rooms, fixed at booking time.
+  subtotal      Decimal  @db.Decimal(14, 2)
+  booking       Booking  @relation(fields: [bookingId], references: [bookingId], onDelete: Cascade)
+  roomType      RoomType @relation(fields: [roomTypeId], references: [roomTypeId])
+
+  @@unique([bookingId, roomTypeId])
+  @@index([roomTypeId])
+  @@map("booking_item")
 }
 
 model ContentEmbedding {
@@ -591,6 +609,7 @@ model Hotel {
   hotelRoomConfig      HotelRoomConfig?
   hotelStaffs          HotelStaff[]
   roomTypes            RoomType[]
+  bookings             Booking[]
   hotelAmenities       HotelAmenity[]
   promotions           Promotion[]
   wallet               Wallet?
@@ -1082,7 +1101,7 @@ model RoomType {
   roomTypeBeds      RoomTypeBed[]
   roomTypeAmenities RoomTypeAmenity[]
   recommendations   Recommendation[]
-  bookings          Booking[]
+  bookingItems      BookingItem[]
   roomTypeImages    RoomTypeImage[]
 
   @@map("room_type")
