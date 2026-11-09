@@ -2,9 +2,9 @@
 
 | | |
 |---|---|
-| Phase status | 🟡 In progress |
-| API status | `Draft` |
-| Agreed on | |
+| Phase status | 🟡 BE done, FE integrating |
+| API status | `BE Done`: every endpoint is merged into `develop`, FE can integrate |
+| Agreed on | 2026-10-29 (decisions O1–O15) |
 | BE owners | Khiêm, Phúc |
 | FE owners | |
 | API | [api/staff.md](../api/staff.md#front-desk-phase-3) (check-in, check-out, no-show, rooms, change requests), [api/customer.md](../api/customer.md#change-requests-phase-3) (change requests, notifications), [api/partner-dashboard.md](../api/partner-dashboard.md) (new action items) |
@@ -132,14 +132,14 @@ hotel wallet:    payment → pending; check-out / no-show: pending −commission
 
 ## Open questions
 
-- [ ]
+None.
 
 ## Definition of Done
 
-- [ ] Every booking status change has an audit log entry
-- [ ] Refunds match the amount paid (with a test) — built with bookings; commission and settlement amounts match the booking total too
-- [ ] Check-in cannot assign a room of another type or a room taken on a remaining night (e2e)
-- [ ] Commission and settlement are written once even when the job and a request race (e2e)
+- [x] Every booking status change has an audit log entry (`BOOKING_CONFIRMED`, `BOOKING_EXPIRED`, `BOOKING_CANCEL_REQUESTED`, `REFUND_APPROVED` / `REFUND_AUTO_APPROVED`, `BOOKING_CHECKED_IN`, `BOOKING_CHECKED_OUT`, `BOOKING_NO_SHOW`; a new `PENDING` booking is dated by `createdAt`)
+- [x] Refunds match the amount paid (with a test) — built with bookings; commission and settlement amounts match the booking total too (`hotel-refunds`, `front-desk` e2e)
+- [x] Check-in cannot assign a room of another type or a room taken on a remaining night (e2e, `front-desk`: also a room still being cleaned)
+- [x] Commission and settlement are written once even when the job and a request race (e2e, `front-desk`: no-show by staff and job, check-out, settlement)
 - [ ] The phase's [api/](../api/README.md) pages match the code, API status `Integrated`
 
 ## Changelog
@@ -148,4 +148,8 @@ hotel wallet:    payment → pending; check-out / no-show: pending −commission
 |---|---|---|
 | 2026-10-29 | BE | Draft: decisions O1–O15, schema changes, endpoints for check-in / check-out / no-show / rooms, change requests, notifications |
 | 2026-10-29 | BE | Built check-in, check-out, room cleaned, commission and settlement; O7: the fee a hotel keeps from a cancellation is settled after the holding period too; room options follow the check-in conditions |
+| 2026-10-30 | BE | No-show at the front desk and automatically at the check-out time; change requests (customer asks, staff with BOOKING or the owner accept or reject; waiting requests closed when the booking moves on); action items `OVERDUE_CHECKOUTS` and `CHANGE_REQUESTS_PENDING`; audit log indexed by entity |
+| 2026-10-30 | BE | In-app notifications next to the booking emails, written before the emails go out |
 | 2026-10-31 | BE | Late check-out fee: decisions L1–L8, hotel policy endpoints, check-out quote, fee at check-out |
+| 2026-10-31 | BE | Notifications filtered by type |
+| 2026-11-09 | BE | Backend scope done and merged; Definition of Done ticked except the API pages becoming `Integrated` (waits for FE) |

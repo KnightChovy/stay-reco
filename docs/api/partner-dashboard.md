@@ -1,6 +1,6 @@
 # API: Partner dashboard *(Draft)*
 
-> Status **Draft**: proposed by FE (2026-10-22), revised by BE against the booking data model (2026-10-28); becomes **Agreed** once FE confirms the revision. Built **before** the hotel operations phase, ahead of the rest of [phase 6](../phases/phase-6-reporting-admin.md) (decision PD8). FE screen: `partner/dashboard` (later also `staff/dashboard`). Rules for every API (envelope, errors, dates, money): [api-guide.md](../api-guide.md). URL rules: [CONVENTIONS.md §1](../../backend/docs/CONVENTIONS.md#1-api-url-naming). Money rules behind the figures: [money-rules.md](../money-rules.md).
+> Status **BE Done**: proposed by FE (2026-10-22), revised by BE against the booking data model (2026-10-28), built; FE wired the first release (2026-11-03). §4.7 is not built yet. Built **before** the hotel operations phase, ahead of the rest of [phase 6](../phases/phase-6-reporting-admin.md) (decision PD8). FE screen: `partner/dashboard` (later also `staff/dashboard`). Rules for every API (envelope, errors, dates, money): [api-guide.md](../api-guide.md). URL rules: [CONVENTIONS.md §1](../../backend/docs/CONVENTIONS.md#1-api-url-naming). Money rules behind the figures: [money-rules.md](../money-rules.md).
 >
 > Uses the booking data (`booking`, `room_calendars`, `invoice`, `wallet_transaction`, `audit_log`). Check-in / check-out figures come from the hotel operations phase; figures that need reviews (loyalty phase) are `0` until it exists; the response shapes do not change when they arrive.
 

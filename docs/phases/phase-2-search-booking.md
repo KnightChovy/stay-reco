@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Phase status | 🟡 BE done, FE integrating |
-| API status | `Agreed` |
+| API status | `BE Done`: every endpoint is merged into `develop`, FE can integrate |
 | Agreed on | 2026-10-23 |
 | BE owners | Khiêm, Phúc |
 | FE owners | |
@@ -151,6 +151,7 @@ room_calendars:  (free) ──hold──► HELD ──paid──► BOOKED ─�
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-11-09 | BE | API status `BE Done`. Bookings with several room types proposed in [design/booking-items.md](../design/booking-items.md) (not built; it will change the "1–8 rooms of one type" limit) |
 | 2026-10-27 | BE | Backend scope done; Definition of Done updated (SePay webhook tests ticked; end-to-end booking waits for FE integration and a real booking transfer) |
 | 2026-10-26 | BE | Demo seed: customer `customer@stayreco.local` with one booking per state, pricing rules and hotel cancellation policies for FE work (see getting-started) |
 | 2026-10-26 | BE | Review follow-ups: refund queue filter for owner and REFUND staff only, booking emails greet the booking account, booking creation retried on a booking code clash, emails in flight finish before the database disconnects at shutdown |
