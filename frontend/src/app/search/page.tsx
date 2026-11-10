@@ -308,6 +308,7 @@ function SearchContent() {
                 cancellationPolicy={hotel.freeCancellation ? 'Miễn phí huỷ phòng' : 'Không hoàn huỷ'}
                 price={formatMoney(hotel.fromTotal)}
                 totalPrice={formatMoney(hotel.fromTotal)}
+                nights={hotel.nights}
                 priceNote={`${hotel.nights} đêm · ${query.rooms} phòng`}
                 detailsHref={`/hotels/${hotel.id}?checkIn=${query.checkIn}&checkOut=${query.checkOut}&guests=${query.guests}&rooms=${query.rooms}`}
                 layout="horizontal"
