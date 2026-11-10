@@ -8,6 +8,7 @@ export * from './responses/booking';
 export * from './responses/hotel';
 export * from './responses/notification';
 export * from './responses/loyalty';
+export * from './responses/preference';
 export * from './responses/promotion';
 export * from './responses/registry';
 export * from './responses/stats';

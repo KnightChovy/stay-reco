@@ -23,6 +23,7 @@ import { StaysModule } from './modules/stays/stays.module';
 import { MailModule } from './modules/mail/mail.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { LoyaltyModule } from './modules/loyalty/loyalty.module';
+import { PreferencesModule } from './modules/preferences/preferences.module';
 import { PromotionsModule } from './modules/promotions/promotions.module';
 import { StorageModule } from './modules/storage/storage.module';
 import { VerificationModule } from './modules/verification/verification.module';
@@ -68,6 +69,7 @@ import { PrismaModule } from './prisma/prisma.module';
     NotificationsModule,
     PromotionsModule,
     LoyaltyModule,
+    PreferencesModule,
   ],
   controllers: [AppController],
   providers: [
