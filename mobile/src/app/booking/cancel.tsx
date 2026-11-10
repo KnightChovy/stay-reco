@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Alert, ScrollView, TextInput, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Icon } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
-import { colors, fonts, radius, shadow } from '@/constants/theme';
+import { colors } from '@/constants/theme';
 import { PriceLine } from '@/features/booking/PriceLine';
 import { formatDate, formatVnd } from '@/lib/stay';
 import { cancelBooking, getBooking, getCancellationQuote } from '@/services/bookings.service';
@@ -73,9 +73,9 @@ export default function CancelBookingScreen() {
   if (!b || !q) {
     const failed = booking.isError || quote.isError || !id;
     return (
-      <View style={styles.screen}>
+      <View className="flex-1 bg-surface">
         <ScreenHeader title="Hủy Đặt Phòng" />
-        <View style={styles.state}>
+        <View className="flex-1 items-center justify-center gap-3 p-6">
           <Text variant="small" color={colors.onSurfaceVariant} center>
             {failed ? 'Đơn này hiện không thể hủy hoặc không tải được thông tin.' : 'Đang tải...'}
           </Text>
@@ -90,12 +90,12 @@ export default function CancelBookingScreen() {
   const free = q.fee === 0;
 
   return (
-    <View style={styles.screen}>
+    <View className="flex-1 bg-surface">
       <ScreenHeader title="Hủy Đặt Phòng" />
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={[styles.banner, styles.row, { backgroundColor: free ? colors.tertiaryFixed : colors.surfaceContainerHigh }]}>
+      <ScrollView contentContainerClassName="gap-4 p-4 pb-8" showsVerticalScrollIndicator={false}>
+        <View className="rounded-lg p-4 flex-row items-center gap-2" style={{ backgroundColor: free ? colors.tertiaryFixed : colors.surfaceContainerHigh }}>
           <Icon name={free ? 'check_circle' : 'info'} size={22} color={free ? colors.tertiaryContainer : colors.secondary} />
-          <Text variant="small" style={styles.flex}>
+          <Text variant="small" className="flex-1">
             {free
               ? q.freeUntil
                 ? `Bạn đang trong thời gian hủy miễn phí (đến ${new Date(q.freeUntil).toLocaleString('vi-VN')}).`
@@ -104,7 +104,7 @@ export default function CancelBookingScreen() {
           </Text>
         </View>
 
-        <View style={styles.card}>
+        <View className="gap-2 rounded-lg bg-surface-container-lowest p-4 shadow-card">
           <Text variant="caption" weight="semibold" color={colors.onSurfaceVariant}>
             MÃ ĐƠN: {b.code}
           </Text>
@@ -117,12 +117,12 @@ export default function CancelBookingScreen() {
           </Text>
         </View>
 
-        <View style={styles.card}>
+        <View className="gap-2 rounded-lg bg-surface-container-lowest p-4 shadow-card">
           <Text variant="h3">Chi tiết hoàn tiền</Text>
           <PriceLine label="Đã thanh toán" value={formatVnd(q.paid)} />
           <PriceLine label={`Phí hủy${free ? '' : ` (${q.feePercent}%)`}`} value={free ? 'Miễn phí' : `-${formatVnd(q.fee)}`} />
-          <View style={styles.divider} />
-          <View style={styles.between}>
+          <View className="h-px bg-surface-container-high" />
+          <View className="flex-row items-center justify-between gap-2">
             <Text variant="label" weight="bold">
               Số tiền hoàn lại
             </Text>
@@ -137,7 +137,7 @@ export default function CancelBookingScreen() {
           )}
         </View>
 
-        <View style={styles.card}>
+        <View className="gap-2 rounded-lg bg-surface-container-lowest p-4 shadow-card">
           <Text variant="label" weight="bold">
             Lý do hủy phòng
           </Text>
@@ -149,16 +149,16 @@ export default function CancelBookingScreen() {
             placeholderTextColor={colors.outline}
             value={reason}
             onChangeText={setReason}
-            style={styles.textarea}
+            className="min-h-20 rounded-md bg-surface-container-low p-3 font-be-regular text-sm text-on-surface"
           />
           <Text variant="caption" color={colors.onSurfaceVariant}>
             Lý do sẽ được gửi tới khách sạn.
           </Text>
         </View>
 
-        <View style={[styles.row, styles.terms]}>
+        <View className="flex-row items-center gap-2" style={{ alignItems: 'flex-start' }}>
           <Checkbox checked={agreed} onChange={setAgreed} />
-          <Text variant="caption" color={colors.onSurfaceVariant} style={styles.flex}>
+          <Text variant="caption" color={colors.onSurfaceVariant} className="flex-1">
             Tôi hiểu rằng thao tác hủy phòng không thể hoàn tác.
           </Text>
         </View>
@@ -169,13 +169,13 @@ export default function CancelBookingScreen() {
         )}
       </ScrollView>
 
-      <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
-        <Button label="Giữ đơn" variant="secondary" size="sm" style={styles.flex} onPress={() => router.back()} />
+      <View className="flex-row gap-3 bg-surface-container-lowest px-4 pt-3 shadow-card" style={{ paddingBottom: insets.bottom + 12 }}>
+        <Button label="Giữ đơn" variant="secondary" size="sm" className="flex-1" onPress={() => router.back()} />
         <Button
           label={submitting ? 'Đang hủy...' : q.needsApproval ? 'Gửi yêu cầu hủy' : 'Xác nhận hủy'}
           leadingIcon="cancel"
           size="sm"
-          style={styles.flex}
+          className="flex-1"
           disabled={!agreed || submitting}
           onPress={() => void submit()}
         />
@@ -183,34 +183,3 @@ export default function CancelBookingScreen() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  state: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 24 },
-  screen: { flex: 1, backgroundColor: colors.surface },
-  content: { padding: 16, gap: 16, paddingBottom: 32 },
-  flex: { flex: 1 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  between: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  banner: { padding: 16, borderRadius: radius.lg, alignItems: 'flex-start' },
-  card: { padding: 16, gap: 8, borderRadius: radius.lg, backgroundColor: colors.surfaceContainerLowest, ...shadow.card },
-  divider: { height: 1, backgroundColor: colors.surfaceContainerHigh },
-  textarea: {
-    minHeight: 80,
-    padding: 12,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceContainerLow,
-    fontFamily: fonts.regular,
-    fontSize: 14,
-    color: colors.onSurface,
-    textAlignVertical: 'top',
-  },
-  terms: { alignItems: 'flex-start' },
-  bottomBar: {
-    flexDirection: 'row',
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    backgroundColor: colors.surfaceContainerLowest,
-    ...shadow.card,
-  },
-});

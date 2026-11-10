@@ -1,4 +1,4 @@
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 import { Chip } from '@/components/ui/chip';
 import { Text } from '@/components/ui/text';
 import { colors } from '@/constants/theme';
@@ -12,11 +12,11 @@ export default function StaffMarketingCalendarScreen() {
   return (
     <StaffScreen title="Lịch đăng & kết nối kênh">
       <Section title="Kênh đã kết nối" />
-      <Card style={styles.list}>
+      <Card style={{ gap: 0, paddingVertical: 4 }}>
         {channels.map((c, i) => (
-          <View key={c.name} style={[s.row, styles.item, i > 0 && styles.topLine]}>
+          <View key={c.name} className={`gap-3 py-2.5 ${s.row} ${i > 0 ? 'border-t border-surface-container-high' : ''}`}>
             <Avatar text={c.letter} bg={c.color} fg={colors.onPrimary} />
-            <View style={s.flex}>
+            <View className={s.flex}>
               <Text variant="label" weight="bold">
                 {c.name}
               </Text>
@@ -35,9 +35,9 @@ export default function StaffMarketingCalendarScreen() {
       </Text>
       {scheduledPosts.map((p) => (
         <Card key={p.id}>
-          <View style={s.row}>
+          <View className={s.row}>
             <Avatar text={p.channel[0]} size={32} bg={channelColor[p.channel] ?? colors.primary} fg={colors.onPrimary} />
-            <Text variant="caption" weight="semibold" color={colors.onSurfaceVariant} style={s.flex}>
+            <Text variant="caption" weight="semibold" color={colors.onSurfaceVariant} className={s.flex}>
               {p.channel} · {p.scheduledTime}
             </Text>
             <Chip label={p.status} tone={statusTone[p.status]} />
@@ -53,9 +53,3 @@ export default function StaffMarketingCalendarScreen() {
     </StaffScreen>
   );
 }
-
-const styles = StyleSheet.create({
-  list: { gap: 0, paddingVertical: 4 },
-  item: { paddingVertical: 10, gap: 12 },
-  topLine: { borderTopWidth: 1, borderTopColor: colors.surfaceContainerHigh },
-});

@@ -1,189 +1,168 @@
 import { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
-import { router } from 'expo-router';
+import { ActivityIndicator, View } from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { CheckOutInput } from '@stayreco/shared';
 import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
-import { Icon } from '@/components/ui/icon';
+import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
-import { colors, radius } from '@/constants/theme';
-import { checkInDeposit, extraCharges } from '@/features/staff/data';
-import { Banner, Card, CardHead, KV, StaffScreen, SuccessSheet, accent, s, success } from '@/features/staff/ui';
-import { formatVnd } from '@/lib/stay';
-
-const subtotalExtra = extraCharges.reduce((sum, c) => sum + c.price * c.qty, 0);
-const netRefund = checkInDeposit - subtotalExtra;
+import { colors } from '@/constants/theme';
+import { Banner, Card, CardHead, KV, StaffScreen, SuccessSheet, accent, s, success, useStaffHotel } from '@/features/staff/ui';
+import { bookingStatusLabel, formatDate, formatVnd } from '@/lib/stay';
+import { apiErrorMessage } from '@/services/ApiService';
+import { checkOutBooking, getCheckOutQuote, lookupBooking, toLookup } from '@/services/staff.service';
 
 export default function StaffCheckOutScreen() {
-  const [finished, setFinished] = useState(false);
+  const params = useLocalSearchParams<{ code?: string }>();
+  const { hotelId } = useStaffHotel();
+  const queryClient = useQueryClient();
+  const [input, setInput] = useState(params.code ?? '');
+  const [query, setQuery] = useState(params.code?.trim() || '');
+  const [fee, setFee] = useState('');
+  const [reason, setReason] = useState('');
+
+  const lookup = useQuery({
+    queryKey: ['staff', 'lookup', hotelId, query],
+    queryFn: () => lookupBooking(hotelId!, toLookup(query)),
+    enabled: !!hotelId && !!query,
+  });
+  const booking = lookup.data;
+  const checkOut = useMutation({
+    mutationFn: (input: CheckOutInput) => checkOutBooking(booking!.id, input),
+    // Không await (để màn chuyển ngay sang trạng thái thành công) và bỏ qua 'check-out-quote': đơn đã đổi trạng thái nên API đó trả 409.
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['staff'], predicate: (q) => q.queryKey[1] !== 'check-out-quote' }),
+  });
+  const canCheckOut = booking?.status === 'CHECKED_IN';
+  const quote = useQuery({
+    queryKey: ['staff', 'check-out-quote', booking?.id],
+    queryFn: () => getCheckOutQuote(booking!.id),
+    enabled: canCheckOut && !checkOut.isSuccess,
+  });
+
+  const computed = quote.data?.lateFee?.amount ?? 0;
+  // Để trống = thu đúng phí theo chính sách; nhập số thấp hơn thì bắt buộc có lý do (không được cao hơn phí tính ra).
+  const lowered = fee.trim() !== '' && Number(fee) !== computed;
+  const feeValid = !lowered || (/^\d+$/.test(fee.trim()) && Number(fee) <= computed && !!reason.trim());
+
+  const search = () => {
+    const value = input.trim();
+    if (!value) return;
+    setFee('');
+    setReason('');
+    checkOut.reset();
+    setQuery(value);
+  };
 
   return (
     <StaffScreen
       title="Check-out & quyết toán"
-      right={<Button label="Hồ sơ BK-8839" variant="ghost" size="sm" onPress={() => router.push({ pathname: '/staff/bookings/[id]', params: { id: 'BK-8839' } })} />}
-      footer={<Button label="Xử lý check-out & giải phóng phòng" leadingIcon="check_circle" size="lg" style={[s.flex, { backgroundColor: accent }]} onPress={() => setFinished(true)} />}
+      right={
+        booking ? (
+          <Button label="Chi tiết đơn" variant="ghost" size="sm" onPress={() => router.push({ pathname: '/staff/bookings/[id]', params: { id: booking.id } })} />
+        ) : undefined
+      }
+      footer={
+        canCheckOut && !checkOut.isSuccess ? (
+          <Button
+            label={checkOut.isPending ? 'Đang xử lý…' : 'Check-out & giải phóng phòng'}
+            leadingIcon="check_circle"
+            size="lg"
+            disabled={!quote.data || !feeValid || checkOut.isPending}
+            className={s.flex} style={{ backgroundColor: accent }}
+            onPress={() => checkOut.mutate(lowered ? { lateFee: { amount: Number(fee), reason: reason.trim() } } : {})}
+          />
+        ) : undefined
+      }
     >
-      <Text variant="caption" color={colors.onSurfaceVariant}>
-        Quyết toán Check-out P.602
-      </Text>
-      <Banner
-        icon="schedule"
-        tone="blue"
-        title="Yêu cầu Check-out Phòng P.602"
-        text="Khách Trần Thị B trả phòng lúc 14:00 (Check-out muộn 2 giờ có tính phí). Buồng phòng đã kiểm tra Minibar & tài sản phòng lúc 13:45 — Không có hư hại."
-      />
-
       <Card>
-        <CardHead icon="bed" title="Thông tin phòng" right={<Chip label="Đang Check-out" tone="secondary" />} />
-        <View style={s.between}>
-          <View style={s.flex}>
-            <Text variant="h2" color={accent}>
-              Phòng P.602
-            </Text>
-            <Text variant="caption" color={colors.onSurfaceVariant}>
-              Executive Suite Ocean View • Tầng 6
-            </Text>
-          </View>
-          <View>
-            <Text variant="caption" color={colors.onSurfaceVariant}>
-              Khách hàng
-            </Text>
-            <Text variant="label" weight="bold">
-              Trần Thị B
-            </Text>
-          </View>
-        </View>
-        <View style={s.box}>
-          <KV label="Ngày Check-in" value="12/10/2026 14:00" />
-          <KV label="Ngày Check-out" value="14/10/2026 14:00" />
-          <KV label="Số lượng thẻ đã thu" value="2 / 2 Thẻ từ" strong color={success} />
-        </View>
+        <Input
+          icon="search"
+          placeholder="Mã đơn (SR-261031-1234) hoặc token QR"
+          autoCapitalize="characters"
+          value={input}
+          onChangeText={setInput}
+          onSubmitEditing={search}
+          returnKeyType="search"
+          accessibilityLabel="Mã đơn hoặc token QR"
+        />
+        <Button label="Tìm đơn" leadingIcon="search" disabled={!input.trim() || !hotelId} onPress={search} style={{ backgroundColor: accent }} />
       </Card>
 
-      <Card>
-        <CardHead icon="verified_user" title="Báo cáo nghiệm thu phòng" right={<Chip label="Đã duyệt" tone="tertiary" />} />
-        <View style={[s.box, styles.green]}>
-          <KV label="Nhân viên kiểm tra" value="Lê Thị Mai (Housekeeping)" />
-          <KV label="Tình trạng nội thất" value="Hoàn hảo (Không hư hại)" strong color={success} />
-          <KV label="Minibar sử dụng" value="1 Chai Evian 500ml" />
-        </View>
-        <Text variant="caption" color={colors.onSurfaceVariant} style={styles.italic}>
-          * Đã ghi nhận các khoản sử dụng phát sinh vào hóa đơn thanh toán bên dưới.
-        </Text>
-      </Card>
+      {lookup.isFetching && <ActivityIndicator color={colors.primary} />}
+      {lookup.isError && <Banner icon="error" tone="danger" title="Không tìm thấy đơn" text={apiErrorMessage(lookup.error, 'Mã đơn hoặc token QR không hợp lệ.')} />}
 
-      <Card>
-        <View style={s.between}>
-          <View style={[s.row, s.flex]}>
-            <Icon name="receipt_long" size={18} color={accent} />
-            <Text variant="h3">Bảng quyết toán (Folio)</Text>
-          </View>
-          <Chip label="#INV-P602-8839" />
-        </View>
-        <Text variant="caption" color={colors.onSurfaceVariant}>
-          Chi tiết các khoản phòng, phát sinh và hoàn cọc tiền thế chân
-        </Text>
-
-        <Text variant="caption" weight="bold" color={colors.onSurfaceVariant} style={s.upper}>
-          1. Tiền phòng cơ bản (Đã thanh toán trước)
-        </Text>
-        <View style={[s.box, s.between]}>
-          <View style={s.flex}>
-            <Text variant="small" weight="bold">
-              Executive Suite Ocean View (2 đêm)
-            </Text>
-            <Text variant="caption" color={colors.onSurfaceVariant}>
-              12/10/2026 - 14/10/2026 • {formatVnd(2500000)} / đêm
-            </Text>
-          </View>
-          <Text variant="small" weight="bold" color={success}>
-            {formatVnd(5000000)} (Đã thu)
+      {booking && (
+        <Card>
+          <CardHead icon="bed" title={`Đơn #${booking.code}`} right={<Chip label={bookingStatusLabel[booking.status]} tone={canCheckOut ? 'secondary' : 'neutral'} />} />
+          <Text variant="label" weight="bold">
+            {booking.guestName}
           </Text>
-        </View>
-
-        <Text variant="caption" weight="bold" color={colors.onSurfaceVariant} style={s.upper}>
-          2. Phát sinh trong quá trình lưu trú
-        </Text>
-        <View style={styles.table}>
-          {extraCharges.map((c) => (
-            <View key={c.id} style={[s.between, styles.tr]}>
-              <View style={s.flex}>
-                <Text variant="small" weight="medium">
-                  {c.name}
-                </Text>
-                <Text variant="caption" color={colors.onSurfaceVariant}>
-                  SL {c.qty} × {formatVnd(c.price)}
-                </Text>
-              </View>
-              <Text variant="small" weight="semibold">
-                {formatVnd(c.price * c.qty)}
-              </Text>
-            </View>
-          ))}
-          <View style={[s.between, styles.tr, styles.tfoot]}>
-            <Text variant="small" weight="bold">
-              Tổng cộng dịch vụ phát sinh
-            </Text>
-            <Text variant="small" weight="bold" color={accent}>
-              {formatVnd(subtotalExtra)}
-            </Text>
+          <View className={s.box}>
+            <KV label="Phòng" value={booking.assignedRooms.map((r) => r.roomNumber).join(', ') || '—'} strong color={accent} />
+            <KV label="Hạng phòng" value={booking.roomType.name} />
+            <KV label="Lưu trú" value={`${formatDate(booking.checkIn)} - ${formatDate(booking.checkOut)} (${booking.nights} đêm)`} />
           </View>
-        </View>
-      </Card>
+        </Card>
+      )}
 
-      <View style={styles.dark}>
-        <View style={s.row}>
-          <Icon name="credit_card" size={16} color="#fbbf24" />
-          <Text variant="caption" weight="bold" color="#fbbf24" style={s.upper}>
-            3. Quyết toán tiền cọc (Deposit Settlement)
-          </Text>
-        </View>
-        <KV label="Tiền cọc tạm thu lúc check-in" value={formatVnd(checkInDeposit)} color="#ffffff" labelColor="#a9b4c2" />
-        <KV label="Trừ chi phí phát sinh" value={`- ${formatVnd(subtotalExtra)}`} color="#fbbf24" labelColor="#a9b4c2" />
-        <View style={styles.darkLine} />
-        <Text variant="caption" color="#cbd5e1">
-          Số tiền HOÀN LẠI CHO KHÁCH
-        </Text>
-        <Text variant="h1" color="#34d399">
-          {formatVnd(netRefund)}
-        </Text>
-        <Button label="Hoàn tiền mặt / VNPay" leadingIcon="refresh" style={{ backgroundColor: '#047857' }} />
-      </View>
+      {booking && !canCheckOut && !checkOut.isSuccess && (
+        <Banner icon="info" tone="amber" title="Đơn chưa thể check-out" text="Chỉ đơn đang lưu trú (đã check-in) mới check-out được." />
+      )}
 
-      <View style={styles.notice}>
-        <Text variant="label" weight="bold" color="#6b3d00">
-          Chuyển trạng thái phòng P.602
-        </Text>
-        <Text variant="caption" color="#6b3d00" style={s.lh}>
-          Sau khi hoàn tất check-out, phòng P.602 sẽ tự động chuyển sang trạng thái “Cần dọn dẹp (Dirty)” cho bộ phận buồng phòng.
-        </Text>
-      </View>
+      {canCheckOut && !checkOut.isSuccess && (
+        <Card>
+          <CardHead icon="receipt_long" title="Quyết toán" />
+          {quote.isPending && <ActivityIndicator color={colors.primary} />}
+          {quote.isError && <Text variant="small" color={colors.error}>{apiErrorMessage(quote.error, 'Không tải được báo giá trả phòng.')}</Text>}
+          {quote.data && (
+            <>
+              <KV label="Đã thanh toán qua StayReco" value={formatVnd(quote.data.amountPaid)} strong color={success} />
+              <KV label="Giờ trả phòng dự kiến" value={new Date(quote.data.scheduledAt).toLocaleString('vi-VN')} />
+              {quote.data.early && (
+                <Banner
+                  icon="schedule"
+                  tone="blue"
+                  title="Trả phòng sớm"
+                  text={`Các đêm ${quote.data.releasedNights.map(formatDate).join(', ')} được mở bán lại, không hoàn tiền.`}
+                />
+              )}
+              {quote.data.lateFee ? (
+                <>
+                  <KV label={`Trả muộn ${quote.data.minutesLate} phút (${quote.data.lateFee.percent}% giá đêm)`} value={formatVnd(computed)} strong color={accent} />
+                  <Text variant="caption" color={colors.onSurfaceVariant}>
+                    Phí thu tại quầy, không qua StayReco. Để trống để thu đúng phí, hoặc nhập số thấp hơn kèm lý do.
+                  </Text>
+                  <Input label="Phí thu thực tế (₫)" keyboardType="number-pad" placeholder={`${computed}`} value={fee} onChangeText={setFee} />
+                  {lowered && <Input label="Lý do giảm phí *" placeholder="Ví dụ: khách VIP, lỗi từ khách sạn…" value={reason} onChangeText={setReason} />}
+                  {!feeValid && (
+                    <Text variant="caption" color={colors.error}>
+                      Phí phải là số không vượt quá {formatVnd(computed)} và cần có lý do.
+                    </Text>
+                  )}
+                </>
+              ) : (
+                <KV label="Phí trả muộn" value="Không có" />
+              )}
+            </>
+          )}
+          {checkOut.isError && <Text variant="small" color={colors.error}>{apiErrorMessage(checkOut.error, 'Check-out không thành công.')}</Text>}
+        </Card>
+      )}
 
       <SuccessSheet
-        visible={finished}
-        onClose={() => setFinished(false)}
+        visible={checkOut.isSuccess}
+        onClose={() => router.back()}
         title="Check-out hoàn tất!"
-        text={`Phòng P.602 đã hoàn tất quyết toán. Khách Trần Thị B đã nhận lại ${formatVnd(netRefund)}.`}
-        printLabel="In hóa đơn quyết toán"
+        text="Phòng đã chuyển sang trạng thái cần dọn dẹp."
+        printLabel="Đóng"
         rows={
           <>
-            <KV label="Mã hóa đơn" value="#INV-P602-8839" strong />
-            <KV label="Số phòng trả" value="P.602" strong color={accent} />
-            <KV label="Thẻ từ nhận lại" value="2 / 2 Thẻ (Đủ)" strong color={success} />
-            <KV label="Trạng thái phòng mới" value="Cần dọn dẹp (Dirty)" strong color="#7a4600" />
+            <KV label="Mã đặt phòng" value={`#${booking?.code ?? ''}`} strong />
+            <KV label="Phí trả muộn đã thu" value={formatVnd(checkOut.data?.lateCheckout?.fee ?? 0)} strong color={accent} />
           </>
         }
       />
     </StaffScreen>
   );
 }
-
-const styles = StyleSheet.create({
-  green: { backgroundColor: '#eef8f1' },
-  italic: { fontStyle: 'italic' },
-  table: { borderWidth: 1, borderColor: colors.surfaceContainerHigh, borderRadius: radius.md, overflow: 'hidden' },
-  tr: { paddingHorizontal: 12, paddingVertical: 10, borderTopWidth: 1, borderTopColor: colors.surfaceContainerHigh, alignItems: 'flex-start' },
-  tfoot: { backgroundColor: colors.surfaceContainerLow },
-  dark: { gap: 10, padding: 16, borderRadius: radius.lg, backgroundColor: '#0f172a' },
-  darkLine: { height: 1, backgroundColor: '#1e293b' },
-  notice: { gap: 4, padding: 14, borderRadius: radius.lg, backgroundColor: '#fff4e0', borderWidth: 1, borderColor: '#f5d9a8' },
-});

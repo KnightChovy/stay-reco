@@ -109,3 +109,8 @@ apiService.interceptors.response.use(
     return apiService(request);
   },
 );
+
+/** Thông báo lỗi backend (`message` trong body) hoặc câu dự phòng khi mất mạng. */
+export function apiErrorMessage(error: unknown, fallback: string) {
+  return (axios.isAxiosError(error) && (error.response?.data as { message?: string } | undefined)?.message) || fallback;
+}

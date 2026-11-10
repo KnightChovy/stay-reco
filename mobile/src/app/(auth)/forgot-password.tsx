@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { router } from 'expo-router';
 import { emailSchema } from '@stayreco/shared';
 import { ScreenHeader } from '@/components/layout/AppHeader';
@@ -8,7 +8,7 @@ import { Chip } from '@/components/ui/chip';
 import { Icon } from '@/components/ui/icon';
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
-import { colors, radius, shadow } from '@/constants/theme';
+import { colors } from '@/constants/theme';
 import { useAuthStore } from '@/stores/auth.store';
 
 const standards = ['Tối thiểu 8 ký tự', 'Bao gồm chữ hoa', 'Có ít nhất 1 số', 'Ký tự đặc biệt'];
@@ -35,11 +35,11 @@ export default function ForgotPasswordScreen() {
   };
 
   return (
-    <View style={styles.screen}>
+    <View className="flex-1 bg-surface">
       <ScreenHeader title="Quên mật khẩu" />
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-        <View style={styles.between}>
-          <Pressable onPress={() => router.replace('/login')} style={styles.row}>
+      <ScrollView contentContainerClassName="gap-[18px] p-4 pb-10" keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        <View className="flex-row items-center justify-between gap-2">
+          <Pressable onPress={() => router.replace('/login')} className="flex-row items-center gap-1.5">
             <Icon name="arrow_back" size={18} color={colors.primary} />
             <Text variant="label" weight="semibold" color={colors.primary}>
               Quay lại Đăng nhập
@@ -48,8 +48,8 @@ export default function ForgotPasswordScreen() {
           <Chip label="SSL 256-bit" icon="lock" tone="neutral" />
         </View>
 
-        <View style={styles.hero}>
-          <View style={styles.heroIcon}>
+        <View className="items-center gap-2.5">
+          <View className="h-16 w-16 items-center justify-center rounded-lg bg-surface-container-high">
             <Icon name="lock_reset" size={30} color={colors.primary} />
           </View>
           <Text variant="hero" center>
@@ -61,9 +61,9 @@ export default function ForgotPasswordScreen() {
           </Text>
         </View>
 
-        <View style={styles.card}>
+        <View className="gap-3 rounded-lg bg-surface-container-lowest p-[18px] shadow-card">
           {sent ? (
-            <View style={styles.success}>
+            <View className="items-center gap-2 py-2">
               <Icon name="check_circle" size={40} color={colors.tertiaryContainer} />
               <Text variant="h3" center>
                 Yêu cầu đã được ghi nhận!
@@ -85,9 +85,9 @@ export default function ForgotPasswordScreen() {
                 onChangeText={setEmail}
                 onSubmitEditing={submit}
               />
-              <View style={styles.rowTop}>
+              <View className="flex-row items-start gap-1.5">
                 <Icon name="info" size={14} color={colors.onSurfaceVariant} />
-                <Text variant="caption" color={colors.onSurfaceVariant} style={styles.flex}>
+                <Text variant="caption" color={colors.onSurfaceVariant} className="flex-1">
                   Chúng tôi sẽ gửi mã kiểm tra tính hợp lệ đến email này.
                 </Text>
               </View>
@@ -107,12 +107,12 @@ export default function ForgotPasswordScreen() {
           )}
         </View>
 
-        <View style={styles.warning}>
-          <View style={styles.warningIcon}>
+        <View className="flex-row gap-3 rounded-lg bg-[#fbefec] p-4">
+          <View className="h-9 w-9 items-center justify-center rounded-full bg-secondary-fixed">
             <Icon name="verified_user" size={20} color={colors.secondary} />
           </View>
-          <View style={styles.flex}>
-            <Text variant="small" weight="bold" style={styles.tracking}>
+          <View className="flex-1">
+            <Text variant="small" weight="bold" className="tracking-[1px]">
               LƯU Ý QUAN TRỌNG
             </Text>
             <Text variant="small" color={colors.error}>
@@ -126,8 +126,8 @@ export default function ForgotPasswordScreen() {
           </View>
         </View>
 
-        <View style={styles.card}>
-          <View style={styles.row}>
+        <View className="gap-3 rounded-lg bg-surface-container-lowest p-[18px] shadow-card">
+          <View className="flex-row items-center gap-1.5">
             <Icon name="password" size={20} color={colors.primary} />
             <Text variant="label" weight="bold">
               Chuẩn an ninh mật khẩu mới
@@ -136,9 +136,9 @@ export default function ForgotPasswordScreen() {
           <Text variant="small" color={colors.onSurfaceVariant}>
             Khi truy cập liên kết gửi về email, bạn sẽ hoàn tất thiết lập mật khẩu với chuẩn an ninh:
           </Text>
-          <View style={styles.grid}>
+          <View className="flex-row flex-wrap gap-2">
             {standards.map((s) => (
-              <View key={s} style={styles.standard}>
+              <View key={s} className="grow basis-[47%] flex-row items-center gap-2 rounded-md bg-surface-container-low p-2.5">
                 <Icon name="check" size={16} color={colors.primary} />
                 <Text variant="caption">{s}</Text>
               </View>
@@ -146,22 +146,22 @@ export default function ForgotPasswordScreen() {
           </View>
         </View>
 
-        <View style={styles.support}>
+        <View className="flex-row gap-3 rounded-lg bg-surface-container-low p-4">
           <Icon name="support_agent" size={24} color={colors.primary} />
-          <View style={[styles.flex, styles.gap6]}>
+          <View className="flex-1 gap-1.5">
             <Text variant="small" weight="bold">
               Không còn truy cập được email này?
             </Text>
             <Text variant="small" color={colors.onSurfaceVariant}>
               Liên hệ Trung tâm hỗ trợ StayReco Care để được chuyên viên xác minh thủ công danh tính chủ sở hữu tài khoản.
             </Text>
-            <View style={styles.row}>
+            <View className="flex-row items-center gap-1.5">
               <Icon name="call" size={16} color={colors.secondary} />
               <Text variant="small" weight="semibold" color={colors.secondary}>
                 1900 6868 (24/7)
               </Text>
             </View>
-            <View style={styles.row}>
+            <View className="flex-row items-center gap-1.5">
               <Icon name="mail" size={16} color={colors.primary} />
               <Text variant="small" weight="semibold" color={colors.primary}>
                 support@stayreco.vn
@@ -177,46 +177,3 @@ export default function ForgotPasswordScreen() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.surface },
-  content: { padding: 16, gap: 18, paddingBottom: 40 },
-  flex: { flex: 1 },
-  gap6: { gap: 6 },
-  tracking: { letterSpacing: 1 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  rowTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
-  between: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  hero: { alignItems: 'center', gap: 10 },
-  heroIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: radius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surfaceContainerHigh,
-  },
-  card: { padding: 18, gap: 12, borderRadius: radius.lg, backgroundColor: colors.surfaceContainerLowest, ...shadow.card },
-  success: { alignItems: 'center', gap: 8, paddingVertical: 8 },
-  warning: { flexDirection: 'row', gap: 12, padding: 16, borderRadius: radius.lg, backgroundColor: '#fbefec' },
-  warningIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.secondaryFixed,
-  },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  standard: {
-    flexBasis: '47%',
-    flexGrow: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    padding: 10,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceContainerLow,
-  },
-  support: { flexDirection: 'row', gap: 12, padding: 16, borderRadius: radius.lg, backgroundColor: colors.surfaceContainerLow },
-});

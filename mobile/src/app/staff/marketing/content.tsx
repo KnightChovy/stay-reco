@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
 import { Text } from '@/components/ui/text';
-import { colors, radius } from '@/constants/theme';
+import { colors } from '@/constants/theme';
 import { contents, type Platform, type Tone } from '@/features/staff/data';
 import { Card, FilterChips, Grid, StaffScreen, Stat, accent, s } from '@/features/staff/ui';
 
@@ -20,7 +20,7 @@ export default function StaffMarketingContentScreen() {
   return (
     <StaffScreen
       title="Thư viện nội dung AI"
-      footer={<Button label="Tạo nội dung AI" leadingIcon="auto_awesome" size="lg" style={[s.flex, { backgroundColor: accent }]} onPress={() => router.push('/staff/marketing/editor')} />}
+      footer={<Button label="Tạo nội dung AI" leadingIcon="auto_awesome" size="lg" className={s.flex} style={{ backgroundColor: accent }} onPress={() => router.push('/staff/marketing/editor')} />}
     >
       <Grid>
         <Stat icon="auto_awesome" label="Nội dung đã khởi tạo AI" value="24" unit="bài viết" foot="Tháng 10/2026" tint={accent} />
@@ -41,8 +41,8 @@ export default function StaffMarketingContentScreen() {
       {list.map((c) => (
         <Pressable key={c.id} accessibilityRole="button" accessibilityLabel={c.title} onPress={() => router.push('/staff/marketing/editor')}>
           <Card>
-            <Image source={c.coverImage} style={styles.cover} contentFit="cover" accessibilityLabel={`Ảnh bìa ${c.title}`} />
-            <View style={s.wrap}>
+            <Image source={c.coverImage} className="h-[150px] rounded-md bg-surface-container" contentFit="cover" accessibilityLabel={`Ảnh bìa ${c.title}`} />
+            <View className={s.wrap}>
               <Chip label={c.platform} tone="primary" />
               <Chip label={c.status} tone={statusTone[c.status]} />
               <Chip label={`AI ${c.aiScore}%`} icon="auto_awesome" tone="secondary" />
@@ -53,8 +53,8 @@ export default function StaffMarketingContentScreen() {
             <Text variant="small" color={colors.onSurfaceVariant} numberOfLines={3}>
               {c.previewText}
             </Text>
-            <View style={s.between}>
-              <Text variant="caption" color={colors.onSurfaceVariant} style={s.flex}>
+            <View className={s.between}>
+              <Text variant="caption" color={colors.onSurfaceVariant} className={s.flex}>
                 Đối tượng: {c.targetAudience}
               </Text>
               <Text variant="caption" color={colors.outline}>
@@ -67,7 +67,3 @@ export default function StaffMarketingContentScreen() {
     </StaffScreen>
   );
 }
-
-const styles = StyleSheet.create({
-  cover: { height: 150, borderRadius: radius.md, backgroundColor: colors.surfaceContainer },
-});

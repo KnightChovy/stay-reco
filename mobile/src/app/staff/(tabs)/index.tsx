@@ -1,42 +1,65 @@
-import { useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
-import { router } from 'expo-router';
+import { ActivityIndicator, Pressable, View } from 'react-native';
+import { router, type Href } from 'expo-router';
+import { useQuery } from '@tanstack/react-query';
+import type { ActionItem } from '@stayreco/shared';
 import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
 import { Icon, type IconName } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
-import { colors, radius } from '@/constants/theme';
-import { bookings, checkInGuests, dashboardStats as st, departments, roomStatus, shift, urgentTasks } from '@/features/staff/data';
-import { Avatar, Card, Grid, KV, Section, Segmented, Stat, StaffTabScreen, accent, s } from '@/features/staff/ui';
+import { colors } from '@/constants/theme';
+import type { Tone } from '@/features/staff/data';
+import { Avatar, Card, Grid, KV, Section, Stat, StaffTabScreen, accent, s, useStaffHotel } from '@/features/staff/ui';
+import { bookingStatusLabel, formatDate } from '@/lib/stay';
+import { getActionItems, getTodayStats } from '@/services/staff.service';
 
-const quick: { icon: IconName; label: string; go: () => void }[] = [
-  { icon: 'qr_code_scanner', label: 'Quét QR Voucher', go: () => router.push('/staff/check-in') },
-  { icon: 'search', label: 'Tìm nhanh đặt phòng', go: () => router.navigate('/staff/bookings') },
-  { icon: 'person_add', label: 'Tạo đặt phòng tại quầy', go: () => router.push('/staff/check-in') },
+const quick: { icon: IconName; label: string; href: Href }[] = [
+  { icon: 'key', label: 'Check-in', href: '/staff/check-in' },
+  { icon: 'logout', label: 'Check-out', href: '/staff/check-out' },
+  { icon: 'search', label: 'Tìm đặt phòng', href: '/staff/bookings' },
 ];
 
-const totalRooms = roomStatus.reduce((sum, r) => sum + r.count, 0);
-const departures = bookings.filter((b) => b.action === 'checkout' || b.action === 'service');
+// Chỉ các mục staff xử lý được trên mobile; mục khác (thiết lập, xác minh…) là việc của chủ khách sạn.
+const actionLabels: Partial<Record<ActionItem['type'], { icon: IconName; label: string; href: Href }>> = {
+  OVERDUE_CHECKOUTS: { icon: 'schedule', label: 'Khách quá giờ trả phòng', href: '/staff/bookings?filter=CHECKED_IN' },
+  REFUND_REQUESTS_PENDING: { icon: 'currency_exchange', label: 'Yêu cầu hoàn tiền đang chờ', href: '/staff/refunds' },
+  CHANGE_REQUESTS_PENDING: { icon: 'edit_note', label: 'Yêu cầu đổi thông tin đang chờ', href: '/staff/bookings?filter=CHANGES' },
+};
+const severityTone: Record<ActionItem['severity'], Tone> = { CRITICAL: 'danger', WARNING: 'warning', INFO: 'neutral' };
+
+const roomLegend = [
+  { key: 'AVAILABLE', label: 'Sẵn sàng', color: '#2e7d55' },
+  { key: 'OCCUPIED', label: 'Có khách', color: colors.primary },
+  { key: 'CLEANING', label: 'Đang dọn', color: '#d97706' },
+  { key: 'MAINTENANCE', label: 'Bảo trì', color: colors.outline },
+] as const;
+
+const initials = (name: string) =>
+  name
+    .split(/\s+/)
+    .slice(-2)
+    .map((w) => w[0]?.toUpperCase() ?? '')
+    .join('');
 
 export default function StaffDashboardScreen() {
-  const [tab, setTab] = useState<'checkin' | 'checkout'>('checkin');
+  const { hotelId } = useStaffHotel();
+  const today = useQuery({ queryKey: ['staff', 'today', hotelId], queryFn: () => getTodayStats(hotelId!), enabled: !!hotelId });
+  const items = useQuery({ queryKey: ['staff', 'action-items', hotelId], queryFn: () => getActionItems(hotelId!), enabled: !!hotelId });
+  const t = today.data;
+  const tasks = items.data?.items.filter((i) => actionLabels[i.type]) ?? [];
 
   return (
     <StaffTabScreen>
-      <View style={s.between}>
-        <View style={s.flex}>
-          <Text variant="caption" weight="semibold" color={colors.tertiaryContainer}>
-            {shift.label}
-          </Text>
-          <Text variant="h1">Tổng quan ca làm</Text>
-        </View>
-        <Chip label={shift.handover} tone="secondary" />
+      <View>
+        <Text variant="caption" weight="semibold" color={colors.tertiaryContainer}>
+          {t ? `Hôm nay ${formatDate(t.date)}` : 'Hôm nay'}
+        </Text>
+        <Text variant="h1">Tổng quan ca làm</Text>
       </View>
 
-      <View style={styles.quickRow}>
+      <View className="flex-row gap-2.5">
         {quick.map((q) => (
-          <Pressable key={q.label} accessibilityRole="button" onPress={q.go} style={styles.quick}>
-            <View style={styles.quickIcon}>
+          <Pressable key={q.label} accessibilityRole="button" onPress={() => router.push(q.href)} className="flex-1 items-center gap-2 rounded-lg border border-surface-container bg-surface-container-lowest px-1.5 py-3.5">
+            <View className="h-11 w-11 items-center justify-center rounded-[14px] bg-surface-container-low">
               <Icon name={q.icon} color={colors.primary} />
             </View>
             <Text variant="caption" weight="semibold" center>
@@ -46,175 +69,122 @@ export default function StaffDashboardScreen() {
         ))}
       </View>
 
-      <Grid>
-        <Stat icon="key" label="Khách nhận phòng" value={`${st.checkIn.total}`} unit="lượt dự kiến" foot={`Đã nhận: ${st.checkIn.done} · Chờ nhận: ${st.checkIn.waiting}`} />
-        <Stat icon="logout" label="Khách trả phòng" value={`${st.checkOut.total}`} unit="lượt trong ngày" foot={`Đã xong: ${st.checkOut.done} · Đang đợi: ${st.checkOut.waiting}`} tint={accent} />
-        <Stat icon="bed" label="Công suất phòng" value={`${st.occupancy.percent}%`} unit={`${st.occupancy.used}/${st.occupancy.total} phòng`} foot={`Còn trống: ${st.occupancy.cleanFree} phòng sạch`} tint="#2e7d55" />
-        <Stat icon="auto_awesome" label="Tin nhắn & AI duyệt" value={`${st.messages.total}`} unit="mục cần phản hồi" foot={st.messages.note} tint={colors.primaryContainer} />
-      </Grid>
-
-      <Section title="Cần xử lý ngay" />
-      <Card style={styles.list}>
-        {urgentTasks.map((t, i) => (
-          <Pressable
-            key={t.title}
-            accessibilityRole="button"
-            onPress={() => router.push({ pathname: '/staff/bookings/[id]', params: { id: t.id } })}
-            style={[styles.task, i > 0 && styles.topLine]}
-          >
-            <View style={styles.taskIcon}>
-              <Icon name={t.icon} size={18} color={colors.primary} />
-            </View>
-            <View style={s.flex}>
-              <Text variant="small" weight="semibold">
-                {t.title}
-              </Text>
-              <Text variant="caption" color={colors.onSurfaceVariant}>
-                {t.sub}
-              </Text>
-              <Chip label={t.tag} tone={t.tone} style={styles.tag} />
-            </View>
-          </Pressable>
-        ))}
-      </Card>
-
-      <View style={s.row}>
-        <Icon name="refresh" size={14} color={colors.onSurfaceVariant} />
-        <Text variant="caption" color={colors.onSurfaceVariant}>
-          Tự động cập nhật thời gian thực từ PMS
-        </Text>
-      </View>
-      <Segmented
-        items={[
-          { key: 'checkin', label: `Nhận phòng (${st.checkIn.total})` },
-          { key: 'checkout', label: `Trả phòng (${st.checkOut.total})` },
-        ]}
-        value={tab}
-        onChange={setTab}
-      />
-
-      {tab === 'checkin'
-        ? checkInGuests.map((g) => (
-            <Card key={g.id}>
-              <View style={s.row}>
-                <Avatar text={g.initials} />
-                <View style={s.flex}>
-                  <Text variant="label" weight="bold">
-                    {g.name}
-                  </Text>
-                  <Text variant="caption" color={colors.onSurfaceVariant}>
-                    {g.id} · {g.tier}
-                  </Text>
-                </View>
-                <View>
-                  <Text variant="label" weight="bold">
-                    {g.arrivalTime}
-                  </Text>
-                  <Text variant="caption" color={colors.onSurfaceVariant}>
-                    Giờ đến
-                  </Text>
-                </View>
-              </View>
-              <KV label="Hạng phòng & Gói" value={`${g.roomType} · ${g.pkg}`} />
-              <KV label="Phòng vật lý" value={`${g.roomNum} · ${g.roomStatus}`} strong />
-              <KV label="Thanh toán" value={`${g.paymentStatus} · ${g.amount}`} />
-              <View style={s.row}>
-                <Button label="Chi tiết" variant="secondary" style={s.flex} onPress={() => router.push({ pathname: '/staff/bookings/[id]', params: { id: g.id } })} />
-                <Button label="Check-in" leadingIcon="key" style={[s.flex, { backgroundColor: accent }]} onPress={() => router.push('/staff/check-in')} />
-              </View>
-            </Card>
-          ))
-        : departures.map((b) => (
-            <Card key={b.id}>
-              <View style={s.row}>
-                <Avatar text={b.initials} />
-                <View style={s.flex}>
-                  <Text variant="label" weight="bold">
-                    {b.guestName}
-                  </Text>
-                  <Text variant="caption" color={colors.onSurfaceVariant}>
-                    {b.id} · {b.roomNum}
-                  </Text>
-                </View>
-                <Chip label={b.status} tone={b.tone} />
-              </View>
-              <KV label="Lịch lưu trú" value={b.stayDates} />
-              <Button label="Check-out" leadingIcon="logout" style={{ backgroundColor: accent }} onPress={() => router.push('/staff/check-out')} />
-            </Card>
-          ))}
-
-      <Section title="Tình trạng phòng vật lý" />
-      <Card>
-        <View style={s.between}>
-          <Text variant="label" weight="bold">
-            Tổng {totalRooms} phòng
+      {today.isPending ? (
+        <ActivityIndicator color={colors.primary} />
+      ) : today.isError ? (
+        <Card>
+          <Text variant="small" color={colors.error}>
+            Không tải được số liệu hôm nay.
           </Text>
-          <Text variant="caption" color={colors.onSurfaceVariant}>
-            {Math.round((roomStatus[0].count / totalRooms) * 100)}% Sẵn sàng
-          </Text>
-        </View>
-        <View style={styles.bar}>
-          {roomStatus.map((r) => (
-            <View key={r.label} style={{ flex: r.count, backgroundColor: r.color }} />
-          ))}
-        </View>
-        {roomStatus.map((r) => (
-          <View key={r.label} style={s.row}>
-            <View style={[styles.legend, { backgroundColor: r.color }]} />
-            <Text variant="small" color={colors.onSurfaceVariant} style={s.flex}>
-              {r.label}
-            </Text>
-            <Text variant="small" weight="bold">
-              {r.count} phòng
-            </Text>
-          </View>
-        ))}
-      </Card>
+          <Button label="Thử lại" leadingIcon="refresh" variant="secondary" onPress={() => void today.refetch()} />
+        </Card>
+      ) : (
+        <>
+          <Grid>
+            <Stat icon="key" label="Khách nhận phòng" value={`${t!.arrivals.expected}`} unit="lượt dự kiến" foot={`Đã nhận: ${t!.arrivals.checkedIn}`} />
+            <Stat icon="logout" label="Khách trả phòng" value={`${t!.departures.expected}`} unit="lượt trong ngày" foot={`Đã xong: ${t!.departures.checkedOut}`} tint={accent} />
+            <Stat
+              icon="bed"
+              label="Công suất đêm nay"
+              value={t!.tonight.occupancyRate === null ? '—' : `${Math.round(t!.tonight.occupancyRate)}%`}
+              unit={`${t!.tonight.roomsSold}/${t!.tonight.roomsAvailable} phòng đã bán`}
+              foot={`Còn trống: ${t!.tonight.roomsAvailable - t!.tonight.roomsSold} phòng`}
+              tint="#2e7d55"
+            />
+            <Stat icon="groups" label="Đang lưu trú" value={`${t!.inHouse.guests}`} unit="khách" foot={`${t!.inHouse.bookings} đơn`} tint={colors.primaryContainer} />
+          </Grid>
 
-      <Section title="Liên hệ bộ phận nội bộ" />
-      <Card style={styles.list}>
-        {departments.map((d, i) => (
-          <View key={d.name} style={[styles.task, i > 0 && styles.topLine]}>
-            <View style={styles.taskIcon}>
-              <Icon name="contact_phone" size={18} color={colors.primary} />
-            </View>
-            <View style={s.flex}>
-              <Text variant="small" weight="semibold">
-                {d.name}
-              </Text>
-              <Text variant="caption" color={colors.onSurfaceVariant}>
-                {d.sub}
-              </Text>
-            </View>
-            <Text variant="small" weight="bold" color={colors.primary}>
-              {d.ext}
+          {tasks.length > 0 && (
+            <>
+              <Section title="Cần xử lý ngay" />
+              <Card style={{ gap: 0, paddingVertical: 4 }}>
+                {tasks.map((item, i) => {
+                  const a = actionLabels[item.type]!;
+                  return (
+                    <Pressable key={item.type} accessibilityRole="button" onPress={() => router.push(a.href)} className={`flex-row items-center gap-3 py-3 ${i > 0 ? 'border-t border-surface-container-high' : ''}`}>
+                      <View className="h-9 w-9 items-center justify-center rounded-[10px] bg-surface-container-low">
+                        <Icon name={a.icon} size={18} color={colors.primary} />
+                      </View>
+                      <Text variant="small" weight="semibold" className={s.flex}>
+                        {a.label}
+                      </Text>
+                      <Chip label={`${item.count}`} tone={severityTone[item.severity]} />
+                    </Pressable>
+                  );
+                })}
+              </Card>
+            </>
+          )}
+
+          <Section title={`Khách sắp đến (${t!.upcomingArrivals.length})`} />
+          {t!.upcomingArrivals.length === 0 ? (
+            <Text variant="small" color={colors.onSurfaceVariant}>
+              Không còn khách nào chờ nhận phòng hôm nay.
             </Text>
-          </View>
-        ))}
-      </Card>
+          ) : (
+            t!.upcomingArrivals.map((g) => (
+              <Card key={g.bookingId}>
+                <View className={s.row}>
+                  <Avatar text={initials(g.guestName)} />
+                  <View className={s.flex}>
+                    <Text variant="label" weight="bold">
+                      {g.guestName}
+                    </Text>
+                    <Text variant="caption" color={colors.onSurfaceVariant}>
+                      #{g.code} · {bookingStatusLabel[g.status]}
+                    </Text>
+                  </View>
+                  <View>
+                    <Text variant="label" weight="bold">
+                      {g.arrivalTime ?? '—'}
+                    </Text>
+                    <Text variant="caption" color={colors.onSurfaceVariant}>
+                      Giờ đến
+                    </Text>
+                  </View>
+                </View>
+                <KV label="Hạng phòng" value={`${g.roomTypeName} · ${g.rooms} phòng · ${g.nights} đêm`} />
+                <KV label="Phòng đang giữ" value={g.roomNumbers.join(', ') || 'Chưa gán'} strong />
+                {!!g.specialRequests && <Text variant="caption">Yêu cầu: {g.specialRequests}</Text>}
+                <View className={s.row}>
+                  <Button label="Chi tiết" variant="secondary" className={s.flex} onPress={() => router.push({ pathname: '/staff/bookings/[id]', params: { id: g.bookingId } })} />
+                  <Button
+                    label="Check-in"
+                    leadingIcon="key"
+                    className={s.flex} style={{ backgroundColor: accent }}
+                    onPress={() => router.push({ pathname: '/staff/check-in', params: { code: g.code } })}
+                  />
+                </View>
+              </Card>
+            ))
+          )}
+
+          <Section title="Tình trạng phòng" />
+          <Card>
+            <Text variant="label" weight="bold">
+              Tổng {t!.rooms.total} phòng
+            </Text>
+            {t!.rooms.total > 0 && (
+              <View className="h-2.5 flex-row gap-0.5 overflow-hidden rounded-full">
+                {roomLegend.map((r) => (
+                  <View key={r.key} style={{ flex: t!.rooms[r.key], backgroundColor: r.color }} />
+                ))}
+              </View>
+            )}
+            {roomLegend.map((r) => (
+              <View key={r.key} className={s.row}>
+                <View className="h-2.5 w-2.5 rounded-[3px]" style={{ backgroundColor: r.color }} />
+                <Text variant="small" color={colors.onSurfaceVariant} className={s.flex}>
+                  {r.label}
+                </Text>
+                <Text variant="small" weight="bold">
+                  {t!.rooms[r.key]} phòng
+                </Text>
+              </View>
+            ))}
+          </Card>
+        </>
+      )}
     </StaffTabScreen>
   );
 }
-
-const styles = StyleSheet.create({
-  quickRow: { flexDirection: 'row', gap: 10 },
-  quick: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 14,
-    paddingHorizontal: 6,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surfaceContainerLowest,
-    borderWidth: 1,
-    borderColor: colors.surfaceContainer,
-  },
-  quickIcon: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceContainerLow },
-  list: { gap: 0, paddingVertical: 4 },
-  task: { flexDirection: 'row', gap: 12, paddingVertical: 12, alignItems: 'flex-start' },
-  topLine: { borderTopWidth: 1, borderTopColor: colors.surfaceContainerHigh },
-  taskIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceContainerLow },
-  tag: { marginTop: 4 },
-  bar: { flexDirection: 'row', height: 10, borderRadius: radius.full, overflow: 'hidden', gap: 2 },
-  legend: { width: 10, height: 10, borderRadius: 3 },
-});

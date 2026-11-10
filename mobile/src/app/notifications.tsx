@@ -1,4 +1,4 @@
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { router } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Notification, NotificationType } from '@stayreco/shared';
@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Icon, type IconName } from '@/components/ui/icon';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
-import { colors, radius, shadow } from '@/constants/theme';
+import { colors, radius } from '@/constants/theme';
 import { getNotifications, markAllNotificationsRead, markNotificationRead } from '@/services/notifications.service';
 import { useAuthStore } from '@/stores/auth.store';
 
@@ -53,16 +53,16 @@ export default function NotificationsScreen() {
   const hasUnread = data?.notifications.some((n) => !n.isRead);
 
   return (
-    <View style={styles.screen}>
+    <View className="flex-1 bg-surface">
       <ScreenHeader
         title="Thông báo"
         right={
           hasUnread && <Button label="Đọc tất cả" leadingIcon="task_alt" variant="ghost" size="sm" onPress={() => void readAll()} />
         }
       />
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerClassName="gap-3 p-4 pb-8" showsVerticalScrollIndicator={false}>
         {!account ? (
-          <View style={styles.state}>
+          <View className="items-center gap-3 py-6">
             <Text variant="small" color={colors.onSurfaceVariant} center>
               Đăng nhập để xem thông báo.
             </Text>
@@ -71,14 +71,14 @@ export default function NotificationsScreen() {
         ) : isPending ? (
           [0, 1, 2].map((i) => <Skeleton key={i} height={72} radius={radius.lg} />)
         ) : isError ? (
-          <View style={styles.state}>
+          <View className="items-center gap-3 py-6">
             <Text variant="small" color={colors.onSurfaceVariant} center>
               Không tải được thông báo. Vui lòng kiểm tra kết nối.
             </Text>
             <Button label="Thử lại" leadingIcon="refresh" variant="secondary" size="sm" onPress={() => refetch()} />
           </View>
         ) : data.notifications.length === 0 ? (
-          <View style={styles.state}>
+          <View className="items-center gap-3 py-6">
             <Text variant="small" color={colors.onSurfaceVariant} center>
               Bạn chưa có thông báo nào.
             </Text>
@@ -90,12 +90,12 @@ export default function NotificationsScreen() {
               accessibilityRole="button"
               accessibilityLabel={`${n.isRead ? '' : 'Chưa đọc. '}${n.title ?? ''} ${n.message}`}
               onPress={() => void open(n)}
-              style={[styles.item, !n.isRead && styles.unread]}
+              className={`flex-row items-start gap-3 rounded-lg p-3.5 shadow-card ${!n.isRead ? 'bg-primary-fixed' : 'bg-surface-container-lowest'}`}
             >
-              <View style={styles.icon}>
+              <View className="h-10 w-10 items-center justify-center rounded-full bg-surface-container-low">
                 <Icon name={typeIcon[n.type]} size={20} color={colors.primaryContainer} />
               </View>
-              <View style={styles.flex}>
+              <View className="flex-1 gap-0.5">
                 {!!n.title && (
                   <Text variant="small" weight="bold">
                     {n.title}
@@ -108,7 +108,7 @@ export default function NotificationsScreen() {
                   {new Date(n.createdAt).toLocaleString('vi-VN')}
                 </Text>
               </View>
-              {!n.isRead && <View style={styles.dot} />}
+              {!n.isRead && <View className="mt-1.5 h-2 w-2 rounded-full bg-secondary" />}
             </Pressable>
           ))
         )}
@@ -116,29 +116,3 @@ export default function NotificationsScreen() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.surface },
-  content: { padding: 16, gap: 12, paddingBottom: 32 },
-  state: { alignItems: 'center', gap: 12, paddingVertical: 24 },
-  flex: { flex: 1, gap: 2 },
-  item: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-    padding: 14,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surfaceContainerLowest,
-    ...shadow.card,
-  },
-  unread: { backgroundColor: colors.primaryFixed },
-  icon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surfaceContainerLow,
-  },
-  dot: { width: 8, height: 8, borderRadius: 4, marginTop: 6, backgroundColor: colors.secondary },
-});

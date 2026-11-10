@@ -1,4 +1,4 @@
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
@@ -8,7 +8,7 @@ import { Chip } from '@/components/ui/chip';
 import { Icon } from '@/components/ui/icon';
 import { QrCode } from '@/components/ui/qr-code';
 import { Text } from '@/components/ui/text';
-import { colors, radius, shadow } from '@/constants/theme';
+import { colors } from '@/constants/theme';
 import { images } from '@/lib/mock-data';
 import { formatDate, formatVnd, nightsBetween } from '@/lib/stay';
 import { getBooking, getVoucher } from '@/services/bookings.service';
@@ -27,9 +27,9 @@ export default function ConfirmationScreen() {
 
   if (!v) {
     return (
-      <View style={styles.screen}>
+      <View className="flex-1 bg-surface">
         <ScreenHeader title="Chi Tiết Đặt Phòng" />
-        <View style={styles.state}>
+        <View className="flex-1 items-center justify-center gap-3 p-6">
           <Text variant="small" color={colors.onSurfaceVariant} center>
             {voucher.isError || !id
               ? 'Voucher không còn hiệu lực hoặc đơn chưa được xác nhận.'
@@ -46,36 +46,36 @@ export default function ConfirmationScreen() {
   const nights = nightsBetween(v.checkIn, v.checkOut);
 
   return (
-    <View style={styles.screen}>
+    <View className="flex-1 bg-surface">
       <ScreenHeader title="Chi Tiết Đặt Phòng" />
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.hero}>
-          <View style={styles.success}>
+      <ScrollView contentContainerClassName="gap-4 p-4 pb-8" showsVerticalScrollIndicator={false}>
+        <View className="items-center gap-2">
+          <View className="h-16 w-16 items-center justify-center rounded-full bg-tertiary-fixed">
             <Icon name="check_circle" size={36} color={colors.tertiaryContainer} />
           </View>
-          <Text variant="caption" weight="semibold" color={colors.onSurfaceVariant} style={styles.code}>
+          <Text variant="caption" weight="semibold" color={colors.onSurfaceVariant} className="tracking-[1px]">
             MÃ ĐƠN: {v.code}
           </Text>
           <Text variant="h1" color={colors.primary} center>
             Đặt phòng thành công!
           </Text>
-          <Chip label="Đã xác nhận & thanh toán" icon="verified" tone="tertiary" style={styles.selfCenter} />
+          <Chip label="Đã xác nhận & thanh toán" icon="verified" tone="tertiary" style={{ alignSelf: 'center' }} />
         </View>
 
-        <View style={styles.card}>
-          <View style={styles.cover}>
+        <View className="overflow-hidden rounded-lg bg-surface-container-lowest shadow-card">
+          <View className="h-[130px] justify-end">
             <Image
               source={booking.data?.hotel.coverImageUrl ?? images.voucherHero}
-              style={StyleSheet.absoluteFill}
+              className="absolute inset-0"
               contentFit="cover"
             />
-            <View style={styles.coverOverlay} />
-            <View style={styles.coverText}>
+            <View className="absolute inset-0 bg-[rgba(1,30,50,0.45)]" />
+            <View className="gap-0.5 p-3.5">
               <Text variant="h2" color={colors.white}>
                 {v.hotelName}
               </Text>
               {booking.data && (
-                <View style={styles.row}>
+                <View className="flex-row items-center gap-1.5">
                   <Icon name="location_on" size={14} color={colors.white} />
                   <Text variant="caption" color={colors.white}>
                     {booking.data.hotel.city}
@@ -85,14 +85,14 @@ export default function ConfirmationScreen() {
             </View>
           </View>
 
-          <View style={styles.qrSection}>
-            <View style={styles.between}>
-              <Text variant="caption" weight="bold" color={colors.onSurfaceVariant} style={styles.code}>
+          <View className="gap-3 bg-surface-container-low p-4">
+            <View className="flex-row items-center justify-between gap-2">
+              <Text variant="caption" weight="bold" color={colors.onSurfaceVariant} className="tracking-[1px]">
                 QR CHECK-IN
               </Text>
               <Chip label="Sẵn sàng sử dụng" tone="tertiary" />
             </View>
-            <View style={styles.qr}>
+            <View className="self-center rounded-lg bg-surface-container-lowest p-3.5">
               <QrCode value={v.qrToken} size={200} />
             </View>
             <Text variant="caption" color={colors.onSurfaceVariant} center>
@@ -100,11 +100,11 @@ export default function ConfirmationScreen() {
             </Text>
           </View>
 
-          <View style={styles.body}>
-            <View style={styles.stay}>
-              <View style={styles.row}>
-                <View style={styles.flex}>
-                  <View style={styles.row}>
+          <View className="gap-3.5 p-4">
+            <View className="gap-2.5 rounded-md bg-surface-container-low p-3">
+              <View className="flex-row items-center gap-1.5">
+                <View className="flex-1">
+                  <View className="flex-row items-center gap-1.5">
                     <Icon name="login" size={16} color={colors.onSurfaceVariant} />
                     <Text variant="caption" color={colors.onSurfaceVariant}>
                       Nhận phòng
@@ -114,8 +114,8 @@ export default function ConfirmationScreen() {
                     {formatDate(v.checkIn)}
                   </Text>
                 </View>
-                <View style={[styles.flex, styles.alignEnd]}>
-                  <View style={styles.row}>
+                <View className="flex-1 items-end">
+                  <View className="flex-row items-center gap-1.5">
                     <Icon name="logout" size={16} color={colors.onSurfaceVariant} />
                     <Text variant="caption" color={colors.onSurfaceVariant}>
                       Trả phòng
@@ -126,8 +126,8 @@ export default function ConfirmationScreen() {
                   </Text>
                 </View>
               </View>
-              <View style={styles.divider} />
-              <View style={styles.between}>
+              <View className="h-px bg-surface-container-high" />
+              <View className="flex-row items-center justify-between gap-2">
                 <Text variant="caption" color={colors.onSurfaceVariant}>
                   Thời gian lưu trú
                 </Text>
@@ -137,8 +137,8 @@ export default function ConfirmationScreen() {
               </View>
             </View>
 
-            <View style={styles.between}>
-              <View style={styles.flex}>
+            <View className="flex-row items-center justify-between gap-2">
+              <View className="flex-1">
                 <Text variant="caption" color={colors.onSurfaceVariant}>
                   Hạng phòng đã chọn
                 </Text>
@@ -152,8 +152,8 @@ export default function ConfirmationScreen() {
               <Chip label={`${v.guests} khách • ${v.rooms} phòng`} tone="primary" />
             </View>
 
-            <View style={[styles.between, styles.total]}>
-              <View style={styles.flex}>
+            <View className="flex-row items-center justify-between gap-2 border-t border-surface-container-high pt-3">
+              <View className="flex-1">
                 <Text variant="small" weight="semibold">
                   Tổng chi phí thanh toán
                 </Text>
@@ -168,21 +168,21 @@ export default function ConfirmationScreen() {
           </View>
         </View>
 
-        <View style={[styles.card, styles.notes]}>
-          <View style={styles.row}>
+        <View className="overflow-hidden rounded-lg bg-surface-container-lowest shadow-card gap-3 p-4">
+          <View className="flex-row items-center gap-1.5">
             <Icon name="info" size={20} color={colors.secondary} />
             <Text variant="label" weight="bold" color={colors.primary}>
               Lưu ý quan trọng khi nhận phòng
             </Text>
           </View>
           {notes.map((n, i) => (
-            <View key={n} style={styles.note}>
-              <View style={styles.noteNum}>
+            <View key={n} className="flex-row gap-2.5">
+              <View className="h-[22px] w-[22px] items-center justify-center rounded-full bg-surface-container">
                 <Text variant="caption" weight="bold">
                   {i + 1}
                 </Text>
               </View>
-              <Text variant="small" color={colors.onSurfaceVariant} style={styles.flex}>
+              <Text variant="small" color={colors.onSurfaceVariant} className="flex-1">
                 {n}
               </Text>
             </View>
@@ -192,44 +192,3 @@ export default function ConfirmationScreen() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  state: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 24 },
-  screen: { flex: 1, backgroundColor: colors.surface },
-  content: { padding: 16, gap: 16, paddingBottom: 32 },
-  flex: { flex: 1 },
-  alignEnd: { alignItems: 'flex-end' },
-  selfCenter: { alignSelf: 'center' },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  between: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  code: { letterSpacing: 1 },
-  hero: { alignItems: 'center', gap: 8 },
-  success: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.tertiaryFixed,
-  },
-  card: { borderRadius: radius.lg, overflow: 'hidden', backgroundColor: colors.surfaceContainerLowest, ...shadow.card },
-  cover: { height: 130, justifyContent: 'flex-end' },
-  coverOverlay: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(1,30,50,0.45)' },
-  coverText: { padding: 14, gap: 2 },
-  qrSection: { padding: 16, gap: 12, backgroundColor: colors.surfaceContainerLow },
-  qr: { alignSelf: 'center', padding: 14, borderRadius: radius.lg, backgroundColor: colors.surfaceContainerLowest },
-  body: { padding: 16, gap: 14 },
-  stay: { padding: 12, gap: 10, borderRadius: radius.md, backgroundColor: colors.surfaceContainerLow },
-  divider: { height: 1, backgroundColor: colors.surfaceContainerHigh },
-  total: { paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.surfaceContainerHigh },
-  notes: { padding: 16, gap: 12 },
-  note: { flexDirection: 'row', gap: 10 },
-  noteNum: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surfaceContainer,
-  },
-});
