@@ -23,6 +23,7 @@ export type HotelCardProps = {
   originalPrice?: string;
   price: string;
   totalPrice?: string;
+  nights?: number;
   pricePeriod?: string;
   priceNote?: string;
   detailsHref?: string;
@@ -49,6 +50,7 @@ export default function HotelCard({
   originalPrice,
   price,
   totalPrice,
+  nights,
   pricePeriod = '/ đêm',
   priceNote = 'Đã gồm thuế, phí',
   detailsHref = '/hotels/an-nhien-riverside',
@@ -175,7 +177,9 @@ export default function HotelCard({
               {originalPrice && <div className="text-xs text-gray-400 line-through">{originalPrice}</div>}
               {totalPrice ? (
                 <div className="flex items-baseline gap-1">
-                  <span className="text-[11px] text-gray-500 font-medium">Tổng 2 đêm:</span>
+                  <span className="text-[11px] text-gray-500 font-medium">
+                    {nights ? `Tổng ${nights} đêm:` : 'Tổng:'}
+                  </span>
                   <span className="text-xl font-extrabold text-[#1b4360]">{totalPrice}</span>
                 </div>
               ) : (
