@@ -18,6 +18,7 @@ export * from './schemas/common';
 export * from './schemas/hotel';
 export * from './schemas/notification';
 export * from './schemas/loyalty';
+export * from './schemas/preference';
 export * from './schemas/pricing';
 export * from './schemas/promotion';
 export * from './schemas/stats';
