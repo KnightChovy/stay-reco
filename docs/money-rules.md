@@ -98,6 +98,7 @@ There is **no** payment-transaction table and no refund-request table.
 |---|---|---|---|
 | Customer holds rooms | `PENDING` | `UNPAID` | none |
 | SePay reports a matching transfer | `CONFIRMED` | `PAID`, with the SePay transaction id and payment time | booking payment into the hotel wallet's **pending** balance (BR-22) |
+| Customer pays from their wallet (W1) | `CONFIRMED` | `PAID`, method `WALLET` | customer wallet available −total; booking payment into the hotel wallet's **pending** balance, as a transfer would |
 | 15 minutes without payment | `EXPIRED` | `FAILED` | none (rooms released) |
 | Customer cancels, nothing to refund | `CANCELLED` | stays `PAID` | none (rooms released; the hotel keeps the money as the cancellation fee, settled after the holding period) |
 | Customer cancels, money to refund | stays `CONFIRMED` | `REFUND_PENDING` | none (waiting for the decision, section 7) |
@@ -214,7 +215,8 @@ Per BR-20, only when: the booking was already refunded or the request is a dupli
 ## 9. Not built yet, or still open
 
 - Promotions, vouchers and loyalty points (BR-06, BR-11) are built; see §2.1.
-- Paying with the customer wallet, withdrawing it: phase 4.
+- Paying a booking **from the customer wallet** is built (decision W1): all or nothing, the hotel still credited into pending exactly as a transfer would. See [api/customer-wallet.md](./api/customer-wallet.md).
+- **Withdrawing** the customer wallet to a bank account: phase 6, with partner payouts, which need the same bank details, request status and manager queue.
 - Partner withdrawals (BR-22): phase 6. The holding period set by an admin: phase 6.
 
 ## Changelog
@@ -236,3 +238,4 @@ Per BR-20, only when: the booking was already refunded or the request is a dupli
 | 2026-10-31 | Late check-out fee (§5.5): hotel policy (grace, cutoff, two percents of the last night's price), the policy at check-out applies, staff may lower it with a reason, paid at the front desk outside the wallets and commission |
 | 2026-11-09 | Promotions and vouchers (§2.1, BR-06): one discount per booking, a promotion or a voucher and never both, the larger of the two; a campaign that issued codes no longer applies automatically; capped by `maxDiscount`, never more than the stay, whole dong; the code is given back when a hold expires unpaid or the booking is cancelled |
 | 2026-11-10 | Loyalty points (§2.1, BR-11): one platform-wide programme, earned at check-out on the amount actually paid, spent as the third subtraction after the discount, capped at what the stay owes, whole dong; points come back when a booking never becomes a stay |
+| 2026-11-10 | Customer wallet (§5, decision W1): a booking may be paid entirely from the balance, never partly, because SePay matches an exact amount; the hotel is credited into pending exactly as a transfer would, so commission, settlement and refunds are unchanged. Withdrawing the customer wallet moves to phase 6 with partner payouts |
