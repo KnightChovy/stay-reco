@@ -58,6 +58,7 @@ import {
 } from './booking-history';
 import type { NightlyPrices } from './booking.mapper';
 import { BookingsService } from './bookings.service';
+import { LoyaltyService } from '../loyalty/loyalty.service';
 import { chargeCommission } from './commission';
 import { lateCheckout } from './late-checkout';
 import { NoShowService } from './no-show.service';
@@ -78,6 +79,7 @@ const CODE = /^SR(\d{6})(\d{4})$/;
 /** What check-in needs to know about the booking. */
 const stayRowSelect = {
   bookingId: true,
+  customerId: true,
   roomTypeId: true,
   status: true,
   numRooms: true,
@@ -112,6 +114,7 @@ export class FrontDeskService {
     private readonly access: HotelAccessService,
     private readonly bookings: BookingsService,
     private readonly ledger: WalletLedger,
+    private readonly loyalty: LoyaltyService,
     private readonly noShows: NoShowService,
     private readonly config: ConfigService<Env, true>,
   ) {}
@@ -352,6 +355,14 @@ export class FrontDeskService {
         data: { status: 'CLEANING' },
       });
       const commission = await chargeCommission(tx, this.ledger, bookingId);
+      // Loyalty points on what the stay was actually paid (BR-11): a discount lowers them too, because a customer
+      // earns on money spent. The conditional status change above makes a second check-out credit them once.
+      const points = await this.loyalty.earn(
+        tx,
+        booking.customerId,
+        bookingId,
+        booking.invoice!.totalAmount,
+      );
       await recordBookingEvent(tx, {
         action: AuditAction.BOOKING_CHECKED_OUT,
         bookingId,
@@ -360,6 +371,7 @@ export class FrontDeskService {
         value: {
           commission: commission.toNumber(),
           releasedNights: released,
+          ...(points && { loyaltyPoints: points }),
           ...(lateFee && { lateFee }),
         },
       });

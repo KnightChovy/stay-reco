@@ -5,6 +5,7 @@ import type { Env } from '../../config/env';
 import type { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditAction } from '../audit/audit.service';
+import { LoyaltyService } from '../loyalty/loyalty.service';
 import { DiscountService } from '../promotions/discount.service';
 import { recordBookingEvent } from './booking-history';
 
@@ -21,6 +22,7 @@ export class HoldExpiryService extends PeriodicJob {
     private readonly prisma: PrismaService,
     config: ConfigService<Env, true>,
     private readonly discounts: DiscountService,
+    private readonly loyalty: LoyaltyService,
   ) {
     super('HoldExpiry', EVERY_MINUTE, config);
   }
@@ -73,6 +75,7 @@ export class HoldExpiryService extends PeriodicJob {
     });
     // The hold was never paid, so the discount was never really spent: the code goes back to the customer.
     await this.discounts.release(tx, bookingId);
+    await this.loyalty.refund(tx, bookingId);
     await recordBookingEvent(tx, {
       action: AuditAction.BOOKING_EXPIRED,
       bookingId,

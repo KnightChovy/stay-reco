@@ -146,6 +146,7 @@ export class LoyaltyService {
       payableAfterDiscount,
     );
     return {
+      programId: programme.loyaltyProgramId,
       pointsBalance: row.pointsBalance,
       maxPointsUsable,
       pointsUsed,

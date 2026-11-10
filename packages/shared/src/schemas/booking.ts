@@ -125,6 +125,8 @@ export const createBookingSchema = z
     specialRequests: z.string().trim().max(BOOKING_LIMITS.specialRequestsMax).optional(),
     /** A discount code the customer typed; the backend applies it and checks `expectedTotal` against the result. */
     code: z.string().trim().min(1).max(50).optional(),
+    /** Loyalty points to spend; the backend caps them and checks `expectedTotal` against the result. */
+    pointsToUse: z.number().int().min(0).max(100_000_000).optional(),
     expectedTotal: moneySchema,
   })
   .superRefine(checkStay);

@@ -37,6 +37,7 @@ export type LoyaltyEntry = z.infer<typeof loyaltyEntryResponseSchema>;
 /** The points part of a stay quote: how many may be spent, and what they would take off. */
 export const pointsQuoteResponseSchema = z
   .object({
+    programId: z.uuid(),
     pointsBalance: z.number().int(),
     maxPointsUsable: z
       .number()
