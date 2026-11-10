@@ -2,12 +2,12 @@
 
 | | |
 |---|---|
-| Phase status | 🟡 Promotions, vouchers and loyalty built; the customer wallet not started |
-| API status | Promotions, vouchers and loyalty: `BE Done` (merged into `develop`, FE can integrate) · the wallet: none yet |
-| Agreed on | Discounts: 2026-11-09 (P1–P8). Loyalty: 2026-11-10 (L1–L7). Wallet: 2026-11-10 (W1) |
+| Phase status | 🟡 Promotions, vouchers, loyalty, the customer wallet and preferences built; reviews on their own branch |
+| API status | `BE Done` for every part (merged into `develop`, FE can integrate) |
+| Agreed on | Discounts: 2026-11-09 (P1–P8). Loyalty and wallet: 2026-11-10 (L1–L7, W1–W3) |
 | BE owners | Phúc |
 | FE owners | |
-| API | [api/promotions.md](../api/promotions.md), [api/loyalty.md](../api/loyalty.md). When the wallet starts: write its endpoints in [api/](../api/README.md) |
+| API | [api/promotions.md](../api/promotions.md), [api/loyalty.md](../api/loyalty.md), [api/customer-wallet.md](../api/customer-wallet.md) |
 
 > Rules for every API: [api-guide.md](../api-guide.md). Money rules (final price, discounts, wallet): [money-rules.md](../money-rules.md), kept in sync with this file.
 
@@ -22,15 +22,16 @@ Keep customers coming back: pay less next time with discount codes and points, r
 - **Promotions and vouchers** (BR-06): campaigns a hotel runs, personal codes handed to customers, the discount applied when booking. ✅ built
 - **Reviews** after check-out (BR-12) — on its own branch
 - **Loyalty** (BR-11): one platform-wide programme, points earned at check-out, points spent on a later stay. ✅ built
-- **Customer wallet**: balance and history, paying a booking from the wallet, withdrawing ([money-rules.md §9](../money-rules.md))
-- **Preferences**: the key-value preferences the recommender of [phase 5](./phase-5-ai-marketing.md) reads
+- **Customer wallet**: balance, movements and paying a whole booking from it. ✅ built; withdrawing moves to phase 6
+- **Preferences**: the key-value preferences the recommender of [phase 5](./phase-5-ai-marketing.md) reads. ✅ built
 
 **Frontend web / mobile** (pages already have UI in `frontend/src/app`)
 
 - `partner/promotions`, the discount code field on the booking form (phase 2 left it disabled)
 - `account/bookings/[id]/review`, hotel page review section
 - `account/rewards`: the balance, tier and history come from `GET /me/loyalty` and `/me/loyalty/entries`; the points field on the booking form sends `pointsToUse`
-- `account/wallet`, `account/preferences`
+- `account/wallet`: balance and movements from `GET /me/wallet` and `/me/wallet/transactions`; "pay from wallet" calls `POST /bookings/:id/pay-with-wallet` and reloads the booking. Say that the balance cannot be withdrawn yet (W3), and on `WALLET_INSUFFICIENT` show the shortfall from `details` and offer a transfer
+- `account/preferences`: `GET` / `PUT /me/preferences`; send only the keys the screen owns, `null` to remove one
 
 ## Out of scope
 
@@ -70,6 +71,8 @@ Keep customers coming back: pay less next time with discount codes and points, r
 | # | Decision |
 |---|---|
 | W1 | Paying from the wallet is **all or nothing**: a booking is paid entirely from the balance, or entirely by transfer. Paying part of one would mean SePay matching an amount that depends on a balance held at booking time, which brings the risk of one balance paying two bookings at once, of the hold expiring without the money being returned, and of a transfer landing after the booking is gone. Since the wallet is only ever filled by refunds, a balance is usually large enough to cover a whole booking anyway. Part payment can be revisited if customers turn out to be blocked by a small shortfall. |
+| W2 | A wallet payment changes **where the money came from, not the money model**: the hotel is still credited the full amount into its **pending** balance exactly as a transfer would (BR-22), so commission, settlement and refunds work on a wallet-paid booking unchanged. The invoice records the source as `WALLET`. |
+| W3 | **Withdrawing** the customer wallet to a bank account is **not built** and moves to [phase 6](./phase-6-reporting-admin.md). It needs somewhere to keep the customer's bank details, a request with a status and a platform manager to mark it paid — the same machinery partner withdrawals need (BR-22), which [money-rules.md §9](../money-rules.md) already puts in phase 6. Building a second, parallel flow now would be thrown away when phase 6 unifies them. Until then the balance can be spent on a stay but not taken out, which the wallet screen should say. |
 
 ### Reviews
 
@@ -85,6 +88,9 @@ booking.promotion_id / voucher_id: set at creation, cleared when the discount is
 loyalty_account.points_balance: +earned at check-out, -spent at booking, +back if the stay never happens
 loyalty_account.lifetime_points: only ever rises; the tier is read from it
 loyalty_tier: MEMBER -> SILVER (10k) -> GOLD (30k) -> PLATINUM (100k)
+
+invoice.payment_method: SEPAY (transfer) | WALLET (paid from the balance)
+wallet(customer).balance_available: +refund approved, -whole booking paid
 ```
 
 ## Adding endpoints
@@ -107,6 +113,8 @@ loyalty_tier: MEMBER -> SILVER (10k) -> GOLD (30k) -> PLATINUM (100k)
 - [ ] Tier thresholds, the earn rate and the point value are fixed in code or in the seed; a screen to change them belongs with the admin screens of phase 6.
 - [ ] Tiers carry no benefit yet (no extra discount, no earn multiplier).
 - [ ] Points never expire. The rewards screen draws an expiry date; giving points one needs a column and a job.
+- [ ] Withdrawing the customer wallet (W3), together with partner payouts, in phase 6.
+- [ ] Preference keys are free-form and agreed between the FE and the recommender; phase 5 should write the list down somewhere both can read.
 
 ## Definition of Done
 
@@ -120,3 +128,4 @@ loyalty_tier: MEMBER -> SILVER (10k) -> GOLD (30k) -> PLATINUM (100k)
 |---|---|---|
 | 2026-11-09 | Phúc | Promotions and vouchers built (P1–P8): campaign CRUD, issuing personal codes, the discount quote, the discount applied and released on `POST /bookings`. Six new error codes, the `DiscountType` enum, and [api/promotions.md](../api/promotions.md). money-rules §2.1 updated |
 | 2026-11-10 | Phúc | Loyalty built (L1–L7): the programme made platform-wide with a migration, points earned at check-out, spent as the third subtraction, given back when a stay never happens, tiers from lifetime points, history off the audit log. Two new error codes, the `LoyaltyTier` enum, and [api/loyalty.md](../api/loyalty.md). Wallet decision W1 recorded, not built |
+| 2026-11-10 | Phúc | Customer wallet and preferences built (W1–W3): balance, movements, paying a whole booking from the wallet, and the key-value preferences phase 5 reads. One new error code and [api/customer-wallet.md](../api/customer-wallet.md). Withdrawing recorded as phase 6 |
