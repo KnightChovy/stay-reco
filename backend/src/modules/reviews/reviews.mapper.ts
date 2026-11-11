@@ -5,6 +5,7 @@ import type { Prisma } from '../../generated/prisma/client';
 /** A review with everything the response needs: its sub-ratings, the stay it belongs to and the author's name. */
 export type ReviewRow = Prisma.ReviewGetPayload<{
   include: {
+    images: true;
     userItemRatings: { include: { ratingCriterion: true } };
     booking: { select: { checkOutDate: true } };
     customer: { select: { userAccount: { select: { fullName: true } } } };
@@ -37,6 +38,20 @@ export const toReview = (review: ReviewRow): Review => ({
   title: review.title,
   content: review.content,
   // Ordered by criterion name so every review shows its scores in the same order.
+  // A photo a manager hid stays in the table as evidence but never reaches a reader.
+  images: review.images
+    .filter((i) => i.isVisible)
+    .sort(
+      (a, b) =>
+        a.sortOrder - b.sortOrder ||
+        a.createdAt.getTime() - b.createdAt.getTime(),
+    )
+    .map((i) => ({
+      id: i.reviewImageId,
+      url: i.imageUrl,
+      width: i.width,
+      height: i.height,
+    })),
   subRatings: review.userItemRatings
     .map(toSubRating)
     .sort((a, b) => a.name.localeCompare(b.name)),
@@ -48,6 +63,7 @@ export const toReview = (review: ReviewRow): Review => ({
 
 /** Everything `toReview` needs, so the service and its queries cannot drift apart. */
 export const reviewInclude = {
+  images: true,
   userItemRatings: { include: { ratingCriterion: true } },
   booking: { select: { checkOutDate: true } },
   customer: { select: { userAccount: { select: { fullName: true } } } },

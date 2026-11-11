@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ReportReason, ViolationStatus } from '../enums';
 import { isoDateTime, responseSchemas } from './registry';
 
 /** Post-stay reviews (BR-12): one per completed booking, written by the customer who stayed. */
@@ -22,6 +23,16 @@ export const subRatingResponseSchema = z
   .register(responseSchemas, { id: 'SubRating' });
 export type SubRating = z.infer<typeof subRatingResponseSchema>;
 
+export const reviewImageResponseSchema = z
+  .object({
+    id: z.uuid(),
+    url: z.string(),
+    width: z.number().int(),
+    height: z.number().int(),
+  })
+  .register(responseSchemas, { id: 'ReviewImage' });
+export type ReviewImage = z.infer<typeof reviewImageResponseSchema>;
+
 export const reviewResponseSchema = z
   .object({
     id: z.uuid(),
@@ -32,6 +43,7 @@ export const reviewResponseSchema = z
     title: z.string().nullable(),
     content: z.string(),
     subRatings: z.array(subRatingResponseSchema),
+    images: z.array(reviewImageResponseSchema).describe('Photos the guest attached, in the order they were added.'),
     isVisible: z.boolean().describe('Hidden reviews are only returned to their author and to the hotel.'),
     stayedAt: z.string().describe('Check-out date of the reviewed stay, "YYYY-MM-DD".'),
     createdAt: isoDateTime(),
@@ -67,3 +79,23 @@ export const reviewEligibilityResponseSchema = z
   })
   .register(responseSchemas, { id: 'ReviewEligibility' });
 export type ReviewEligibility = z.infer<typeof reviewEligibilityResponseSchema>;
+
+/** One flag raised against a review or a photo, as the platform manager's queue shows it. */
+export const contentReportResponseSchema = z
+  .object({
+    id: z.uuid(),
+    reviewId: z.uuid(),
+    reviewImageId: z.uuid().nullable().describe('Set when one photo was flagged rather than the whole review.'),
+    hotelId: z.uuid(),
+    hotelName: z.string(),
+    reason: z.enum(ReportReason),
+    note: z.string().nullable(),
+    status: z.enum(ViolationStatus),
+    reporterName: z.string(),
+    reporterRole: z.string().describe('The role of whoever raised it, so a hotel flagging its own page is visible.'),
+    resolution: z.string().nullable(),
+    resolvedAt: isoDateTime().nullable(),
+    createdAt: isoDateTime(),
+  })
+  .register(responseSchemas, { id: 'ContentReport' });
+export type ContentReport = z.infer<typeof contentReportResponseSchema>;

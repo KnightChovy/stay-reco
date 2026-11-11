@@ -229,6 +229,10 @@ There is no `status` field in the body; the HTTP status is already available as 
 | `LOYALTY_PROGRAM_NOT_FOUND` | 404 | No loyalty programme is running | Hide the points section |
 | `LOYALTY_POINTS_INSUFFICIENT` | 409 | More points than the customer holds | Show the balance and re-quote |
 | `VOUCHER_NOT_FOUND` | 404 | The discount code doesn't exist or belongs to another customer | "Mã không hợp lệ" |
+| `REVIEW_IMAGE_NOT_FOUND` | 404 | The photo doesn't exist or belongs to another review | Reload the review |
+| `REPORT_ALREADY_RAISED` | 409 | You already flagged this review or photo | "Bạn đã báo cáo nội dung này" |
+| `REPORT_NOT_FOUND` | 404 | The report doesn't exist | Reload the queue |
+| `REPORT_STATUS_CONFLICT` | 409 | The report is already resolved or dismissed | Reload the report |
 | `VOUCHER_ALREADY_USED` | 409 | The voucher was already used on another booking | "Mã đã được sử dụng" |
 | `VOUCHER_EXPIRED` | 409 | The voucher, or the campaign behind it, is past its end date | "Mã đã hết hạn" |
 | `VOUCHER_NOT_APPLICABLE` | 409 | Below the campaign's minimum amount, or another hotel | Show the minimum, or which hotel it is for |

@@ -115,6 +115,32 @@ export const PaymentStatus = {
 } as const;
 export type PaymentStatus = (typeof PaymentStatus)[keyof typeof PaymentStatus];
 
+/** Why a review, or one of its photos, was flagged for a platform manager (R11). */
+export const ReportReason = {
+  /** Abusive, obscene or otherwise offensive. */
+  OFFENSIVE: 'OFFENSIVE',
+  /** The reviewer does not appear to have stayed. */
+  NOT_A_STAY: 'NOT_A_STAY',
+  /** Shows someone's face, name, phone number or document. */
+  PERSONAL_DATA: 'PERSONAL_DATA',
+  SPAM_OR_ADVERT: 'SPAM_OR_ADVERT',
+  /** About a different hotel. */
+  WRONG_HOTEL: 'WRONG_HOTEL',
+  /** Looks generated rather than photographed. */
+  AI_GENERATED: 'AI_GENERATED',
+  OTHER: 'OTHER',
+} as const;
+export type ReportReason = (typeof ReportReason)[keyof typeof ReportReason];
+
+/** How far a report has got. Shared with the partner policy violations the schema already had. */
+export const ViolationStatus = {
+  OPEN: 'OPEN',
+  INVESTIGATING: 'INVESTIGATING',
+  RESOLVED: 'RESOLVED',
+  DISMISSED: 'DISMISSED',
+} as const;
+export type ViolationStatus = (typeof ViolationStatus)[keyof typeof ViolationStatus];
+
 /** Loyalty tiers (BR-11), reached by lifetime points and never lost by spending them. */
 export const LoyaltyTier = {
   MEMBER: 'MEMBER',
