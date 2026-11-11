@@ -52,6 +52,21 @@ const errorMessages: Record<string, string> = {
   VOUCHER_INVALID: "Mã QR voucher không hợp lệ hoặc đã bị chỉnh sửa.",
   ROOM_STATUS_CONFLICT: "Trạng thái phòng đã thay đổi. Danh sách đã được tải lại.",
   CHANGE_REQUEST_STATUS_CONFLICT: "Yêu cầu đổi thông tin đã được xử lý hoặc đã đóng. Booking đã được tải lại.",
+  // Phase 4: discounts, points, wallet, reviews (docs/api/promotions.md, loyalty.md, customer-wallet.md, reviews.md).
+  BOOKING_PRICE_CHANGED: "Giá đã thay đổi so với lúc bạn xem. Tổng tiền đã được cập nhật, vui lòng kiểm tra lại.",
+  ROOM_SOLD_OUT: "Hạng phòng đã hết trong những ngày này. Vui lòng chọn hạng phòng khác.",
+  VOUCHER_NOT_FOUND: "Mã giảm giá không tồn tại hoặc không thuộc tài khoản của bạn.",
+  VOUCHER_ALREADY_USED: "Mã giảm giá này đã được dùng cho một đặt phòng khác.",
+  VOUCHER_EXPIRED: "Mã giảm giá đã hết hạn hoặc chương trình đã kết thúc.",
+  VOUCHER_NOT_APPLICABLE: "Mã giảm giá không áp dụng cho khách sạn này hoặc đơn chưa đạt giá trị tối thiểu.",
+  LOYALTY_PROGRAM_NOT_FOUND: "Chương trình điểm thưởng StayMiles hiện chưa hoạt động.",
+  LOYALTY_POINTS_INSUFFICIENT: "Bạn không đủ điểm StayMiles để dùng số điểm này.",
+  WALLET_INSUFFICIENT: "Số dư ví không đủ để thanh toán toàn bộ đơn. Vui lòng chuyển khoản.",
+  REVIEW_NOT_FOUND: "Không tìm thấy đánh giá. Danh sách đã được tải lại.",
+  REVIEW_NOT_ALLOWED: "Chuyến đi chưa hoàn tất hoặc chưa chấm đủ mọi tiêu chí nên chưa thể gửi đánh giá.",
+  REVIEW_ALREADY_EXISTS: "Bạn đã đánh giá chuyến đi này rồi.",
+  REVIEW_WINDOW_CLOSED: "Đã quá thời hạn đánh giá chuyến đi này.",
+  RATING_CRITERION_NOT_FOUND: "Tiêu chí chấm điểm không còn tồn tại. Vui lòng tải lại trang.",
 };
 
 /** Custom messages written in the shared zod schemas (packages/shared/src/schemas), also returned in `details`. */
@@ -86,6 +101,8 @@ const schemaMessages: Record<string, string> = {
   "to must not be before from": "Ngày kết thúc không được trước ngày bắt đầu.",
   "at most 62 days per request": "Tối đa 62 ngày mỗi lần.",
   "checkInTo must not be before checkInFrom": "Ngày kết thúc không được trước ngày bắt đầu.",
+  "at most 1 decimal place": "Điểm chỉ có tối đa 1 chữ số thập phân.",
+  "at least one preference must be given": "Chưa có sở thích nào để lưu.",
 };
 
 /** Backend messages that carry a value, so they cannot be keys of `schemaMessages`. */

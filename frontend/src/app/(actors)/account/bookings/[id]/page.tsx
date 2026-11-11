@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
+import { Suspense } from 'react';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -16,6 +17,7 @@ import {
   Phone,
   QrCode,
   ShieldCheck,
+  Star,
   User,
   Users,
   XCircle,
@@ -30,6 +32,7 @@ import type { BookingStatus, PaymentStatus } from '@stayreco/shared';
 import { getApiErrorMessage } from '@/lib/api-error';
 import { useBooking, useBookingVoucher } from '@/features/booking/api/booking-queries';
 import { VoucherQr } from '@/features/booking/components/VoucherQr';
+import { useReviewEligibility } from '@/features/account/api/rewards-queries';
 import { formatDate, formatDateTime, formatMoney } from '@/features/stays/lib/format';
 
 const FALLBACK_IMAGE =
@@ -82,6 +85,29 @@ function CheckInQrCard({ bookingId, checkedIn }: { bookingId: string; checkedIn:
         )}
       </div>
     </Card>
+  );
+}
+
+/** "Write a review" / "Your review", from `GET /bookings/:id/review-eligibility` rather than re-implementing its rules. */
+function ReviewButton({ bookingId }: { bookingId: string }) {
+  const eligibility = useReviewEligibility(bookingId).data;
+  if (!eligibility || (!eligibility.canReview && !eligibility.reviewId)) return null;
+  return (
+    <Link href={`/account/bookings/${bookingId}/review`}>
+      <Button className="h-10 gap-1.5 bg-[#934a33] px-4 text-xs font-bold text-white hover:bg-[#7a341e]">
+        <Star className="size-4" /> {eligibility.canReview ? 'Viết đánh giá' : 'Xem đánh giá của bạn'}
+      </Button>
+    </Link>
+  );
+}
+
+function ReviewedNotice() {
+  const reviewed = useSearchParams().get('reviewed') === '1';
+  if (!reviewed) return null;
+  return (
+    <div className="mx-auto mt-4 flex max-w-marketplace items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-semibold text-emerald-800 sm:px-6">
+      <CheckCircle2 className="size-4" /> Cảm ơn bạn! Đánh giá đã được lưu và hiển thị trên trang khách sạn.
+    </div>
   );
 }
 
@@ -176,6 +202,7 @@ export default function BookingDetailPage() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
+              {booking.status === 'COMPLETED' && <ReviewButton bookingId={booking.id} />}
               {canPay && (
                 <Link href={`/booking/payment?id=${booking.id}`}>
                   <Button className="h-10 gap-1.5 bg-[#013758] px-4 text-xs font-bold text-white hover:bg-[#193B56]">
@@ -218,6 +245,10 @@ export default function BookingDetailPage() {
             </div>
           </div>
         </section>
+
+        <Suspense fallback={null}>
+          <ReviewedNotice />
+        </Suspense>
 
         <div className="mx-auto w-full max-w-marketplace px-4 py-6 sm:px-6 sm:py-8">
           <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-12">
