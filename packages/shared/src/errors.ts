@@ -149,6 +149,12 @@ export const ErrorCode = {
   PROMOTION_NOT_ACTIVE: 'PROMOTION_NOT_ACTIVE',
 >>>>>>> feat/promotions-api
 
+  // Loyalty (BR-11)
+  /** No loyalty programme is running, so points cannot be earned or spent. */
+  LOYALTY_PROGRAM_NOT_FOUND: 'LOYALTY_PROGRAM_NOT_FOUND',
+  /** Spending more points than the customer holds. */
+  LOYALTY_POINTS_INSUFFICIENT: 'LOYALTY_POINTS_INSUFFICIENT',
+
   // Payments
   /** A webhook call (SePay) with a missing or wrong API key; nothing is processed. Not a client error to refresh. */
   INVALID_API_KEY: 'INVALID_API_KEY',

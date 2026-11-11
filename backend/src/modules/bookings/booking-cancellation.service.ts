@@ -19,6 +19,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { BookingMailer } from './booking-mailer';
 import { BookingsService } from './bookings.service';
 import { AuditAction } from '../audit/audit.service';
+import { LoyaltyService } from '../loyalty/loyalty.service';
 import { DiscountService } from '../promotions/discount.service';
 import { closePendingChange, recordBookingEvent } from './booking-history';
 import { cancellationAmounts } from './cancellation';
@@ -60,6 +61,7 @@ export class BookingCancellationService {
     private readonly bookings: BookingsService,
     private readonly mailer: BookingMailer,
     private readonly discounts: DiscountService,
+    private readonly loyalty: LoyaltyService,
   ) {}
 
   /** What cancelling now would cost (MSG11). */
@@ -122,6 +124,7 @@ export class BookingCancellationService {
         await tx.roomCalendars.deleteMany({ where: { bookingId } });
         // The stay never happened, so the campaign got no business: the code goes back to the customer.
         await this.discounts.release(tx, bookingId);
+        await this.loyalty.refund(tx, bookingId);
         await closePendingChange(tx, bookingId, now);
       }
       await recordBookingEvent(tx, {

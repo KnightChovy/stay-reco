@@ -46,6 +46,7 @@ const BED_TYPES = [
 ];
 
 /**
+<<<<<<< HEAD
  * The criteria a guest scores after a stay (BR-12), matching the review screen. The weights add up to 1, so the
  * weighted average of the sub-ratings is the review's overall rating.
  */
@@ -56,6 +57,19 @@ const RATING_CRITERIA = [
   { name: 'Độ yên tĩnh', description: 'Không gian yên tĩnh, dễ ngủ', weight: 0.15 },
   { name: 'Giá trị tương xứng chi phí', description: 'Chất lượng nhận được so với số tiền đã trả', weight: 0.15 },
 ];
+=======
+ * The platform-wide loyalty programme (BR-11). One per system, `hotel_id` null, so a customer keeps a single points
+ * balance wherever they stay instead of a scrap at each hotel. A hotel may still run its own programme alongside it.
+ *
+ * 1 point per 1,000 d spent, and a point is worth 100 d when spent: a 2,000,000 d stay earns 2,000 points, worth
+ * 200,000 d off a later stay, so roughly 10% comes back.
+ */
+const PLATFORM_LOYALTY = {
+  name: 'StayMiles',
+  pointsPerCurrency: 0.001,
+  pointValue: 100,
+};
+>>>>>>> feat/loyalty-api
 
 /** Catalog tables have no unique name, so insert only the names that are missing (safe to re-run). */
 async function seedCatalog() {
@@ -90,6 +104,7 @@ async function seedCatalog() {
 
 async function main() {
   await seedCatalog();
+  await seedLoyalty();
   await seedAdmin();
   if (shouldSeedDemo()) await seedDemo(prisma);
 }
@@ -105,6 +120,19 @@ function shouldSeedDemo() {
     return flag === 'true';
   }
   return flag !== 'false';
+}
+
+/** The one platform-wide programme; re-running the seed leaves an existing one, and its rates, alone. */
+async function seedLoyalty() {
+  const existing = await prisma.loyaltyProgram.findFirst({
+    where: { hotelId: null },
+  });
+  if (existing) {
+    console.log(`Loyalty programme ${existing.name} already exists, skipping`);
+    return;
+  }
+  await prisma.loyaltyProgram.create({ data: PLATFORM_LOYALTY });
+  console.log(`Created loyalty programme ${PLATFORM_LOYALTY.name}`);
 }
 
 async function seedAdmin() {

@@ -40,8 +40,13 @@ import {
 } from '../hotels/hotel.mapper';
 import { PriceEngine } from '../pricing/price-engine';
 import { AuditAction, AuditService } from '../audit/audit.service';
+import { LoyaltyService } from '../loyalty/loyalty.service';
 import { DiscountService } from '../promotions/discount.service';
-import { payable } from '../promotions/stay-discount.service';
+import {
+  afterPoints,
+  payable,
+  StayDiscountService,
+} from '../promotions/stay-discount.service';
 import { roomTypeNotFound } from '../rooms/room-types.service';
 import { byRoomNumber } from '../rooms/rooms.service';
 import { bookableHotel, sellableRoomType } from '../stays/bookable';
@@ -105,6 +110,8 @@ export class BookingsService {
     private readonly holds: HoldExpiryService,
     private readonly sepay: SepayPayment,
     private readonly discounts: DiscountService,
+    private readonly stayDiscount: StayDiscountService,
+    private readonly loyalty: LoyaltyService,
     private readonly audit: AuditService,
     private readonly config: ConfigService<Env, true>,
   ) {}
@@ -193,8 +200,19 @@ export class BookingsService {
       subtotal,
       input.code,
     );
+<<<<<<< HEAD
     const total = payable(subtotal, discount);
 >>>>>>> feat/promotions-api
+=======
+    const afterDiscount = payable(subtotal, discount);
+    // Points are the third subtraction (money-rules §2.1), taken off what the discount left.
+    const points = await this.stayDiscount.points(
+      user.accountId,
+      afterDiscount,
+      input.pointsToUse,
+    );
+    const total = afterPoints(afterDiscount, points);
+>>>>>>> feat/loyalty-api
     if (!total.equals(input.expectedTotal)) {
       throw new ConflictException({
         code: ErrorCode.BOOKING_PRICE_CHANGED,
@@ -260,6 +278,7 @@ export class BookingsService {
             hotelId,
 =======
             roomTypeId,
+            loyaltyProgramId: points?.pointsUsed ? points.programId : null,
             promotionId: discount?.promotionId ?? null,
             voucherId: discount?.voucherId ?? null,
 >>>>>>> feat/promotions-api
@@ -291,13 +310,34 @@ export class BookingsService {
           },
           select: { bookingId: true },
         });
+        // Spent after the booking exists, so the movement can name it, but still inside the same transaction: two
+        // bookings racing for the same points cannot both win, and the loser is told its price changed rather than
+        // quietly paying the total without them.
+        if (
+          points?.pointsUsed &&
+          !(await this.loyalty.spend(
+            tx,
+            user.accountId,
+            booking.bookingId,
+            points.pointsUsed,
+          ))
+        ) {
+          throw new ConflictException({
+            code: ErrorCode.BOOKING_PRICE_CHANGED,
+            message: 'The points are no longer available',
+            details: [
+              { field: 'expectedTotal', message: afterDiscount.toString() },
+            ],
+          });
+        }
+
         await tx.invoice.create({
           data: {
             bookingId: booking.bookingId,
             invoiceNumber: await this.unusedCode(tx, now),
             subtotal,
             taxAmount: 0,
-            discountAmount: discount?.amount ?? 0,
+            discountAmount: (discount?.amount ?? 0) + (points?.amount ?? 0),
             totalAmount: total,
             paymentMethod: 'SEPAY',
           },

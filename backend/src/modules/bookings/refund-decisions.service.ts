@@ -28,6 +28,7 @@ import { AuditAction } from '../audit/audit.service';
 import { fromTime } from '../hotels/hotel.mapper';
 import { DEFAULT_CHECK_IN_TIME } from '../stays/offer';
 import { WalletLedger } from '../wallets/wallet-ledger';
+import { LoyaltyService } from '../loyalty/loyalty.service';
 import { DiscountService } from '../promotions/discount.service';
 import { bookingNotFound } from './booking-access';
 import {
@@ -65,6 +66,7 @@ export class RefundDecisionsService extends PeriodicJob {
     private readonly mailer: BookingMailer,
     config: ConfigService<Env, true>,
     private readonly discounts: DiscountService,
+    private readonly loyalty: LoyaltyService,
   ) {
     super('RefundDecisions', EVERY_MINUTE, config);
   }
@@ -227,6 +229,7 @@ export class RefundDecisionsService extends PeriodicJob {
     await closePendingChange(tx, bookingId, now);
     // The stay never happened, so the campaign got no business: the code goes back to the customer.
     await this.discounts.release(tx, bookingId);
+    await this.loyalty.refund(tx, bookingId);
 
     const code = booking.invoice!.invoiceNumber;
     const hotelWallet = await this.ledger.hotelWallet(tx, booking.hotelId);

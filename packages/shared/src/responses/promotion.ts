@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { DiscountType } from '../enums';
+import { pointsQuoteResponseSchema } from './loyalty';
 import { isoDateTime, responseSchemas } from './registry';
 
 /** Promotions and vouchers (BR-06): what takes money off a stay before it is paid. */
@@ -64,7 +65,8 @@ export const discountQuoteResponseSchema = z
   .object({
     subtotal: z.number().describe('Sum of the nightly prices for every room, before any discount.'),
     discount: appliedDiscountResponseSchema.nullable().describe('null when nothing applies.'),
-    expectedTotal: z.number().describe('subtotal - discount, never below 0; send this to POST /bookings.'),
+    points: pointsQuoteResponseSchema.nullable().describe('The loyalty points part; null when no programme is running.'),
+    expectedTotal: z.number().describe('subtotal - discount - points, never below 0; send this to POST /bookings.'),
   })
   .register(responseSchemas, { id: 'DiscountQuote' });
 export type DiscountQuote = z.infer<typeof discountQuoteResponseSchema>;

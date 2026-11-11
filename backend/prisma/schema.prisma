@@ -803,6 +803,8 @@ model LoyaltyAccount {
   customerId       String         @map("customer_id") @db.Uuid
   loyaltyProgramId String         @map("loyalty_program_id") @db.Uuid
   pointsBalance    Int            @default(0) @map("points_balance")
+  /// Every point ever earned; never lowered by spending, so the tier cannot fall when a customer uses their points.
+  lifetimePoints   Int            @default(0) @map("lifetime_points")
   tier             LoyaltyTier?
   joinedAt         DateTime       @default(now()) @map("joined_at") @db.Timestamptz(6)
   updatedAt        DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -815,12 +817,16 @@ model LoyaltyAccount {
 
 model LoyaltyProgram {
   loyaltyProgramId  String           @id @default(dbgenerated("gen_random_uuid()")) @map("loyalty_program_id") @db.Uuid
-  hotelId           String           @map("hotel_id") @db.Uuid
+  /// Null for the platform-wide programme every hotel earns into; set for a programme one hotel runs on its own.
+  hotelId           String?          @map("hotel_id") @db.Uuid
   name              String           @db.VarChar(200)
+  /// Points earned per dong spent, e.g. 0.001 = 1 point per 1,000 d.
   pointsPerCurrency Decimal          @map("points_per_currency") @db.Decimal(8, 4)
+  /// What one point is worth in dong when it is spent.
+  pointValue        Decimal          @default(0) @map("point_value") @db.Decimal(14, 2)
   isActive          Boolean          @default(true) @map("is_active")
   createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
-  hotel             Hotel            @relation(fields: [hotelId], references: [hotelId])
+  hotel             Hotel?           @relation(fields: [hotelId], references: [hotelId])
   bookings          Booking[]
   loyaltyAccounts   LoyaltyAccount[]
 

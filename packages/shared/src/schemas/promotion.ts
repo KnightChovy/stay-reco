@@ -74,5 +74,7 @@ export const discountQuoteSchema = z.strictObject({
   rooms: z.number().int().min(1).max(8).default(1),
   /** The code the customer typed; left out to see the automatic campaigns only. */
   code: z.string().trim().min(1).max(50).optional(),
+  /** Loyalty points to spend on top of the discount; capped at the balance and at what the stay still owes. */
+  pointsToUse: z.number().int().min(0).max(100_000_000).optional(),
 });
 export type DiscountQuoteInput = z.infer<typeof discountQuoteSchema>;

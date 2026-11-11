@@ -14,7 +14,11 @@ Each endpoint is described **once**, on the page of the role that uses it most; 
 | [reviews.md](./reviews.md) | Customer, partner, hotel staff, public | Post-stay reviews: rating criteria, writing and editing a review, a hotel's reviews and rating figures, hiding a review |
 =======
 | [promotions.md](./promotions.md) | Customer, partner, hotel staff | Discount campaigns, personal voucher codes, the discount quote and what a booking is charged |
+<<<<<<< HEAD
 >>>>>>> feat/promotions-api
+=======
+| [loyalty.md](./loyalty.md) | Customer | Loyalty points: the balance and tier, earning at check-out, spending on a booking, the points history |
+>>>>>>> feat/loyalty-api
 
 How to read each endpoint table:
 

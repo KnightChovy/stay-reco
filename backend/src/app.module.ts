@@ -23,8 +23,12 @@ import { StaysModule } from './modules/stays/stays.module';
 import { MailModule } from './modules/mail/mail.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 <<<<<<< HEAD
+<<<<<<< HEAD
 import { ReviewsModule } from './modules/reviews/reviews.module';
 =======
+=======
+import { LoyaltyModule } from './modules/loyalty/loyalty.module';
+>>>>>>> feat/loyalty-api
 import { PromotionsModule } from './modules/promotions/promotions.module';
 >>>>>>> feat/promotions-api
 import { StorageModule } from './modules/storage/storage.module';
@@ -73,7 +77,11 @@ import { PrismaModule } from './prisma/prisma.module';
     ReviewsModule,
 =======
     PromotionsModule,
+<<<<<<< HEAD
 >>>>>>> feat/promotions-api
+=======
+    LoyaltyModule,
+>>>>>>> feat/loyalty-api
   ],
   controllers: [AppController],
   providers: [
