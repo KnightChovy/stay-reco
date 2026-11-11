@@ -240,6 +240,7 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorInfo> = {
     status: 409,
     description: 'No change request is waiting',
   },
+<<<<<<< HEAD
   REVIEW_NOT_FOUND: {
     status: 404,
     description: "Review doesn't exist or belongs to another customer",
@@ -260,6 +261,33 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorInfo> = {
   RATING_CRITERION_NOT_FOUND: {
     status: 404,
     description: 'A sub-rating names a criterion that does not exist',
+=======
+  VOUCHER_NOT_FOUND: {
+    status: 404,
+    description: "Discount code doesn't exist or belongs to another customer",
+  },
+  VOUCHER_ALREADY_USED: {
+    status: 409,
+    description: 'The voucher was already used on another booking',
+  },
+  VOUCHER_EXPIRED: {
+    status: 409,
+    description: 'The voucher, or the campaign behind it, is past its end date',
+  },
+  VOUCHER_NOT_APPLICABLE: {
+    status: 409,
+    description:
+      "The stay is below the campaign's minimum amount, or is at another hotel",
+  },
+  PROMOTION_NOT_FOUND: {
+    status: 404,
+    description: "Promotion doesn't exist or belongs to another hotel",
+  },
+  PROMOTION_NOT_ACTIVE: {
+    status: 409,
+    description:
+      'The campaign is switched off, outside its dates, or has run out of uses',
+>>>>>>> feat/promotions-api
   },
   NOTIFICATION_NOT_FOUND: {
     status: 404,

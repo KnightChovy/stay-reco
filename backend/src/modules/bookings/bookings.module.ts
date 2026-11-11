@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { PromotionsModule } from '../promotions/promotions.module';
 import { AvailabilityModule } from '../availability/availability.module';
 import { PricingModule } from '../pricing/pricing.module';
 import { NotificationsModule } from '../notifications/notifications.module';
@@ -25,6 +26,7 @@ import { SettlementService } from './settlement.service';
     AvailabilityModule,
     WalletsModule,
     NotificationsModule,
+    PromotionsModule,
   ],
   controllers: [
     BookingsController,

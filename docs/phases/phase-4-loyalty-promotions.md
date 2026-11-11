@@ -1,13 +1,13 @@
 # Phase 4: Loyalty, promotions, reviews
 
-| | |
-|---|---|
-| Phase status | 🟡 Reviews BE done; loyalty, promotions and the customer wallet not started |
-| API status | Reviews: `BE Done` (merged into `develop`, FE can integrate) · the rest: none yet |
-| Agreed on | Reviews: 2026-11-09 (decisions R1–R9). Loyalty, promotions and wallet: not agreed yet |
-| BE owners | Phúc |
-| FE owners | |
-| API | [api/reviews.md](../api/reviews.md). When the other parts start: write their endpoints in [api/](../api/README.md) |
+|              |                                                                                                                    |
+| ------------ | ------------------------------------------------------------------------------------------------------------------ |
+| Phase status | 🟡 Reviews BE done; loyalty, promotions and the customer wallet not started                                        |
+| API status   | Reviews: `BE Done` (merged into `develop`, FE can integrate) · the rest: none yet                                  |
+| Agreed on    | Reviews: 2026-11-09 (decisions R1–R9). Loyalty, promotions and wallet: not agreed yet                              |
+| BE owners    | Phúc                                                                                                               |
+| FE owners    |                                                                                                                    |
+| API          | [api/reviews.md](../api/reviews.md). When the other parts start: write their endpoints in [api/](../api/README.md) |
 
 > Rules for every API: [api-guide.md](../api-guide.md). Money rules (final price, discounts, wallet): [money-rules.md](../money-rules.md), kept in sync with this file.
 
@@ -42,17 +42,17 @@ Keep customers coming back: rate the stay they just had, pay less next time with
 
 ### Reviews (R1–R9, decided 2026-11-09)
 
-| # | Decision |
-|---|---|
-| R1 | A review belongs to a **booking**, not to a hotel: only the customer whose stay reached `COMPLETED` can write one, and `review.booking_id` is unique, so **one review per stay**. A guest who stays twice writes two reviews. |
-| R2 | The review window is **`REVIEW_WINDOW_DAYS` after check-out**, 30 by default, from an env setting until the admin screen of phase 6 can hold it (as `WALLET_HOLD_DAYS` does, decision O7). Writing or editing after it returns `REVIEW_WINDOW_CLOSED`. |
-| R3 | The guest scores a fixed set of **weighted criteria** (`rating_criterion`), seeded to the five the review screen shows. The **overall rating is computed by the backend** as their weighted average and is never sent by the client: a review whose stars disagree with its criteria would mean nothing. |
-| R4 | **Every criterion must be scored exactly once.** A partial review is refused (`REVIEW_NOT_ALLOWED`), because choosing which criteria to score is choosing what your own overall rating weighs. |
-| R5 | A review is **visible as soon as it is written**; there is no moderation queue. The hotel may **hide** it (`is_visible`), which takes it out of the public list and the rating figures. The author still sees their hidden review in `GET /me/reviews`. |
-| R6 | The author may **edit** their review while the window is open. Sending `subRatings` replaces all of them and recomputes the overall rating. Writing, editing and a visibility change are all written to the audit log. |
-| R7 | Reviewers are shown as **"Nguyễn Văn A."**, not by their full name: reviews are public and the name is personal data (as on Booking.com and Traveloka). |
-| R8 | Each sub-rating is also upserted into **`user_item_rating`**, the user-item matrix the recommender reads in phase 5. That table keeps one score per (customer, hotel, criterion), so a repeat stay updates the earlier score instead of adding a row. |
-| R9 | **Review photos and a hotel's reply are not built.** The FE prototype draws both, but `review` has no image relation and no reply field, so both need a new table and a migration. Deferred rather than guessed at; see the open questions. |
+| #   | Decision                                                                                                                                                                                                                                                                                                 |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R1  | A review belongs to a **booking**, not to a hotel: only the customer whose stay reached `COMPLETED` can write one, and `review.booking_id` is unique, so **one review per stay**. A guest who stays twice writes two reviews.                                                                            |
+| R2  | The review window is **`REVIEW_WINDOW_DAYS` after check-out**, 30 by default, from an env setting until the admin screen of phase 6 can hold it (as `WALLET_HOLD_DAYS` does, decision O7). Writing or editing after it returns `REVIEW_WINDOW_CLOSED`.                                                   |
+| R3  | The guest scores a fixed set of **weighted criteria** (`rating_criterion`), seeded to the five the review screen shows. The **overall rating is computed by the backend** as their weighted average and is never sent by the client: a review whose stars disagree with its criteria would mean nothing. |
+| R4  | **Every criterion must be scored exactly once.** A partial review is refused (`REVIEW_NOT_ALLOWED`), because choosing which criteria to score is choosing what your own overall rating weighs.                                                                                                           |
+| R5  | A review is **visible as soon as it is written**; there is no moderation queue. The hotel may **hide** it (`is_visible`), which takes it out of the public list and the rating figures. The author still sees their hidden review in `GET /me/reviews`.                                                  |
+| R6  | The author may **edit** their review while the window is open. Sending `subRatings` replaces all of them and recomputes the overall rating. Writing, editing and a visibility change are all written to the audit log.                                                                                   |
+| R7  | Reviewers are shown as **"Nguyễn Văn A."**, not by their full name: reviews are public and the name is personal data (as on Booking.com and Traveloka).                                                                                                                                                  |
+| R8  | Each sub-rating is also upserted into **`user_item_rating`**, the user-item matrix the recommender reads in phase 5. That table keeps one score per (customer, hotel, criterion), so a repeat stay updates the earlier score instead of adding a row.                                                    |
+| R9  | **Review photos and a hotel's reply are not built.** The FE prototype draws both, but `review` has no image relation and no reply field, so both need a new table and a migration. Deferred rather than guessed at; see the open questions.                                                              |
 
 ### Loyalty, promotions, wallet
 
@@ -97,6 +97,6 @@ Three of these change the schema, so they are worth settling before the code is 
 
 ## Changelog
 
-| Date | Who | Change |
-|---|---|---|
+| Date       | Who  | Change                                                                                                                                                                                                                                                            |
+| ---------- | ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 2026-11-09 | Phúc | Reviews built (R1–R9): rating criteria, writing, editing, a hotel's reviews and rating figures, hiding a review. Five new error codes, `REVIEW_WINDOW_DAYS`, the five seeded criteria, and [api/reviews.md](../api/reviews.md). Photos and hotel replies deferred |

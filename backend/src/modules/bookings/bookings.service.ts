@@ -39,6 +39,9 @@ import {
   toTime,
 } from '../hotels/hotel.mapper';
 import { PriceEngine } from '../pricing/price-engine';
+import { AuditAction, AuditService } from '../audit/audit.service';
+import { DiscountService } from '../promotions/discount.service';
+import { payable } from '../promotions/stay-discount.service';
 import { roomTypeNotFound } from '../rooms/room-types.service';
 import { byRoomNumber } from '../rooms/rooms.service';
 import { bookableHotel, sellableRoomType } from '../stays/bookable';
@@ -101,6 +104,8 @@ export class BookingsService {
     private readonly engine: PriceEngine,
     private readonly holds: HoldExpiryService,
     private readonly sepay: SepayPayment,
+    private readonly discounts: DiscountService,
+    private readonly audit: AuditService,
     private readonly config: ConfigService<Env, true>,
   ) {}
 
@@ -116,7 +121,11 @@ export class BookingsService {
         hotel: bookableHotel,
       },
       select: {
+<<<<<<< HEAD
         roomTypeId: true,
+=======
+        hotelId: true,
+>>>>>>> feat/promotions-api
         maxOccupancy: true,
         hotelId: true,
         hotel: {
@@ -128,6 +137,7 @@ export class BookingsService {
         },
       },
     });
+<<<<<<< HEAD
     // Every room type sellable, all of one hotel (docs/design/booking-items.md §3).
     const hotelIds = new Set(roomTypes.map((r) => r.hotelId));
     if (roomTypes.length !== ids.length || hotelIds.size !== 1) {
@@ -140,6 +150,11 @@ export class BookingsService {
       0,
     );
     if (guests > capacity) {
+=======
+    if (!roomType) throw roomTypeNotFound();
+    const { hotelId } = roomType;
+    if (guests > rooms * roomType.maxOccupancy) {
+>>>>>>> feat/promotions-api
       throw validation(
         'guests',
         `at most ${capacity} guests in the rooms of this booking`,
@@ -147,6 +162,7 @@ export class BookingsService {
     }
 
     // Priced before the hold: the rules do not depend on availability, and BR-09 fixes the result on the booking.
+<<<<<<< HEAD
     const quotes = await this.engine.quote(ids, checkIn, checkOut);
     const items = requested.map((item, index) => {
       const quote = quotes.get(item.roomTypeId)!;
@@ -165,6 +181,20 @@ export class BookingsService {
       (sum, i) => sum.plus(i.subtotal),
       new Prisma.Decimal(0),
     );
+=======
+    const quote = (
+      await this.engine.quote([roomTypeId], checkIn, checkOut)
+    ).get(roomTypeId)!;
+    const subtotal = quote.total.times(rooms);
+    // A promotion or the typed code comes off the stay, never both (BR-06, money-rules §2.1).
+    const discount = await this.discounts.forStay(
+      user.accountId,
+      hotelId,
+      subtotal,
+      input.code,
+    );
+    const total = payable(subtotal, discount);
+>>>>>>> feat/promotions-api
     if (!total.equals(input.expectedTotal)) {
       throw new ConflictException({
         code: ErrorCode.BOOKING_PRICE_CHANGED,
@@ -213,10 +243,26 @@ export class BookingsService {
           picks.push({ item, picked });
         }
 
+        // Taken inside the booking's transaction: two bookings racing for one code, or for a campaign's last use,
+        // cannot both win. The loser is told the price changed rather than quietly paying more than it agreed to.
+        if (discount && !(await this.discounts.consume(tx, discount))) {
+          throw new ConflictException({
+            code: ErrorCode.BOOKING_PRICE_CHANGED,
+            message: 'The discount is no longer available',
+            details: [{ field: 'expectedTotal', message: subtotal.toString() }],
+          });
+        }
+
         const booking = await tx.booking.create({
           data: {
             customerId: user.accountId,
+<<<<<<< HEAD
             hotelId,
+=======
+            roomTypeId,
+            promotionId: discount?.promotionId ?? null,
+            voucherId: discount?.voucherId ?? null,
+>>>>>>> feat/promotions-api
             checkInDate: fromCalendarDate(checkIn),
             checkOutDate: fromCalendarDate(checkOut),
             numGuests: guests,
@@ -249,9 +295,9 @@ export class BookingsService {
           data: {
             bookingId: booking.bookingId,
             invoiceNumber: await this.unusedCode(tx, now),
-            subtotal: total,
+            subtotal,
             taxAmount: 0,
-            discountAmount: 0,
+            discountAmount: discount?.amount ?? 0,
             totalAmount: total,
             paymentMethod: 'SEPAY',
           },
@@ -287,6 +333,20 @@ export class BookingsService {
         return booking.bookingId;
       }),
     );
+    if (discount) {
+      await this.audit.log(
+        AuditAction.BOOKING_DISCOUNT_APPLIED,
+        user.accountId,
+        {},
+        {
+          bookingId,
+          kind: discount.kind,
+          promotionId: discount.promotionId,
+          code: discount.code,
+          amount: discount.amount,
+        },
+      );
+    }
     return this.load(bookingId);
   }
 

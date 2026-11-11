@@ -121,6 +121,7 @@ export const ErrorCode = {
   /** Notification does not exist or belongs to someone else. */
   NOTIFICATION_NOT_FOUND: 'NOTIFICATION_NOT_FOUND',
 
+<<<<<<< HEAD
   // Reviews (BR-12)
   /** The review does not exist, or belongs to another customer. */
   REVIEW_NOT_FOUND: 'REVIEW_NOT_FOUND',
@@ -132,6 +133,21 @@ export const ErrorCode = {
   REVIEW_WINDOW_CLOSED: 'REVIEW_WINDOW_CLOSED',
   /** A sub-rating names a criterion that does not exist. */
   RATING_CRITERION_NOT_FOUND: 'RATING_CRITERION_NOT_FOUND',
+=======
+  // Promotions and vouchers (BR-06)
+  /** The discount code does not exist, or belongs to another customer. */
+  VOUCHER_NOT_FOUND: 'VOUCHER_NOT_FOUND',
+  /** The voucher was already used on another booking. */
+  VOUCHER_ALREADY_USED: 'VOUCHER_ALREADY_USED',
+  /** The voucher, or the campaign behind it, is past its end date. */
+  VOUCHER_EXPIRED: 'VOUCHER_EXPIRED',
+  /** The stay is below the campaign's minimum amount, or is at another hotel. */
+  VOUCHER_NOT_APPLICABLE: 'VOUCHER_NOT_APPLICABLE',
+  /** The promotion does not exist, or belongs to another hotel. */
+  PROMOTION_NOT_FOUND: 'PROMOTION_NOT_FOUND',
+  /** The campaign is switched off, outside its dates, or has run out of uses. */
+  PROMOTION_NOT_ACTIVE: 'PROMOTION_NOT_ACTIVE',
+>>>>>>> feat/promotions-api
 
   // Payments
   /** A webhook call (SePay) with a missing or wrong API key; nothing is processed. Not a client error to refresh. */

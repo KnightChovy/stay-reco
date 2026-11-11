@@ -7,6 +7,7 @@ export * from './responses/auth';
 export * from './responses/booking';
 export * from './responses/hotel';
 export * from './responses/notification';
+export * from './responses/promotion';
 export * from './responses/registry';
 export * from './responses/review';
 export * from './responses/stats';
@@ -17,6 +18,10 @@ export * from './schemas/common';
 export * from './schemas/hotel';
 export * from './schemas/notification';
 export * from './schemas/pricing';
+<<<<<<< HEAD
 export * from './schemas/review';
+=======
+export * from './schemas/promotion';
+>>>>>>> feat/promotions-api
 export * from './schemas/stats';
 export * from './schemas/wallet';
