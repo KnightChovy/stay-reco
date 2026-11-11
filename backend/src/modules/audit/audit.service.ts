@@ -60,6 +60,14 @@ export enum AuditAction {
   REVIEW_UPDATED = 'REVIEW_UPDATED',
   /** The hotel hid or showed a review; `new_value` holds the new visibility. */
   REVIEW_VISIBILITY_CHANGED = 'REVIEW_VISIBILITY_CHANGED',
+  /** Someone flagged a review, or one of its photos, for a platform manager (R11). */
+  REVIEW_REPORTED = 'REVIEW_REPORTED',
+  /** A platform manager decided a report; `new_value` says whether the content was hidden. */
+  REVIEW_REPORT_DECIDED = 'REVIEW_REPORT_DECIDED',
+  /** A guest added a photo to their review. */
+  REVIEW_IMAGE_ADDED = 'REVIEW_IMAGE_ADDED',
+  /** A guest removed a photo from their review. */
+  REVIEW_IMAGE_REMOVED = 'REVIEW_IMAGE_REMOVED',
   /** The hotel started a discount campaign (BR-06). */
   PROMOTION_CREATED = 'PROMOTION_CREATED',
   /** The hotel changed a campaign; `new_value` holds the fields that changed. */

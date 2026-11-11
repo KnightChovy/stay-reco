@@ -18,13 +18,21 @@ const rejectedFile = (reason: string) =>
     message: `The file was rejected: ${reason}`,
   });
 
+/** What an upload gives back; the dimensions let a caller check the shape of what was stored. */
+export interface UploadedImage {
+  storageKey: string;
+  url: string;
+  width: number;
+  height: number;
+}
+
 /** Swap the provider in StorageModule without touching callers. */
 export abstract class StorageService {
   /** Public image, served directly from its `url`. `storageKey` is what `deleteImage` needs. */
   abstract uploadImage(
     file: Buffer,
     folder: string,
-  ): Promise<{ storageKey: string; url: string }>;
+  ): Promise<UploadedImage>;
 
   /** Private file (verification documents): returns a key that only `signedUrl` turns into a link. */
   abstract uploadPrivate(file: Buffer, folder: string): Promise<string>;
@@ -89,7 +97,12 @@ export class CloudinaryStorageService extends StorageService {
 
   async uploadImage(file: Buffer, folder: string) {
     const res = await this.upload(file, { folder });
-    return { storageKey: res.public_id, url: res.secure_url };
+    return {
+      storageKey: res.public_id,
+      url: res.secure_url,
+      width: res.width,
+      height: res.height,
+    };
   }
 
   async uploadPrivate(file: Buffer, folder: string) {

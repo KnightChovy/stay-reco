@@ -29,7 +29,6 @@ import { ErrorCode } from '../../common/errors/error-code';
 import {
   ApiData,
   ApiErrors,
-  ApiHotelAccess,
   ApiPage,
 } from '../../common/swagger/api-docs.decorators';
 import { UserRole } from '../../generated/prisma/client';
@@ -159,12 +158,13 @@ export class ReviewsController {
   }
 
   @ApiOperation({
-    summary: 'Hide a review from the hotel page, or show it again',
+    summary: 'Hide a review, or show it again',
     description:
-      'The owner or staff of the reviewed hotel. A hidden review leaves the public list and the rating figures, but its author still sees it in `GET /me/reviews`.',
+      'A **platform manager** only (R12). A hotel cannot take down a review of itself; it reports one with `POST /reviews/:id/reports` like anybody else, and a manager decides. A hidden review leaves the public list and the rating figures, but its author still sees it in `GET /me/reviews`.',
   })
-  @ApiHotelAccess('member', ErrorCode.REVIEW_NOT_FOUND)
   @ApiData(reviewResponseSchema)
+  @ApiErrors(ErrorCode.REVIEW_NOT_FOUND)
+  @Roles(UserRole.PLATFORM_MANAGER)
   @Patch('reviews/:id/visibility')
   setVisibility(
     @CurrentUser() user: AuthUser,
