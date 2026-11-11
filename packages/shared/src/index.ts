@@ -22,10 +22,7 @@ export * from './schemas/notification';
 export * from './schemas/loyalty';
 export * from './schemas/preference';
 export * from './schemas/pricing';
-<<<<<<< HEAD
 export * from './schemas/review';
-=======
 export * from './schemas/promotion';
->>>>>>> feat/promotions-api
 export * from './schemas/stats';
 export * from './schemas/wallet';

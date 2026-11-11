@@ -240,7 +240,6 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorInfo> = {
     status: 409,
     description: 'No change request is waiting',
   },
-<<<<<<< HEAD
   REVIEW_NOT_FOUND: {
     status: 404,
     description: "Review doesn't exist or belongs to another customer",
@@ -261,7 +260,7 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorInfo> = {
   RATING_CRITERION_NOT_FOUND: {
     status: 404,
     description: 'A sub-rating names a criterion that does not exist',
-=======
+  },
   VOUCHER_NOT_FOUND: {
     status: 404,
     description: "Discount code doesn't exist or belongs to another customer",
@@ -287,7 +286,6 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorInfo> = {
     status: 409,
     description:
       'The campaign is switched off, outside its dates, or has run out of uses',
->>>>>>> feat/promotions-api
   },
   LOYALTY_PROGRAM_NOT_FOUND: {
     status: 404,

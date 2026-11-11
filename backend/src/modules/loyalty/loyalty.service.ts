@@ -341,10 +341,10 @@ export class LoyaltyService {
       where: { bookingId: { in: bookingIds } },
       select: {
         bookingId: true,
-        roomType: { select: { hotel: { select: { name: true } } } },
+        hotel: { select: { name: true } },
       },
     });
-    return new Map(bookings.map((b) => [b.bookingId, b.roomType.hotel.name]));
+    return new Map(bookings.map((b) => [b.bookingId, b.hotel.name]));
   }
 
   /** One movement, written against the loyalty account so the history reads off the audit log's entity index. */

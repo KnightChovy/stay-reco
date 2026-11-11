@@ -128,11 +128,7 @@ export class BookingsService {
         hotel: bookableHotel,
       },
       select: {
-<<<<<<< HEAD
         roomTypeId: true,
-=======
-        hotelId: true,
->>>>>>> feat/promotions-api
         maxOccupancy: true,
         hotelId: true,
         hotel: {
@@ -144,7 +140,6 @@ export class BookingsService {
         },
       },
     });
-<<<<<<< HEAD
     // Every room type sellable, all of one hotel (docs/design/booking-items.md §3).
     const hotelIds = new Set(roomTypes.map((r) => r.hotelId));
     if (roomTypes.length !== ids.length || hotelIds.size !== 1) {
@@ -157,11 +152,6 @@ export class BookingsService {
       0,
     );
     if (guests > capacity) {
-=======
-    if (!roomType) throw roomTypeNotFound();
-    const { hotelId } = roomType;
-    if (guests > rooms * roomType.maxOccupancy) {
->>>>>>> feat/promotions-api
       throw validation(
         'guests',
         `at most ${capacity} guests in the rooms of this booking`,
@@ -169,7 +159,6 @@ export class BookingsService {
     }
 
     // Priced before the hold: the rules do not depend on availability, and BR-09 fixes the result on the booking.
-<<<<<<< HEAD
     const quotes = await this.engine.quote(ids, checkIn, checkOut);
     const items = requested.map((item, index) => {
       const quote = quotes.get(item.roomTypeId)!;
@@ -184,15 +173,12 @@ export class BookingsService {
         })) satisfies NightlyPrices,
       };
     });
-    const total = items.reduce(
+    // The stay subtotal adds up every room type of the booking; the discount and the points come off that
+    // sum, not off one room type (money-rules §2.1).
+    const subtotal = items.reduce(
       (sum, i) => sum.plus(i.subtotal),
       new Prisma.Decimal(0),
     );
-=======
-    const quote = (
-      await this.engine.quote([roomTypeId], checkIn, checkOut)
-    ).get(roomTypeId)!;
-    const subtotal = quote.total.times(rooms);
     // A promotion or the typed code comes off the stay, never both (BR-06, money-rules §2.1).
     const discount = await this.discounts.forStay(
       user.accountId,
@@ -200,10 +186,6 @@ export class BookingsService {
       subtotal,
       input.code,
     );
-<<<<<<< HEAD
-    const total = payable(subtotal, discount);
->>>>>>> feat/promotions-api
-=======
     const afterDiscount = payable(subtotal, discount);
     // Points are the third subtraction (money-rules §2.1), taken off what the discount left.
     const points = await this.stayDiscount.points(
@@ -212,7 +194,6 @@ export class BookingsService {
       input.pointsToUse,
     );
     const total = afterPoints(afterDiscount, points);
->>>>>>> feat/loyalty-api
     if (!total.equals(input.expectedTotal)) {
       throw new ConflictException({
         code: ErrorCode.BOOKING_PRICE_CHANGED,
@@ -274,14 +255,10 @@ export class BookingsService {
         const booking = await tx.booking.create({
           data: {
             customerId: user.accountId,
-<<<<<<< HEAD
             hotelId,
-=======
-            roomTypeId,
             loyaltyProgramId: points?.pointsUsed ? points.programId : null,
             promotionId: discount?.promotionId ?? null,
             voucherId: discount?.voucherId ?? null,
->>>>>>> feat/promotions-api
             checkInDate: fromCalendarDate(checkIn),
             checkOutDate: fromCalendarDate(checkOut),
             numGuests: guests,

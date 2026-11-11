@@ -114,7 +114,7 @@ export class ReviewsService {
             bookingId: true,
             status: true,
             checkOutDate: true,
-            roomType: { select: { hotelId: true } },
+            hotelId: true,
             review: { select: { reviewId: true } },
           },
         })
@@ -192,7 +192,7 @@ export class ReviewsService {
     }
     if (closesAt <= now) throw windowClosed();
 
-    const hotelId = booking.roomType.hotelId;
+    const { hotelId } = booking;
     const overallRating = await this.weightedOverall(input.subRatings);
     const review = await this.prisma.$transaction(async (tx) => {
       const created = await tx.review.create({

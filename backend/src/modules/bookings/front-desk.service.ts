@@ -79,12 +79,8 @@ const CODE = /^SR(\d{6})(\d{4})$/;
 /** What check-in needs to know about the booking. */
 const stayRowSelect = {
   bookingId: true,
-<<<<<<< HEAD
   hotelId: true,
-=======
   customerId: true,
-  roomTypeId: true,
->>>>>>> feat/loyalty-api
   status: true,
   checkInDate: true,
   checkOutDate: true,

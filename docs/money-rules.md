@@ -28,15 +28,9 @@ Sources: the SRS business rules (Report 3, section 5.1, BR-01 to BR-29), the pre
 
 Final price of a booking = sum of the nightly prices (from the pricing rules) − promotion or voucher discount − value of loyalty points used (BR-05, BR-06). It is never below 0, includes VAT and the service fee, is paid in full when booking and does not change afterwards.
 
-<<<<<<< HEAD
-<<<<<<< HEAD
 Phase 2 has no promotions, vouchers or points (phase 4), so the final price = sum of the nightly prices × number of rooms, added up over the room types of the booking (a booking holds 1–5 room types of one hotel since 2026-11-09).
-=======
 Promotions and vouchers are built (phase 4): the final price = sum of the nightly prices × number of rooms, minus **one** discount. A booking takes a promotion **or** a voucher, never both, and gets whichever saves more; a campaign that has issued personal codes stops applying to everyone. The discount is capped by the voucher's `maxDiscount`, never exceeds the subtotal (a stay may reach 0 but never below), and is rounded half up to whole dong. Loyalty points, the third subtraction, are not built yet. See [api/promotions.md](./api/promotions.md).
->>>>>>> feat/promotions-api
-=======
 Promotions and vouchers are built (phase 4): the final price = sum of the nightly prices × number of rooms, minus **one** discount. A booking takes a promotion **or** a voucher, never both, and gets whichever saves more; a campaign that has issued personal codes stops applying to everyone. The discount is capped by the voucher's `maxDiscount`, never exceeds the subtotal (a stay may reach 0 but never below), and is rounded half up to whole dong. Loyalty points are the third subtraction and are built too (BR-11): one platform-wide programme, points earned at check-out on what the stay was **actually paid**, and spent at the programme's point value. They stack on top of the discount, are capped at what the stay still owes, and points beyond that stay on the balance. See [api/loyalty.md](./api/loyalty.md). See [api/promotions.md](./api/promotions.md).
->>>>>>> feat/loyalty-api
 
 ### 2.2 Pricing rules
 

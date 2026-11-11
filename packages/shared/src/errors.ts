@@ -121,7 +121,6 @@ export const ErrorCode = {
   /** Notification does not exist or belongs to someone else. */
   NOTIFICATION_NOT_FOUND: 'NOTIFICATION_NOT_FOUND',
 
-<<<<<<< HEAD
   // Reviews (BR-12)
   /** The review does not exist, or belongs to another customer. */
   REVIEW_NOT_FOUND: 'REVIEW_NOT_FOUND',
@@ -133,7 +132,6 @@ export const ErrorCode = {
   REVIEW_WINDOW_CLOSED: 'REVIEW_WINDOW_CLOSED',
   /** A sub-rating names a criterion that does not exist. */
   RATING_CRITERION_NOT_FOUND: 'RATING_CRITERION_NOT_FOUND',
-=======
   // Promotions and vouchers (BR-06)
   /** The discount code does not exist, or belongs to another customer. */
   VOUCHER_NOT_FOUND: 'VOUCHER_NOT_FOUND',
@@ -147,7 +145,6 @@ export const ErrorCode = {
   PROMOTION_NOT_FOUND: 'PROMOTION_NOT_FOUND',
   /** The campaign is switched off, outside its dates, or has run out of uses. */
   PROMOTION_NOT_ACTIVE: 'PROMOTION_NOT_ACTIVE',
->>>>>>> feat/promotions-api
 
   // Loyalty (BR-11)
   /** No loyalty programme is running, so points cannot be earned or spent. */

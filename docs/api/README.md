@@ -10,19 +10,10 @@ Each endpoint is described **once**, on the page of the role that uses it most; 
 | [manager.md](./manager.md) | Platform manager (`PLATFORM_MANAGER`) | Verification queue, decisions, re-verification |
 | [customer.md](./customer.md) | Customer (`CUSTOMER`) | Search, booking, cancellation, change requests, notifications (every role) |
 | [partner-dashboard.md](./partner-dashboard.md) | Partner, hotel staff | Dashboard: action items, today, KPIs, chart, occupancy forecast (draft) |
-<<<<<<< HEAD
 | [reviews.md](./reviews.md) | Customer, partner, hotel staff, public | Post-stay reviews: rating criteria, writing and editing a review, a hotel's reviews and rating figures, hiding a review |
-=======
 | [promotions.md](./promotions.md) | Customer, partner, hotel staff | Discount campaigns, personal voucher codes, the discount quote and what a booking is charged |
-<<<<<<< HEAD
->>>>>>> feat/promotions-api
-=======
 | [loyalty.md](./loyalty.md) | Customer | Loyalty points: the balance and tier, earning at check-out, spending on a booking, the points history |
-<<<<<<< HEAD
->>>>>>> feat/loyalty-api
-=======
 | [customer-wallet.md](./customer-wallet.md) | Customer | The customer wallet: balance, movements, paying a whole booking from it, and saved preferences |
->>>>>>> feat/wallet-api
 
 How to read each endpoint table:
 

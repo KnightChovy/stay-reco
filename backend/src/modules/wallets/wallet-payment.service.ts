@@ -45,7 +45,7 @@ export class WalletPaymentService {
           where: { bookingId, customerId },
           select: {
             status: true,
-            roomType: { select: { hotelId: true } },
+            hotelId: true,
             invoice: {
               select: {
                 invoiceNumber: true,
@@ -148,10 +148,7 @@ export class WalletPaymentService {
       });
 
       // The hotel is credited exactly as a transfer would credit it (BR-22): full amount into pending.
-      const hotelWallet = await this.ledger.hotelWallet(
-        tx,
-        booking.roomType.hotelId,
-      );
+      const hotelWallet = await this.ledger.hotelWallet(tx, booking.hotelId);
       await this.ledger.post(tx, {
         walletId: hotelWallet.walletId,
         type: 'BOOKING_PAYMENT',

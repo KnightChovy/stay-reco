@@ -54,14 +54,12 @@ export enum AuditAction {
   BOOKING_CHANGE_ACCEPTED = 'BOOKING_CHANGE_ACCEPTED',
   /** The hotel kept the booking as it was; `new_value` holds the reason sent to the customer (UC43). */
   BOOKING_CHANGE_REJECTED = 'BOOKING_CHANGE_REJECTED',
-<<<<<<< HEAD
   /** The guest wrote the review of a completed stay (BR-12). */
   REVIEW_CREATED = 'REVIEW_CREATED',
   /** The author edited their review inside the review window. */
   REVIEW_UPDATED = 'REVIEW_UPDATED',
   /** The hotel hid or showed a review; `new_value` holds the new visibility. */
   REVIEW_VISIBILITY_CHANGED = 'REVIEW_VISIBILITY_CHANGED',
-=======
   /** The hotel started a discount campaign (BR-06). */
   PROMOTION_CREATED = 'PROMOTION_CREATED',
   /** The hotel changed a campaign; `new_value` holds the fields that changed. */
@@ -70,7 +68,6 @@ export enum AuditAction {
   VOUCHERS_ISSUED = 'VOUCHERS_ISSUED',
   /** A booking took a discount; `new_value` holds the campaign, the code and the amount taken off. */
   BOOKING_DISCOUNT_APPLIED = 'BOOKING_DISCOUNT_APPLIED',
->>>>>>> feat/promotions-api
   /** A SePay transfer that confirmed nothing (no or unknown code, wrong amount, other account): for manual handling. */
   SEPAY_TRANSFER_UNMATCHED = 'SEPAY_TRANSFER_UNMATCHED',
   /** A SePay transfer for a booking no longer waiting for payment (expired, already paid): refund by hand. */

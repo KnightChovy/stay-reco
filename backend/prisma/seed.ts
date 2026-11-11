@@ -46,7 +46,6 @@ const BED_TYPES = [
 ];
 
 /**
-<<<<<<< HEAD
  * The criteria a guest scores after a stay (BR-12), matching the review screen. The weights add up to 1, so the
  * weighted average of the sub-ratings is the review's overall rating.
  */
@@ -57,7 +56,8 @@ const RATING_CRITERIA = [
   { name: 'Độ yên tĩnh', description: 'Không gian yên tĩnh, dễ ngủ', weight: 0.15 },
   { name: 'Giá trị tương xứng chi phí', description: 'Chất lượng nhận được so với số tiền đã trả', weight: 0.15 },
 ];
-=======
+
+/**
  * The platform-wide loyalty programme (BR-11). One per system, `hotel_id` null, so a customer keeps a single points
  * balance wherever they stay instead of a scrap at each hotel. A hotel may still run its own programme alongside it.
  *
@@ -69,7 +69,6 @@ const PLATFORM_LOYALTY = {
   pointsPerCurrency: 0.001,
   pointValue: 100,
 };
->>>>>>> feat/loyalty-api
 
 /** Catalog tables have no unique name, so insert only the names that are missing (safe to re-run). */
 async function seedCatalog() {
