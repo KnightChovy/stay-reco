@@ -38,6 +38,11 @@ const envSchema = z
       (v) => (v === '' ? undefined : v),
       z.coerce.number().int().min(0).default(1),
     ),
+    /** Review window (BR-12): days after check-out during which a guest may write or edit the review of a stay. */
+    REVIEW_WINDOW_DAYS: z.preprocess(
+      (v) => (v === '' ? undefined : v),
+      z.coerce.number().int().min(1).default(30),
+    ),
     /** SMTP for real emails. Leave SMTP_HOST empty to print emails to the console instead (dev, tests). */
     SMTP_HOST: z.string().optional(),
     SMTP_PORT: z.coerce.number().int().positive().default(587),

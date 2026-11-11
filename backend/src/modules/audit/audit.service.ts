@@ -54,6 +54,12 @@ export enum AuditAction {
   BOOKING_CHANGE_ACCEPTED = 'BOOKING_CHANGE_ACCEPTED',
   /** The hotel kept the booking as it was; `new_value` holds the reason sent to the customer (UC43). */
   BOOKING_CHANGE_REJECTED = 'BOOKING_CHANGE_REJECTED',
+  /** The guest wrote the review of a completed stay (BR-12). */
+  REVIEW_CREATED = 'REVIEW_CREATED',
+  /** The author edited their review inside the review window. */
+  REVIEW_UPDATED = 'REVIEW_UPDATED',
+  /** The hotel hid or showed a review; `new_value` holds the new visibility. */
+  REVIEW_VISIBILITY_CHANGED = 'REVIEW_VISIBILITY_CHANGED',
   /** A SePay transfer that confirmed nothing (no or unknown code, wrong amount, other account): for manual handling. */
   SEPAY_TRANSFER_UNMATCHED = 'SEPAY_TRANSFER_UNMATCHED',
   /** A SePay transfer for a booking no longer waiting for payment (expired, already paid): refund by hand. */
