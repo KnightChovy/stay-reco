@@ -20,12 +20,16 @@ export class FakeStorage extends StorageService {
   deleted: string[] = [];
   private seq = 0;
 
+  /** What the next upload reports as its size; a test sets it to try a shape the rules refuse. */
+  nextSize = { width: 1600, height: 1200 };
+
   uploadImage(_file: Buffer, folder: string) {
     this.uploads.push({ folder, private: false });
     const storageKey = `${folder}/img${++this.seq}`;
     return Promise.resolve({
       storageKey,
       url: `https://cdn.test/${storageKey}.png`,
+      ...this.nextSize,
     });
   }
   uploadPrivate(_file: Buffer, folder: string) {
@@ -50,6 +54,7 @@ export class FakeStorage extends StorageService {
   clear() {
     this.uploads = [];
     this.deleted = [];
+    this.nextSize = { width: 1600, height: 1200 };
   }
 }
 

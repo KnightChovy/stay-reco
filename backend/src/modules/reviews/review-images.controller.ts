@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
   HttpStatus,
   Param,
   Post,
@@ -128,6 +129,7 @@ export class ReviewImagesController {
   @ApiErrors(ErrorCode.REPORT_NOT_FOUND, ErrorCode.REPORT_STATUS_CONFLICT)
   @Roles(UserRole.PLATFORM_MANAGER)
   @Post('content-reports/:id/decide')
+  @HttpCode(HttpStatus.OK)
   decide(
     @CurrentUser() user: AuthUser,
     @Param('id') id: string,

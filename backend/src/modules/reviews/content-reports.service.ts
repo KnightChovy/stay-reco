@@ -172,8 +172,11 @@ export class ContentReportsService {
     const decided = await this.prisma.$transaction(async (tx) => {
       if (input.hide) {
         if (report.reviewImageId) {
-          await tx.reviewImage.delete({
+          // Hidden, not deleted: a decision has to keep the evidence it was made on, and deleting the row would
+          // cascade away this very report.
+          await tx.reviewImage.update({
             where: { reviewImageId: report.reviewImageId },
+            data: { isVisible: false },
           });
         } else {
           await tx.review.update({

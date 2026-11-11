@@ -38,8 +38,9 @@ export const toReview = (review: ReviewRow): Review => ({
   title: review.title,
   content: review.content,
   // Ordered by criterion name so every review shows its scores in the same order.
+  // A photo a manager hid stays in the table as evidence but never reaches a reader.
   images: review.images
-    .slice()
+    .filter((i) => i.isVisible)
     .sort(
       (a, b) =>
         a.sortOrder - b.sortOrder ||

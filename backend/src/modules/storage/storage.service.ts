@@ -29,10 +29,7 @@ export interface UploadedImage {
 /** Swap the provider in StorageModule without touching callers. */
 export abstract class StorageService {
   /** Public image, served directly from its `url`. `storageKey` is what `deleteImage` needs. */
-  abstract uploadImage(
-    file: Buffer,
-    folder: string,
-  ): Promise<UploadedImage>;
+  abstract uploadImage(file: Buffer, folder: string): Promise<UploadedImage>;
 
   /** Private file (verification documents): returns a key that only `signedUrl` turns into a link. */
   abstract uploadPrivate(file: Buffer, folder: string): Promise<string>;

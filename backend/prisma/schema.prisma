@@ -1061,6 +1061,8 @@ model ReviewImage {
   width         Int
   height        Int
   sortOrder     Int      @default(0) @map("sort_order")
+  /// A manager hides a photo rather than deleting it, so the evidence behind the decision survives.
+  isVisible     Boolean  @default(true) @map("is_visible")
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   review        Review          @relation(fields: [reviewId], references: [reviewId], onDelete: Cascade)
   reports       ContentReport[]
