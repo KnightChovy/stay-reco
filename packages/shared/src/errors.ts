@@ -132,6 +132,15 @@ export const ErrorCode = {
   REVIEW_WINDOW_CLOSED: 'REVIEW_WINDOW_CLOSED',
   /** A sub-rating names a criterion that does not exist. */
   RATING_CRITERION_NOT_FOUND: 'RATING_CRITERION_NOT_FOUND',
+  /** The review photo does not exist, or belongs to another customer's review. */
+  REVIEW_IMAGE_NOT_FOUND: 'REVIEW_IMAGE_NOT_FOUND',
+  /** Flagging the same review, or the same photo, twice. */
+  REPORT_ALREADY_RAISED: 'REPORT_ALREADY_RAISED',
+  /** The report does not exist. */
+  REPORT_NOT_FOUND: 'REPORT_NOT_FOUND',
+  /** Deciding a report that is already resolved or dismissed. */
+  REPORT_STATUS_CONFLICT: 'REPORT_STATUS_CONFLICT',
+
   // Promotions and vouchers (BR-06)
   /** The discount code does not exist, or belongs to another customer. */
   VOUCHER_NOT_FOUND: 'VOUCHER_NOT_FOUND',

@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { listQuerySchema } from './common';
+import { ReportReason, ViolationStatus } from '../enums';
+import { listQuerySchema, repeatedQuery } from './common';
 
 /** A score given to one rating criterion, 1.0–5.0 with at most one decimal (`Decimal(3, 1)` in the database). */
 export const criterionScoreSchema = z
@@ -46,3 +47,42 @@ export const reviewListQuerySchema = listQuerySchema.omit({ search: true }).exte
   minRating: z.coerce.number().min(1).max(5).optional(),
 });
 export type ReviewListQuery = z.infer<typeof reviewListQuerySchema>;
+
+/**
+ * What a review photo has to look like (R10). A size cap, a short list of formats and a ratio that keeps a photo
+ * roughly rectangular, as Tripadvisor does. Unlike Tripadvisor the ratio is checked on the longer side, so a
+ * portrait photo from a phone is accepted as readily as a landscape one.
+ */
+export const REVIEW_IMAGE_RULES = {
+  maxPerReview: 5,
+  maxBytes: 10 * 1024 * 1024,
+  mimeTypes: ['image/jpeg', 'image/png', 'image/webp'],
+  /** Longer side divided by shorter: 1.0 is square, 1.333 is 4:3 (or 3:4). */
+  maxAspectRatio: 4 / 3,
+  minPixels: 200,
+} as const;
+
+/** `POST /reviews/:id/reports`: why a review, or one of its photos, is being flagged. */
+export const reportReviewSchema = z.strictObject({
+  reason: z.enum(ReportReason),
+  note: z.string().trim().max(1000).optional(),
+  /** Flags one photo instead of the whole review. */
+  reviewImageId: z.uuid().optional(),
+});
+export type ReportReviewInput = z.infer<typeof reportReviewSchema>;
+
+/** `GET /content-reports`: the platform manager's queue, oldest first so nothing waits forever. */
+export const reportListQuerySchema = listQuerySchema.omit({ sort: true, search: true }).extend({
+  status: repeatedQuery(z.enum(ViolationStatus)).optional(),
+});
+export type ReportListQuery = z.infer<typeof reportListQuerySchema>;
+
+/** `POST /content-reports/:id/decide`: the manager hides the content or lets it stand, and says why. */
+export const decideReportSchema = z.strictObject({
+  /** `RESOLVED` acts on the content; `DISMISSED` leaves it alone. `INVESTIGATING` just claims the report. */
+  status: z.enum(['INVESTIGATING', 'RESOLVED', 'DISMISSED']),
+  /** Hides the review, or the one photo, when the report is resolved. */
+  hide: z.boolean().optional(),
+  resolution: z.string().trim().max(1000).optional(),
+});
+export type DecideReportInput = z.infer<typeof decideReportSchema>;

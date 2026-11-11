@@ -261,6 +261,19 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorInfo> = {
     status: 404,
     description: 'A sub-rating names a criterion that does not exist',
   },
+  REVIEW_IMAGE_NOT_FOUND: {
+    status: 404,
+    description: "Review photo doesn't exist or belongs to another review",
+  },
+  REPORT_ALREADY_RAISED: {
+    status: 409,
+    description: 'You have already flagged this review or photo',
+  },
+  REPORT_NOT_FOUND: { status: 404, description: "Report doesn't exist" },
+  REPORT_STATUS_CONFLICT: {
+    status: 409,
+    description: 'The report is already resolved or dismissed',
+  },
   VOUCHER_NOT_FOUND: {
     status: 404,
     description: "Discount code doesn't exist or belongs to another customer",
