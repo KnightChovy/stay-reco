@@ -626,6 +626,7 @@ model Hotel {
   verificationRequests HotelVerificationRequest[]
   hotelImages          HotelImage[]
 
+  aiUsages            AiUsage[]
   @@map("hotel")
 }
 
@@ -718,6 +719,7 @@ model HotelStaff {
   marketingContents MarketingContent[]
   conversations     Conversation[]
 
+  aiUsages           AiUsage[]
   @@map("hotel_staff")
 }
 
@@ -1048,6 +1050,30 @@ model Review {
   reports         ContentReport[]
 
   @@map("review")
+}
+
+/// One call to the language model: what it was for, what it cost, and who it was for.
+/// Phase 5 requires every call to be logged and the spend per hotel to be capped.
+model AiUsage {
+  aiUsageId       String      @id @default(dbgenerated("gen_random_uuid()")) @map("ai_usage_id") @db.Uuid
+  hotelId         String      @map("hotel_id") @db.Uuid
+  /// Who asked for it; null when a job did.
+  hotelStaffId    String?     @map("hotel_staff_id") @db.Uuid
+  /// What it was for, e.g. "brand-voice" or "marketing-content".
+  purpose         String      @db.VarChar(50)
+  model           String      @db.VarChar(100)
+  inputTokens     Int         @map("input_tokens")
+  outputTokens    Int         @map("output_tokens")
+  cacheReadTokens Int         @default(0) @map("cache_read_tokens")
+  /// US dollars, at the model's published rate when the call was made.
+  costUsd         Decimal     @map("cost_usd") @db.Decimal(12, 6)
+  createdAt       DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  hotel           Hotel       @relation(fields: [hotelId], references: [hotelId], onDelete: Cascade)
+  hotelStaff      HotelStaff? @relation(fields: [hotelStaffId], references: [hotelStaffId])
+
+  /// The monthly spend of one hotel is read off this index.
+  @@index([hotelId, createdAt])
+  @@map("ai_usage")
 }
 
 /// A photo a guest attached to their review; hidden with the review it belongs to.
