@@ -18,7 +18,11 @@ Each endpoint is described **once**, on the page of the role that uses it most; 
 >>>>>>> feat/promotions-api
 =======
 | [loyalty.md](./loyalty.md) | Customer | Loyalty points: the balance and tier, earning at check-out, spending on a booking, the points history |
+<<<<<<< HEAD
 >>>>>>> feat/loyalty-api
+=======
+| [customer-wallet.md](./customer-wallet.md) | Customer | The customer wallet: balance, movements, paying a whole booking from it, and saved preferences |
+>>>>>>> feat/wallet-api
 
 How to read each endpoint table:
 

@@ -297,6 +297,11 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorInfo> = {
     status: 409,
     description: 'Spending more points than the customer holds',
   },
+  WALLET_INSUFFICIENT: {
+    status: 409,
+    description:
+      'The wallet balance does not cover the whole booking; paying from it is all or nothing',
+  },
   NOTIFICATION_NOT_FOUND: {
     status: 404,
     description: "Notification doesn't exist or belongs to someone else",

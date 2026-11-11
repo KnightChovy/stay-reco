@@ -8,6 +8,7 @@ export * from './responses/booking';
 export * from './responses/hotel';
 export * from './responses/notification';
 export * from './responses/loyalty';
+export * from './responses/preference';
 export * from './responses/promotion';
 export * from './responses/registry';
 export * from './responses/review';
@@ -19,6 +20,7 @@ export * from './schemas/common';
 export * from './schemas/hotel';
 export * from './schemas/notification';
 export * from './schemas/loyalty';
+export * from './schemas/preference';
 export * from './schemas/pricing';
 <<<<<<< HEAD
 export * from './schemas/review';

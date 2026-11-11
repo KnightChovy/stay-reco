@@ -222,6 +222,7 @@ There is no `status` field in the body; the HTTP status is already available as 
 | `NOTIFICATION_NOT_FOUND` | 404 | Notification doesn't exist or belongs to someone else | Reload the list |
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 | `REVIEW_NOT_FOUND` | 404 | Review doesn't exist or belongs to another customer | Reload the booking |
 | `REVIEW_NOT_ALLOWED` | 409 | The stay is not completed, so it cannot be reviewed yet | Hide the review button |
 | `REVIEW_ALREADY_EXISTS` | 409 | The booking already has a review; one review per stay | Open the existing review |
@@ -229,6 +230,9 @@ There is no `status` field in the body; the HTTP status is already available as 
 | `RATING_CRITERION_NOT_FOUND` | 404 | A sub-rating names a criterion that does not exist | Reload the criteria |
 =======
 =======
+=======
+| `WALLET_INSUFFICIENT` | 409 | The balance does not cover the whole booking | Show the balance and the shortfall; offer a transfer |
+>>>>>>> feat/wallet-api
 | `LOYALTY_PROGRAM_NOT_FOUND` | 404 | No loyalty programme is running | Hide the points section |
 | `LOYALTY_POINTS_INSUFFICIENT` | 409 | More points than the customer holds | Show the balance and re-quote |
 >>>>>>> feat/loyalty-api

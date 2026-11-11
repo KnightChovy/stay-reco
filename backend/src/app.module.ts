@@ -28,7 +28,11 @@ import { ReviewsModule } from './modules/reviews/reviews.module';
 =======
 =======
 import { LoyaltyModule } from './modules/loyalty/loyalty.module';
+<<<<<<< HEAD
 >>>>>>> feat/loyalty-api
+=======
+import { PreferencesModule } from './modules/preferences/preferences.module';
+>>>>>>> feat/wallet-api
 import { PromotionsModule } from './modules/promotions/promotions.module';
 >>>>>>> feat/promotions-api
 import { StorageModule } from './modules/storage/storage.module';
@@ -81,7 +85,11 @@ import { PrismaModule } from './prisma/prisma.module';
 >>>>>>> feat/promotions-api
 =======
     LoyaltyModule,
+<<<<<<< HEAD
 >>>>>>> feat/loyalty-api
+=======
+    PreferencesModule,
+>>>>>>> feat/wallet-api
   ],
   controllers: [AppController],
   providers: [

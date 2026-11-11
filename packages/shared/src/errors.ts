@@ -155,6 +155,10 @@ export const ErrorCode = {
   /** Spending more points than the customer holds. */
   LOYALTY_POINTS_INSUFFICIENT: 'LOYALTY_POINTS_INSUFFICIENT',
 
+  // Customer wallet
+  /** The wallet balance does not cover the whole booking; paying from it is all or nothing (decision W1). */
+  WALLET_INSUFFICIENT: 'WALLET_INSUFFICIENT',
+
   // Payments
   /** A webhook call (SePay) with a missing or wrong API key; nothing is processed. Not a client error to refresh. */
   INVALID_API_KEY: 'INVALID_API_KEY',
