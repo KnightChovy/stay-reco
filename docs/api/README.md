@@ -5,9 +5,10 @@ Each endpoint is described **once**, on the page of the role that uses it most; 
 | Page | Used by | Content |
 |---|---|---|
 | [auth.md](./auth.md) | Every role | Sign-up, sign-in, OTP, refresh, sessions, passwords, invitations |
-| [partner.md](./partner.md) | Partner (`HOTEL_PARTNER`) | Catalog, hotels, images, room types, rooms, staff, verification requests |
+| [partner.md](./partner.md) | Partner (`HOTEL_PARTNER`) | Catalog, hotels, images, room types, rooms, staff, verification requests, wallet, withdrawals |
 | [staff.md](./staff.md) | Hotel staff (`HOTEL_STAFF`) | What staff can read, front desk (check-in, check-out, no-show, rooms), change requests; the 5 permission groups |
-| [manager.md](./manager.md) | Platform manager (`PLATFORM_MANAGER`) | Verification queue, decisions, re-verification |
+| [manager.md](./manager.md) | Platform manager (`PLATFORM_MANAGER`) | Verification queue, decisions, re-verification; withdrawal queue, platform figures, hotels, compliance cases (draft) |
+| [admin.md](./admin.md) | Admin (`ADMIN`) | Dashboard, users, account suspension, partners' commission rate, suspension requests, system logs, transactions, payment settings (draft) |
 | [customer.md](./customer.md) | Customer (`CUSTOMER`) | Search, booking, cancellation, change requests, notifications (every role) |
 | [partner-dashboard.md](./partner-dashboard.md) | Partner, hotel staff | Dashboard: action items, today, KPIs, chart, occupancy forecast (draft) |
 | [reviews.md](./reviews.md) | Customer, partner, hotel staff, public | Post-stay reviews: rating criteria, writing and editing a review, a hotel's reviews and rating figures, hiding a review |

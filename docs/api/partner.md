@@ -268,6 +268,25 @@ Slide "08. Cancellation And Refund": when a customer cancels a paid booking with
 - **Beneficiary**: the bank account the hotel is paid out to, taken from the most recently approved verification request, the account number masked (`****6789`). `account` is `null` until a request is approved. `updatePending: true` means a newer request (possibly with another account) waits for review; until it is approved, payouts still go to `account`. A manager's re-verification request has no account and does not count.
 - Staff never see the wallet: they get `403 FORBIDDEN`; another partner gets `404 HOTEL_NOT_FOUND`.
 
+## Withdrawals
+
+*(Draft)* The "Rút tiền" pop-up of the revenue page (UC59, SRS 3.13.5). Decisions M1–M3 in [phase-6-reporting-admin.md](../phases/phase-6-reporting-admin.md); money rules in [money-rules.md §5.4](../money-rules.md#54-commission-and-payouts). The manager side is in [manager.md](./manager.md#withdrawals).
+
+| Method | Path | Access | Body / Query | Response |
+|---|---|---|---|---|
+| GET | `/hotels/:hotelId/payouts` | owner (also while suspended) | `?status=&page=&pageSize=` (`payoutListQuerySchema`) | `Payout[]` + `meta` |
+| POST | `/hotels/:hotelId/payouts` | owner (not while suspended) | `{ amount }` (`createPayoutSchema`) | `Payout` (201) |
+| POST | `/hotels/:hotelId/payouts/:payoutId/cancel` | owner (also while suspended) | | `Payout` |
+
+- **Flow**: the pop-up reads the available balance (`GET /hotels/:hotelId/stats/overview` → `wallet.available`) and the beneficiary (`GET /hotels/:hotelId/beneficiary`), the owner types an amount and sends it. The request is `PENDING` until a platform manager pays it or rejects it, within 2 working days (BR-22); the owner gets a notification and an email either way.
+- **Amount**: whole dong, more than 0 (`400 VALIDATION_ERROR` otherwise), at most the available balance (`409 PAYOUT_EXCEEDS_BALANCE`, MSG30, `details[0].message` holds the available balance).
+- **One pending request per hotel**: a second one returns `409 PAYOUT_PENDING`; two requests sent at the same moment leave one.
+- **Beneficiary**: the account of the hotel's latest **approved** verification request; none yet → `409 BENEFICIARY_MISSING`. The request is paid to the account it was made with, even if a newer verification request later changes it (M2).
+- **Wallet**: on request, a `PAYOUT` movement of −amount appears in `GET /hotels/:hotelId/wallet/transactions`; the amount leaves the available balance and is **reserved** (`wallet.reserved` of the overview). Paid: the reserved amount is gone (no new movement). Rejected or cancelled: an `ADJUSTMENT` of +amount brings it back to the available balance.
+- **Cancel**: only a `PENDING` request (`409 PAYOUT_STATUS_CONFLICT` otherwise, for example when the manager has just paid it). A suspended partner can cancel but not request (`403 PARTNER_SUSPENDED`).
+- **List**: newest first; `status` may be repeated (`PENDING`, `PAID`, `REJECTED`, `CANCELLED`). `PAYOUT_NOT_FOUND` for a withdrawal of another hotel.
+- Staff get `403 FORBIDDEN`; another partner gets `404 HOTEL_NOT_FOUND`.
+
 ## Types
 
 TypeScript types are in `@stayreco/shared` (`responses/hotel.ts`). Money is a number (at most 2 decimals), dates are ISO strings.
@@ -323,6 +342,17 @@ TypeScript types are in `@stayreco/shared` (`responses/hotel.ts`). Money is a nu
 // HotelBeneficiary (responses/wallet.ts)
 { "account": { "bankName": "Vietcombank", "accountNumber": "****6789", "accountHolder": "CONG TY AN NHIEN" },
   "verifiedAt": "2026-10-20T08:00:00.000Z", "updatePending": false }
+
+// Payout (responses/payout.ts, Draft): the partner's view; the manager's adds the partner (manager.md)
+{ "id": "uuid", "hotel": { "id": "uuid", "name": "An Nhiên Riverside" },
+  "amount": 15000000, "status": "PENDING",            // PENDING | PAID | REJECTED | CANCELLED
+  "beneficiary": { "bankName": "Vietcombank", "accountNumber": "****6789", "accountHolder": "CONG TY AN NHIEN" },
+  "requestedAt": "2026-11-12T03:00:00.000Z",
+  "dueBy": "2026-11-14T03:00:00.000Z",                 // 2 working days after the request (BR-22)
+  "overdue": false,                                     // still PENDING after dueBy
+  "decidedAt": null,                                    // paid, rejected or cancelled at
+  "bankReference": null,                                // PAID: the bank transfer reference
+  "reason": null }                                      // REJECTED: the manager's reason
 ```
 
 ## Common error codes
@@ -336,5 +366,6 @@ TypeScript types are in `@stayreco/shared` (`responses/hotel.ts`). Money is a nu
 | Files | `UPLOAD_INVALID_FILE`, `UPLOAD_UNAVAILABLE`, `IMAGE_NOT_FOUND`, `IMAGE_LIMIT_REACHED` |
 | Pricing, availability | `PRICING_RULE_NOT_FOUND`, `AVAILABILITY_BELOW_BOOKED` |
 | Bookings, refunds | `BOOKING_NOT_FOUND`, `REFUND_STATUS_CONFLICT` |
+| Withdrawals (Draft) | `PAYOUT_NOT_FOUND`, `PAYOUT_PENDING`, `PAYOUT_EXCEEDS_BALANCE`, `BENEFICIARY_MISSING`, `PAYOUT_STATUS_CONFLICT` |
 
 Meanings and handling: [api-guide.md §4.3](../api-guide.md#43-error-codes).
