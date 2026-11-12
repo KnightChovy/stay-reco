@@ -23,14 +23,17 @@ describe('Partner dashboard (e2e)', () => {
     email: string,
     roomNumbers: string[],
     status: 'ACTIVE' | 'DRAFT' = 'ACTIVE',
+    /** Another hotel of a partner already signed in. */
+    owner?: { id: string; token: string },
+    name = 'Riverside',
   ) => {
-    const partner = await t.signIn('HOTEL_PARTNER', email);
+    const partner = owner ?? (await t.signIn('HOTEL_PARTNER', email));
     const res = await t
       .api()
       .post('/api/v1/hotels')
       .set(auth(partner.token))
       .send({
-        name: 'Riverside',
+        name,
         address: '1 Bạch Đằng',
         city: 'Đà Nẵng',
         email: 'contact@hotel.test',
@@ -305,6 +308,142 @@ describe('Partner dashboard (e2e)', () => {
         reviewCount: { value: 0, previous: 0, deltaPercent: null },
       });
       expect(o.wallet).toEqual({ available: 0, pending: 6700000, reserved: 0 });
+    });
+
+    it('adds up every hotel of the partner, each with the figures of its own overview (§4.7)', async () => {
+      const query = 'from=2026-10-01&to=2026-10-31';
+      // A second hotel of the same partner: one room from 1 September, one night sold in October.
+      const second = await hotel('', ['201'], 'ACTIVE', h, 'Mỹ Khê');
+      await t.prisma.room.updateMany({
+        where: { roomId: { in: second.rooms } },
+        data: { createdAt: new Date('2026-09-01T00:00:00+07:00') },
+      });
+      await book(second, {
+        checkIn: '2026-10-05',
+        prices: [1000000],
+        status: 'COMPLETED',
+        createdAt: new Date('2026-10-01T03:00:00Z'),
+      });
+      // A draft with no rooms yet: zeros, and the setup steps it still lacks.
+      const draft = await hotel('', [], 'DRAFT', h, 'Zeta');
+
+      const res = await t
+        .api()
+        .get(`/api/v1/me/hotels/stats?${query}`)
+        .set(auth(h.token))
+        .expect(200);
+      const p = res.body.data as {
+        period: unknown;
+        hotels: {
+          hotel: { id: string; name: string; status: string };
+          roomRevenue: unknown;
+          netEarnings: unknown;
+          occupancyRate: unknown;
+          avgRating: number | null;
+          actionItems: { critical: number; warning: number };
+        }[];
+        totals: unknown;
+      };
+      expect(p.period).toEqual({
+        from: '2026-10-01',
+        to: '2026-10-31',
+        days: 31,
+      });
+      expect(p.hotels.map((x) => [x.hotel.name, x.hotel.status])).toEqual([
+        ['Mỹ Khê', 'ACTIVE'],
+        ['Riverside', 'ACTIVE'],
+        ['Zeta', 'DRAFT'],
+      ]);
+
+      // Each hotel is exactly its own overview and action items.
+      for (const x of p.hotels) {
+        const [o, items] = await Promise.all([
+          t
+            .api()
+            .get(`/api/v1/hotels/${x.hotel.id}/stats/overview?${query}`)
+            .set(auth(h.token))
+            .expect(200),
+          t
+            .api()
+            .get(`/api/v1/hotels/${x.hotel.id}/action-items`)
+            .set(auth(h.token))
+            .expect(200),
+        ]);
+        const overview = o.body.data as HotelStatsOverview;
+        const severities = (
+          items.body.data as { items: { severity: string }[] }
+        ).items.map((i) => i.severity);
+        expect(x).toMatchObject({
+          roomRevenue: overview.performance.roomRevenue,
+          netEarnings: overview.cash.netEarnings,
+          occupancyRate: overview.performance.occupancyRate,
+          avgRating: overview.reviews.avgRating.value,
+          actionItems: {
+            critical: severities.filter((s) => s === 'CRITICAL').length,
+            warning: severities.filter((s) => s === 'WARNING').length,
+          },
+        });
+      }
+      expect(p.hotels[0]).toMatchObject({
+        hotel: { id: second.hotelId },
+        roomRevenue: { value: 1000000, previous: 0 },
+        occupancyRate: { value: 3.2, previous: 0, deltaPoints: 3.2 },
+      });
+      expect(p.hotels[2]).toMatchObject({
+        hotel: { id: draft.hotelId },
+        roomRevenue: { value: 0, previous: 0, deltaPercent: null },
+        occupancyRate: { value: null, previous: null, deltaPoints: null },
+      });
+      expect(p.hotels[2].actionItems.warning).toBeGreaterThan(0);
+
+      // Occupancy of the whole portfolio comes from the summed nights: (6 + 1) / (60 + 31), not the mean of 10 and 3.2.
+      expect(p.totals).toEqual({
+        roomRevenue: { value: 6300000, previous: 1200000, deltaPercent: 425 },
+        netEarnings: { value: 5600000, previous: 2000000, deltaPercent: 180 },
+        occupancyRate: { value: 7.7, previous: 1.1, deltaPoints: 6.6 },
+      });
+    });
+
+    it('shows a partner only its own hotels, and only to the partner', async () => {
+      const other = await t.signIn('HOTEL_PARTNER', 'other@hotel.test');
+      const res = await t
+        .api()
+        .get('/api/v1/me/hotels/stats?from=2026-10-01&to=2026-10-31')
+        .set(auth(other.token))
+        .expect(200);
+      expect(res.body.data.hotels).toEqual([]);
+      expect(res.body.data.totals).toEqual({
+        roomRevenue: { value: 0, previous: 0, deltaPercent: null },
+        netEarnings: { value: 0, previous: 0, deltaPercent: null },
+        occupancyRate: { value: null, previous: null, deltaPoints: null },
+      });
+
+      const staff = await t.signInStaff(h.hotelId, 'staff@hotel.test', [
+        'BOOKING',
+      ]);
+      const customer = await t.signIn('CUSTOMER', 'someone@mail.test');
+      for (const token of [staff.token, customer.token]) {
+        await t
+          .api()
+          .get('/api/v1/me/hotels/stats')
+          .set(auth(token))
+          .expect(403);
+      }
+      await t
+        .api()
+        .get('/api/v1/me/hotels/stats?from=2026-10-01')
+        .set(auth(h.token))
+        .expect(400);
+      // A suspended partner keeps its figures.
+      await t.prisma.hotelPartner.update({
+        where: { hotelPartnerId: h.id },
+        data: { status: 'SUSPENDED' },
+      });
+      await t
+        .api()
+        .get('/api/v1/me/hotels/stats')
+        .set(auth(h.token))
+        .expect(200);
     });
 
     it('splits the same figures into weeks starting on Monday', async () => {
