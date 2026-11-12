@@ -66,7 +66,7 @@ The withdrawal queue (UC74, SRS 3.15.5, BR-22, decisions M1–M3). Status: `BE D
 
 ## Platform figures
 
-*(Draft)* Manager dashboard (UC69, 3.14.1), platform revenue (UC75, 3.15.1), revenue of one hotel (3.15.2), commissions (3.15.3), cash flow (3.15.4) and their export (UC76). Decisions M4–M7.
+Manager dashboard (UC69, 3.14.1), platform revenue (UC75, 3.15.1), revenue of one hotel (3.15.2), commissions (3.15.3), cash flow (3.15.4) and their export (UC76). Decisions M4–M7. Status: `BE Done` for every row except `stats/overview`, which comes with the manager's operations (*Draft*).
 
 | Method | Path | Query | Response |
 |---|---|---|---|
@@ -110,11 +110,11 @@ Common rules, as in the partner dashboard ([partner-dashboard.md §2](./partner-
     "suspensionRequests": { "pending": 1 } } }
 ```
 
-**`PlatformRevenue`**: `totals` (`gmv`, `discounts`, `pointsUsed`, `refunds`, `commission`, `platformDebits`, `platformRevenue`, `bookings` as `Metric`s), `series` (continuous buckets of `day`, `week` or `month` with `gmv`, `commission`, `bookings`), `byRegion` (every region, with `gmv`, `commission`, `bookings` as `Metric`s and `hotels`).
+**`PlatformRevenue`**: `totals` (`gmv`, `discounts`, `pointsUsed`, `refunds`, `commission`, `platformDebits`, `platformRevenue`, `bookings` as `Metric`s), `granularity`, `series` (continuous buckets of `day`, `week` or `month` with `periodStart`, `days`, `gmv`, `commission`, `bookings`; default granularity and bucket limits as the partner's `series`), `byRegion` (every region in the order `NORTH`, `CENTRAL`, `SOUTH`, `OTHER`, with `gmv`, `commission`, `bookings` as `Metric`s and `hotels`, the active hotels of the region now). Discounts are the `BOOKING_DISCOUNT_APPLIED` amount of each booking; points are the rest of the invoice's `discountAmount`.
 
-**`HotelRevenueRow`** (drill-down table): `hotel` (`id`, `name`, `city`, `region`), `partner` (`id`, `name`), `bookings`, `gmv`, `commission`, `refunds`, `cancellationRate`. `sort`: `gmv-desc` (default), `commission-desc`, `bookings-desc`, `cancellationRate-desc`, `name-asc`.
+**`HotelRevenueRow`** (drill-down table): every hotel past the draft stage: `hotel` (`id`, `name`, `city`, `region`), `partner` (`id`, `name`), `bookings`, `gmv`, `commission`, `refunds`, `cancellationRate` (`null` without bookings). `sort`: `gmv-desc` (default), `commission-desc`, `bookings-desc`, `cancellationRate-desc`, `name-asc`; ties by name. `search` ignores Vietnamese marks (`nhien` finds "An Nhiên").
 
-**`HotelRevenueDetail`** (one hotel): the same row with `Metric`s, the wallet balances now (`available`, `pending`, `reserved`), the withdrawals of the period (count, amount paid, pending) and the commission rate of the partner. The movements come from `…/wallet/transactions`, the same ledger the owner sees.
+**`HotelRevenueDetail`** (one hotel, drafts included; unknown id → `404 HOTEL_NOT_FOUND`): `hotel` (+ `status`), `partner` (`id`, `name`, `status`, `commissionRate`), `bookings`, `gmv`, `commission`, `refunds` as `Metric`s, `cancellationRate` as `RateMetric`, `wallet` (`available`, `pending`, `reserved` now, or `null`), `payouts` (`paidCount`, `paidAmount` in the period; `pendingCount`, `pendingAmount` now). The movements come from `…/wallet/transactions`, the same ledger the owner sees.
 
 **`CommissionRow`**: one per booking that is or will be charged: `booking` (`id`, `code`), `hotel`, `checkOutDate`, `total` (`invoice.totalAmount`), `rate` (fixed at booking), `amount` (charged, or expected = total × rate rounded half up), `status` (`CHARGED` at check-out or no-show, `EXPECTED` for a confirmed or checked-in stay), `chargedAt`. Period on the check-out date; `status` filter; `search` matches the booking code. No refund adjustment (M6).
 
