@@ -69,7 +69,7 @@ interface DayRow {
   refunds: Prisma.Decimal;
 }
 
-interface Totals {
+export interface Totals {
   roomsAvailable: number;
   nightsSold: number;
   revenue: Prisma.Decimal;
@@ -176,6 +176,26 @@ export class StatsService {
         pending: toNumber(wallet.balancePending),
         reserved: toNumber(wallet.balanceReserved),
       },
+    };
+  }
+
+  /**
+   * A hotel's totals of `period` and of `previous`, and the period's average rating: the same figures as `overview`,
+   * for the partner's view of all its hotels (§4.7).
+   */
+  async periodTotals(
+    hotelId: string,
+    period: StatsPeriod,
+    previous: StatsPeriod,
+  ): Promise<{ cur: Totals; prev: Totals; rating: number | null }> {
+    const [days, averages] = await Promise.all([
+      this.days(hotelId, previous.from, period.to),
+      this.averages(hotelId, period),
+    ]);
+    return {
+      cur: totalOf(days.filter((d) => d.day >= period.from)),
+      prev: totalOf(days.filter((d) => d.day < period.from)),
+      rating: averages.rating,
     };
   }
 
