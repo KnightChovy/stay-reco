@@ -9,6 +9,7 @@ import { UserRole } from '../src/generated/prisma/client';
 import { BookingMailer } from '../src/modules/bookings/booking-mailer';
 import { MailMessage, MailService } from '../src/modules/mail/mail.service';
 import { PayoutMailer } from '../src/modules/payouts/payout-mailer';
+import { AccountMailer } from '../src/modules/admin/account-mailer';
 import { StorageService } from '../src/modules/storage/storage.service';
 import { PLATFORM_WALLET_ID } from '../src/modules/wallets/wallet-ledger';
 import { PrismaService } from '../src/prisma/prisma.service';
@@ -99,6 +100,7 @@ export async function createTestApp() {
     // Emails and notifications of the previous test still being written would hit the accounts removed below.
     await app.get(BookingMailer).idle();
     await app.get(PayoutMailer).idle();
+    await app.get(AccountMailer).idle();
     outbox.length = 0;
     storage.clear();
     await prisma.$executeRawUnsafe(
@@ -112,7 +114,7 @@ export async function createTestApp() {
 
   /** Creates an ACTIVE account directly and signs in; returns its id and access token. */
   const signIn = async (
-    role: 'CUSTOMER' | 'HOTEL_PARTNER' | 'PLATFORM_MANAGER',
+    role: 'CUSTOMER' | 'HOTEL_PARTNER' | 'PLATFORM_MANAGER' | 'ADMIN',
     email: string,
   ) => {
     const account = await prisma.userAccount.create({
@@ -124,6 +126,7 @@ export async function createTestApp() {
         emailVerifiedAt: new Date(),
         ...(role === 'CUSTOMER' && { customer: { create: {} } }),
         ...(role === 'PLATFORM_MANAGER' && { platformManager: { create: {} } }),
+        ...(role === 'ADMIN' && { admin: { create: {} } }),
         ...(role === 'HOTEL_PARTNER' && {
           hotelPartner: {
             create: {

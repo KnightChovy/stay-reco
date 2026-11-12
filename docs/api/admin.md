@@ -1,6 +1,6 @@
 # API: Admin (`ADMIN`)
 
-*(Draft)* FE screens: `admin/*`. Decisions M8–M10 in [phases/phase-6-reporting-admin.md](../phases/phase-6-reporting-admin.md). Inviting a platform manager is already built: `POST /auth/invitations/platform-manager` ([auth.md](./auth.md)). System AI settings (UC81) belong to the AI phase.
+Status: `BE Done`, except **Transactions** and **Payment settings** (*Draft*). FE screens: `admin/*`. Decisions M8–M10 in [phases/phase-6-reporting-admin.md](../phases/phase-6-reporting-admin.md). Inviting a platform manager is already built: `POST /auth/invitations/platform-manager` ([auth.md](./auth.md)). System AI settings (UC81) belong to the AI phase.
 
 Every route on this page is for `ADMIN` only; every other role gets `403 FORBIDDEN`. Lists follow [api-guide.md §5](../api-guide.md#5-lists-pagination-filtering-sorting); periods follow the manager's figures ([manager.md](./manager.md#platform-figures)): `from`/`to` together or not at all, default the last 30 days.
 
@@ -52,7 +52,9 @@ UC82, SRS 3.16.2–3.16.3, decision M9.
   "partner": { "status": "APPROVED", "commissionRate": 8, "hotels": [ { "id": "uuid", "name": "…", "status": "ACTIVE" } ] },
   "staff": null,                                       // { hotel, position, permissions } for staff
   "suspensionRequests": [ { "id": "uuid", "status": "PENDING", … } ],
-  "timeline": [ { "id": "uuid", "action": "LOGIN_SUCCESS", "severity": "INFO", "at": "…", "ip": "…", "by": null } ] }
+  "timeline": [ { "id": "uuid", "action": "LOGIN_SUCCESS", "severity": "INFO", "at": "…",
+                  "actor": { "id": "uuid", "fullName": "…", "role": "HOTEL_PARTNER" }, "entity": null,
+                  "details": null, "ip": "…" } ] }   // AuditLogEntry, see System logs
 ```
 
 ## Partners
@@ -75,7 +77,8 @@ UC82, SRS 3.16.2–3.16.3, decision M9.
 
 UC83, BR-15, decisions M8–M9. A request is sent by a platform manager from a compliance case ([manager.md](./manager.md#compliance-cases)).
 
-- **List**: `PENDING` by default, oldest first.
+- **List**: `PENDING` by default, oldest first; `status` may be repeated, and decided requests come newest first. A request is the `SUSPENSION_REQUESTED` event of a case, decided by the next `SUSPENSION_APPROVED` / `SUSPENSION_REJECTED` event of that case (no table, M8).
+- Two admins deciding the same request at once: one succeeds, the other gets `409 SUSPENSION_STATUS_CONFLICT`.
 - **Approve**: the partner becomes `SUSPENDED` (its hotels leave the search and take no new bookings; bookings already made are served; the owner can read but not change anything; pending withdrawals stay for the manager). The partner and the manager who asked are notified.
 - **Reject**: the partner is not changed; the manager is notified with the reason.
 - Only a `PENDING` request can be decided (`409 SUSPENSION_STATUS_CONFLICT`); unknown id: `404 SUSPENSION_REQUEST_NOT_FOUND`.

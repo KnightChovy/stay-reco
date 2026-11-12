@@ -264,7 +264,8 @@ export class PlatformOpsService {
           JOIN audit_log a ON a.entity_type = 'policy_violation' AND a.entity_id = p.policy_violation_id
             AND a.action = 'VIOLATION_OPENED'
           WHERE p.status IN ('OPEN', 'INVESTIGATING')
-            AND (a.new_value::jsonb ->> 'hotelId') = h.hotel_id::text)::int AS "openCases"
+            AND (CASE WHEN a.action = 'VIOLATION_OPENED' THEN a.new_value::jsonb ->> 'hotelId' END)
+              = h.hotel_id::text)::int AS "openCases"
       FROM hotel h JOIN hotel_partner hp ON hp.hotel_partner_id = h.hotel_partner_id
       WHERE h.status <> 'DRAFT'`;
   }

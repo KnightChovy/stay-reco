@@ -413,8 +413,9 @@ export class PlatformStatsService {
         FROM moves`,
       this.prisma.$queryRaw<{ count: number; amount: Prisma.Decimal }[]>`
         SELECT count(*)::int AS count,
-          coalesce(sum(CASE WHEN jsonb_typeof(a.new_value::jsonb -> 'amount') = 'number'
-            THEN (a.new_value::jsonb ->> 'amount')::numeric END), 0) AS amount
+          coalesce(sum(CASE WHEN a.action IN ('SEPAY_TRANSFER_UNMATCHED', 'SEPAY_TRANSFER_LATE') THEN
+            CASE WHEN jsonb_typeof(a.new_value::jsonb -> 'amount') = 'number'
+              THEN (a.new_value::jsonb ->> 'amount')::numeric END END), 0) AS amount
         FROM audit_log a
         WHERE a.action IN ('SEPAY_TRANSFER_UNMATCHED', 'SEPAY_TRANSFER_LATE')
           AND a.created_at >= ${start} AND a.created_at < ${end}`,
@@ -549,11 +550,17 @@ export class PlatformStatsService {
         SELECT ${day(Prisma.sql`i.paid_at`)} AS day, i.booking_id, i.total_amount, i.discount_amount
         FROM invoice i WHERE i.paid_at >= ${start} AND i.paid_at < ${end}
       ),
-      disc AS (
-        SELECT (a.new_value::jsonb ->> 'bookingId') AS booking_id, sum((a.new_value::jsonb ->> 'amount')::numeric) AS amount
+      -- The JSON is only read inside CASE on the action: Postgres may test the WHERE terms in any order, and a row of
+      -- another action is not bound to hold JSON.
+      applied AS (
+        SELECT CASE WHEN a.action = 'BOOKING_DISCOUNT_APPLIED' THEN a.new_value::jsonb ->> 'bookingId' END AS booking_id,
+          CASE WHEN a.action = 'BOOKING_DISCOUNT_APPLIED' THEN (a.new_value::jsonb ->> 'amount')::numeric END AS amount
         FROM audit_log a
         WHERE a.action = 'BOOKING_DISCOUNT_APPLIED'
-          AND (a.new_value::jsonb ->> 'bookingId') IN (SELECT booking_id::text FROM paid)
+      ),
+      disc AS (
+        SELECT booking_id, sum(amount) AS amount FROM applied
+        WHERE booking_id IN (SELECT booking_id::text FROM paid)
         GROUP BY 1
       ),
       sales AS (

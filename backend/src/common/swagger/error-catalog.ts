@@ -350,6 +350,28 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorInfo> = {
     description:
       'The partner already has a suspension request waiting for the admin',
   },
+  PARTNER_STATUS_CONFLICT: {
+    status: 409,
+    description:
+      "The partner's status does not allow it (reinstating a partner that is not suspended)",
+  },
+  SUSPENSION_REQUEST_NOT_FOUND: {
+    status: 404,
+    description: "Suspension request doesn't exist",
+  },
+  SUSPENSION_STATUS_CONFLICT: {
+    status: 409,
+    description: 'The suspension request was already decided',
+  },
+  USER_NOT_FOUND: {
+    status: 404,
+    description: "Account doesn't exist",
+  },
+  ACCOUNT_STATUS_CONFLICT: {
+    status: 409,
+    description:
+      "The account's status does not allow it (locking a locked account, unlocking an active one)",
+  },
   PARTNER_NOT_FOUND: {
     status: 404,
     description: "Hotel partner doesn't exist",

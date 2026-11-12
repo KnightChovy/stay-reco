@@ -106,6 +106,14 @@ export enum AuditAction {
   SUSPENSION_APPROVED = 'SUSPENSION_APPROVED',
   /** The admin kept the partner as it was; `new_value` holds the reason. */
   SUSPENSION_REJECTED = 'SUSPENSION_REJECTED',
+  /** The admin locked an account (`entity` the account); `new_value` holds the reason and the status before. */
+  ACCOUNT_SUSPENDED = 'ACCOUNT_SUSPENDED',
+  /** The admin unlocked an account; `new_value` holds the reason and the status set. */
+  ACCOUNT_ACTIVATED = 'ACCOUNT_ACTIVATED',
+  /** The admin lifted a partner's suspension; `new_value` holds the reason. */
+  PARTNER_REINSTATED = 'PARTNER_REINSTATED',
+  /** The admin changed a partner's commission rate (BR-13); `new_value` holds the old and new rates. */
+  COMMISSION_RATE_CHANGED = 'COMMISSION_RATE_CHANGED',
 }
 
 /** audit_log has one actor column per role; the account id is the role row's id. */

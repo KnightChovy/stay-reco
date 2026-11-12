@@ -17,6 +17,7 @@ import { HotelsModule } from './modules/hotels/hotels.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { PayoutsModule } from './modules/payouts/payouts.module';
 import { PlatformModule } from './modules/platform/platform.module';
+import { AdminModule } from './modules/admin/admin.module';
 import { PricingModule } from './modules/pricing/pricing.module';
 import { RoomsModule } from './modules/rooms/rooms.module';
 import { StaffModule } from './modules/staff/staff.module';
@@ -68,6 +69,7 @@ import { PrismaModule } from './prisma/prisma.module';
     PaymentsModule,
     PayoutsModule,
     PlatformModule,
+    AdminModule,
     StaffModule,
     VerificationModule,
     StatsModule,

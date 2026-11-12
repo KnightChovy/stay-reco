@@ -186,6 +186,18 @@ export const ErrorCode = {
   SUSPENSION_REQUEST_PENDING: 'SUSPENSION_REQUEST_PENDING',
   /** The hotel partner doesn't exist. */
   PARTNER_NOT_FOUND: 'PARTNER_NOT_FOUND',
+  /** The partner's status does not allow it (reinstating a partner that is not suspended). */
+  PARTNER_STATUS_CONFLICT: 'PARTNER_STATUS_CONFLICT',
+  /** The suspension request doesn't exist. */
+  SUSPENSION_REQUEST_NOT_FOUND: 'SUSPENSION_REQUEST_NOT_FOUND',
+  /** The suspension request was already decided. */
+  SUSPENSION_STATUS_CONFLICT: 'SUSPENSION_STATUS_CONFLICT',
+
+  // Administration
+  /** The account doesn't exist. */
+  USER_NOT_FOUND: 'USER_NOT_FOUND',
+  /** The account's status does not allow it (locking a locked account, unlocking an active one). */
+  ACCOUNT_STATUS_CONFLICT: 'ACCOUNT_STATUS_CONFLICT',
 
   // Payments
   /** A webhook call (SePay) with a missing or wrong API key; nothing is processed. Not a client error to refresh. */
