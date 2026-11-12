@@ -25,6 +25,7 @@ import { isUuid } from '../../common/hotel-access/hotel-access.service';
 import type { Env } from '../../config/env';
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { SIMULATED_TRANSACTION_PREFIX } from '../payments/dev-payments.controller';
 import { platformPeriod } from '../platform/platform-stats.service';
 import { details } from './audit-logs.service';
 
@@ -307,7 +308,10 @@ export class AdminPaymentsService {
     };
   }
 
-  /** The latest event a SePay notification wrote: a confirmed transfer, or one that confirmed nothing or came late. */
+  /**
+   * The latest event a SePay notification wrote: a confirmed transfer, or one that confirmed nothing or came late. Wallet
+   * payments carry no `transactionId`, and the payment simulator's ids start with `sim-`: neither is SePay talking.
+   */
   private async lastWebhook() {
     const last = await this.prisma.auditLog.findFirst({
       where: {
@@ -315,6 +319,11 @@ export class AdminPaymentsService {
           {
             action: 'BOOKING_CONFIRMED',
             newValue: { contains: '"transactionId"' },
+            NOT: {
+              newValue: {
+                contains: `"transactionId":"${SIMULATED_TRANSACTION_PREFIX}`,
+              },
+            },
           },
           { action: { in: UNMATCHED } },
         ],

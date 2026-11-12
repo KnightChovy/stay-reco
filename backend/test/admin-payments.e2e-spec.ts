@@ -365,6 +365,15 @@ describe('Admin transactions and payment settings (e2e)', () => {
   });
 
   it('shows the gateway settings read-only and checks them', async () => {
+    // A simulated payment is not a SePay notification, however recent.
+    await t.prisma.auditLog.create({
+      data: {
+        action: 'BOOKING_CONFIRMED',
+        entityType: 'booking',
+        entityId: ids['SR-D:booking'],
+        newValue: JSON.stringify({ transactionId: 'sim-123', amount: 700000 }),
+      },
+    });
     const s = (await get('/payment-settings').expect(200)).body.data;
     expect(s).toMatchObject({
       provider: 'SEPAY',
