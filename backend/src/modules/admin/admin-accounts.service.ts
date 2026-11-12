@@ -15,6 +15,7 @@ import type {
 } from '@stayreco/shared';
 import type { AuthUser } from '../../common/decorators/current-user.decorator';
 import type { RequestMeta } from '../../common/decorators/request-meta.decorator';
+import { escapeLike } from '../../common/db/like';
 import { lockAccount } from '../../common/db/locks';
 import { ErrorCode } from '../../common/errors/error-code';
 import { Paginated } from '../../common/http/api-response';
@@ -91,8 +92,15 @@ export class AdminAccountsService {
       status: query.status ? { in: query.status } : { not: 'DELETED' },
       ...(query.search && {
         OR: [
-          { fullName: { contains: query.search, mode: 'insensitive' } },
-          { email: { contains: query.search, mode: 'insensitive' } },
+          {
+            fullName: {
+              contains: escapeLike(query.search),
+              mode: 'insensitive',
+            },
+          },
+          {
+            email: { contains: escapeLike(query.search), mode: 'insensitive' },
+          },
         ],
       }),
     };

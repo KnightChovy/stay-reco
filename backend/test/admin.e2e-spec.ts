@@ -80,6 +80,13 @@ describe('Administration (e2e)', () => {
       const all = (await api().get('/admin/users?pageSize=20').expect(200))
         .body;
       expect(all.meta.total).toBe(5);
+      // `%` and `_` are plain characters, not wildcards matching every account.
+      for (const search of ['%', '_']) {
+        const res = await api()
+          .get(`/admin/users?search=${encodeURIComponent(search)}`)
+          .expect(200);
+        expect(res.body.meta.total).toBe(0);
+      }
       const byEmail = (
         await api().get('/admin/users?search=STAFF@').expect(200)
       ).body.data;

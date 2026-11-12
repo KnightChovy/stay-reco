@@ -1,6 +1,16 @@
 import { z } from 'zod';
-import { AccountStatus, HotelStatus, PartnerStatus, Role, StaffPermission } from '../enums';
-import { AUDIT_SEVERITIES } from '../schemas/admin';
+import {
+  AccountStatus,
+  BookingStatus,
+  HotelStatus,
+  PartnerStatus,
+  PaymentMethod,
+  PaymentStatus,
+  Role,
+  StaffPermission,
+  WalletTxnType,
+} from '../enums';
+import { AUDIT_SEVERITIES, PAYMENT_CHECKS } from '../schemas/admin';
 import { suspensionRequestResponseSchema } from './compliance';
 import { isoDateTime, responseSchemas } from './registry';
 import { metricResponseSchema, statsPeriodResponseSchema } from './stats';
@@ -96,3 +106,92 @@ export const adminUserResponseSchema = z
   })
   .register(responseSchemas, { id: 'AdminUser' });
 export type AdminUser = z.infer<typeof adminUserResponseSchema>;
+
+// ── Transactions and payment settings ───────────────────────
+
+export const adminTransactionResponseSchema = z
+  .object({
+    invoiceId: z.uuid(),
+    booking: z.object({ id: z.uuid(), code: z.string() }),
+    hotel: z.object({ id: z.uuid(), name: z.string() }),
+    method: z.enum(PaymentMethod),
+    status: z.enum(PaymentStatus),
+    expectedAmount: z.number().describe('`invoice.totalAmount`.'),
+    confirmedAmount: z
+      .number()
+      .nullable()
+      .describe('What the payment confirmation reported (SePay transfer or wallet); null while unpaid.'),
+    refunded: z.number().describe('Refunded to the customer wallet.'),
+    gatewayTransactionId: z.string().nullable().describe('The SePay transaction id.'),
+    paidAt: isoDateTime().nullable(),
+    createdAt: isoDateTime(),
+    mismatch: z.boolean().describe('`confirmedAmount` differs from `expectedAmount`.'),
+  })
+  .register(responseSchemas, { id: 'AdminTransaction', description: 'The payment of one booking and its refunds.' });
+export type AdminTransaction = z.infer<typeof adminTransactionResponseSchema>;
+
+export const adminTransactionDetailResponseSchema = adminTransactionResponseSchema
+  .extend({
+    booking: z.object({ id: z.uuid(), code: z.string(), status: z.enum(BookingStatus) }),
+    customer: z.object({ id: z.uuid(), fullName: z.string(), email: z.string() }),
+    events: z
+      .array(z.object({ action: z.string(), at: isoDateTime(), details: z.record(z.string(), z.unknown()).nullable() }))
+      .describe("The booking's history, oldest first."),
+    walletMovements: z
+      .array(
+        z.object({
+          wallet: z.enum(['HOTEL', 'CUSTOMER', 'PLATFORM']),
+          type: z.enum(WalletTxnType),
+          amount: z.number(),
+          description: z.string().nullable(),
+          createdAt: isoDateTime(),
+        }),
+      )
+      .describe('Every wallet movement of the booking, oldest first.'),
+  })
+  .register(responseSchemas, { id: 'AdminTransactionDetail' });
+export type AdminTransactionDetail = z.infer<typeof adminTransactionDetailResponseSchema>;
+
+export const unmatchedTransferResponseSchema = z
+  .object({
+    id: z.uuid(),
+    at: isoDateTime(),
+    kind: z.enum(['UNMATCHED', 'LATE']),
+    reason: z.string().nullable(),
+    code: z.string().nullable().describe('The booking code found in the transfer content, if any.'),
+    bookingId: z.uuid().nullable(),
+    amount: z.number().nullable(),
+    content: z.string().nullable(),
+    sepayId: z.string().nullable(),
+  })
+  .register(responseSchemas, {
+    id: 'UnmatchedTransfer',
+    description: 'A SePay transfer that confirmed nothing or came late: to refund by hand.',
+  });
+export type UnmatchedTransfer = z.infer<typeof unmatchedTransferResponseSchema>;
+
+export const paymentSettingsResponseSchema = z
+  .object({
+    provider: z.literal('SEPAY'),
+    bank: z.object({ code: z.string(), name: z.string() }),
+    accountNumber: z.string().describe('Masked: `****6789`.'),
+    accountName: z.string(),
+    webhookUrl: z.string(),
+    webhookKeySet: z.boolean(),
+    lastWebhookAt: isoDateTime().nullable().describe('The latest SePay notification received; null if none.'),
+    paymentHoldMinutes: z.number().int(),
+    walletHoldDays: z.number(),
+    defaultCommissionRate: z.number(),
+  })
+  .register(responseSchemas, {
+    id: 'PaymentSettings',
+    description: 'Read-only (decision M10): server environment settings.',
+  });
+export type PaymentSettings = z.infer<typeof paymentSettingsResponseSchema>;
+
+export const paymentSettingsCheckResponseSchema = z
+  .object({
+    checks: z.array(z.object({ name: z.enum(PAYMENT_CHECKS), ok: z.boolean(), message: z.string().nullable() })),
+  })
+  .register(responseSchemas, { id: 'PaymentSettingsCheck' });
+export type PaymentSettingsCheck = z.infer<typeof paymentSettingsCheckResponseSchema>;

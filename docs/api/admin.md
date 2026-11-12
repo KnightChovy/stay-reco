@@ -1,6 +1,6 @@
 # API: Admin (`ADMIN`)
 
-Status: `BE Done`, except **Transactions** and **Payment settings** (*Draft*). FE screens: `admin/*`. Decisions M8–M10 in [phases/phase-6-reporting-admin.md](../phases/phase-6-reporting-admin.md). Inviting a platform manager is already built: `POST /auth/invitations/platform-manager` ([auth.md](./auth.md)). System AI settings (UC81) belong to the AI phase.
+Status: `BE Done`. FE screens: `admin/*`. Decisions M8–M10 in [phases/phase-6-reporting-admin.md](../phases/phase-6-reporting-admin.md). Inviting a platform manager is already built: `POST /auth/invitations/platform-manager` ([auth.md](./auth.md)). System AI settings (UC81) belong to the AI phase.
 
 Every route on this page is for `ADMIN` only; every other role gets `403 FORBIDDEN`. Lists follow [api-guide.md §5](../api-guide.md#5-lists-pagination-filtering-sorting); periods follow the manager's figures ([manager.md](./manager.md#platform-figures)): `from`/`to` together or not at all, default the last 30 days.
 
@@ -124,9 +124,13 @@ UC80, SRS 3.16.7, 3.16.9. Read-only: nothing can be changed or deleted.
 UC79, SRS 3.16.5–3.16.6. A transaction is the payment of a booking and its refunds: one invoice ([money-rules.md §5.1](../money-rules.md#51-model-lecturer-feedback)).
 
 - **List**: period on the invoice's creation; `status` is the invoice's payment status (repeatable), `method` the payment method; `search` matches the booking code or the SePay transaction id; `mismatch=true` keeps the invoices whose confirmed amount differs from the expected one. Newest first.
-- **Detail**: the booking (code, hotel, customer, status), the expected amount (`invoice.totalAmount`) and the amount SePay confirmed (from the `BOOKING_CONFIRMED` event), highlighted when they differ; the event history of the booking; and every wallet movement of the booking in every wallet (hotel, customer, platform).
+- **List**: period default the last 30 days, at most 366; `paidAt` is `null` while unpaid; `refunded` sums the refunds credited to the customer wallet.
+- **Detail**: the booking (code, hotel, customer, status), the expected amount (`invoice.totalAmount`) and the amount the payment confirmation reported (from the `BOOKING_CONFIRMED` event: the SePay transfer, or the customer wallet), with `mismatch` when they differ; the event history of the booking (details masked like the logs); and every wallet movement of the booking in every wallet (hotel, customer, platform), oldest first. Unknown invoice: `404 NOT_FOUND`.
+- Route order: `transactions/unmatched` and `transactions/export` are matched before `transactions/:invoiceId`.
 - **Unmatched transfers**: the SePay transfers that confirmed nothing (no or unknown code, wrong amount, other account) or came for a booking no longer waiting, with amount, transfer content, SePay id and reason, to be refunded by hand.
 - There is **no status check with SePay** (M10): the detail shows what the webhook reported.
+- **Export**: the same filters, every row (at most 10,000), file `StayReco_giao-dich_<from>_<to>.xlsx`.
+- **Payment settings**: `webhookUrl` is built from the address the API was called on (`X-Forwarded-Proto` honoured); `lastWebhookAt` is the latest SePay notification (a confirmed transfer, or one kept for manual handling), never a wallet payment. The self-test: `ACCOUNT_CONFIGURED` fails on the demo account `0000000000`, `WEBHOOK_KEY_SET` on a missing key, `WEBHOOK_RECEIVED` when nothing came in the last 7 days.
 
 ```jsonc
 // AdminTransaction
