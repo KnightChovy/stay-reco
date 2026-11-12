@@ -1,6 +1,6 @@
 # API: Partner dashboard *(Draft)*
 
-> Status **BE Done**: proposed by FE (2026-10-22), revised by BE against the booking data model (2026-10-28), built; FE wired the first release (2026-11-03). §4.7 is not built yet. Built **before** the hotel operations phase, ahead of the rest of [phase 6](../phases/phase-6-reporting-admin.md) (decision PD8). FE screen: `partner/dashboard` (later also `staff/dashboard`). Rules for every API (envelope, errors, dates, money): [api-guide.md](../api-guide.md). URL rules: [CONVENTIONS.md §1](../../backend/docs/CONVENTIONS.md#1-api-url-naming). Money rules behind the figures: [money-rules.md](../money-rules.md).
+> Status **BE Done**: proposed by FE (2026-10-22), revised by BE against the booking data model (2026-10-28), built; FE wired the first release (2026-11-03); §4.7 built 2026-11-12. Built **before** the hotel operations phase, ahead of the rest of [phase 6](../phases/phase-6-reporting-admin.md) (decision PD8). FE screen: `partner/dashboard` (later also `staff/dashboard`). Rules for every API (envelope, errors, dates, money): [api-guide.md](../api-guide.md). URL rules: [CONVENTIONS.md §1](../../backend/docs/CONVENTIONS.md#1-api-url-naming). Money rules behind the figures: [money-rules.md](../money-rules.md).
 >
 > Uses the booking data (`booking`, `room_calendars`, `invoice`, `wallet_transaction`, `audit_log`). Check-in / check-out figures come from the hotel operations phase; figures that need reviews (loyalty phase) are `0` until it exists; the response shapes do not change when they arrive.
 
@@ -16,7 +16,7 @@ The dashboard answers the partner's questions, in this order (the top of the scr
 | 4 | How did it evolve? | Revenue + occupancy chart | `GET /hotels/:hotelId/stats/series` | ✅ |
 | 5 | How full am I in the coming weeks (should I change prices)? | 30-day occupancy heatmap | `GET /hotels/:hotelId/stats/occupancy-forecast` | ✅ |
 | 6 | Which room types / channels perform best? | Breakdown tables | `GET /hotels/:hotelId/stats/breakdown` | ✅ (2026-11-06) |
-| 7 | (Several hotels) Which hotel needs attention? | Portfolio table | `GET /me/hotels/stats` | later (§4.7) |
+| 7 | (Several hotels) Which hotel needs attention? | Portfolio table | `GET /me/hotels/stats` | ✅ (2026-11-12, §4.7) |
 | 8 | Can I keep the figures, or send them to my accountant? | "Xuất Excel" button | `GET /hotels/:hotelId/stats/export` | ✅ (2026-11-09) |
 
 Layout (desktop; on mobile the sections stack in the same order):
@@ -86,7 +86,7 @@ A booking counts as **sold** when `status ∈ {CONFIRMED, CHECKED_IN, COMPLETED,
 | Average stay | `avgLengthOfStay` | Average nights of the sold bookings whose `checkInDate` is in the period; `null` without such bookings. |
 | Lead time | `avgLeadTimeDays` | Average `checkInDate − Vietnam date of createdAt` (days) of `bookingsCreated`; `null` when 0. |
 | Rating | `avgRating`, `reviewCount` | `review.overallRating` of visible reviews created in the period; `avgRating` has 1 decimal, `null` without reviews. Reviews arrive with the loyalty phase: until then `null` / `0`. |
-| Net received | `netEarnings` | **Cash basis**, from the hotel wallet ledger: the sum of the signed `amount` of the hotel wallet's `wallet_transaction` rows of type `BOOKING_PAYMENT`, `COMMISSION`, `REFUND`, `ADJUSTMENT` with `createdAt` in the period (payments are positive, refunds and commission negative). Excludes `PAYOUT` (money leaving the wallet is not a loss). |
+| Net received | `netEarnings` | **Cash basis**, from the hotel wallet ledger: the sum of the signed `amount` of the hotel wallet's `wallet_transaction` rows of type `BOOKING_PAYMENT`, `COMMISSION`, `REFUND`, `ADJUSTMENT` with `createdAt` in the period (payments are positive, refunds and commission negative). Excludes `PAYOUT` (money leaving the wallet is not a loss) and the `ADJUSTMENT` that gives back a rejected or cancelled withdrawal (key `payout:<id>:return`), since it only returns money already earned. |
 | Commission | `commission` | Sum of the hotel's `COMMISSION` rows in the period, as a positive number. Commission is charged at check-out, so it is `0` until the hotel operations phase. |
 | Refunds | `refunds` | Sum of the hotel's `REFUND` rows in the period, as a positive number. |
 
@@ -304,9 +304,24 @@ Which room types and channels perform best in the period (owner only, `from?`/`t
 - `byStatus`: the **current** status of those bookings, all five listed (`CONFIRMED`, `CHECKED_IN`, `COMPLETED`, `NO_SHOW`, `CANCELLED`).
 - `byPaymentMethod`: the invoice's payment method, **only the methods used**, most used first (only `SEPAY` is offered now; the enum also has `VNPAY`, `WALLET`, `CASH`, `MIXED`).
 
-### 4.7 `GET /me/hotels/stats` *(later)*
+### 4.7 `GET /me/hotels/stats`
 
-Not in the first release. For partners with 2 or more hotels: every hotel the partner owns, including `DRAFT` ones (with zeros), sorted by name, each with `roomRevenue`, `netEarnings`, `occupancyRate` (as `Metric`s), `avgRating` and `actionItems: { critical, warning }`, plus `totals` where `occupancyRate` is computed from the summed room nights, not as an average of hotel rates.
+For partners with 2 or more hotels (BR-21: the dashboard is the only screen that shows all hotels together). `HOTEL_PARTNER` only, also while suspended; staff and other roles get `403 FORBIDDEN`. Same `from?`/`to?` as `overview`, with the same default and comparison period.
+
+Every hotel the partner owns, drafts included (with zeros), sorted by name. Each hotel's figures are **exactly those of its own `overview`** for the period (`performance.roomRevenue`, `cash.netEarnings`, `performance.occupancyRate`, and `reviews.avgRating.value` as `avgRating`), and `actionItems` counts the hotel's current action items (one per type, as `GET /hotels/:hotelId/action-items` for the owner) that are `CRITICAL` and `WARNING`. `totals` adds up the hotels: revenue and net received are sums, and `occupancyRate` is computed from the summed room nights sold and available, **not** as an average of the hotels' rates. A partner without hotels gets an empty list and zero totals.
+
+```jsonc
+// PartnerPortfolio
+{ "generatedAt": "…", "period": { "from": "2026-10-01", "to": "2026-10-31", "days": 31 }, "previous": { … },
+  "hotels": [
+    { "hotel": { "id": "uuid", "name": "Mỹ Khê", "city": "Đà Nẵng", "status": "ACTIVE" },
+      "roomRevenue": { "value": 1000000, "previous": 0, "deltaPercent": null },
+      "netEarnings": { … }, "occupancyRate": { "value": 3.2, "previous": 0, "deltaPoints": 3.2 },
+      "avgRating": 4.5, "actionItems": { "critical": 0, "warning": 1 } } ],
+  "totals": { "roomRevenue": { … }, "netEarnings": { … }, "occupancyRate": { … } } }
+```
+
+Each hotel costs the queries of its own overview and action items, run one hotel after another; fine for the handful of hotels a partner has.
 
 ### 4.8 `GET /hotels/:hotelId/stats/export`
 
@@ -329,7 +344,7 @@ Not in the file: the late check-out fee (paid at the front desk, never through S
 | File | Content |
 |---|---|
 | `src/schemas/stats.ts` | `statsRangeQuerySchema` (`from` + `to` together, 366-day limit), `statsSeriesQuerySchema` (+ `granularity`, bucket limit per granularity), `occupancyForecastQuerySchema` (`days` 7–90, default 30), `todayStatsQuerySchema` (`arrivalsLimit` 1–20, default 5), `STATS_GRANULARITIES`, `STATS_LIMITS`, and the helpers `defaultGranularity(from, to)` and `statsBucketCount(from, to, granularity)` |
-| `src/responses/stats.ts` | `Metric`, `RateMetric`, `StatsPeriod`, `RoomTypeBreakdown`, `HotelStatsBreakdown` (+ `BOOKING_SOURCES`, `CREATED_BOOKING_STATUSES`), `ActionItem` (a union on `type`, so each type has typed `params`; + `ACTION_ITEM_TYPES`, `ACTION_ITEM_SEVERITIES`, `SETUP_STEPS`), `ActionItemList`, `TodayArrival`, `HotelTodayStats`, `HotelStatsOverview`, `StatsSeriesPoint`, `HotelStatsSeries`, `OccupancyForecastDay`, `OccupancyForecast`, all registered in `responseSchemas` for Swagger |
+| `src/responses/stats.ts` | `Metric`, `RateMetric`, `StatsPeriod`, `RoomTypeBreakdown`, `HotelStatsBreakdown` (+ `BOOKING_SOURCES`, `CREATED_BOOKING_STATUSES`), `ActionItem` (a union on `type`, so each type has typed `params`; + `ACTION_ITEM_TYPES`, `ACTION_ITEM_SEVERITIES`, `SETUP_STEPS`), `ActionItemList`, `TodayArrival`, `HotelTodayStats`, `HotelStatsOverview`, `StatsSeriesPoint`, `HotelStatsSeries`, `OccupancyForecastDay`, `OccupancyForecast`, `PortfolioHotel`, `PartnerPortfolio`, all registered in `responseSchemas` for Swagger |
 
 ## 6. Backend notes
 
@@ -359,6 +374,7 @@ Changes from FE's draft (2026-10-22), because of the booking data model: booking
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-11-12 | BE | `GET /me/hotels/stats` built (§4.7): every hotel of the partner with the figures of its own overview and its action items by severity; totals with occupancy from the summed room nights; e2e checks each hotel against its overview |
 | 2026-11-09 | BE | `stats/export` built (§4.8): five-sheet workbook with the figures of `overview`, `series` and `breakdown`, the bookings created in the period and the wallet movements; downloads are sent without the envelope (api-guide §4) |
 | 2026-11-06 | BE | `stats/breakdown` built (§4.6): room types with the §3 figures adding up to `overview`, bookings created by source, current status and payment method with `sharePercent`; no new index (the dashboard indexes cover it) |
 | 2026-10-30 | BE | `OVERDUE_CHECKOUTS` and `CHANGE_REQUESTS_PENDING` sent; today's `checkedIn`, `checkedOut` and `inHouse` now real (check-in / check-out built) |

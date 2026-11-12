@@ -8,6 +8,8 @@ import { configureApp } from '../src/app.setup';
 import { UserRole } from '../src/generated/prisma/client';
 import { BookingMailer } from '../src/modules/bookings/booking-mailer';
 import { MailMessage, MailService } from '../src/modules/mail/mail.service';
+import { PayoutMailer } from '../src/modules/payouts/payout-mailer';
+import { AccountMailer } from '../src/modules/admin/account-mailer';
 import { StorageService } from '../src/modules/storage/storage.service';
 import { PLATFORM_WALLET_ID } from '../src/modules/wallets/wallet-ledger';
 import { PrismaService } from '../src/prisma/prisma.service';
@@ -20,12 +22,16 @@ export class FakeStorage extends StorageService {
   deleted: string[] = [];
   private seq = 0;
 
+  /** What the next upload reports as its size; a test sets it to try a shape the rules refuse. */
+  nextSize = { width: 1600, height: 1200 };
+
   uploadImage(_file: Buffer, folder: string) {
     this.uploads.push({ folder, private: false });
     const storageKey = `${folder}/img${++this.seq}`;
     return Promise.resolve({
       storageKey,
       url: `https://cdn.test/${storageKey}.png`,
+      ...this.nextSize,
     });
   }
   uploadPrivate(_file: Buffer, folder: string) {
@@ -50,6 +56,7 @@ export class FakeStorage extends StorageService {
   clear() {
     this.uploads = [];
     this.deleted = [];
+    this.nextSize = { width: 1600, height: 1200 };
   }
 }
 
@@ -92,6 +99,8 @@ export async function createTestApp() {
   const reset = async () => {
     // Emails and notifications of the previous test still being written would hit the accounts removed below.
     await app.get(BookingMailer).idle();
+    await app.get(PayoutMailer).idle();
+    await app.get(AccountMailer).idle();
     outbox.length = 0;
     storage.clear();
     await prisma.$executeRawUnsafe(
@@ -105,7 +114,7 @@ export async function createTestApp() {
 
   /** Creates an ACTIVE account directly and signs in; returns its id and access token. */
   const signIn = async (
-    role: 'CUSTOMER' | 'HOTEL_PARTNER' | 'PLATFORM_MANAGER',
+    role: 'CUSTOMER' | 'HOTEL_PARTNER' | 'PLATFORM_MANAGER' | 'ADMIN',
     email: string,
   ) => {
     const account = await prisma.userAccount.create({
@@ -117,6 +126,7 @@ export async function createTestApp() {
         emailVerifiedAt: new Date(),
         ...(role === 'CUSTOMER' && { customer: { create: {} } }),
         ...(role === 'PLATFORM_MANAGER' && { platformManager: { create: {} } }),
+        ...(role === 'ADMIN' && { admin: { create: {} } }),
         ...(role === 'HOTEL_PARTNER' && {
           hotelPartner: {
             create: {

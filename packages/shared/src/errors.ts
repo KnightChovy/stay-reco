@@ -132,6 +132,15 @@ export const ErrorCode = {
   REVIEW_WINDOW_CLOSED: 'REVIEW_WINDOW_CLOSED',
   /** A sub-rating names a criterion that does not exist. */
   RATING_CRITERION_NOT_FOUND: 'RATING_CRITERION_NOT_FOUND',
+  /** The review photo does not exist, or belongs to another customer's review. */
+  REVIEW_IMAGE_NOT_FOUND: 'REVIEW_IMAGE_NOT_FOUND',
+  /** Flagging the same review, or the same photo, twice. */
+  REPORT_ALREADY_RAISED: 'REPORT_ALREADY_RAISED',
+  /** The report does not exist. */
+  REPORT_NOT_FOUND: 'REPORT_NOT_FOUND',
+  /** Deciding a report that is already resolved or dismissed. */
+  REPORT_STATUS_CONFLICT: 'REPORT_STATUS_CONFLICT',
+
   // Promotions and vouchers (BR-06)
   /** The discount code does not exist, or belongs to another customer. */
   VOUCHER_NOT_FOUND: 'VOUCHER_NOT_FOUND',
@@ -155,6 +164,40 @@ export const ErrorCode = {
   // Customer wallet
   /** The wallet balance does not cover the whole booking; paying from it is all or nothing (decision W1). */
   WALLET_INSUFFICIENT: 'WALLET_INSUFFICIENT',
+
+  // Withdrawals (BR-22, decisions M1–M3)
+  /** The withdrawal doesn't exist, or belongs to another hotel. */
+  PAYOUT_NOT_FOUND: 'PAYOUT_NOT_FOUND',
+  /** The hotel already has a withdrawal waiting for a platform manager; one at a time. */
+  PAYOUT_PENDING: 'PAYOUT_PENDING',
+  /** More than the available balance (MSG30); `details[0].message` holds the available balance. */
+  PAYOUT_EXCEEDS_BALANCE: 'PAYOUT_EXCEEDS_BALANCE',
+  /** The hotel has no approved verification with a beneficiary account to pay to. */
+  BENEFICIARY_MISSING: 'BENEFICIARY_MISSING',
+  /** The withdrawal is no longer pending (paid, rejected or cancelled in the meantime). */
+  PAYOUT_STATUS_CONFLICT: 'PAYOUT_STATUS_CONFLICT',
+
+  // Compliance (BR-15, decision M8)
+  /** The compliance case doesn't exist. */
+  VIOLATION_NOT_FOUND: 'VIOLATION_NOT_FOUND',
+  /** The case is closed, or the status change does not follow OPEN → INVESTIGATING → RESOLVED / DISMISSED. */
+  VIOLATION_STATUS_CONFLICT: 'VIOLATION_STATUS_CONFLICT',
+  /** The partner already has a suspension request waiting for the admin. */
+  SUSPENSION_REQUEST_PENDING: 'SUSPENSION_REQUEST_PENDING',
+  /** The hotel partner doesn't exist. */
+  PARTNER_NOT_FOUND: 'PARTNER_NOT_FOUND',
+  /** The partner's status does not allow it (reinstating a partner that is not suspended). */
+  PARTNER_STATUS_CONFLICT: 'PARTNER_STATUS_CONFLICT',
+  /** The suspension request doesn't exist. */
+  SUSPENSION_REQUEST_NOT_FOUND: 'SUSPENSION_REQUEST_NOT_FOUND',
+  /** The suspension request was already decided. */
+  SUSPENSION_STATUS_CONFLICT: 'SUSPENSION_STATUS_CONFLICT',
+
+  // Administration
+  /** The account doesn't exist. */
+  USER_NOT_FOUND: 'USER_NOT_FOUND',
+  /** The account's status does not allow it (locking a locked account, unlocking an active one). */
+  ACCOUNT_STATUS_CONFLICT: 'ACCOUNT_STATUS_CONFLICT',
 
   // Payments
   /** A webhook call (SePay) with a missing or wrong API key; nothing is processed. Not a client error to refresh. */

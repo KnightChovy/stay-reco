@@ -25,7 +25,12 @@ One review per booking (`booking_id` is unique). A guest who stays twice writes 
 | POST | `/bookings/:id/reviews` | the customer who booked | `createReviewSchema` | `Review` (201) |
 | GET | `/me/reviews` | customer | `?sort=&minRating=&page=&pageSize=` | `Review[]` + `meta` |
 | PATCH | `/reviews/:id` | the author | `updateReviewSchema` | `Review` |
-| PATCH | `/reviews/:id/visibility` | member of the reviewed hotel | `{ isVisible }` | `Review` |
+| PATCH | `/reviews/:id/visibility` | **platform manager** | `{ isVisible }` | `Review` |
+| POST | `/reviews/:id/images` | the author | `multipart/form-data`, field `file` | `Review` (201) |
+| DELETE | `/review-images/:id` | the author | | `Review` |
+| POST | `/reviews/:id/reports` | **any signed-in role** | `reportReviewSchema` | `ContentReport` (201) |
+| GET | `/content-reports` | platform manager | `?status=&page=&pageSize=` | `ContentReport[]` + `meta` |
+| POST | `/content-reports/:id/decide` | platform manager | `decideReportSchema` | `ContentReport` |
 
 ### Writing a review
 
@@ -48,7 +53,11 @@ One review per booking (`booking_id` is unique). A guest who stays twice writes 
 
 ### Hiding a review
 
-`PATCH /reviews/:id/visibility { "isVisible": false }`, for the owner or staff of the reviewed hotel. A review of another hotel answers `404 REVIEW_NOT_FOUND`. Hiding takes the review out of `GET /hotels/:hotelId/reviews` and out of `RatingSummary`; `GET /me/reviews` still shows it to its author, with `isVisible: false`.
+`PATCH /reviews/:id/visibility { "isVisible": false }`, for a **platform manager** only.
+
+**A hotel cannot hide a review of itself** (R12). It reports one like anybody else, and a manager decides. A hotel free to hide what it dislikes hides every bad review, which is why Tripadvisor does not let one either. A hotel calling this endpoint gets `403 FORBIDDEN`.
+
+Hiding takes the review out of `GET /hotels/:hotelId/reviews` and out of `RatingSummary`; `GET /me/reviews` still shows it to its author, with `isVisible: false`.
 
 ### Showing the "Write a review" button
 
@@ -60,6 +69,72 @@ One review per booking (`booking_id` is unique). A guest who stays twice writes 
   "reviewId": "…",                     // the review already written, when there is one
   "closesAt": "2026-12-09T00:00:00.000Z" }  // end of the window; null when the stay is not completed
 ```
+
+## Photos (R10)
+
+`POST /reviews/:id/images` is `multipart/form-data` with one file in the field `file`. It answers the whole review, so the screen can re-render from one response.
+
+| Rule | Value |
+|---|---|
+| Photos per review | **5** |
+| Size | 10MB |
+| Formats | JPEG, PNG, WebP |
+| Shape | sides between **1:1 and 4:3, either way up** |
+| Smallest side | 200px |
+
+The shape rule is Tripadvisor's, with one difference: it is measured on the **longer** side, so a portrait photo from a phone passes as readily as a landscape one. Tripadvisor accepts landscape only because its layout is landscape; phones shoot portrait by default, and refusing those would turn most guests away. A panorama is still refused either way up.
+
+The format list is the repo's existing one rather than Tripadvisor's `jpg/png/gif/bmp`: the magic-byte check already knows these three, bmp is obsolete, and an animated gif is a different problem for moderation.
+
+The type is read from the **file's first bytes**, not its name or `Content-Type`, so renaming a file to `.png` does not get it through.
+
+Photos may be added and removed for exactly as long as the review text can be edited, so a guest can come back and add one. `DELETE /review-images/:id` removes the row **and the file**.
+
+A photo a manager hides stays in the table as the evidence behind that decision, but never reaches a reader.
+
+## Reporting (R11)
+
+The flag under every review. **Every signed-in role may raise one, the reviewed hotel included** — that is how a hotel asks for a review to be looked at, since it cannot take one down itself.
+
+```jsonc
+// POST /reviews/:id/reports
+{ "reason": "NOT_A_STAY",          // OFFENSIVE | NOT_A_STAY | PERSONAL_DATA
+                                   // SPAM_OR_ADVERT | WRONG_HOTEL | AI_GENERATED | OTHER
+  "note": "Khách này chưa từng ở.", // optional, max 1000
+  "reviewImageId": "…" }           // optional: flags one photo instead of the whole review
+```
+
+Reporting the same thing twice answers `409 REPORT_ALREADY_RAISED`. Reporting **changes nothing on its own** — the content stays up until a manager decides.
+
+### The manager's queue
+
+`GET /content-reports` lists what is waiting, **oldest first** so nothing waits for ever. Without `status` it shows `OPEN` and `INVESTIGATING`.
+
+```jsonc
+// POST /content-reports/:id/decide
+{ "status": "RESOLVED",    // INVESTIGATING (claim it) | RESOLVED | DISMISSED
+  "hide": true,            // acts on the content
+  "resolution": "Không có lưu trú." }
+```
+
+`hide` acts on **the flagged photo** if the report named one, otherwise on **the whole review**. Dismissing leaves everything alone. A report already resolved or dismissed answers `409 REPORT_STATUS_CONFLICT`.
+
+```jsonc
+// ContentReport
+{ "id": "…", "reviewId": "…", "reviewImageId": null,
+  "hotelId": "…", "hotelName": "An Nhiên Riverside Hotel",
+  "reason": "NOT_A_STAY", "note": "…",
+  "status": "OPEN",
+  "reporterName": "Nguyễn Văn A",
+  "reporterRole": "HOTEL_PARTNER",   // so a hotel flagging its own page is visible
+  "resolution": null, "resolvedAt": null, "createdAt": "…" }
+```
+
+### What is deliberately missing
+
+There is **no automatic filter**. Booking.com checks uploads with machine learning and approves most within seconds; StayReco has no such pipeline, so a photo is live until somebody flags it and a manager acts. Detecting AI-generated photos is not attempted at all: independent tests in 2026 put detectors at 18–31% against recent generators, which would flag more real guest photos than generated ones. `AI_GENERATED` is a reason a **person** can pick, which is how Tripadvisor enforces its own ban.
+
+Automatic NSFW screening on upload is the obvious next step and is cheap (~$0.001 an image through the Cloudinary add-on already in use); it is not built yet.
 
 ## Types
 
@@ -76,6 +151,7 @@ One review per booking (`booking_id` is unique). A guest who stays twice writes 
   "title": "Phòng sạch, nhân viên dễ thương",
   "content": "…",
   "subRatings": [ { "criterionId": "…", "name": "Vị trí", "score": 5 } ],  // by criterion name
+  "images": [ { "id": "…", "url": "…", "width": 1600, "height": 1200 } ],  // in the order added
   "isVisible": true,
   "stayedAt": "2026-11-09",            // check-out date of the reviewed stay
   "createdAt": "…", "updatedAt": "…" }
@@ -95,7 +171,7 @@ An overall rating of 4.4 counts as **4** in `distribution`; only 5.0 lands in th
 
 - Each sub-rating is also written to `user_item_rating`, the user-item matrix the recommender reads in [phase 5](../phases/phase-5-ai-marketing.md). That table holds one score per (customer, hotel, criterion), so a repeat stay at the same hotel updates the earlier score instead of adding a row.
 - Alerts on negative reviews (UC42, decision O13 of [phase 3](../phases/phase-3-operations.md)) were waiting for this page and can now be built.
-- Not built yet: review photos and a hotel's written reply, both drawn in the FE prototype. Both need new tables; see the open decisions in [phase-4-loyalty-promotions.md](../phases/phase-4-loyalty-promotions.md).
+- Photos are built (R10). A hotel's **written reply** to a review is still not: the FE prototype draws it, but `review` has no reply field. See [phase-4-loyalty-promotions.md](../phases/phase-4-loyalty-promotions.md).
 
 ## Common error codes
 
@@ -106,6 +182,11 @@ An overall rating of 4.4 counts as **4** in `distribution`; only 5.0 lands in th
 | `REVIEW_ALREADY_EXISTS` | 409 | The booking already has a review |
 | `REVIEW_WINDOW_CLOSED` | 409 | More than `REVIEW_WINDOW_DAYS` since check-out |
 | `RATING_CRITERION_NOT_FOUND` | 404 | A sub-rating names a criterion that does not exist |
+| `REVIEW_IMAGE_NOT_FOUND` | 404 | The photo doesn't exist or belongs to another review |
+| `UPLOAD_INVALID_FILE` | 400 | Not an image, too large, wrong shape, or the sixth photo |
+| `REPORT_ALREADY_RAISED` | 409 | You already flagged this review or photo |
+| `REPORT_NOT_FOUND` | 404 | The report doesn't exist |
+| `REPORT_STATUS_CONFLICT` | 409 | The report is already resolved or dismissed |
 | `BOOKING_NOT_FOUND` | 404 | The booking doesn't exist or belongs to someone else |
 
 The full list is in [../api-guide.md §4.3](../api-guide.md#43-error-codes).

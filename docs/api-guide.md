@@ -226,9 +226,27 @@ There is no `status` field in the body; the HTTP status is already available as 
 | `REVIEW_WINDOW_CLOSED` | 409 | The review window closed (`REVIEW_WINDOW_DAYS` after check-out) | "Reviews close <n> days after check-out" |
 | `RATING_CRITERION_NOT_FOUND` | 404 | A sub-rating names a criterion that does not exist | Reload the criteria |
 | `WALLET_INSUFFICIENT` | 409 | The balance does not cover the whole booking | Show the balance and the shortfall; offer a transfer |
+| `PAYOUT_NOT_FOUND` | 404 | The withdrawal doesn't exist, or belongs to another hotel | Reload the list |
+| `PAYOUT_PENDING` | 409 | The hotel already has a withdrawal waiting for a platform manager | Show the pending withdrawal; offer to cancel it |
+| `PAYOUT_EXCEEDS_BALANCE` | 409 | More than the available balance; `details[0].message` holds the available balance | MSG30, show the available balance |
+| `BENEFICIARY_MISSING` | 409 | The hotel has no approved verification with a beneficiary account | Link to the verification request |
+| `PAYOUT_STATUS_CONFLICT` | 409 | The withdrawal is no longer pending (paid, rejected or cancelled in the meantime) | Reload the withdrawal |
+| `VIOLATION_NOT_FOUND` | 404 | The compliance case doesn't exist | Reload the list |
+| `VIOLATION_STATUS_CONFLICT` | 409 | The case is closed, or the status change does not follow OPEN → INVESTIGATING → RESOLVED / DISMISSED | Reload the case |
+| `SUSPENSION_REQUEST_PENDING` | 409 | The partner already has a suspension request waiting for the admin | Show the waiting request |
+| `PARTNER_NOT_FOUND` | 404 | The hotel partner doesn't exist | Reload the list |
+| `PARTNER_STATUS_CONFLICT` | 409 | Reinstating a partner that is not suspended | Reload the account |
+| `SUSPENSION_REQUEST_NOT_FOUND` | 404 | The suspension request doesn't exist | Reload the list |
+| `SUSPENSION_STATUS_CONFLICT` | 409 | The suspension request was already decided | Reload the request |
+| `USER_NOT_FOUND` | 404 | The account doesn't exist | Reload the list |
+| `ACCOUNT_STATUS_CONFLICT` | 409 | The account's status does not allow it (locking a locked account, unlocking an active one) | Reload the account |
 | `LOYALTY_PROGRAM_NOT_FOUND` | 404 | No loyalty programme is running | Hide the points section |
 | `LOYALTY_POINTS_INSUFFICIENT` | 409 | More points than the customer holds | Show the balance and re-quote |
 | `VOUCHER_NOT_FOUND` | 404 | The discount code doesn't exist or belongs to another customer | "Mã không hợp lệ" |
+| `REVIEW_IMAGE_NOT_FOUND` | 404 | The photo doesn't exist or belongs to another review | Reload the review |
+| `REPORT_ALREADY_RAISED` | 409 | You already flagged this review or photo | "Bạn đã báo cáo nội dung này" |
+| `REPORT_NOT_FOUND` | 404 | The report doesn't exist | Reload the queue |
+| `REPORT_STATUS_CONFLICT` | 409 | The report is already resolved or dismissed | Reload the report |
 | `VOUCHER_ALREADY_USED` | 409 | The voucher was already used on another booking | "Mã đã được sử dụng" |
 | `VOUCHER_EXPIRED` | 409 | The voucher, or the campaign behind it, is past its end date | "Mã đã hết hạn" |
 | `VOUCHER_NOT_APPLICABLE` | 409 | Below the campaign's minimum amount, or another hotel | Show the minimum, or which hotel it is for |

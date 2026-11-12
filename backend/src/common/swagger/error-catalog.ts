@@ -261,6 +261,19 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorInfo> = {
     status: 404,
     description: 'A sub-rating names a criterion that does not exist',
   },
+  REVIEW_IMAGE_NOT_FOUND: {
+    status: 404,
+    description: "Review photo doesn't exist or belongs to another review",
+  },
+  REPORT_ALREADY_RAISED: {
+    status: 409,
+    description: 'You have already flagged this review or photo',
+  },
+  REPORT_NOT_FOUND: { status: 404, description: "Report doesn't exist" },
+  REPORT_STATUS_CONFLICT: {
+    status: 409,
+    description: 'The report is already resolved or dismissed',
+  },
   VOUCHER_NOT_FOUND: {
     status: 404,
     description: "Discount code doesn't exist or belongs to another customer",
@@ -303,6 +316,70 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorInfo> = {
   NOTIFICATION_NOT_FOUND: {
     status: 404,
     description: "Notification doesn't exist or belongs to someone else",
+  },
+  PAYOUT_NOT_FOUND: {
+    status: 404,
+    description: "Withdrawal doesn't exist or belongs to another hotel",
+  },
+  PAYOUT_PENDING: {
+    status: 409,
+    description:
+      'The hotel already has a withdrawal waiting for a platform manager',
+  },
+  PAYOUT_EXCEEDS_BALANCE: {
+    status: 409,
+    description:
+      'More than the available balance (MSG30); `details[0].message` holds the available balance',
+  },
+  BENEFICIARY_MISSING: {
+    status: 409,
+    description:
+      'The hotel has no approved verification with a beneficiary account',
+  },
+  VIOLATION_NOT_FOUND: {
+    status: 404,
+    description: "Compliance case doesn't exist",
+  },
+  VIOLATION_STATUS_CONFLICT: {
+    status: 409,
+    description:
+      'The case is closed, or the change does not follow OPEN → INVESTIGATING → RESOLVED / DISMISSED',
+  },
+  SUSPENSION_REQUEST_PENDING: {
+    status: 409,
+    description:
+      'The partner already has a suspension request waiting for the admin',
+  },
+  PARTNER_STATUS_CONFLICT: {
+    status: 409,
+    description:
+      "The partner's status does not allow it (reinstating a partner that is not suspended)",
+  },
+  SUSPENSION_REQUEST_NOT_FOUND: {
+    status: 404,
+    description: "Suspension request doesn't exist",
+  },
+  SUSPENSION_STATUS_CONFLICT: {
+    status: 409,
+    description: 'The suspension request was already decided',
+  },
+  USER_NOT_FOUND: {
+    status: 404,
+    description: "Account doesn't exist",
+  },
+  ACCOUNT_STATUS_CONFLICT: {
+    status: 409,
+    description:
+      "The account's status does not allow it (locking a locked account, unlocking an active one)",
+  },
+  PARTNER_NOT_FOUND: {
+    status: 404,
+    description: "Hotel partner doesn't exist",
+  },
+  PAYOUT_STATUS_CONFLICT: {
+    status: 409,
+    description:
+      'The withdrawal is no longer pending (paid, rejected or cancelled in the meantime)',
   },
   INVALID_API_KEY: {
     status: 401,

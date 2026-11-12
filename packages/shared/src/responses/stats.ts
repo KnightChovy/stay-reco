@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { BookingStatus, PaymentMethod, PaymentStatus } from '../enums';
+import { BookingStatus, HotelStatus, PaymentMethod, PaymentStatus } from '../enums';
 import { STATS_GRANULARITIES } from '../schemas/stats';
 import { isoDateTime, responseSchemas } from './registry';
 
@@ -174,6 +174,47 @@ export const hotelStatsOverviewResponseSchema = z
   })
   .register(responseSchemas, { id: 'HotelStatsOverview' });
 export type HotelStatsOverview = z.infer<typeof hotelStatsOverviewResponseSchema>;
+
+// ── Every hotel of a partner ────────────────────────────────
+
+export const portfolioHotelResponseSchema = z
+  .object({
+    hotel: z.object({ id: z.uuid(), name: z.string(), city: z.string(), status: z.enum(HotelStatus) }),
+    roomRevenue: metricResponseSchema,
+    netEarnings: metricResponseSchema,
+    occupancyRate: rateMetricResponseSchema,
+    avgRating: z
+      .number()
+      .nullable()
+      .describe('Average of the visible reviews written in the period, 1 decimal; null without reviews.'),
+    actionItems: z
+      .object({ critical: z.number().int(), warning: z.number().int() })
+      .describe('How many action items of each severity the hotel has now (one per type, as `action-items`).'),
+  })
+  .register(responseSchemas, {
+    id: 'PortfolioHotel',
+    description: "One hotel's figures, the same as its own `stats/overview` for the period.",
+  });
+export type PortfolioHotel = z.infer<typeof portfolioHotelResponseSchema>;
+
+export const partnerPortfolioResponseSchema = z
+  .object({
+    generatedAt: generatedAt(),
+    period: statsPeriodResponseSchema,
+    previous: statsPeriodResponseSchema,
+    hotels: z.array(portfolioHotelResponseSchema).describe('Every hotel of the partner, drafts included, by name.'),
+    totals: z
+      .object({
+        roomRevenue: metricResponseSchema,
+        netEarnings: metricResponseSchema,
+        occupancyRate: rateMetricResponseSchema.describe(
+          'From the room nights summed over the hotels, not an average of their rates.',
+        ),
+      })
+      .describe('All the hotels together.'),
+  })
+  .register(responseSchemas, { id: 'PartnerPortfolio' });
+export type PartnerPortfolio = z.infer<typeof partnerPortfolioResponseSchema>;
 
 // ── Series ──────────────────────────────────────────────────
 

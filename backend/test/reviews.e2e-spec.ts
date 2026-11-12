@@ -443,7 +443,11 @@ describe('Post-stay reviews (e2e)', () => {
   });
 
   describe('PATCH /reviews/:id/visibility', () => {
-    it('lets the hotel hide a review, which leaves the public list but not the author', async () => {
+    it('lets a platform manager hide a review, which leaves the public list but not the author', async () => {
+      const manager = await t.signIn(
+        'PLATFORM_MANAGER',
+        'manager@stayreco.test',
+      );
       const h = await hotel();
       const guest = await t.signIn('CUSTOMER', 'guest@mail.test');
       const booking = await completedStay(
@@ -460,7 +464,7 @@ describe('Post-stay reviews (e2e)', () => {
       await t
         .api()
         .patch(`/api/v1/reviews/${review.body.data.id}/visibility`)
-        .set(auth(h.token))
+        .set(auth(manager.token))
         .send({ isVisible: false })
         .expect(200);
 
@@ -485,9 +489,8 @@ describe('Post-stay reviews (e2e)', () => {
       expect(mine.body.data[0].isVisible).toBe(false);
     });
 
-    it('refuses a review of another hotel', async () => {
+    it('refuses the reviewed hotel itself: it reports a review, it does not hide one', async () => {
       const h = await hotel();
-      const other = await hotel('other@hotel.test');
       const guest = await t.signIn('CUSTOMER', 'guest@mail.test');
       const booking = await completedStay(
         guest.token,
@@ -503,10 +506,16 @@ describe('Post-stay reviews (e2e)', () => {
       const res = await t
         .api()
         .patch(`/api/v1/reviews/${review.body.data.id}/visibility`)
-        .set(auth(other.token))
-        .send({ isVisible: false })
-        .expect(404);
-      expect(res.body.code).toBe('REVIEW_NOT_FOUND');
+        .set(auth(h.token))
+        .send({ isVisible: false });
+      expect(res.status).toBe(403);
+
+      // Still visible to everyone.
+      const list = await t
+        .api()
+        .get(`/api/v1/hotels/${h.hotelId}/reviews`)
+        .expect(200);
+      expect(list.body.data).toHaveLength(1);
     });
   });
 

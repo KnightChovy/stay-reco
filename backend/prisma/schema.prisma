@@ -912,6 +912,7 @@ model PlatformManager {
   policyViolations          PolicyViolation[]
   walletTransactions        WalletTransaction[]
 
+  contentReports    ContentReport[]
   @@map("platform_manager")
 }
 
@@ -1043,8 +1044,71 @@ model Review {
   hotel           Hotel            @relation(fields: [hotelId], references: [hotelId])
   booking         Booking          @relation(fields: [bookingId], references: [bookingId])
   userItemRatings UserItemRating[]
+  images          ReviewImage[]
+  reports         ContentReport[]
 
   @@map("review")
+}
+
+/// A photo a guest attached to their review; hidden with the review it belongs to.
+model ReviewImage {
+  reviewImageId String   @id @default(dbgenerated("gen_random_uuid()")) @map("review_image_id") @db.Uuid
+  reviewId      String   @map("review_id") @db.Uuid
+  imageUrl      String   @map("image_url") @db.VarChar(500)
+  /// Cloudinary public id, used to delete the file.
+  storageKey    String   @map("storage_key") @db.VarChar(255)
+  /// Kept so the aspect ratio a photo was accepted with can be read back.
+  width         Int
+  height        Int
+  sortOrder     Int      @default(0) @map("sort_order")
+  /// A manager hides a photo rather than deleting it, so the evidence behind the decision survives.
+  isVisible     Boolean  @default(true) @map("is_visible")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  review        Review          @relation(fields: [reviewId], references: [reviewId], onDelete: Cascade)
+  reports       ContentReport[]
+
+  @@index([reviewId])
+  @@map("review_image")
+}
+
+/// Anyone signed in may flag a review, or one of its photos, for a platform manager to look at.
+model ContentReport {
+  contentReportId   String           @id @default(dbgenerated("gen_random_uuid()")) @map("content_report_id") @db.Uuid
+  /// Who raised it: any signed-in account, whatever their role.
+  reporterId        String           @map("reporter_id") @db.Uuid
+  reviewId          String           @map("review_id") @db.Uuid
+  /// Set when one photo was flagged rather than the whole review.
+  reviewImageId     String?          @map("review_image_id") @db.Uuid
+  reason            ReportReason
+  note              String?
+  status            ViolationStatus  @default(OPEN)
+  /// The manager who decided, and what they wrote; null while the report is waiting.
+  platformManagerId String?          @map("platform_manager_id") @db.Uuid
+  resolution        String?
+  resolvedAt        DateTime?        @map("resolved_at") @db.Timestamptz(6)
+  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  reporter          UserAccount      @relation(fields: [reporterId], references: [userAccountId], onDelete: Cascade)
+  review            Review           @relation(fields: [reviewId], references: [reviewId], onDelete: Cascade)
+  reviewImage       ReviewImage?     @relation(fields: [reviewImageId], references: [reviewImageId], onDelete: Cascade)
+  platformManager   PlatformManager? @relation(fields: [platformManagerId], references: [platformManagerId])
+
+  /// One open report per person per review; the queue is for distinct complaints, not repeat clicks.
+  @@unique([reporterId, reviewId, reviewImageId])
+  @@index([status, createdAt])
+  @@map("content_report")
+}
+
+/// Why a review or one of its photos was flagged.
+enum ReportReason {
+  OFFENSIVE
+  NOT_A_STAY
+  PERSONAL_DATA
+  SPAM_OR_ADVERT
+  WRONG_HOTEL
+  AI_GENERATED
+  OTHER
+
+  @@map("report_reason")
 }
 
 model Room {
@@ -1191,6 +1255,7 @@ model UserAccount {
   authSessions       AuthSession[]
   verificationTokens VerificationToken[]
 
+  contentReports      ContentReport[]
   @@map("user_account")
 }
 

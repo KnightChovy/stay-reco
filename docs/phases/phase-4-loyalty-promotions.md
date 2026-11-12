@@ -20,7 +20,7 @@ Keep customers coming back: rate the stay they just had, pay less next time with
 **Backend**
 
 - **Promotions and vouchers** (BR-06): campaigns a hotel runs, personal codes handed to customers, the discount applied when booking. ✅ built
-- **Reviews** after check-out (BR-12): rating criteria, writing and editing, a hotel's reviews and rating figures, hiding one. ✅ built
+- **Reviews** after check-out (BR-12): rating criteria, writing and editing, a hotel's reviews and rating figures, photos, reporting, and a platform manager's moderation queue. ✅ built
 - **Loyalty** (BR-11): one platform-wide programme, points earned at check-out, points spent on a later stay. ✅ built
 - **Customer wallet**: balance, movements and paying a whole booking from it. ✅ built; withdrawing moves to phase 6 (W3)
 - **Preferences**: the key-value preferences the recommender of [phase 5](./phase-5-ai-marketing.md) reads. ✅ built
@@ -36,12 +36,13 @@ Keep customers coming back: rate the stay they just had, pay less next time with
 
 - The partner withdrawing from the hotel wallet (BR-22) and the admin setting the holding period → phase 6 ([money-rules.md §9](../money-rules.md))
 - Alerts on negative reviews (UC42, decision O13 of [phase 3](./phase-3-operations.md)) → now unblocked by reviews, but built later
-- Review photos and a hotel's written reply → drawn in the FE prototype, not built; see R9
+- A hotel's written reply to a review → drawn in the FE prototype, not built; see R9
+- Automatic screening of uploads (NSFW, AI-generated) → see R14; the Cloudinary add-on is the obvious next step
 - `account/profile` → already built outside this phase (every account edits its profile and avatar)
 
 ## Agreed decisions
 
-### Reviews (R1–R9, decided 2026-11-09)
+### Reviews (R1–R14; R1–R9 decided 2026-11-09, R10–R14 on 2026-11-12)
 
 | # | Decision |
 |---|---|
@@ -53,7 +54,12 @@ Keep customers coming back: rate the stay they just had, pay less next time with
 | R6 | The author may **edit** their review while the window is open. Sending `subRatings` replaces all of them and recomputes the overall rating. Writing, editing and a visibility change are all written to the audit log. |
 | R7 | Reviewers are shown as **"Nguyễn Văn A."**, not by their full name: reviews are public and the name is personal data (as on Booking.com and Traveloka). |
 | R8 | Each sub-rating is also upserted into **`user_item_rating`**, the user-item matrix the recommender reads in phase 5. That table keeps one score per (customer, hotel, criterion), so a repeat stay updates the earlier score instead of adding a row. |
-| R9 | **Review photos and a hotel's reply are not built.** The FE prototype draws both, but `review` has no image relation and no reply field, so both need a new table and a migration. Deferred rather than guessed at; see the open questions. |
+| R9 | **A hotel's written reply to a review is not built.** The FE prototype draws one, but `review` has no reply field, so it needs a table and a migration. Review photos, which R9 originally deferred alongside it, are built: see R10–R12. |
+| R10 | **Photos**: at most 5 per review, 10MB each, JPEG/PNG/WebP, sides between 1:1 and 4:3. Tripadvisor's rules, with the ratio measured on the **longer** side so a portrait photo from a phone passes — Tripadvisor accepts landscape only because its layout is, and phones shoot portrait. Added and removed for exactly as long as the review text can be edited. |
+| R11 | **Anyone signed in may flag** a review, or one of its photos, and a platform manager works the queue oldest first. Reporting changes nothing on its own. A unique key, not a check, stops the same person flagging the same thing twice; Postgres treats NULLs as distinct, so a partial index covers reports against a whole review. |
+| R12 | **A hotel can no longer hide a review of itself.** `PATCH /reviews/:id/visibility` answers only to a platform manager; a hotel reports a review like anybody else. A hotel free to hide what it dislikes hides every bad review, which is why Tripadvisor does not let one. This **changes R5** and is a breaking change for any FE calling that endpoint as the owner. |
+| R13 | A manager **hides** a flagged photo rather than deleting it: a decision has to keep the evidence it was made on. A hidden photo never reaches a reader. The author deleting their own photo still removes the file. |
+| R14 | **No automatic filter.** Booking.com screens uploads with machine learning in seconds; StayReco has no such pipeline, so content is live until somebody flags it. Detecting AI-generated photos is not attempted: independent 2026 tests put detectors at 18–31% against recent generators, so it would flag more real guest photos than generated ones. `AI_GENERATED` is a reason a **person** picks, which is how Tripadvisor enforces its own ban. |
 
 ### Promotions and vouchers (P1–P8, decided 2026-11-09)
 
@@ -111,13 +117,17 @@ loyalty_tier: MEMBER -> SILVER (10k) -> GOLD (30k) -> PLATINUM (100k)
 - Review screen: load `GET /rating-criteria` and render one slider per criterion; the overall rating is **not** an input, it comes back from the API.
 - Show the "Write a review" button from `GET /bookings/:id/review-eligibility` rather than re-implementing the rules.
 - Hotel page: the review list and `GET /hotels/:hotelId/rating-summary` (average, star distribution, per-criterion averages).
-- The photo upload and the "hotel replies within 24h" line in the prototype have no API behind them; hide them until R9 is decided.
+- The photo upload is live: `POST /reviews/:id/images` (multipart, field `file`), `DELETE /review-images/:id`. Show the rules before the picker — 5 photos, 10MB, JPEG/PNG/WebP, 1:1 to 4:3 either way up.
+- Add the flag under every review (`POST /reviews/:id/reports`), for every signed-in role. The partner portal needs it too: a hotel reports a review, it can no longer hide one (R12).
+- The "hotel replies within 24h" line still has no API behind it; hide it until R9 is decided.
 
 ## Open questions
 
 - [ ] **Loyalty: per hotel or platform-wide?** The schema says per hotel (`loyalty_program.hotel_id` is required), the FE prototype draws one platform-wide "Ví điểm StayMiles" with tiers. The two cannot both be true; taking the FE route means a migration.
 - [ ] **How much is a point worth** when spent, and is it earned on the total or on the amount after discounts?
 - [ ] **Paying from the wallet**: part of a booking with the rest by transfer, or all-or-nothing? This touches the SePay flow, where the transferred amount must match the booking exactly.
+- [ ] Automatic NSFW screening on upload through the Cloudinary add-on already in use (~$0.001 an image).
+- [ ] A hotel's written reply to a review (R9): a field on `review` or its own table, and whether a reply can be edited.
 - [ ] A `requiresCode` column on `promotion`, to replace the "has vouchers" rule of P4 (migration).
 - [ ] Who creates platform-wide campaigns, and from which screen (phase 6).
 - [ ] Tier thresholds, the earn rate and the point value are fixed in code or in the seed; a screen to change them belongs with the admin screens of phase 6.
@@ -138,3 +148,4 @@ loyalty_tier: MEMBER -> SILVER (10k) -> GOLD (30k) -> PLATINUM (100k)
 | 2026-11-10 | Phúc | Loyalty built (L1–L7): the programme made platform-wide with a migration, points earned at check-out, spent as the third subtraction, given back when a stay never happens, tiers from lifetime points, history off the audit log. Two new error codes, the `LoyaltyTier` enum, and [api/loyalty.md](../api/loyalty.md). Wallet decision W1 recorded, not built |
 | 2026-11-11 | Phúc | The four branches merged into `develop`. The stay subtotal now adds up every room type of a booking (PR #109), so the discount and the points come off that sum; a booking points at its hotel rather than one room type, which the review, loyalty and wallet queries follow |
 | 2026-11-11 | FE | Web customer integration on `feat/phase-4-frontend`: `/account/rewards`, `/account/wallet`, `/account/preferences`, `/account/bookings/[id]/review`, the hotel page reviews, discount code and points on `/booking`, pay with wallet on `/booking/payment`. Partner screens (promotions, review moderation) are not connected yet |
+| 2026-11-12 | Phúc | Review photos and content reports built (R10–R14): 5 photos a review with Tripadvisor's shape rules, the flag under every review for every role, and a platform manager's queue. Hiding a review moves from the hotel to a platform manager, which changes R5 and breaks that endpoint for FE callers using owner access |

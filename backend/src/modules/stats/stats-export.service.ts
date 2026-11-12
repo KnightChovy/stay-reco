@@ -68,12 +68,12 @@ const TXN: Record<WalletTxnType, string> = {
   SETTLEMENT: 'Chuyển sang khả dụng',
 };
 
-const MONEY = '#,##0 "₫"';
+export const MONEY = '#,##0 "₫"';
 const MONEY_2 = '#,##0.00 "₫"';
-const INT = '#,##0';
-const ONE = '0.0';
-const DATE = 'dd/mm/yyyy';
-const DATE_TIME = 'dd/mm/yyyy hh:mm';
+export const INT = '#,##0';
+export const ONE = '0.0';
+export const DATE = 'dd/mm/yyyy';
+export const DATE_TIME = 'dd/mm/yyyy hh:mm';
 
 const viDate = (date: string) => date.split('-').reverse().join('/');
 
@@ -179,7 +179,7 @@ export class StatsExportService {
         SELECT wt.booking_id,
           -coalesce(sum(wt.amount) FILTER (WHERE wt.type = 'COMMISSION'), 0) AS commission,
           -coalesce(sum(wt.amount) FILTER (WHERE wt.type = 'REFUND'), 0) AS refunds,
-          coalesce(sum(wt.amount) FILTER (WHERE wt.type IN ${EARNINGS}), 0) AS net
+          coalesce(sum(wt.amount) FILTER (WHERE ${EARNINGS}), 0) AS net
         FROM wallet_transaction wt JOIN wallet w ON w.wallet_id = wt.wallet_id
         WHERE w.hotel_id = ${hotelId}::uuid AND wt.booking_id IN (SELECT booking_id FROM created)
         GROUP BY wt.booking_id
@@ -238,7 +238,7 @@ export function slug(name: string) {
 
 // ── Sheets ──────────────────────────────────────────────────
 
-interface Column {
+export interface Column {
   header: string;
   width: number;
   numFmt?: string;
@@ -277,7 +277,7 @@ function table(
 }
 
 /** A sheet whose only content is one table from row 1, with the header frozen and filters on. */
-function listSheet(
+export function listSheet(
   book: ExcelJS.Workbook,
   name: string,
   columns: Column[],

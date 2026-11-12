@@ -119,7 +119,7 @@ StayReco's own money is tracked like a party of its own, so revenue is managed p
 - At check-out (or no-show) the commission moves as a pair of transactions: hotel wallet pending −commission, platform wallet available +commission.
 - Costs or compensations the platform bears (goodwill credits to a customer, platform-funded promotions, bank fees) are debited from the platform wallet.
 - Platform revenue for a period = the platform wallet's commission transactions minus its debits; its balance is always at hand.
-- Reconciliation: money in the platform's bank account = sum of all wallet balances (hotels, customers, platform) once payouts are recorded.
+- Reconciliation: money in the platform's bank account = money received through SePay for bookings − withdrawals paid = sum of all wallet balances (hotels, customers, platform), each counted as **available + pending + reserved** (an amount waiting to be paid out is still in the bank). SePay transfers that confirmed nothing, or came late, are in the bank but in no wallet until they are refunded by hand, so they are shown apart.
 
 ### 5.4 Commission and payouts
 
@@ -128,7 +128,15 @@ StayReco's own money is tracked like a party of its own, so revenue is managed p
 - Refunds happen only before check-in, so they never meet a commission. Should one ever correct a commission later, it is a new adjustment entry; the original entry is never edited (SRS 3.5.7).
 - **Settlement** (BR-22): `WALLET_HOLD_DAYS` after the check-out or no-show (default 1 day, an env setting until the admin screen exists), a job moves the hotel's net amount (payment − commission) from pending to available as a pair of `SETTLEMENT` transactions (keys `settlement:<bookingId>:pending` and `settlement:<bookingId>:available`). The total balance does not change; only the available part grows.
 - A **cancelled** booking that left the hotel money (the whole payment with nothing to refund, or the fee of a partial refund) is settled the same way, `WALLET_HOLD_DAYS` after the cancellation, with no commission: net = payment − refund. Example: 5,000,000 ₫ paid, 30% fee, refund 3,500,000 ₫ approved → 1,500,000 ₫ becomes available one day after the approval. A full refund leaves nothing to settle.
-- A partner withdraws at most the available balance, only to the declared beneficiary account, with one pending request per hotel at a time; platform managers process it within 2 working days (BR-22). Not built yet (phase 6).
+- **Withdrawals** (BR-22, decisions M1–M3 of the reporting and administration phase; built 2026-11-12): a partner withdraws at most the available balance, more than 0, in whole dong, only to the beneficiary account of the hotel's latest approved verification, with one pending request per hotel at a time; a suspended partner cannot request one. Platform managers process it within 2 working days (Monday–Friday). There is no withdrawal table: a request is a `PAYOUT` transaction on the hotel wallet (key `payout:<id>`), and its state comes from its audit events.
+
+| Event | Hotel wallet | Wallet transaction |
+|---|---|---|
+| Partner requests X | available −X, reserved +X | `PAYOUT` −X |
+| Manager pays (bank transfer made, reference recorded) | reserved −X | none: the money has left the platform's bank account |
+| Manager rejects with a reason, or partner cancels | reserved −X, available +X | `ADJUSTMENT` +X (key `payout:<id>:return`) |
+
+`balance_after` stays available + pending, so a `PAYOUT` row lowers it by X and its `ADJUSTMENT` brings it back.
 
 ### 5.5 Late check-out fee (collected at the hotel)
 
@@ -218,8 +226,9 @@ Per BR-20, only when: the booking was already refunded or the request is a dupli
 
 - Promotions, vouchers and loyalty points (BR-06, BR-11) are built; see §2.1.
 - Paying a booking **from the customer wallet** is built (decision W1): all or nothing, the hotel still credited into pending exactly as a transfer would. See [api/customer-wallet.md](./api/customer-wallet.md).
-- **Withdrawing** the customer wallet to a bank account: phase 6, with partner payouts, which need the same bank details, request status and manager queue.
-- Partner withdrawals (BR-22): phase 6. The holding period set by an admin: phase 6.
+- **Withdrawing** the customer wallet to a bank account: open. Customers have no bank details in the schema; storing them needs a decision first. Partner withdrawals do not need this, the beneficiary comes from the hotel's verification.
+- Partner withdrawals (BR-22): built, §5.4. The holding period and the gateway settings stay environment settings, shown read-only to the admin (decision M10).
+- **Who pays for discounts** (decision M4, 2026-11-12): a hotel's own promotions and vouchers are paid by the hotel (it is credited the total after the discount, as now). The platform-wide loyalty points are to be paid by the platform: the platform wallet will make up the value of the points to the hotel. Until that is built in the loyalty flow, the hotel is credited the total after points.
 
 ## Changelog
 
@@ -241,3 +250,4 @@ Per BR-20, only when: the booking was already refunded or the request is a dupli
 | 2026-11-09 | Promotions and vouchers (§2.1, BR-06): one discount per booking, a promotion or a voucher and never both, the larger of the two; a campaign that issued codes no longer applies automatically; capped by `maxDiscount`, never more than the stay, whole dong; the code is given back when a hold expires unpaid or the booking is cancelled |
 | 2026-11-10 | Loyalty points (§2.1, BR-11): one platform-wide programme, earned at check-out on the amount actually paid, spent as the third subtraction after the discount, capped at what the stay owes, whole dong; points come back when a booking never becomes a stay |
 | 2026-11-10 | Customer wallet (§5, decision W1): a booking may be paid entirely from the balance, never partly, because SePay matches an exact amount; the hotel is credited into pending exactly as a transfer would, so commission, settlement and refunds are unchanged. Withdrawing the customer wallet moves to phase 6 with partner payouts |
+| 2026-11-12 | Withdrawals planned (§5.4, M1–M3): a `PAYOUT` row reserves the amount, paid takes it out, rejected or cancelled gives it back with an `ADJUSTMENT`; reconciliation counts reserved amounts and withdrawals paid, unmatched SePay transfers apart (§5.3); who pays for discounts and points (M4, §9); withdrawing the customer wallet stays open |

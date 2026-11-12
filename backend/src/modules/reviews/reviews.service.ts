@@ -227,13 +227,11 @@ export class ReviewsService {
   }
 
   /** The author edits their own review while the window is still open. */
-  async update(
-    customerId: string,
-    reviewId: string,
-    input: UpdateReviewInput,
-    meta: RequestMeta = {},
-    now = new Date(),
-  ): Promise<Review> {
+  /**
+   * The caller's own review, refused once the review window has closed. Shared with the photo endpoints, so a photo
+   * can be added or removed exactly as long as the text can be edited.
+   */
+  async assertEditable(reviewId: string, customerId: string, now = new Date()) {
     const existing = isUuid(reviewId)
       ? await this.prisma.review.findFirst({
           where: { reviewId, customerId },
@@ -249,6 +247,17 @@ export class ReviewsService {
       existing.booking.status,
     );
     if (!closesAt || closesAt <= now) throw windowClosed();
+    return existing;
+  }
+
+  async update(
+    customerId: string,
+    reviewId: string,
+    input: UpdateReviewInput,
+    meta: RequestMeta = {},
+    now = new Date(),
+  ): Promise<Review> {
+    const existing = await this.assertEditable(reviewId, customerId, now);
 
     const overallRating = input.subRatings
       ? await this.weightedOverall(input.subRatings)
@@ -285,8 +294,8 @@ export class ReviewsService {
   }
 
   /**
-   * The hotel hides a review from its public page, or shows it again. Addressed by the review's own id, so the tenant
-   * check runs here (CONVENTIONS §5): a review of another hotel is simply not found.
+   * A platform manager hides a review, or shows it again (R12). The hotel being reviewed cannot: one left free to
+   * hide what it dislikes would hide every bad review, so it reports one like anybody else and a manager decides.
    */
   async setVisibility(
     user: AuthUser,
@@ -300,7 +309,7 @@ export class ReviewsService {
           select: { hotelId: true },
         })
       : null;
-    await this.access.assertResource(user, review?.hotelId, 'member', notFound);
+    if (!review) throw notFound();
     await this.prisma.review.update({
       where: { reviewId },
       data: { isVisible },
@@ -309,7 +318,7 @@ export class ReviewsService {
       AuditAction.REVIEW_VISIBILITY_CHANGED,
       user.accountId,
       meta,
-      { reviewId, hotelId: review!.hotelId, isVisible },
+      { reviewId, hotelId: review.hotelId, isVisible },
     );
     return toReview(
       await this.prisma.review.findUniqueOrThrow({

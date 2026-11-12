@@ -60,6 +60,14 @@ export enum AuditAction {
   REVIEW_UPDATED = 'REVIEW_UPDATED',
   /** The hotel hid or showed a review; `new_value` holds the new visibility. */
   REVIEW_VISIBILITY_CHANGED = 'REVIEW_VISIBILITY_CHANGED',
+  /** Someone flagged a review, or one of its photos, for a platform manager (R11). */
+  REVIEW_REPORTED = 'REVIEW_REPORTED',
+  /** A platform manager decided a report; `new_value` says whether the content was hidden. */
+  REVIEW_REPORT_DECIDED = 'REVIEW_REPORT_DECIDED',
+  /** A guest added a photo to their review. */
+  REVIEW_IMAGE_ADDED = 'REVIEW_IMAGE_ADDED',
+  /** A guest removed a photo from their review. */
+  REVIEW_IMAGE_REMOVED = 'REVIEW_IMAGE_REMOVED',
   /** The hotel started a discount campaign (BR-06). */
   PROMOTION_CREATED = 'PROMOTION_CREATED',
   /** The hotel changed a campaign; `new_value` holds the fields that changed. */
@@ -72,6 +80,40 @@ export enum AuditAction {
   SEPAY_TRANSFER_UNMATCHED = 'SEPAY_TRANSFER_UNMATCHED',
   /** A SePay transfer for a booking no longer waiting for payment (expired, already paid): refund by hand. */
   SEPAY_TRANSFER_LATE = 'SEPAY_TRANSFER_LATE',
+  /**
+   * Withdrawals (BR-22, M1): events of the `PAYOUT` wallet movement (`entity_type` `wallet_transaction`); the latest
+   * of REQUESTED / PAID / REJECTED / CANCELLED is its state. REQUESTED holds the verification request the beneficiary
+   * account comes from, never the account number.
+   */
+  PAYOUT_REQUESTED = 'PAYOUT_REQUESTED',
+  /** A platform manager opened the withdrawal with the full account number (M3). */
+  PAYOUT_ACCOUNT_VIEWED = 'PAYOUT_ACCOUNT_VIEWED',
+  /** A platform manager made the bank transfer; `new_value` holds the bank reference. */
+  PAYOUT_PAID = 'PAYOUT_PAID',
+  /** A platform manager refused it; `new_value` holds the reason sent to the partner. */
+  PAYOUT_REJECTED = 'PAYOUT_REJECTED',
+  /** The partner took the request back. */
+  PAYOUT_CANCELLED = 'PAYOUT_CANCELLED',
+  /**
+   * Compliance cases (BR-15, M8): events of a `policy_violation`. OPENED holds the hotel concerned and the evidence
+   * file ids; UPDATED the status or severity set and the manager's note.
+   */
+  VIOLATION_OPENED = 'VIOLATION_OPENED',
+  VIOLATION_UPDATED = 'VIOLATION_UPDATED',
+  /** A platform manager asks the admin to suspend the partner of a case; `new_value` holds the reason. */
+  SUSPENSION_REQUESTED = 'SUSPENSION_REQUESTED',
+  /** The admin suspended the partner; `new_value` holds the reason. */
+  SUSPENSION_APPROVED = 'SUSPENSION_APPROVED',
+  /** The admin kept the partner as it was; `new_value` holds the reason. */
+  SUSPENSION_REJECTED = 'SUSPENSION_REJECTED',
+  /** The admin locked an account (`entity` the account); `new_value` holds the reason and the status before. */
+  ACCOUNT_SUSPENDED = 'ACCOUNT_SUSPENDED',
+  /** The admin unlocked an account; `new_value` holds the reason and the status set. */
+  ACCOUNT_ACTIVATED = 'ACCOUNT_ACTIVATED',
+  /** The admin lifted a partner's suspension; `new_value` holds the reason. */
+  PARTNER_REINSTATED = 'PARTNER_REINSTATED',
+  /** The admin changed a partner's commission rate (BR-13); `new_value` holds the old and new rates. */
+  COMMISSION_RATE_CHANGED = 'COMMISSION_RATE_CHANGED',
 }
 
 /** audit_log has one actor column per role; the account id is the role row's id. */
