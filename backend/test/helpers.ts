@@ -9,6 +9,12 @@ import { UserRole } from '../src/generated/prisma/client';
 import { BookingMailer } from '../src/modules/bookings/booking-mailer';
 import { MailMessage, MailService } from '../src/modules/mail/mail.service';
 import { AiService } from '../src/modules/marketing/ai.service';
+import { PublisherRegistry } from '../src/modules/marketing/publishers/publisher.registry';
+import {
+  publishFailed,
+  type PublishablePost,
+  type PublishTarget,
+} from '../src/modules/marketing/publishers/social-publisher';
 import { StorageService } from '../src/modules/storage/storage.service';
 import { PLATFORM_WALLET_ID } from '../src/modules/wallets/wallet-ledger';
 import { PrismaService } from '../src/prisma/prisma.service';
@@ -118,11 +124,53 @@ export class FakeAi {
   }
 }
 
+/**
+ * Stands in for every social platform. Tests read `posts` to see what would have gone out, set `failWith` to make
+ * the platform refuse, and set `metricsAnswer` to whatever the insights call would have returned.
+ */
+export class FakePublisherRegistry {
+  posts: (PublishablePost & { platform: string; accountName: string })[] = [];
+  metricsCalls = 0;
+  nextPostId = 'post_1';
+  /** When set, the platform refuses with this message instead of accepting the post. */
+  failWith: string | null = null;
+  metricsAnswer = { views: 120, likes: 9, shares: 2, comments: 3 };
+
+  for(platform: string) {
+    return {
+      platform,
+      publish: (target: PublishTarget, post: PublishablePost) => {
+        if (this.failWith) {
+          return Promise.reject(publishFailed(platform, this.failWith));
+        }
+        this.posts.push({
+          ...post,
+          platform,
+          accountName: target.accountName,
+        });
+        return Promise.resolve(this.nextPostId);
+      },
+      metrics: () => {
+        this.metricsCalls++;
+        return Promise.resolve(this.metricsAnswer);
+      },
+    };
+  }
+
+  clear() {
+    this.posts = [];
+    this.metricsCalls = 0;
+    this.nextPostId = 'post_1';
+    this.failWith = null;
+  }
+}
+
 /** App with emails captured in `outbox` and Cloudinary replaced by `storage`. */
 export async function createTestApp() {
   const outbox: MailMessage[] = [];
   const storage = new FakeStorage();
   const ai = new FakeAi();
+  const publisher = new FakePublisherRegistry();
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(MailService)
     .useValue({
@@ -135,6 +183,8 @@ export async function createTestApp() {
     .useValue(storage)
     .overrideProvider(AiService)
     .useValue(ai)
+    .overrideProvider(PublisherRegistry)
+    .useValue(publisher)
     .compile();
 
   const app: INestApplication<App> = moduleRef.createNestApplication();
@@ -150,6 +200,7 @@ export async function createTestApp() {
     outbox.length = 0;
     storage.clear();
     ai.clear();
+    publisher.clear();
     await prisma.$executeRawUnsafe(
       'TRUNCATE TABLE user_account, audit_log RESTART IDENTITY CASCADE',
     );
@@ -226,6 +277,7 @@ export async function createTestApp() {
     outbox,
     storage,
     ai,
+    publisher,
     reset,
     signIn,
     signInStaff,

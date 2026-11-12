@@ -47,6 +47,11 @@ const envSchema = z
     GEMINI_API_KEY: z.string().optional(),
     /** Model the marketing writer calls. Flash is the default: a draft costs a fraction of a cent. */
     GEMINI_MODEL: z.string().default('gemini-3.8-flash'),
+    /**
+     * The Meta Graph API version the Facebook and Instagram publishers call. It has to be a version the connected
+     * app is allowed to use; Meta retires one about every two years.
+     */
+    META_GRAPH_VERSION: z.string().default('v26.0'),
     /** Spend cap per hotel per calendar month, in US dollars (phase 5 Definition of Done). */
     AI_MONTHLY_BUDGET_USD: z.preprocess(
       (v) => (v === '' ? undefined : v),

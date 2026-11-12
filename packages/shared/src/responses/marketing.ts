@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import { ContentStatus, ContentType } from '../enums';
+import {
+  ContentStatus,
+  ContentType,
+  ScheduleStatus,
+  SocialPlatform,
+} from '../enums';
 import { isoDateTime, responseSchemas } from './registry';
 
 /** The brand voice every generated post is written in. */
@@ -51,3 +56,54 @@ export const contentIdeaResponseSchema = z
   })
   .register(responseSchemas, { id: 'ContentIdea' });
 export type ContentIdea = z.infer<typeof contentIdeaResponseSchema>;
+
+/** A social page the hotel has connected. The token is never part of this: it goes in and is not read back out. */
+export const socialAccountResponseSchema = z
+  .object({
+    id: z.uuid(),
+    hotelId: z.uuid(),
+    platform: z.enum(SocialPlatform),
+    accountName: z.string().describe('The id the platform posts under.'),
+    expiresAt: isoDateTime().nullable(),
+    /** False once the token's expiry has passed; the publisher skips such an account rather than failing a post. */
+    usable: z.boolean(),
+    createdAt: isoDateTime(),
+  })
+  .register(responseSchemas, { id: 'SocialAccount' });
+export type SocialAccount = z.infer<typeof socialAccountResponseSchema>;
+
+/** One approved piece of content, aimed at one page, at one time. */
+export const contentScheduleResponseSchema = z
+  .object({
+    id: z.uuid(),
+    contentId: z.uuid(),
+    socialAccountId: z.uuid(),
+    platform: z.enum(SocialPlatform),
+    accountName: z.string(),
+    title: z.string().nullable(),
+    body: z.string(),
+    status: z.enum(ScheduleStatus),
+    scheduledAt: isoDateTime().nullable().describe('Null means at the next run of the job.'),
+    publishedAt: isoDateTime().nullable(),
+    /** The platform's own id for the post, once it exists; what the metrics are read against. */
+    externalPostId: z.string().nullable(),
+    /** Why the platform refused it, kept on the row so the calendar can say rather than only log. */
+    failureReason: z.string().nullable(),
+  })
+  .register(responseSchemas, { id: 'ContentSchedule' });
+export type ContentSchedule = z.infer<typeof contentScheduleResponseSchema>;
+
+/** How a published post did, as the platform last reported it. */
+export const contentMetricResponseSchema = z
+  .object({
+    id: z.uuid(),
+    scheduleId: z.uuid(),
+    platform: z.enum(SocialPlatform),
+    views: z.number().int(),
+    likes: z.number().int(),
+    shares: z.number().int(),
+    comments: z.number().int(),
+    recordedAt: isoDateTime(),
+  })
+  .register(responseSchemas, { id: 'ContentMetric' });
+export type ContentMetric = z.infer<typeof contentMetricResponseSchema>;

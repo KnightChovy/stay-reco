@@ -325,6 +325,33 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorInfo> = {
     status: 403,
     description: 'The model declined to write what was asked for',
   },
+  SOCIAL_ACCOUNT_NOT_FOUND: {
+    status: 404,
+    description: "A connected page doesn't exist or belongs to another hotel",
+  },
+  SCHEDULE_NOT_FOUND: {
+    status: 404,
+    description: "A scheduled post doesn't exist or belongs to another hotel",
+  },
+  SCHEDULE_STATUS_CONFLICT: {
+    status: 409,
+    description:
+      'Cancelling or reading figures for a post whose status does not allow it',
+  },
+  CONTENT_NOT_APPROVED: {
+    status: 409,
+    description: 'Scheduling content the owner has not approved',
+  },
+  SOCIAL_PUBLISH_FAILED: {
+    status: 502,
+    description:
+      'The platform refused the post or could not be reached; its own message is passed through',
+  },
+  SOCIAL_PLATFORM_UNSUPPORTED: {
+    status: 501,
+    description:
+      'Posting to this platform is not built yet (TikTok takes video only)',
+  },
   CONTENT_NOT_FOUND: {
     status: 404,
     description: "Marketing content doesn't exist or belongs to another hotel",

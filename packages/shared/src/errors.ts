@@ -176,6 +176,18 @@ export const ErrorCode = {
   CONTENT_NOT_FOUND: 'CONTENT_NOT_FOUND',
   /** Editing, submitting, approving or deleting content whose status does not allow it. */
   CONTENT_STATUS_CONFLICT: 'CONTENT_STATUS_CONFLICT',
+  /** The connected social account does not exist, or belongs to another hotel. */
+  SOCIAL_ACCOUNT_NOT_FOUND: 'SOCIAL_ACCOUNT_NOT_FOUND',
+  /** The scheduled post does not exist, or belongs to another hotel. */
+  SCHEDULE_NOT_FOUND: 'SCHEDULE_NOT_FOUND',
+  /** Cancelling or publishing a scheduled post whose status does not allow it. */
+  SCHEDULE_STATUS_CONFLICT: 'SCHEDULE_STATUS_CONFLICT',
+  /** Scheduling content the owner has not approved (decision M10). */
+  CONTENT_NOT_APPROVED: 'CONTENT_NOT_APPROVED',
+  /** The platform refused the post, or could not be reached. Nothing about our request was wrong. */
+  SOCIAL_PUBLISH_FAILED: 'SOCIAL_PUBLISH_FAILED',
+  /** Posting to this platform is not built yet (TikTok: decision M12). */
+  SOCIAL_PLATFORM_UNSUPPORTED: 'SOCIAL_PLATFORM_UNSUPPORTED',
 
   // Payments
   /** A webhook call (SePay) with a missing or wrong API key; nothing is processed. Not a client error to refresh. */

@@ -1,8 +1,11 @@
 import {
+  connectSocialAccountSchema,
   contentListQuerySchema,
   generateContentSchema,
   learnBrandVoiceSchema,
   rejectContentSchema,
+  scheduleContentSchema,
+  scheduleListQuerySchema,
   updateBrandVoiceSchema,
   updateContentSchema,
 } from '@stayreco/shared';
@@ -14,3 +17,8 @@ export class GenerateContentDto extends zodDto(generateContentSchema) {}
 export class UpdateContentDto extends zodDto(updateContentSchema) {}
 export class RejectContentDto extends zodDto(rejectContentSchema) {}
 export class ContentListQueryDto extends zodDto(contentListQuerySchema) {}
+export class ConnectSocialAccountDto extends zodDto(
+  connectSocialAccountSchema,
+) {}
+export class ScheduleContentDto extends zodDto(scheduleContentSchema) {}
+export class ScheduleListQueryDto extends zodDto(scheduleListQuerySchema) {}

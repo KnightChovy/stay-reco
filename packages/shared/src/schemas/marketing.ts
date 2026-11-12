@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import { ContentStatus, ContentType, SocialPlatform } from '../enums';
+import {
+  ContentStatus,
+  ContentType,
+  ScheduleStatus,
+  SocialPlatform,
+} from '../enums';
 import { listQuerySchema, repeatedQuery } from './common';
 
 /**
@@ -58,3 +63,50 @@ export const contentListQuerySchema = listQuerySchema.omit({ sort: true, search:
   contentType: repeatedQuery(z.enum(ContentType)).optional(),
 });
 export type ContentListQuery = z.infer<typeof contentListQuerySchema>;
+
+/**
+ * `POST /hotels/:hotelId/social-accounts`: connects a page the hotel already owns (M11).
+ *
+ * The token is pasted rather than obtained through OAuth. A Facebook or Instagram app has to be reviewed by Meta
+ * before it may post on a page it does not own, and that review takes weeks and needs a live privacy policy and a
+ * screencast. Pasting a long-lived page token from Graph API Explorer is the same credential by a slower route, so
+ * the scheduling and publishing underneath can be finished and demonstrated now, and the OAuth screen becomes the
+ * only part still missing when the app is approved.
+ */
+export const connectSocialAccountSchema = z.strictObject({
+  platform: z.enum(SocialPlatform),
+  /**
+   * The id the platform posts under: a Facebook Page id, or an Instagram Business account id. Not the display
+   * name - the publisher calls the API with this.
+   */
+  accountName: z.string().trim().min(1).max(255),
+  /** A long-lived page or user access token. Stored encrypted and never read back out of the API. */
+  accessToken: z.string().trim().min(10).max(4000),
+  /** When the token stops working, if the platform said. A token past this is not used. */
+  expiresAt: z.iso.datetime().nullable().optional(),
+});
+export type ConnectSocialAccountInput = z.infer<typeof connectSocialAccountSchema>;
+
+/**
+ * `POST /marketing-content/:id/schedule`: puts approved content on a calendar (M9).
+ *
+ * `scheduledAt` in the past, or left out, means publish at the next run of the job rather than refusing: a staff
+ * member clicking "post now" and a staff member picking a time two minutes ago want the same thing.
+ */
+export const scheduleContentSchema = z.strictObject({
+  socialAccountId: z.uuid(),
+  scheduledAt: z.iso.datetime().nullable().optional(),
+});
+export type ScheduleContentInput = z.infer<typeof scheduleContentSchema>;
+
+/** `GET /hotels/:hotelId/content-schedules`: the posting calendar, soonest first. */
+export const scheduleListQuerySchema = listQuerySchema
+  .omit({ sort: true, search: true })
+  .extend({
+    status: repeatedQuery(z.enum(ScheduleStatus)).optional(),
+    platform: repeatedQuery(z.enum(SocialPlatform)).optional(),
+    /** Only posts due on or after this instant; with `until`, the window a calendar screen shows. */
+    from: z.iso.datetime().optional(),
+    until: z.iso.datetime().optional(),
+  });
+export type ScheduleListQuery = z.infer<typeof scheduleListQuerySchema>;

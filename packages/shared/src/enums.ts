@@ -138,6 +138,15 @@ export const ContentStatus = {
 } as const;
 export type ContentStatus = (typeof ContentStatus)[keyof typeof ContentStatus];
 
+/** Where a scheduled post stands (M9). */
+export const ScheduleStatus = {
+  SCHEDULED: 'SCHEDULED',
+  PUBLISHED: 'PUBLISHED',
+  FAILED: 'FAILED',
+  CANCELLED: 'CANCELLED',
+} as const;
+export type ScheduleStatus = (typeof ScheduleStatus)[keyof typeof ScheduleStatus];
+
 /** Where a post goes. */
 export const SocialPlatform = {
   FACEBOOK: 'FACEBOOK',
