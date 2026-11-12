@@ -17,17 +17,17 @@ type Props = Omit<PressableProps, 'style'> & {
 /** Pressable co nhẹ khi chạm rồi bật về bằng spring. */
 export function PressableScale({ style, scaleTo = 0.96, onPressIn, onPressOut, ...props }: Props) {
   const scale = useSharedValue(1);
-  const animatedStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  const animatedStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.get() }] }));
 
   return (
     <AnimatedPressable
       {...props}
       onPressIn={(e) => {
-        scale.value = withSpring(scaleTo, spring);
+        scale.set(withSpring(scaleTo, spring));
         onPressIn?.(e);
       }}
       onPressOut={(e) => {
-        scale.value = withSpring(1, spring);
+        scale.set(withSpring(1, spring));
         onPressOut?.(e);
       }}
       style={[style, animatedStyle]}
