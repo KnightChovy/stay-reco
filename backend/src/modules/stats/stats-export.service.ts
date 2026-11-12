@@ -179,7 +179,7 @@ export class StatsExportService {
         SELECT wt.booking_id,
           -coalesce(sum(wt.amount) FILTER (WHERE wt.type = 'COMMISSION'), 0) AS commission,
           -coalesce(sum(wt.amount) FILTER (WHERE wt.type = 'REFUND'), 0) AS refunds,
-          coalesce(sum(wt.amount) FILTER (WHERE wt.type IN ${EARNINGS}), 0) AS net
+          coalesce(sum(wt.amount) FILTER (WHERE ${EARNINGS}), 0) AS net
         FROM wallet_transaction wt JOIN wallet w ON w.wallet_id = wt.wallet_id
         WHERE w.hotel_id = ${hotelId}::uuid AND wt.booking_id IN (SELECT booking_id FROM created)
         GROUP BY wt.booking_id

@@ -523,6 +523,51 @@ describe('Withdrawals (e2e)', () => {
       });
     });
 
+    it('leaves the net received of the dashboard alone: a withdrawal only moves money already earned', async () => {
+      const owner = await ready();
+      const manager = await t.signIn(
+        'PLATFORM_MANAGER',
+        'manager@stayreco.test',
+      );
+      const net = async () =>
+        (
+          await t
+            .api()
+            .get(`/api/v1/hotels/${owner.hotelId}/stats/overview`)
+            .set(auth(owner.token))
+            .expect(200)
+        ).body.data.cash.netEarnings.value as number;
+      const before = await net();
+
+      const rejected = (
+        await ask(owner.token, owner.hotelId, 3000000).expect(201)
+      ).body.data as Payout;
+      await t
+        .api()
+        .post(`/api/v1/payouts/${rejected.id}/reject`)
+        .set(auth(manager.token))
+        .send({ reason: 'Sai thông tin' })
+        .expect(200);
+      const cancelled = (
+        await ask(owner.token, owner.hotelId, 1000000).expect(201)
+      ).body.data as Payout;
+      await t
+        .api()
+        .post(`/api/v1/hotels/${owner.hotelId}/payouts/${cancelled.id}/cancel`)
+        .set(auth(owner.token))
+        .expect(200);
+      const paid = (await ask(owner.token, owner.hotelId, 2000000).expect(201))
+        .body.data as Payout;
+      await t
+        .api()
+        .post(`/api/v1/payouts/${paid.id}/paid`)
+        .set(auth(manager.token))
+        .send({ bankReference: 'FT9' })
+        .expect(200);
+
+      expect(await net()).toBe(before);
+    });
+
     it('decides once when the manager and the partner act together', async () => {
       const owner = await ready();
       const manager = await t.signIn(
