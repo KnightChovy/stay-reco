@@ -1,9 +1,9 @@
-import axios, { AxiosError, InternalAxiosRequestConfig } from "axios";
+import { create, isAxiosError, type AxiosError, type InternalAxiosRequestConfig } from "axios";
 import { Platform } from "react-native";
 import * as SecureStore from "expo-secure-store";
 import type { APIResponse, RefreshResult } from "@stayreco/shared";
 
-export const apiService = axios.create({
+export const apiService = create({
   baseURL: process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api/v1",
   headers: {
     "Content-Type": "application/json",
@@ -67,7 +67,7 @@ export function refreshSession(): Promise<string> {
     })
     .catch((err: unknown) => {
       // Chỉ đăng xuất khi server từ chối token; mất mạng thì giữ phiên để thử lại sau.
-      if (axios.isAxiosError(err) && err.response) {
+      if (isAxiosError(err) && err.response) {
         clearSession();
         session.onExpired();
       }
@@ -110,7 +110,10 @@ apiService.interceptors.response.use(
   },
 );
 
+/** Config cho request gửi FormData: ghi đè Content-Type JSON mặc định (nếu không axios đổi form thành JSON), nới timeout cho ảnh. */
+export const multipart = { headers: { "Content-Type": "multipart/form-data" }, timeout: 60000 };
+
 /** Thông báo lỗi backend (`message` trong body) hoặc câu dự phòng khi mất mạng. */
 export function apiErrorMessage(error: unknown, fallback: string) {
-  return (axios.isAxiosError(error) && (error.response?.data as { message?: string } | undefined)?.message) || fallback;
+  return (isAxiosError(error) && (error.response?.data as { message?: string } | undefined)?.message) || fallback;
 }

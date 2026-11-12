@@ -32,7 +32,7 @@ type MenuItem = {
   icon: IconName;
   bg: string;
   fg: string;
-  href?: '/notifications' | '/account/password' | '/account/rewards' | '/account/wallet';
+  href?: '/notifications' | '/account/password' | '/account/rewards' | '/account/wallet' | '/account/reviews';
 };
 
 const baseMenu: MenuItem[] = [
@@ -112,6 +112,14 @@ export default function AccountScreen() {
       bg: colors.secondaryFixed,
       fg: colors.secondary,
       href: '/account/wallet',
+    },
+    {
+      title: 'Đánh giá của tôi',
+      desc: 'Xem và sửa các đánh giá đã viết',
+      icon: 'star',
+      bg: colors.tertiaryFixed,
+      fg: colors.tertiaryContainer,
+      href: '/account/reviews',
     },
     ...baseMenu.slice(1),
   ];

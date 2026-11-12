@@ -12,6 +12,7 @@ import { Icon, type IconName } from '@/components/ui/icon';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
 import { colors, radius } from '@/constants/theme';
+import { HotelReviews } from '@/features/reviews/HotelReviews';
 import { images } from '@/lib/mock-data';
 import { formatDate, formatVnd, nightsBetween, stayFromParams } from '@/lib/stay';
 import { hotelListingQuery } from '@/services/stays.service';
@@ -258,6 +259,8 @@ export default function HotelDetailScreen() {
             <RoomCard key={room.roomType.id} room={room} nights={nights} onBook={() => book(room.roomType.id)} />
           ))}
         </View>
+
+        <HotelReviews hotelId={hotel.id} />
 
         {Object.keys(hotel.policies).length > 0 && (
           <View className="mx-4 mt-5 gap-2.5 rounded-lg bg-surface-container-low p-4">
