@@ -14,6 +14,7 @@ Each endpoint is described **once**, on the page of the role that uses it most; 
 | [promotions.md](./promotions.md) | Customer, partner, hotel staff | Discount campaigns, personal voucher codes, the discount quote and what a booking is charged |
 | [loyalty.md](./loyalty.md) | Customer | Loyalty points: the balance and tier, earning at check-out, spending on a booking, the points history |
 | [customer-wallet.md](./customer-wallet.md) | Customer | The customer wallet: balance, movements, paying a whole booking from it, and saved preferences |
+| [marketing.md](./marketing.md) | Partner, hotel staff | AI marketing: the hotel's brand voice, and what the AI writer has cost this month |
 
 How to read each endpoint table:
 
