@@ -20,12 +20,14 @@ import {
   ShieldCheck,
   Timer,
   User,
+  Wallet,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { getApiErrorMessage } from '@/lib/api-error';
 import { useBooking, useSimulatePayment } from '@/features/booking/api/booking-queries';
+import { useMyWallet, usePayWithWallet } from '@/features/account/api/rewards-queries';
 import { formatDate, formatDateTime, formatMoney } from '@/features/stays/lib/format';
 
 const FALLBACK_IMAGE =
@@ -46,6 +48,93 @@ function formatCountdown(milliseconds: number) {
   const minutes = Math.floor(total / 60);
   const seconds = total % 60;
   return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+}
+
+/**
+ * Pay the whole booking from the StayReco wallet (decision W1: all or nothing). Shown only when there is a balance;
+ * a balance below the total explains the shortfall and leaves the transfer as the way to pay.
+ */
+function WalletPayCard({ bookingId, total }: { bookingId: string; total: number }) {
+  const walletQuery = useMyWallet();
+  const payWithWallet = usePayWithWallet();
+  const [confirming, setConfirming] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const balance = walletQuery.data?.balanceAvailable ?? 0;
+
+  if (walletQuery.isLoading || walletQuery.error || balance <= 0) return null;
+  const enough = balance >= total;
+
+  const pay = () => {
+    setError(null);
+    payWithWallet.mutate(bookingId, {
+      // The booking query then reads CONFIRMED and the page moves to the confirmation.
+      onError: (mutationError) => {
+        setConfirming(false);
+        setError(getApiErrorMessage(mutationError, 'Không thanh toán được bằng ví. Vui lòng chuyển khoản.'));
+        void walletQuery.refetch();
+      },
+    });
+  };
+
+  return (
+    <Card className="space-y-4 rounded-xl border border-slate-200/80 bg-white p-5 shadow-xs sm:p-7">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="flex items-center gap-2 text-lg font-bold text-[#202B36]">
+            <Wallet className="size-5 text-[#934a33]" /> Thanh toán bằng ví StayReco
+          </h2>
+          <p className="mt-1 text-xs text-slate-500">
+            Trừ toàn bộ số tiền từ ví, đơn được xác nhận ngay, không cần chuyển khoản.
+          </p>
+        </div>
+        <div className="rounded-lg bg-[#f1f3f9] px-3 py-2 text-right">
+          <span className="block text-[10px] font-semibold uppercase text-slate-400">Số dư ví</span>
+          <span className="text-base font-bold text-[#013758]">{formatMoney(balance)}</span>
+        </div>
+      </div>
+
+      {!enough ? (
+        <p className="rounded-lg bg-[#FBF2E3] p-3 text-xs text-[#865D23]">
+          Số dư còn thiếu <strong>{formatMoney(total - balance)}</strong> để trả toàn bộ đơn. Ví chỉ thanh toán được
+          trọn đơn, vui lòng chuyển khoản bên dưới.
+        </p>
+      ) : confirming ? (
+        <div className="space-y-3 rounded-lg border border-[#ebd8cc] bg-[#F5EBE5] p-4">
+          <p className="text-xs text-[#783520] sm:text-sm">
+            Xác nhận trừ <strong>{formatMoney(total)}</strong> từ ví? Số dư còn lại sẽ là{' '}
+            <strong>{formatMoney(balance - total)}</strong>.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              onClick={pay}
+              disabled={payWithWallet.isPending}
+              className="h-10 gap-1.5 bg-[#934a33] px-5 text-xs font-bold text-white hover:bg-[#7a341e]"
+            >
+              {payWithWallet.isPending ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
+              Xác nhận thanh toán
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setConfirming(false)}
+              disabled={payWithWallet.isPending}
+              className="h-10 px-5 text-xs font-semibold"
+            >
+              Huỷ
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <Button
+          onClick={() => setConfirming(true)}
+          className="h-11 w-full gap-2 bg-[#934a33] text-sm font-bold text-white hover:bg-[#7a341e] sm:w-auto sm:px-6"
+        >
+          <Wallet className="size-4" /> Thanh toán {formatMoney(total)} bằng ví
+        </Button>
+      )}
+
+      {error && <p className="text-xs font-semibold text-red-600">{error}</p>}
+    </Card>
+  );
 }
 
 function PaymentContent() {
@@ -189,6 +278,10 @@ function PaymentContent() {
               <span className="text-[11px] text-slate-400">Khởi tạo {formatDateTime(booking.createdAt)}</span>
             </div>
           </Card>
+
+          {booking.status === 'PENDING' && booking.paymentStatus === 'UNPAID' && (
+            <WalletPayCard bookingId={booking.id} total={payment?.amount ?? booking.totalAmount} />
+          )}
 
           <Card className="space-y-6 rounded-xl border border-slate-200/80 bg-white p-5 shadow-xs sm:p-7">
             <div>

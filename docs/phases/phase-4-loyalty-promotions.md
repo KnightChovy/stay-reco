@@ -2,11 +2,11 @@
 
 |              |                                                                                                                                                         |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Phase status | 🟡 Backend done for every part; FE not integrated yet |
+| Phase status | 🟡 Backend done; customer web FE integrated on `feat/phase-4-frontend` (not merged yet); partner FE not connected |
 | API status   | `BE Done` for every part: merged into `develop`, FE can integrate |
 | Agreed on    | Reviews and discounts: 2026-11-09 (R1–R9, P1–P8). Loyalty and wallet: 2026-11-10 (L1–L7, W1–W3) |
 | BE owners    | Phúc                                                                                                                                                    |
-| FE owners    |                                                                                                                                                         |
+| FE owners    | Web customer screens: branch `feat/phase-4-frontend` |
 | API          | [api/reviews.md](../api/reviews.md), [api/promotions.md](../api/promotions.md), [api/loyalty.md](../api/loyalty.md), [api/customer-wallet.md](../api/customer-wallet.md) |
 
 > Rules for every API: [api-guide.md](../api-guide.md). Money rules (final price, discounts, wallet): [money-rules.md](../money-rules.md), kept in sync with this file.
@@ -147,4 +147,5 @@ loyalty_tier: MEMBER -> SILVER (10k) -> GOLD (30k) -> PLATINUM (100k)
 | 2026-11-09 | Phúc | Promotions and vouchers built (P1–P8): campaign CRUD, issuing personal codes, the discount quote, the discount applied and released on `POST /bookings`. Six new error codes, the `DiscountType` enum, and [api/promotions.md](../api/promotions.md). money-rules §2.1 updated                                                                                  |
 | 2026-11-10 | Phúc | Loyalty built (L1–L7): the programme made platform-wide with a migration, points earned at check-out, spent as the third subtraction, given back when a stay never happens, tiers from lifetime points, history off the audit log. Two new error codes, the `LoyaltyTier` enum, and [api/loyalty.md](../api/loyalty.md). Wallet decision W1 recorded, not built |
 | 2026-11-11 | Phúc | The four branches merged into `develop`. The stay subtotal now adds up every room type of a booking (PR #109), so the discount and the points come off that sum; a booking points at its hotel rather than one room type, which the review, loyalty and wallet queries follow |
+| 2026-11-11 | FE | Web customer integration on `feat/phase-4-frontend`: `/account/rewards`, `/account/wallet`, `/account/preferences`, `/account/bookings/[id]/review`, the hotel page reviews, discount code and points on `/booking`, pay with wallet on `/booking/payment`. Partner screens (promotions, review moderation) are not connected yet |
 | 2026-11-12 | Phúc | Review photos and content reports built (R10–R14): 5 photos a review with Tripadvisor's shape rules, the flag under every review for every role, and a platform manager's queue. Hiding a review moves from the hotel to a platform manager, which changes R5 and breaks that endpoint for FE callers using owner access |

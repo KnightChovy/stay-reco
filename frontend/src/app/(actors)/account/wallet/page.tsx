@@ -1,174 +1,223 @@
 'use client';
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
+import {
+  AlertTriangle,
+  ArrowDownLeft,
+  ArrowUpRight,
+  Info,
+  Loader2,
+  ReceiptText,
+  RotateCcw,
+  Wallet,
+} from 'lucide-react';
+import type { WalletTxnType } from '@stayreco/shared';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import AppBreadcrumb from '@/components/common/breadcrumb/AppBreadcrumb';
+import Pagination from '@/components/common/pagination/Pagination';
 import AccountSubNav from '@/features/account/AccountSubNav';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import {
-  Wallet,
-  ArrowDownLeft,
-  ArrowUpRight,
-  RefreshCw,
-  ShieldCheck,
-  CheckCircle2,
-  Clock,
-  Building2,
-  CreditCard
-} from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { getApiErrorMessage } from '@/lib/api-error';
+import { formatDateTime, formatMoney } from '@/features/stays/lib/format';
+import { useMyWallet, useMyWalletTransactions } from '@/features/account/api/rewards-queries';
+import { WALLET_TXN_LABELS } from '@/features/account/lib/rewards-labels';
 
-export default function WalletPage() {
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+const PAGE_SIZE = 10;
 
-  const transactions = [
-    {
-      id: 'TX-981240',
-      type: 'refund',
-      title: 'Hoàn tiền hủy phòng #SR-261020-0842',
-      amount: '+2.250.000 ₫',
-      date: '14/09/2026 (15:30)',
-      status: 'Đã hoàn thành',
-      method: 'VNPay QR',
-    },
-    {
-      id: 'TX-771020',
-      type: 'payment',
-      title: 'Thanh toán đơn phòng #SR-892410',
-      amount: '-3.920.000 ₫',
-      date: '10/09/2026 (09:15)',
-      status: 'Thành công',
-      method: 'Ví StayReco',
-    },
-    {
-      id: 'TX-651200',
-      type: 'withdraw',
-      title: 'Rút tiền về Vietcombank (****8899)',
-      amount: '-1.500.000 ₫',
-      date: '01/09/2026 (18:45)',
-      status: 'Thành công',
-      method: 'Chuyển khoản NH',
-    },
-  ];
+const FILTERS: Array<{ id: string; label: string; types?: WalletTxnType[] }> = [
+  { id: 'all', label: 'Tất cả' },
+  { id: 'refund', label: 'Tiền hoàn', types: ['REFUND'] },
+  { id: 'payment', label: 'Thanh toán', types: ['BOOKING_PAYMENT'] },
+];
 
-  const handleWithdraw = () => {
-    setToastMessage('Yêu cầu rút 2.250.000 ₫ về ngân hàng đã được gửi thành công! Tiền sẽ về trong 24h.');
-    setTimeout(() => setToastMessage(null), 4000);
-  };
+function TransactionsCard() {
+  const [filter, setFilter] = useState('all');
+  const [page, setPage] = useState(1);
+  const types = FILTERS.find((item) => item.id === filter)?.types;
+  const query = useMyWalletTransactions({ page, pageSize: PAGE_SIZE, type: types });
+  const transactions = query.data?.transactions ?? [];
+  const meta = query.data?.meta;
 
   return (
-    <div className="flex min-h-screen flex-col bg-background font-sans antialiased text-foreground">
+    <Card className="space-y-6 rounded-2xl border border-border bg-white p-6 shadow-xs sm:p-8">
+      <div className="flex flex-col gap-3 border-b border-border pb-4 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="flex items-center gap-2 text-lg font-bold text-foreground">
+          <ReceiptText className="size-5 text-primary" /> Lịch sử giao dịch ví
+          {query.isFetching && !query.isLoading && (
+            <Loader2 className="size-4 animate-spin text-muted-foreground" aria-label="Đang cập nhật" />
+          )}
+        </h2>
+        <div className="flex gap-1 rounded-lg bg-slate-100 p-1" role="tablist" aria-label="Lọc giao dịch">
+          {FILTERS.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              role="tab"
+              aria-selected={filter === item.id}
+              onClick={() => {
+                setFilter(item.id);
+                setPage(1);
+              }}
+              className={cn(
+                'rounded-md px-3 py-1.5 text-xs font-semibold transition-colors',
+                filter === item.id ? 'bg-white text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {query.isLoading ? (
+        <div className="flex items-center justify-center gap-2 py-10 text-xs text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" /> Đang tải giao dịch…
+        </div>
+      ) : query.error ? (
+        <div className="flex flex-col items-center gap-3 py-8 text-center">
+          <AlertTriangle className="size-6 text-amber-500" />
+          <p className="text-xs text-muted-foreground">{getApiErrorMessage(query.error)}</p>
+          <Button variant="outline" size="sm" onClick={() => void query.refetch()} className="gap-1.5">
+            <RotateCcw className="size-3.5" /> Thử lại
+          </Button>
+        </div>
+      ) : transactions.length === 0 ? (
+        <p className="py-8 text-center text-xs text-muted-foreground">
+          Chưa có giao dịch nào. Tiền hoàn từ các đơn huỷ sẽ xuất hiện tại đây.
+        </p>
+      ) : (
+        <ul className="space-y-3">
+          {transactions.map((tx) => {
+            const credit = tx.amount >= 0;
+            return (
+              <li
+                key={tx.id}
+                className="flex items-center justify-between gap-4 rounded-xl border border-border bg-slate-50 p-4"
+              >
+                <div className="flex min-w-0 items-center gap-3">
+                  <span
+                    className={cn(
+                      'flex size-10 shrink-0 items-center justify-center rounded-full',
+                      credit ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-700',
+                    )}
+                  >
+                    {credit ? <ArrowDownLeft className="size-5" /> : <ArrowUpRight className="size-5" />}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-foreground sm:text-sm">
+                      {WALLET_TXN_LABELS[tx.type]}
+                      {tx.booking && (
+                        <>
+                          {' · '}
+                          <Link href={`/account/bookings/${tx.booking.id}`} className="text-primary hover:underline">
+                            #{tx.booking.code}
+                          </Link>
+                        </>
+                      )}
+                    </p>
+                    <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                      {formatDateTime(tx.createdAt)}
+                      {tx.description && ` · ${tx.description}`}
+                    </p>
+                  </div>
+                </div>
+                <div className="shrink-0 text-right">
+                  <span className={cn('block text-sm font-bold sm:text-base', credit ? 'text-emerald-600' : 'text-foreground')}>
+                    {credit ? '+' : '−'}
+                    {formatMoney(Math.abs(tx.amount))}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground">Số dư sau: {formatMoney(tx.balanceAfter)}</span>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {meta && meta.totalPages > 1 && (
+        <Pagination currentPage={meta.page} totalPages={meta.totalPages} onPageChange={setPage} />
+      )}
+    </Card>
+  );
+}
+
+export default function WalletPage() {
+  const wallet = useMyWallet();
+
+  return (
+    <div className="flex min-h-screen flex-col bg-background font-sans text-foreground antialiased">
       <Header />
 
-      <main className="flex-1 w-full bg-[#f7f9ff]">
+      <main className="w-full flex-1 bg-[#f7f9ff]">
         <AccountSubNav activeTab="wallet" />
 
-        <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+        <div className="mx-auto max-w-4xl space-y-8 px-4 py-8 sm:px-6 lg:px-8">
           <AppBreadcrumb
             items={[
               { label: 'Trang chủ', href: '/' },
               { label: 'Tài khoản', href: '/account/profile' },
-              { label: 'Ví StayReco Wallet & Hoàn tiền', active: true },
+              { label: 'Ví & Hoàn tiền', active: true },
             ]}
           />
 
-          {/* Wallet Balance Card */}
-          <div className="w-full rounded-2xl bg-linear-to-r from-[#124b6d] via-[#193b56] to-[#ae583c] p-6 sm:p-8 text-white flex flex-col md:flex-row items-start md:items-center justify-between gap-6 shadow-md">
+          <div className="flex w-full flex-col items-start justify-between gap-6 rounded-2xl bg-linear-to-r from-[#124b6d] via-[#193b56] to-[#ae583c] p-6 text-white shadow-md sm:p-8 md:flex-row md:items-center">
             <div className="space-y-2">
-              <span className="inline-flex items-center gap-1 bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-xs font-semibold">
-                <Wallet className="size-3.5" /> Ví điện tử StayReco Wallet
+              <span className="inline-flex items-center gap-1 rounded-full bg-white/20 px-3 py-1 text-xs font-semibold backdrop-blur-md">
+                <Wallet className="size-3.5" /> Ví StayReco
               </span>
-              <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-white">2.250.000 ₫</h1>
-              <p className="text-xs sm:text-sm text-white/80">
-                Số dư khả dụng từ tiền hoàn trả và tích lũy giao dịch.
-              </p>
+              {wallet.isLoading ? (
+                <div className="flex items-center gap-2 py-2 text-sm text-white/80">
+                  <Loader2 className="size-5 animate-spin" /> Đang tải số dư…
+                </div>
+              ) : wallet.error || !wallet.data ? (
+                <div className="space-y-2">
+                  <p className="text-sm text-white/90">{getApiErrorMessage(wallet.error)}</p>
+                  <Button
+                    size="sm"
+                    onClick={() => void wallet.refetch()}
+                    className="gap-1.5 bg-white text-primary hover:bg-slate-100"
+                  >
+                    <RotateCcw className="size-3.5" /> Thử lại
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <h1 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
+                    {formatMoney(wallet.data.balanceAvailable)}
+                  </h1>
+                  <p className="text-xs text-white/80 sm:text-sm">
+                    Số dư khả dụng từ tiền hoàn của các đơn đã huỷ
+                    {wallet.data.updatedAt && ` · cập nhật ${formatDateTime(wallet.data.updatedAt)}`}.
+                  </p>
+                </>
+              )}
             </div>
 
-            <div className="flex items-center gap-3 w-full md:w-auto shrink-0">
-              <Button
-                onClick={handleWithdraw}
-                className="h-11 px-5 bg-white text-primary hover:bg-slate-100 font-bold text-xs sm:text-sm shadow-xs"
-              >
-                Rút tiền về Ngân hàng
+            <Link href="/search" className="w-full shrink-0 md:w-auto">
+              <Button className="h-11 w-full border-0 bg-[#ae583c] px-5 text-xs font-bold text-white shadow-xs hover:bg-[#934a33] sm:text-sm">
+                Dùng thanh toán đơn mới
               </Button>
-              <Link href="/search">
-                <Button className="h-11 px-5 bg-[#ae583c] text-white hover:bg-[#934a33] font-bold text-xs sm:text-sm shadow-xs border-0">
-                  Dùng thanh toán đơn mới
-                </Button>
-              </Link>
+            </Link>
+          </div>
+
+          <div className="flex items-start gap-3 rounded-xl border border-[#ebd8cc] bg-[#F5EBE5] p-4 text-xs text-[#783520] sm:text-sm">
+            <Info className="mt-0.5 size-4 shrink-0" />
+            <div className="space-y-1">
+              <p>
+                <strong>Thanh toán bằng ví:</strong> số dư phải đủ trả <strong>toàn bộ</strong> đơn đặt phòng; chọn
+                &ldquo;Thanh toán bằng ví&rdquo; ở trang thanh toán. Nếu không đủ, vui lòng chuyển khoản như thường lệ.
+              </p>
+              <p>Hiện chưa hỗ trợ rút số dư ví về tài khoản ngân hàng. Tính năng này sẽ có trong bản cập nhật tới.</p>
             </div>
           </div>
 
-          {/* Transaction History */}
-          <Card className="p-6 sm:p-8 bg-white border border-border shadow-xs rounded-2xl space-y-6">
-            <div className="flex items-center justify-between pb-4 border-b border-border">
-              <h2 className="text-lg font-bold text-foreground">Lịch sử giao dịch ví & Hoàn tiền</h2>
-              <Badge className="bg-emerald-50 text-emerald-700 hover:bg-emerald-50 text-xs">
-                PCI-DSS Secured
-              </Badge>
-            </div>
-
-            <div className="space-y-3">
-              {transactions.map((tx) => (
-                <div
-                  key={tx.id}
-                  className="p-4 rounded-xl border border-border bg-slate-50 flex items-center justify-between gap-4"
-                >
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`size-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0 ${
-                        tx.type === 'refund'
-                          ? 'bg-emerald-100 text-emerald-700'
-                          : 'bg-slate-200 text-slate-700'
-                      }`}
-                    >
-                      {tx.type === 'refund' ? (
-                        <ArrowDownLeft className="size-5" />
-                      ) : (
-                        <ArrowUpRight className="size-5" />
-                      )}
-                    </div>
-
-                    <div>
-                      <h4 className="text-xs sm:text-sm font-bold text-foreground">{tx.title}</h4>
-                      <p className="text-[11px] text-muted-foreground mt-0.5">
-                        {tx.date} • Phương thức: {tx.method}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="text-right">
-                    <span
-                      className={`text-sm sm:text-base font-bold block ${
-                        tx.type === 'refund' ? 'text-emerald-600' : 'text-foreground'
-                      }`}
-                    >
-                      {tx.amount}
-                    </span>
-                    <span className="text-[10px] text-emerald-700 font-semibold bg-emerald-50 px-2 py-0.5 rounded-full inline-block mt-0.5">
-                      {tx.status}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </Card>
+          <TransactionsCard />
         </div>
       </main>
-
-      {/* Toast */}
-      {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-primary text-primary-foreground px-5 py-3.5 rounded-xl shadow-xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5">
-          <CheckCircle2 className="size-5 text-emerald-400 shrink-0" />
-          <div>
-            <h4 className="text-xs sm:text-sm font-bold">Thao tác thành công!</h4>
-            <p className="text-[11px] text-white/80">{toastMessage}</p>
-          </div>
-        </div>
-      )}
 
       <Footer />
     </div>

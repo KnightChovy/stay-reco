@@ -10,13 +10,16 @@ import {
   Bed,
   Calendar,
   CheckCircle2,
+  Coins,
   Info,
   Loader2,
   Lock,
   MapPin,
   ShieldCheck,
+  Ticket,
   Timer,
   User,
+  X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -28,6 +31,10 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { getApiErrorCode, getApiErrorMessage } from '@/lib/api-error';
 import { useAuthStore } from '@/lib/auth-store';
 import { useCreateBooking } from '@/features/booking/api/booking-queries';
+import { useDiscountQuote, useVoucherOptions, voucherSaving } from '@/features/account/api/rewards-queries';
+import { VoucherPicker } from '@/features/booking/components/VoucherPicker';
+import { getDiscountQuote } from '@/services/rewards.service';
+import { formatPoints } from '@/features/account/lib/rewards-labels';
 import { useHotelListing, useRoomTypeListing } from '@/features/stays/api/stays-queries';
 import { formatDate, formatMoney } from '@/features/stays/lib/format';
 
@@ -68,8 +75,85 @@ function BookingContent() {
   const [agreed, setAgreed] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
+  // Discount code and points: applied only once the backend accepted them (docs/api/promotions.md, loyalty.md).
+  const [codeInput, setCodeInput] = useState('');
+  // "auto" uses the voucher that saves the most, as soon as the codes are priced; any choice of the customer
+  // (another code, a typed one, or none) switches to "manual" and is kept.
+  const [selection, setSelection] = useState<{ mode: 'auto' } | { mode: 'manual'; code: string | undefined }>({
+    mode: 'auto',
+  });
+  const [showCodeInput, setShowCodeInput] = useState(false);
+  const [codeError, setCodeError] = useState<string | null>(null);
+  const [checkingCode, setCheckingCode] = useState(false);
+  const [pointsInput, setPointsInput] = useState('');
+  const [pointsToUse, setPointsToUse] = useState<number | undefined>(undefined);
+  const [pointsError, setPointsError] = useState<string | null>(null);
+
+  const stayInput = useMemo(
+    () => (roomTypeId && checkIn && checkOut ? { roomTypeId, checkIn, checkOut, rooms } : null),
+    [roomTypeId, checkIn, checkOut, rooms],
+  );
+  const voucherOptions = useVoucherOptions(stayInput, hotelId);
+  const bestCode = voucherOptions.options.reduce<{ code: string; saving: number } | undefined>((best, option) => {
+    const saving = voucherSaving(option);
+    return saving > 0 && (!best || saving > best.saving) ? { code: option.voucher.code, saving } : best;
+  }, undefined)?.code;
+  const autoPending = selection.mode === 'auto' && voucherOptions.isLoading;
+  const appliedCode = selection.mode === 'auto' ? (autoPending ? undefined : bestCode) : selection.code;
+  const listedCodes = new Set(voucherOptions.options.map((option) => option.voucher.code.toUpperCase()));
+
+  const quoteInput = useMemo(
+    () =>
+      roomTypeId && checkIn && checkOut
+        ? { roomTypeId, checkIn, checkOut, rooms, code: appliedCode, pointsToUse }
+        : null,
+    [roomTypeId, checkIn, checkOut, rooms, appliedCode, pointsToUse],
+  );
+  const quoteQuery = useDiscountQuote(quoteInput);
+  const quote = quoteQuery.data;
+
   const roomType = roomQuery.data?.roomType;
   const offer = roomQuery.data?.offer;
+
+  /** A typed code is checked with a quote first, so a refused code never replaces the working total. */
+  const applyCode = async () => {
+    const code = codeInput.trim().toUpperCase();
+    setCodeError(null);
+    if (!code || !quoteInput) return;
+    setCheckingCode(true);
+    try {
+      await getDiscountQuote({ ...quoteInput, code });
+      setSelection({ mode: 'manual', code });
+      setCodeInput('');
+      setShowCodeInput(false);
+    } catch (error) {
+      setCodeError(getApiErrorMessage(error, 'Không áp dụng được mã này.'));
+    } finally {
+      setCheckingCode(false);
+    }
+  };
+
+  const selectCode = (code: string | undefined) => {
+    setSelection({ mode: 'manual', code });
+    setCodeError(null);
+  };
+
+  const removeCode = () => selectCode(undefined);
+
+  const applyPoints = (value: number) => {
+    setPointsError(null);
+    const balance = quote?.points?.pointsBalance ?? 0;
+    if (!Number.isInteger(value) || value < 0) {
+      setPointsError('Số điểm phải là số nguyên không âm.');
+      return;
+    }
+    if (value > balance) {
+      setPointsError(`Bạn chỉ có ${formatPoints(balance)}.`);
+      return;
+    }
+    setPointsToUse(value || undefined);
+    setPointsInput(value ? String(value) : '');
+  };
   const hotel = hotelQuery.data?.hotel;
   const nights = checkIn && checkOut ? nightsBetween(checkIn, checkOut) : 0;
   const image = roomType?.images[0]?.url ?? hotel?.images[0]?.url ?? FALLBACK_IMAGE;
@@ -92,6 +176,10 @@ function BookingContent() {
       setFormError('Thiếu thông tin hạng phòng hoặc ngày lưu trú.');
       return;
     }
+    if (!quote) {
+      setFormError('Chưa tính được tổng tiền. Vui lòng đợi giây lát hoặc tải lại trang.');
+      return;
+    }
 
     createBooking.mutate(
       {
@@ -104,7 +192,10 @@ function BookingContent() {
         contactPhone: contactPhone.trim(),
         arrivalTime: /^([01]\d|2[0-3]):[0-5]\d$/.test(arrivalTime) ? arrivalTime : undefined,
         specialRequests: specialRequests.trim() || undefined,
-        expectedTotal: offer.total,
+        code: appliedCode,
+        pointsToUse,
+        // The discounted total the customer saw; the backend prices the stay again and refuses a mismatch.
+        expectedTotal: quote.expectedTotal,
       },
       {
         onSuccess: (booking) => {
@@ -114,8 +205,23 @@ function BookingContent() {
         onError: (error) => {
           const code = getApiErrorCode(error);
           if (code === 'BOOKING_PRICE_CHANGED') {
-            setFormError('Giá phòng vừa thay đổi. Danh sách đã được cập nhật, vui lòng kiểm tra lại tổng tiền.');
+            setFormError(
+              'Giá phòng, ưu đãi hoặc điểm vừa thay đổi. Tổng tiền đã được cập nhật, vui lòng kiểm tra lại.',
+            );
             void roomQuery.refetch();
+            void quoteQuery.refetch();
+            return;
+          }
+          if (code?.startsWith('VOUCHER_')) {
+            // The code stopped working between the quote and the booking: drop it, keep the reason on screen.
+            removeCode();
+            setCodeError(getApiErrorMessage(error));
+            return;
+          }
+          if (code === 'LOYALTY_POINTS_INSUFFICIENT') {
+            setPointsToUse(undefined);
+            setPointsError(getApiErrorMessage(error));
+            void quoteQuery.refetch();
             return;
           }
           if (code === 'ROOM_SOLD_OUT') {
@@ -286,6 +392,167 @@ function BookingContent() {
           </Card>
 
           <Card className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-xs sm:p-7">
+            <div className="mb-5 flex items-center gap-2.5 border-b border-slate-100 pb-3">
+              <span className="flex size-8 items-center justify-center rounded-lg bg-[#F5EBE5] text-[#934a33]">
+                <Ticket className="size-4" />
+              </span>
+              <h2 className="text-lg font-bold text-[#202B36]">Ưu đãi & điểm thưởng</h2>
+            </div>
+
+            <div className="space-y-5">
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-xs font-semibold text-[#202B36] sm:text-sm">Voucher của bạn</span>
+                  {selection.mode === 'auto' && appliedCode && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                      <CheckCircle2 className="size-3.5" /> Đã tự áp dụng voucher tốt nhất
+                    </span>
+                  )}
+                </div>
+
+                <VoucherPicker
+                  options={voucherOptions.options}
+                  isLoading={voucherOptions.isLoading}
+                  selectedCode={appliedCode}
+                  bestCode={bestCode}
+                  onSelect={selectCode}
+                  disabled={createBooking.isPending}
+                />
+
+                {appliedCode && !listedCodes.has(appliedCode.toUpperCase()) && (
+                  <div className="flex items-center justify-between gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-xs">
+                    <span className="flex items-center gap-1.5 font-semibold text-emerald-800">
+                      <CheckCircle2 className="size-4" /> Đã áp dụng mã <span className="font-mono">{appliedCode}</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={removeCode}
+                      className="flex items-center gap-1 font-semibold text-slate-600 hover:text-red-600"
+                      aria-label="Bỏ mã giảm giá"
+                    >
+                      <X className="size-3.5" /> Bỏ mã
+                    </button>
+                  </div>
+                )}
+
+                {showCodeInput ? (
+                  <form
+                    className="flex gap-2"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void applyCode();
+                    }}
+                  >
+                    <Input
+                      id="discountCode"
+                      aria-label="Nhập mã voucher khác"
+                      value={codeInput}
+                      onChange={(event) => setCodeInput(event.target.value.toUpperCase())}
+                      placeholder="Nhập mã voucher khác"
+                      maxLength={50}
+                      autoFocus
+                      aria-invalid={!!codeError}
+                      className="h-11 border-slate-300 font-mono text-sm uppercase"
+                    />
+                    <Button
+                      type="submit"
+                      variant="outline"
+                      disabled={!codeInput.trim() || checkingCode}
+                      className="h-11 shrink-0 border-[#013758] px-5 text-xs font-bold text-[#013758]"
+                    >
+                      {checkingCode ? <Loader2 className="size-4 animate-spin" /> : 'Áp dụng'}
+                    </Button>
+                  </form>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowCodeInput(true)}
+                    className="text-xs font-semibold text-[#013758] hover:underline"
+                  >
+                    + Nhập mã khác
+                  </button>
+                )}
+                {codeError && <p className="text-xs text-red-600">{codeError}</p>}
+                <p className="text-[11px] text-slate-500">
+                  Mỗi đơn chỉ dùng một ưu đãi: khuyến mãi của khách sạn hoặc một voucher. Nếu khuyến mãi của khách sạn có
+                  lợi hơn, hệ thống dùng khuyến mãi đó và giữ lại voucher của bạn. Xem tất cả voucher ở{' '}
+                  <Link href="/account/rewards" className="font-semibold text-[#013758] underline" target="_blank">
+                    Voucher & Điểm thưởng
+                  </Link>
+                  .
+                </p>
+              </div>
+
+              {quote?.points && (
+                <div className="space-y-1.5 border-t border-slate-100 pt-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <Label htmlFor="pointsToUse" className="flex items-center gap-1.5 text-xs font-semibold text-[#202B36] sm:text-sm">
+                      <Coins className="size-4 text-[#934a33]" /> Dùng điểm StayMiles
+                    </Label>
+                    <span className="text-[11px] text-slate-500">
+                      Bạn có <strong className="text-[#202B36]">{formatPoints(quote.points.pointsBalance)}</strong>
+                    </span>
+                  </div>
+                  {quote.points.pointsBalance === 0 ? (
+                    <p className="text-xs text-slate-500">
+                      Bạn chưa có điểm. Sau kỳ nghỉ này bạn sẽ được cộng 1 điểm cho mỗi 1.000 ₫ thực trả.
+                    </p>
+                  ) : (
+                    <form
+                      className="flex flex-wrap gap-2"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        applyPoints(Number(pointsInput || 0));
+                      }}
+                    >
+                      <Input
+                        id="pointsToUse"
+                        inputMode="numeric"
+                        value={pointsInput}
+                        onChange={(event) => setPointsInput(event.target.value.replace(/\D/g, ''))}
+                        placeholder={`Tối đa ${new Intl.NumberFormat('vi-VN').format(quote.points.maxPointsUsable)}`}
+                        aria-invalid={!!pointsError}
+                        className="h-11 min-w-0 flex-1 border-slate-300 text-sm"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => applyPoints(quote.points!.maxPointsUsable)}
+                        disabled={quote.points.maxPointsUsable === 0}
+                        className="h-11 shrink-0 px-4 text-xs font-semibold"
+                      >
+                        Dùng tối đa
+                      </Button>
+                      <Button
+                        type="submit"
+                        variant="outline"
+                        className="h-11 shrink-0 border-[#013758] px-5 text-xs font-bold text-[#013758]"
+                      >
+                        Áp dụng
+                      </Button>
+                    </form>
+                  )}
+                  {pointsError && <p className="text-xs text-red-600">{pointsError}</p>}
+                  {pointsToUse !== undefined && quote.points.pointsUsed > 0 && (
+                    <p className="flex flex-wrap items-center gap-2 text-xs text-emerald-700">
+                      <CheckCircle2 className="size-3.5" />
+                      Dùng {formatPoints(quote.points.pointsUsed)} = −{formatMoney(quote.points.amount)}
+                      {quote.points.pointsUsed < pointsToUse && ' (chỉ trừ đủ số tiền còn lại, phần dư giữ nguyên trong ví điểm)'}
+                      <button
+                        type="button"
+                        onClick={() => applyPoints(0)}
+                        className="font-semibold text-slate-600 underline hover:text-red-600"
+                      >
+                        Không dùng điểm
+                      </button>
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          </Card>
+
+          <Card className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-xs sm:p-7">
             <div className="mb-4 flex items-center gap-2.5">
               <span className="flex size-8 items-center justify-center rounded-lg bg-[#EDF4EE] text-[#35624A]">
                 <ShieldCheck className="size-4" />
@@ -377,13 +644,45 @@ function BookingContent() {
                   <span>
                     {rooms} phòng × {nights} đêm
                   </span>
-                  <span>{formatMoney(offer.total)}</span>
+                  <span>{formatMoney(quote?.subtotal ?? offer.total)}</span>
                 </div>
+                {quote?.discount && (
+                  <div className="flex justify-between gap-2 font-semibold text-emerald-700">
+                    <span className="min-w-0">
+                      {quote.discount.kind === 'VOUCHER' ? `Mã ${quote.discount.code}` : 'Khuyến mãi'}: {quote.discount.name}
+                    </span>
+                    <span className="shrink-0">−{formatMoney(quote.discount.amount)}</span>
+                  </div>
+                )}
+                {quote?.points && quote.points.amount > 0 && (
+                  <div className="flex justify-between font-semibold text-emerald-700">
+                    <span>Điểm StayMiles ({new Intl.NumberFormat('vi-VN').format(quote.points.pointsUsed)})</span>
+                    <span>−{formatMoney(quote.points.amount)}</span>
+                  </div>
+                )}
                 <div className="my-2 h-px w-full bg-slate-200" />
                 <div className="flex items-baseline justify-between">
-                  <span className="text-xs font-bold text-[#202B36]">TỔNG THANH TOÁN</span>
-                  <span className="text-2xl font-bold text-[#013758]">{formatMoney(offer.total)}</span>
+                  <span className="flex items-center gap-1.5 text-xs font-bold text-[#202B36]">
+                    TỔNG THANH TOÁN
+                    {quoteQuery.isFetching && <Loader2 className="size-3.5 animate-spin text-slate-400" aria-label="Đang tính giá" />}
+                  </span>
+                  <span className="text-2xl font-bold text-[#013758]">
+                    {quote ? formatMoney(quote.expectedTotal) : '—'}
+                  </span>
                 </div>
+                {quote && quote.expectedTotal < quote.subtotal && (
+                  <p className="text-right text-[11px] font-semibold text-emerald-700">
+                    Bạn tiết kiệm {formatMoney(quote.subtotal - quote.expectedTotal)}
+                  </p>
+                )}
+                {quoteQuery.error && !quote && (
+                  <p className="flex items-center justify-between gap-2 text-xs text-red-600">
+                    {getApiErrorMessage(quoteQuery.error, 'Không tính được tổng tiền.')}
+                    <button type="button" className="font-semibold underline" onClick={() => void quoteQuery.refetch()}>
+                      Thử lại
+                    </button>
+                  </p>
+                )}
               </div>
 
               {formError && (
@@ -395,7 +694,14 @@ function BookingContent() {
 
               <Button
                 onClick={submit}
-                disabled={!agreed || createBooking.isPending || offer.available < rooms}
+                disabled={
+                  !agreed ||
+                  createBooking.isPending ||
+                  offer.available < rooms ||
+                  !quote ||
+                  quoteQuery.isFetching ||
+                  autoPending
+                }
                 className="h-12 w-full gap-2 rounded-lg bg-[#234e70] text-sm font-bold text-white hover:bg-[#193B56]"
               >
                 {createBooking.isPending ? (

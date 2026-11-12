@@ -25,6 +25,8 @@ import { Badge } from "@/components/ui/badge";
 import { getApiErrorMessage } from "@/lib/api-error";
 import { useHotelListing } from "../api/stays-queries";
 import { StaySearchBar } from "./StaySearchBar";
+import { HotelReviews } from "@/features/reviews/components/HotelReviews";
+import { useHotelRatingSummary } from "@/features/account/api/rewards-queries";
 import { formatDate, formatDateTime, formatMoney } from "../lib/format";
 
 const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1200&q=80";
@@ -112,6 +114,7 @@ export function HotelDetail({
 }) {
   const router = useRouter();
   const { data, isLoading, isPlaceholderData, error, refetch } = useHotelListing(hotelId, query);
+  const rating = useHotelRatingSummary(hotelId).data;
 
   if (isLoading) {
     return (
@@ -167,6 +170,13 @@ export function HotelDetail({
               <div className="mb-2 flex flex-wrap items-center gap-2">
                 <Badge className="border-0 bg-white/90 text-slate-900">{hotel.starRating ? `${hotel.starRating} sao` : "Chỗ nghỉ"}</Badge>
                 <Badge className="border-0 bg-emerald-500/90 text-white">Đã xác minh</Badge>
+                {rating && rating.count > 0 && (
+                  <a href="#reviews">
+                    <Badge className="border-0 bg-primary text-primary-foreground">
+                      ★ {rating.average.toFixed(1)} · {rating.count} đánh giá
+                    </Badge>
+                  </a>
+                )}
               </div>
               <h1 className="text-2xl font-bold sm:text-3xl">{hotel.name}</h1>
               <p className="mt-1 flex items-center gap-1.5 text-sm text-white/90">
@@ -243,6 +253,8 @@ export function HotelDetail({
                 {hotel.amenities.length === 0 && <p className="text-xs text-muted-foreground">Chưa cập nhật tiện ích.</p>}
               </div>
             </section>
+
+            <HotelReviews hotelId={hotelId} />
           </div>
 
           <aside className="space-y-4 lg:col-span-4">
