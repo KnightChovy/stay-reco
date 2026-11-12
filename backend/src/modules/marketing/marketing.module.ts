@@ -12,6 +12,7 @@ import { InstagramPublisher } from './publishers/instagram.publisher';
 import { PublisherRegistry } from './publishers/publisher.registry';
 import { TiktokPublisher } from './publishers/tiktok.publisher';
 import { ScheduleService } from './schedule.service';
+import { FacebookOauthService } from './facebook-oauth.service';
 import { SocialAccountsService } from './social-accounts.service';
 import { SocialController } from './social.controller';
 
@@ -23,6 +24,7 @@ import { SocialController } from './social.controller';
     ContentService,
     ContentIdeasService,
     SocialAccountsService,
+    FacebookOauthService,
     ScheduleService,
     MetricsService,
     PublishDueService,

@@ -188,6 +188,12 @@ export const ErrorCode = {
   SOCIAL_PUBLISH_FAILED: 'SOCIAL_PUBLISH_FAILED',
   /** Posting to this platform is not built yet (TikTok: decision M12). */
   SOCIAL_PLATFORM_UNSUPPORTED: 'SOCIAL_PLATFORM_UNSUPPORTED',
+  /** The server has no Meta app configured, so the owner cannot be sent to Facebook to connect a page. */
+  SOCIAL_OAUTH_DISABLED: 'SOCIAL_OAUTH_DISABLED',
+  /** The `state` or `connectionToken` handed back is not ours, is for another hotel, or has expired. Start again. */
+  SOCIAL_OAUTH_INVALID: 'SOCIAL_OAUTH_INVALID',
+  /** Facebook refused the exchange, or the owner granted no page we can post to. */
+  SOCIAL_OAUTH_FAILED: 'SOCIAL_OAUTH_FAILED',
 
   // Payments
   /** A webhook call (SePay) with a missing or wrong API key; nothing is processed. Not a client error to refresh. */

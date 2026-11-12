@@ -13,6 +13,8 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
   contentMetricResponseSchema,
   contentScheduleResponseSchema,
+  facebookAuthorizeResponseSchema,
+  facebookExchangeResponseSchema,
   socialAccountResponseSchema,
   z,
 } from '@stayreco/shared';
@@ -33,11 +35,14 @@ import {
   ApiPage,
 } from '../../common/swagger/api-docs.decorators';
 import { StaffPermission } from '../../generated/prisma/client';
+import { FacebookOauthService } from './facebook-oauth.service';
 import { MetricsService } from './metrics.service';
 import { ScheduleService } from './schedule.service';
 import { SocialAccountsService } from './social-accounts.service';
 import {
   ConnectSocialAccountDto,
+  FacebookConnectDto,
+  FacebookExchangeDto,
   ScheduleContentDto,
   ScheduleListQueryDto,
 } from './dto/marketing.dto';
@@ -48,6 +53,7 @@ import {
 export class SocialController {
   constructor(
     private readonly accounts: SocialAccountsService,
+    private readonly facebook: FacebookOauthService,
     private readonly schedules: ScheduleService,
     private readonly metrics: MetricsService,
   ) {}
@@ -67,6 +73,62 @@ export class SocialController {
     @ReqMeta() meta: RequestMeta,
   ) {
     return this.accounts.connect(user, hotelId, dto, meta);
+  }
+
+  @ApiOperation({
+    summary: 'Start connecting a Facebook page',
+    description:
+      'The **owner** only, and the first of three steps (M16). Returns a Facebook URL to open in the browser; Facebook asks the owner which pages this app may post to, then sends them back to the configured redirect with a `code` and the `state` from this URL. The owner never sees a token. Answers `503 SOCIAL_OAUTH_DISABLED` when the server has no Meta app configured - pasting a page token still works.',
+  })
+  @HotelAccessRequired('owner')
+  @ApiErrors(ErrorCode.SOCIAL_OAUTH_DISABLED)
+  @ApiData(facebookAuthorizeResponseSchema)
+  @Get('hotels/:hotelId/social-accounts/facebook/authorize')
+  authorizeFacebook(@Param('hotelId') hotelId: string) {
+    return this.facebook.authorize(hotelId);
+  }
+
+  @ApiOperation({
+    summary: 'Read back the pages the owner just granted',
+    description:
+      'Step two. The page the owner lands on reads `code` and `state` out of the query string and posts them here, inside their own session: a redirect from Facebook carries no `Authorization` header, so it cannot call the API itself. Returns the pages the owner administers, which of them this hotel already posts to, and a `connectionToken` that stands in for the access token for ten minutes. No token is in the answer.',
+  })
+  @HotelAccessRequired('owner')
+  @ApiErrors(
+    ErrorCode.SOCIAL_OAUTH_DISABLED,
+    ErrorCode.SOCIAL_OAUTH_INVALID,
+    ErrorCode.SOCIAL_OAUTH_FAILED,
+  )
+  @ApiData(facebookExchangeResponseSchema)
+  @Post('hotels/:hotelId/social-accounts/facebook/exchange')
+  @HttpCode(HttpStatus.OK)
+  exchangeFacebook(
+    @Param('hotelId') hotelId: string,
+    @Body() dto: FacebookExchangeDto,
+  ) {
+    return this.facebook.exchange(hotelId, dto.code, dto.state);
+  }
+
+  @ApiOperation({
+    summary: 'Finish connecting the pages the owner picked',
+    description:
+      'Step three. An owner may administer a dozen pages and only one of them is this hotel, so nothing is connected until they say which. `instagram: true` also connects the Instagram Business account linked to that page, publishing with the same token. Reconnecting a page already on the hotel updates its token rather than adding a second row.',
+  })
+  @HotelAccessRequired('owner')
+  @ApiErrors(
+    ErrorCode.SOCIAL_OAUTH_DISABLED,
+    ErrorCode.SOCIAL_OAUTH_INVALID,
+    ErrorCode.SOCIAL_OAUTH_FAILED,
+  )
+  @ApiData(z.array(socialAccountResponseSchema), HttpStatus.CREATED)
+  @Post('hotels/:hotelId/social-accounts/facebook/connect')
+  connectFacebook(
+    @CurrentUser() user: AuthUser,
+    @Param('hotelId') hotelId: string,
+    @Body() dto: FacebookConnectDto,
+    @ReqMeta() meta: RequestMeta,
+  ) {
+    return this.facebook.connect(user, hotelId, dto, meta);
   }
 
   @ApiOperation({

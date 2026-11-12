@@ -1,6 +1,8 @@
 import {
   connectSocialAccountSchema,
   contentListQuerySchema,
+  facebookConnectSchema,
+  facebookExchangeSchema,
   generateContentSchema,
   learnBrandVoiceSchema,
   rejectContentSchema,
@@ -20,5 +22,7 @@ export class ContentListQueryDto extends zodDto(contentListQuerySchema) {}
 export class ConnectSocialAccountDto extends zodDto(
   connectSocialAccountSchema,
 ) {}
+export class FacebookExchangeDto extends zodDto(facebookExchangeSchema) {}
+export class FacebookConnectDto extends zodDto(facebookConnectSchema) {}
 export class ScheduleContentDto extends zodDto(scheduleContentSchema) {}
 export class ScheduleListQueryDto extends zodDto(scheduleListQuerySchema) {}

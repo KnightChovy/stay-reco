@@ -352,6 +352,21 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorInfo> = {
     description:
       'Posting to this platform is not built yet (TikTok takes video only)',
   },
+  SOCIAL_OAUTH_DISABLED: {
+    status: 503,
+    description:
+      'No Meta app is configured on this server, so the owner cannot be sent to Facebook; a page token can still be pasted',
+  },
+  SOCIAL_OAUTH_INVALID: {
+    status: 400,
+    description:
+      'The `state` or `connectionToken` handed back is not ours, is for another hotel, or has expired',
+  },
+  SOCIAL_OAUTH_FAILED: {
+    status: 502,
+    description:
+      'Facebook refused the exchange, or granted no page we can post to; its own message is passed through',
+  },
   CONTENT_NOT_FOUND: {
     status: 404,
     description: "Marketing content doesn't exist or belongs to another hotel",

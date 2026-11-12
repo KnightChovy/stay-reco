@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | Phase status | 🟡 Marketing done (TikTok excluded by decision); recommendations not started |
-| API status | Marketing, all 22 endpoints: `BE Done` · recommendations: none yet |
-| Agreed on | Marketing: 2026-11-12 (M1–M15). Recommendations: not agreed yet |
+| API status | Marketing, all 25 endpoints: `BE Done` · recommendations: none yet |
+| Agreed on | Marketing: 2026-11-12 (M1–M15), 2026-11-13 (M16). Recommendations: not agreed yet |
 | BE owners | Phúc |
 | FE owners | |
 | API | [api/marketing.md](../api/marketing.md). As the other parts start: write their endpoints in [api/](../api/README.md) |
@@ -69,6 +69,21 @@ AI hotel recommendations, a conversational assistant, and marketing content tool
 | M14 | **There is no publish-now endpoint.** Scheduling with no time means the next run of the job, within a minute, so "post now" is that button with a null `scheduledAt`. Leaving the job as the only writer is what makes a double post impossible without a lease column or a `PUBLISHING` state: a request and a timer firing in the same second would both see a `SCHEDULED` row, and the hotel's followers would see the post twice. This is the cheaper answer to the problem the Postiz notes below predicted a migration for. |
 | M15 | **Metrics append rather than overwrite.** A post that gained its reach on day three is a different thing from one that got it in the first hour, and an owner deciding when to post needs to tell them apart. Refreshing is a request, not a job: insight numbers move for days, so a job would have to decide how long to keep asking about every post a hotel ever made. |
 
+### The owner connects the page (M16, decided 2026-11-13)
+
+| # | Decision |
+|---|---|
+| M16 | **Three requests, and the owner never sees a token.** `authorize` hands back a Facebook URL, the owner consents, the frontend posts the `code` back to `exchange`, and `connect` stores a token per page they picked. M11 is not retired by this: pasting needs no Meta app at all, which is what let publishing be finished before there was one, and it remains how a page is connected by hand. What changed is who the default route is for - asking a hotel owner to open Graph API Explorer and copy a credential out of a JSON response was never a product. |
+
+Four things this had to get right, each with a test:
+
+- **The redirect lands on the frontend, not the API.** A redirect from Facebook carries no `Authorization` header, so `GET /callback` would arrive unauthenticated and would have to trust `state` for identity as well as integrity. The page the owner lands on posts the code back inside their own session instead, which leaves `state` doing one job and doing it well: it is encrypted with the hotel id in it, so a code obtained while connecting hotel A cannot be replayed onto hotel B by an owner who holds both. That test exists because an owner with two hotels is the normal case, not an attack.
+- **No table, and no token in the browser.** `state` and `connectionToken` are both encrypted with the same `FieldCipher` as the stored tokens, so the flow is stateless and the client holds two opaque strings. Decryption failing *is* the signature check. A `connectionToken` stands in for the user access token for ten minutes and is useless to anyone who cannot decrypt it.
+- **Nothing is connected automatically, and nothing by halves.** An owner may administer a dozen pages; one of them is this hotel. Step three reads the pages from Facebook again rather than trusting what the browser hands back - a page the app was removed from in between is then simply absent, which is better than storing a token already revoked - and every pick is validated before anything is written.
+- **Reconnecting updates the row.** A new unique index on `(hotelId, platform, accountName)` makes that the only option, because a published post's schedule row points at that account, and that record of what went out should survive the token being replaced. It also clears the epoch expiry that disconnecting sets, which is the difference between a reconnected page publishing and silently not.
+
+**App review still gates less than it appears to.** In Development mode this flow is real for anyone holding a role in the app - Admin, Developer, Tester - on pages they administer, so a hotel can connect its own page through the product today by being invited as a Tester. Review plus **Business Verification** are what open it to hotels outside the app, and verification wants a registered legal entity: a company matter, not a code one. Leaving Development mode is the whole migration.
+
 ### The model: Gemini, not Claude (2026-11-12)
 
 The writer calls **Gemini** (`gemini-3.8-flash` by default), because that is what the team codes against. Only `ai.service.ts` and the price table changed — M3's single door is what made the swap that small, which is the clearest evidence it was worth insisting on.
@@ -108,10 +123,12 @@ content_metric: one row per refresh, never overwritten (M15)
 | 3 | Calendar, manual scheduling ✅ | nobody |
 | 4 | Publishing to Facebook + Instagram ✅ | nobody, once M11 made the token pasted |
 | 5 | Metrics ✅ | same |
-| — | The OAuth connect screen | ⚠️ Meta app review + business verification |
+| — | The OAuth connect flow ✅ | works in Development mode; **Business Verification** is what opens it to hotels outside the app (M16) |
 | — | TikTok | video on `marketing_content`, then its app audit (M12) |
 
-Step 4 was expected to wait on app review. It did not have to: review is only needed to act on a page the app's own team does not administer, so a pasted Page token (M11) unblocked the whole second half. What is still genuinely blocked is the **OAuth screen** a third-party hotel would use, and nothing else depends on it.
+Step 4 was expected to wait on app review. It did not have to: review is only needed to act on a page the app's own team does not administer, so a pasted Page token (M11) unblocked the whole second half.
+
+The OAuth connect flow was then built on top of it (M16) and turned out not to be blocked either - Development mode runs it for anyone holding a role in the app, so a hotel invited as a Tester connects its own page through the product. What is genuinely blocked is **Business Verification**, which needs a legal entity rather than code, and no part of the system waits on it: leaving Development mode changes nothing but a setting.
 
 ## What to copy from Postiz
 
@@ -142,6 +159,7 @@ Still open:
 
 - [ ] Should generated content be labelled as AI-written where guests see it? Nothing in the API marks it either way today.
 - [ ] Is $5 a hotel a month the right cap, and should a partner be able to raise it? At $0.0005 a draft it is ~9,000 drafts, which looks generous rather than tight.
+- [ ] A page the owner disconnects on Facebook's side, rather than ours, is only noticed when a post fails. Nothing polls `/debug_token`.
 - [ ] Nothing warns an owner before a token expires. `usable` turns false and the next post fails with a clear reason, which is late but not silent.
 - [ ] A post longer than a platform's limit is sent and refused, rather than caught first. Postiz's `checkValidity()` is the shape of the fix.
 
@@ -157,5 +175,6 @@ Still open:
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-11-13 | Phúc | The owner-facing connect flow (M16): three endpoints, no token typed or seen, state and connection handle encrypted rather than stored, pages read from Facebook again before anything is written, reconnect updating the row a published post points at. One migration (unique page per hotel), three error codes, 22 e2e |
 | 2026-11-12 | Phúc | Pages, calendar, publishing and metrics built (M7–M15): staff write and the owner approves, ideas read out of the hotel's own figures, approved content scheduled onto connected Facebook and Instagram pages by a job that is the only writer, tokens encrypted at rest, platform refusals recorded with the platform's own words, and each metrics refresh kept as its own reading. TikTok deliberately refused with its reason. The AI writer also moved from Claude to Gemini — one file, because every call already went through one door. Eight new error codes, one migration, [../social-setup.md](../social-setup.md), and 359 e2e across 31 suites |
 | 2026-11-12 | Phúc | Brand voice and the AI cost cap built (M1–M6): voice learned from the hotel's own posts, `ai_usage` logging every call, a monthly dollar cap per hotel, and the writer switched off cleanly when no API key is set. Three new error codes and [api/marketing.md](../api/marketing.md) |

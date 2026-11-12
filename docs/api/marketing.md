@@ -53,6 +53,9 @@ Three things are worth knowing before reading the table.
 
 | Method | Path | Access | Body | Response |
 |---|---|---|---|---|
+| GET | `/hotels/:hotelId/social-accounts/facebook/authorize` | **owner** | | `FacebookAuthorize` |
+| POST | `/hotels/:hotelId/social-accounts/facebook/exchange` | **owner** | `facebookExchangeSchema` | `FacebookExchange` (200) |
+| POST | `/hotels/:hotelId/social-accounts/facebook/connect` | **owner** | `facebookConnectSchema` | `SocialAccount[]` (201) |
 | POST | `/hotels/:hotelId/social-accounts` | **owner** | `connectSocialAccountSchema` | `SocialAccount` (201) |
 | GET | `/hotels/:hotelId/social-accounts` | member + `MARKETING` | | `SocialAccount[]` |
 | DELETE | `/social-accounts/:id` | **owner** | | 204 |
@@ -128,6 +131,41 @@ Each `brief` can be sent straight back to the generate endpoint. An idea whose f
 
 ## Connecting a page
 
+Two routes in, one encrypted row out. An owner is sent down the first; the second is for us.
+
+### Through Facebook, as the owner does it (M16)
+
+```jsonc
+// 1. GET /hotels/:hotelId/social-accounts/facebook/authorize
+{ "authorizeUrl": "https://www.facebook.com/v26.0/dialog/oauth?client_id=…&state=v1:…" }
+
+// the browser goes there; Facebook sends it back to META_OAUTH_REDIRECT_URI?code=…&state=…
+// that page posts both to:
+
+// 2. POST /hotels/:hotelId/social-accounts/facebook/exchange
+{ "code": "AQD…", "state": "v1:…" }
+// → the pages this owner administers. No token of any kind in the answer.
+{ "connectionToken": "v1:…",                    // the user token, encrypted, 10 minutes
+  "expiresAt": "…",
+  "pages": [
+    { "pageId": "1001", "name": "An Nhiên Riverside",
+      "instagramId": "9001",                     // null means Instagram cannot be offered
+      "connected": false }] }                    // true → the UI says "reconnect"
+
+// 3. POST /hotels/:hotelId/social-accounts/facebook/connect
+{ "connectionToken": "v1:…",
+  "pages": [{ "pageId": "1001", "instagram": true }] }
+// → [SocialAccount FACEBOOK 1001, SocialAccount INSTAGRAM 9001]
+```
+
+**The redirect lands on the frontend, not the API.** A redirect carries no `Authorization` header, so a `GET /callback` would arrive unauthenticated and have to trust `state` for identity as well as integrity. Posting from the page the owner lands on keeps the request inside their session, and leaves `state` doing one job: it is encrypted with the hotel id in it, so a code obtained while connecting hotel A cannot be replayed onto hotel B by an owner who holds both. Both `state` and `connectionToken` are encrypted with the same cipher as the stored tokens, so neither needed a table and neither is readable by the client holding it.
+
+**Nothing is connected automatically.** An owner may administer a dozen pages and one of them is this hotel. Step three reads the pages from Facebook again rather than trusting the browser, and validates every pick before writing any: half a connection is worse than none.
+
+**Reconnecting updates the row** rather than adding one beside it — unique on `(hotelId, platform, accountName)` — because a published post's schedule points at that row, and it also clears the epoch expiry that disconnecting set.
+
+### By hand
+
 ```jsonc
 // POST /hotels/:hotelId/social-accounts
 { "platform": "FACEBOOK",
@@ -142,7 +180,7 @@ Each `brief` can be sent straight back to the generate endpoint. An idea whose f
 
 The token goes **in and does not come back out**. It is encrypted at rest with the same cipher as a partner's bank details, because a page token can post as the hotel for months: a leaked row is a leaked ability to post under the hotel's name.
 
-Tokens are pasted rather than obtained through OAuth, on purpose — [../social-setup.md](../social-setup.md) explains how to get one and why this is the route for now (M11).
+Pasting is kept beside the owner-facing flow because it needs no Meta app at all, which is what let publishing be finished before there was one (M11), and it is still the quickest way to connect a page by hand. [../social-setup.md](../social-setup.md) has both routes step by step.
 
 `usable` turns false once `expiresAt` has passed. The publisher then **skips** the page and writes the reason on the post, rather than calling a platform with a token it knows is dead.
 
@@ -237,4 +275,7 @@ Leaving `GEMINI_API_KEY` empty does **not** stop the server starting — the mar
 | `SCHEDULE_STATUS_CONFLICT` | 409 | Cancelling a post that went out, or reading figures for one that did not |
 | `SOCIAL_PUBLISH_FAILED` | 502 | The platform refused or could not be reached; its own message is passed through |
 | `SOCIAL_PLATFORM_UNSUPPORTED` | 501 | TikTok, or Instagram without a photo |
+| `SOCIAL_OAUTH_DISABLED` | 503 | No Meta app configured on this server; pasting a token still works |
+| `SOCIAL_OAUTH_INVALID` | 400 | The `state` or `connectionToken` is not ours, is for another hotel, or expired |
+| `SOCIAL_OAUTH_FAILED` | 502 | Facebook refused the exchange, or granted no page we can post to |
 | `VALIDATION_ERROR` | 400 | Fewer than 2 or more than 5 voice samples, a brief under 5 characters, a token under 10 |

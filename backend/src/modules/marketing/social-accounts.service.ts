@@ -13,7 +13,10 @@ import {
   isUuid,
 } from '../../common/hotel-access/hotel-access.service';
 import type { Env } from '../../config/env';
-import type { SocialAccount as SocialAccountRow } from '../../generated/prisma/client';
+import type {
+  SocialPlatform as SocialPlatformName,
+  SocialAccount as SocialAccountRow,
+} from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditAction, AuditService } from '../audit/audit.service';
 import type { PublishTarget } from './publishers/social-publisher';
@@ -88,6 +91,44 @@ export class SocialAccountsService {
       // The platform and the page id, never the token.
       { hotelId, platform: input.platform, accountName: input.accountName },
     );
+    return toAccount(row);
+  }
+
+  /**
+   * Stores a page token the owner connected through Facebook (M16), replacing whatever was on that page before.
+   *
+   * One row per page per hotel, enforced by the unique index: reconnecting an expired page has to update the row a
+   * published post's schedule already points at, not add a second one beside it. Nothing is audited here - the
+   * caller logs the whole connection once, rather than once per page.
+   */
+  async upsert(
+    hotelId: string,
+    input: {
+      platform: SocialPlatformName;
+      accountName: string;
+      accessToken: string;
+      expiresAt?: Date | null;
+    },
+  ): Promise<SocialAccount> {
+    const token = this.cipher.encrypt(input.accessToken);
+    const row = await this.prisma.socialAccount.upsert({
+      where: {
+        hotelId_platform_accountName: {
+          hotelId,
+          platform: input.platform,
+          accountName: input.accountName,
+        },
+      },
+      create: {
+        hotelId,
+        platform: input.platform,
+        accountName: input.accountName,
+        accessToken: token,
+        expiresAt: input.expiresAt ?? null,
+      },
+      // A page disconnected earlier had its expiry set to the epoch; reconnecting has to clear that too.
+      update: { accessToken: token, expiresAt: input.expiresAt ?? null },
+    });
     return toAccount(row);
   }
 

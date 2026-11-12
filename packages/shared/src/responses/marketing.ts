@@ -72,6 +72,43 @@ export const socialAccountResponseSchema = z
   .register(responseSchemas, { id: 'SocialAccount' });
 export type SocialAccount = z.infer<typeof socialAccountResponseSchema>;
 
+/** Step one: where to send the owner's browser so Facebook can ask them which pages we may post to. */
+export const facebookAuthorizeResponseSchema = z
+  .object({
+    authorizeUrl: z
+      .string()
+      .describe('Open this in the browser. It carries a signed `state` tying the flow to this hotel.'),
+  })
+  .register(responseSchemas, { id: 'FacebookAuthorize' });
+export type FacebookAuthorize = z.infer<typeof facebookAuthorizeResponseSchema>;
+
+/** One page the owner administers, as offered for connecting. No token: the owner picks, then we store it. */
+export const facebookPageResponseSchema = z
+  .object({
+    pageId: z.string().describe('The Facebook Page id, which is what `accountName` becomes.'),
+    name: z.string().describe("The page's display name, so the owner can tell their pages apart."),
+    /** The Instagram Business account linked to this page, when there is one; null means Instagram is not offered. */
+    instagramId: z.string().nullable(),
+    /** True when this hotel already posts to this page, so the UI can show "reconnect" rather than "connect". */
+    connected: z.boolean(),
+  })
+  .register(responseSchemas, { id: 'FacebookPage' });
+export type FacebookPage = z.infer<typeof facebookPageResponseSchema>;
+
+/** Step two: the pages Facebook says this owner administers, plus the handle needed to finish connecting. */
+export const facebookExchangeResponseSchema = z
+  .object({
+    /**
+     * A short-lived, encrypted stand-in for the user access token. The token itself never reaches the browser; this
+     * is handed back in step three and is useless to anyone who cannot decrypt it.
+     */
+    connectionToken: z.string(),
+    expiresAt: isoDateTime().describe('When the connection token stops working and the owner must start again.'),
+    pages: z.array(facebookPageResponseSchema),
+  })
+  .register(responseSchemas, { id: 'FacebookExchange' });
+export type FacebookExchange = z.infer<typeof facebookExchangeResponseSchema>;
+
 /** One approved piece of content, aimed at one page, at one time. */
 export const contentScheduleResponseSchema = z
   .object({

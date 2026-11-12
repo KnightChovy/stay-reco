@@ -231,6 +231,9 @@ There is no `status` field in the body; the HTTP status is already available as 
 | `SCHEDULE_STATUS_CONFLICT` | 409 | Cancelling a post that went out, or reading figures for one that did not | Reload the calendar |
 | `SOCIAL_PUBLISH_FAILED` | 502 | The platform refused or could not be reached | Show `message`: it carries the platform's own words |
 | `SOCIAL_PLATFORM_UNSUPPORTED` | 501 | TikTok, or Instagram without a photo | Show `message`; for Instagram, ask for a photo |
+| `SOCIAL_OAUTH_DISABLED` | 503 | No Meta app is configured, so the owner cannot be sent to Facebook | Hide the connect button; a token can still be pasted |
+| `SOCIAL_OAUTH_INVALID` | 400 | The `state` or `connectionToken` is not ours, is for another hotel, or has expired | Start the connect flow again |
+| `SOCIAL_OAUTH_FAILED` | 502 | Facebook refused the exchange, or granted no page | Show `message`: it carries Facebook's own words |
 | `REVIEW_NOT_FOUND` | 404 | Review doesn't exist or belongs to another customer | Reload the booking |
 | `REVIEW_NOT_ALLOWED` | 409 | The stay is not completed, so it cannot be reviewed yet | Hide the review button |
 | `REVIEW_ALREADY_EXISTS` | 409 | The booking already has a review; one review per stay | Open the existing review |

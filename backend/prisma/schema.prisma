@@ -1260,6 +1260,11 @@ model SocialAccount {
   hotel            Hotel             @relation(fields: [hotelId], references: [hotelId])
   contentSchedules ContentSchedule[]
 
+  /**
+   * One row per page per hotel. Reconnecting a page updates the token on this row instead of adding a second,
+   * which is what keeps a disconnected page's published history pointing at the same account (M11).
+   */
+  @@unique([hotelId, platform, accountName])
   @@map("social_account")
 }
 

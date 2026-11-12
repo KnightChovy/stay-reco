@@ -52,6 +52,19 @@ const envSchema = z
      * app is allowed to use; Meta retires one about every two years.
      */
     META_GRAPH_VERSION: z.string().default('v26.0'),
+    /**
+     * The Meta app the owner-facing connect flow runs through. Leave `META_APP_ID` empty and the OAuth endpoints
+     * answer 503: pasting a page token by hand still works, which is how the flow is demonstrated without an app.
+     */
+    META_APP_ID: z.string().optional(),
+    /** The app secret. Never leaves the server: it is what turns Facebook's one-time code into a token. */
+    META_APP_SECRET: z.string().optional(),
+    /**
+     * Where Facebook sends the owner's browser back to. It must match a Valid OAuth Redirect URI on the app
+     * exactly, including the scheme and any trailing slash, and it is a page in our frontend rather than an API
+     * route: a redirect carries no Authorization header, so that page posts the code back inside the owner's session.
+     */
+    META_OAUTH_REDIRECT_URI: z.string().url().optional(),
     /** Spend cap per hotel per calendar month, in US dollars (phase 5 Definition of Done). */
     AI_MONTHLY_BUDGET_USD: z.preprocess(
       (v) => (v === '' ? undefined : v),

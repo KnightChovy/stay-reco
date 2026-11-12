@@ -88,6 +88,47 @@ export const connectSocialAccountSchema = z.strictObject({
 export type ConnectSocialAccountInput = z.infer<typeof connectSocialAccountSchema>;
 
 /**
+ * `POST /hotels/:hotelId/social-accounts/facebook/exchange`: the second step of the owner-facing connect flow.
+ *
+ * Facebook redirects the owner's browser back with `code` and `state`. The browser cannot call us with it directly
+ * - a redirect carries no `Authorization` header, so the request would be unauthenticated - so the page the owner
+ * lands on reads both out of the query string and posts them here, inside the owner's own session. That is also
+ * what makes `state` worth checking: it is signed with the hotel id in it, so a code obtained while connecting
+ * hotel A cannot be replayed against hotel B by someone who owns both.
+ */
+export const facebookExchangeSchema = z.strictObject({
+  /** The one-time code Facebook put in the redirect. Worth nothing without our app secret. */
+  code: z.string().trim().min(1).max(2000),
+  /** The signed value we generated in step one and Facebook handed back unchanged. */
+  state: z.string().trim().min(1).max(2000),
+});
+export type FacebookExchangeInput = z.infer<typeof facebookExchangeSchema>;
+
+/**
+ * `POST /hotels/:hotelId/social-accounts/facebook/connect`: the third step, where the owner says which of their
+ * pages this hotel should post to.
+ *
+ * Pages are not connected automatically in step two: an owner may administer a dozen pages, and only one of them
+ * is this hotel. `instagram: true` additionally connects the Instagram Business account linked to that page, which
+ * posts with the same page token.
+ */
+export const facebookConnectSchema = z.strictObject({
+  /** The short-lived handle step two returned. It stands in for the user token, which never reaches the browser. */
+  connectionToken: z.string().trim().min(1).max(4000),
+  pages: z
+    .array(
+      z.strictObject({
+        pageId: z.string().trim().min(1).max(255),
+        /** Connect the linked Instagram account too. Refused if that page has none. */
+        instagram: z.boolean().optional().default(false),
+      }),
+    )
+    .min(1)
+    .max(20),
+});
+export type FacebookConnectInput = z.infer<typeof facebookConnectSchema>;
+
+/**
  * `POST /marketing-content/:id/schedule`: puts approved content on a calendar (M9).
  *
  * `scheduledAt` in the past, or left out, means publish at the next run of the job rather than refusing: a staff
