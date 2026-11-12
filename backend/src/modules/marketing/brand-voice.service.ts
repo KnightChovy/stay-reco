@@ -7,7 +7,7 @@ import type {
 import { z } from 'zod';
 import type { AuthUser } from '../../common/decorators/current-user.decorator';
 import { PrismaService } from '../../prisma/prisma.service';
-import { ClaudeService } from './claude.service';
+import { AiService } from './ai.service';
 
 /** `ai_config` keys this service owns. Free-form elsewhere, fixed here so the writer knows what to read. */
 const KEYS = {
@@ -46,7 +46,7 @@ Describe only what is actually there. Do not flatter the writing, do not suggest
 export class BrandVoiceService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly claude: ClaudeService,
+    private readonly ai: AiService,
   ) {}
 
   async get(hotelId: string): Promise<BrandVoice> {
@@ -110,7 +110,7 @@ export class BrandVoiceService {
     const samples = input.samples
       .map((s, i) => `--- Post ${i + 1} ---\n${s}`)
       .join('\n\n');
-    const learned = await this.claude.ask(
+    const learned = await this.ai.ask(
       {
         hotelId,
         // Null when the caller is the owning partner: only staff have a row to attribute the cost to.

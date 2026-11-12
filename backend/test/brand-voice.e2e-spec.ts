@@ -74,10 +74,10 @@ describe('Brand voice and the AI budget (e2e)', () => {
       expect(res.body.data.updatedAt).not.toBeNull();
 
       // Both posts reached the model, under the purpose the usage log records.
-      expect(t.claude.calls).toHaveLength(1);
-      expect(t.claude.calls[0].purpose).toBe('brand-voice');
-      expect(t.claude.calls[0].prompt).toContain('sông Hàn');
-      expect(t.claude.calls[0].prompt).toContain('mì Quảng');
+      expect(t.ai.calls).toHaveLength(1);
+      expect(t.ai.calls[0].purpose).toBe('brand-voice');
+      expect(t.ai.calls[0].prompt).toContain('sông Hàn');
+      expect(t.ai.calls[0].prompt).toContain('mì Quảng');
     });
 
     it('keeps the voice on a second read, replacing it rather than piling up', async () => {
@@ -89,7 +89,7 @@ describe('Brand voice and the AI budget (e2e)', () => {
         .send({ samples })
         .expect(200);
 
-      t.claude.answer = {
+      t.ai.answer = {
         summary: 'Trang trọng, xưng "quý khách".',
         audience: 'Khách doanh nhân',
         highlights: 'phòng họp, đưa đón sân bay',
@@ -119,12 +119,12 @@ describe('Brand voice and the AI budget (e2e)', () => {
         expect(res.status).toBe(400);
         expect(res.body.code).toBe('VALIDATION_ERROR');
       }
-      expect(t.claude.calls).toHaveLength(0);
+      expect(t.ai.calls).toHaveLength(0);
     });
 
     it('refuses a hotel that has used its budget, without calling the model', async () => {
       const h = await hotel();
-      t.claude.budgetLeft = 0;
+      t.ai.budgetLeft = 0;
 
       const res = await t
         .api()
@@ -133,7 +133,7 @@ describe('Brand voice and the AI budget (e2e)', () => {
         .send({ samples });
       expect(res.status).toBe(403);
       expect(res.body.code).toBe('AI_BUDGET_EXCEEDED');
-      expect(t.claude.calls).toHaveLength(0);
+      expect(t.ai.calls).toHaveLength(0);
     });
 
     it("keeps one hotel out of another's brand voice", async () => {

@@ -8,7 +8,7 @@ import { configureApp } from '../src/app.setup';
 import { UserRole } from '../src/generated/prisma/client';
 import { BookingMailer } from '../src/modules/bookings/booking-mailer';
 import { MailMessage, MailService } from '../src/modules/mail/mail.service';
-import { ClaudeService } from '../src/modules/marketing/claude.service';
+import { AiService } from '../src/modules/marketing/ai.service';
 import { StorageService } from '../src/modules/storage/storage.service';
 import { PLATFORM_WALLET_ID } from '../src/modules/wallets/wallet-ledger';
 import { PrismaService } from '../src/prisma/prisma.service';
@@ -76,7 +76,7 @@ export const FILES = {
  * Stands in for the model. Tests set `answer` to whatever the real call would have returned and read `calls` to
  * check what was asked; `budgetLeft` lets a test put a hotel over its cap without spending anything.
  */
-export class FakeClaude {
+export class FakeAi {
   calls: { purpose: string; system: string; prompt: string }[] = [];
   answer: unknown = {
     summary: 'Ấm áp, xưng "mình", câu ngắn.',
@@ -122,7 +122,7 @@ export class FakeClaude {
 export async function createTestApp() {
   const outbox: MailMessage[] = [];
   const storage = new FakeStorage();
-  const claude = new FakeClaude();
+  const ai = new FakeAi();
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(MailService)
     .useValue({
@@ -133,8 +133,8 @@ export async function createTestApp() {
     })
     .overrideProvider(StorageService)
     .useValue(storage)
-    .overrideProvider(ClaudeService)
-    .useValue(claude)
+    .overrideProvider(AiService)
+    .useValue(ai)
     .compile();
 
   const app: INestApplication<App> = moduleRef.createNestApplication();
@@ -149,7 +149,7 @@ export async function createTestApp() {
     await app.get(BookingMailer).idle();
     outbox.length = 0;
     storage.clear();
-    claude.clear();
+    ai.clear();
     await prisma.$executeRawUnsafe(
       'TRUNCATE TABLE user_account, audit_log RESTART IDENTITY CASCADE',
     );
@@ -225,7 +225,7 @@ export async function createTestApp() {
     api,
     outbox,
     storage,
-    claude,
+    ai,
     reset,
     signIn,
     signInStaff,

@@ -83,7 +83,7 @@ describe('Marketing content and approval (e2e)', () => {
 
   beforeEach(async () => {
     await t.reset();
-    t.claude.answer = {
+    t.ai.answer = {
       title: 'Cuối tuần bên sông Hàn',
       body: 'Mình còn vài phòng hướng biển cho cuối tuần này, bạn ghé nhé.',
     };
@@ -110,7 +110,7 @@ describe('Marketing content and approval (e2e)', () => {
         title: 'Cuối tuần bên sông Hàn',
       });
 
-      const call = t.claude.calls.at(-1)!;
+      const call = t.ai.calls.at(-1)!;
       expect(call.purpose).toBe('marketing-content');
       expect(call.system).toContain('xưng "mình"');
       expect(call.system).toContain('đẳng cấp');
@@ -120,28 +120,28 @@ describe('Marketing content and approval (e2e)', () => {
     it('still writes for a hotel that has set no voice up', async () => {
       const h = await hotel();
       await generate(h.token, h.hotelId).expect(201);
-      expect(t.claude.calls.at(-1)!.system).toContain('no brand voice');
+      expect(t.ai.calls.at(-1)!.system).toContain('no brand voice');
     });
 
     it('shapes the brief by platform', async () => {
       const h = await hotel();
       await generate(h.token, h.hotelId, { platform: 'TIKTOK' }).expect(201);
-      expect(t.claude.calls.at(-1)!.prompt).toContain('TikTok');
+      expect(t.ai.calls.at(-1)!.prompt).toContain('TikTok');
     });
 
     it('tells the model never to invent a price or a date', async () => {
       const h = await hotel();
       await generate(h.token, h.hotelId).expect(201);
-      expect(t.claude.calls.at(-1)!.system).toContain('Never invent a fact');
+      expect(t.ai.calls.at(-1)!.system).toContain('Never invent a fact');
     });
 
     it('refuses a hotel over its budget, without calling the model', async () => {
       const h = await hotel();
-      t.claude.budgetLeft = 0;
+      t.ai.budgetLeft = 0;
       const res = await generate(h.token, h.hotelId);
       expect(res.status).toBe(403);
       expect(res.body.code).toBe('AI_BUDGET_EXCEEDED');
-      expect(t.claude.calls).toHaveLength(0);
+      expect(t.ai.calls).toHaveLength(0);
     });
   });
 
@@ -331,7 +331,7 @@ describe('Marketing content and approval (e2e)', () => {
       expect(kinds).toContain('FREE_ROOMS');
       expect(kinds).toContain('PROMOTION');
       // Suggestions are database queries; they must cost nothing.
-      expect(t.claude.calls).toHaveLength(0);
+      expect(t.ai.calls).toHaveLength(0);
     });
 
     it('drops the empty-rooms idea once every room is taken', async () => {

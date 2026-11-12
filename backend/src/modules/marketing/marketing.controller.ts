@@ -21,7 +21,7 @@ import { ErrorCode } from '../../common/errors/error-code';
 import { HotelAccessRequired } from '../../common/hotel-access/hotel-access.guard';
 import { ApiData, ApiErrors } from '../../common/swagger/api-docs.decorators';
 import { BrandVoiceService } from './brand-voice.service';
-import { ClaudeService } from './claude.service';
+import { AiService } from './ai.service';
 import { LearnBrandVoiceDto, UpdateBrandVoiceDto } from './dto/marketing.dto';
 
 /** The brand voice the AI writer uses, and what it has cost (phase 5, M1). */
@@ -30,7 +30,7 @@ import { LearnBrandVoiceDto, UpdateBrandVoiceDto } from './dto/marketing.dto';
 export class MarketingController {
   constructor(
     private readonly brandVoice: BrandVoiceService,
-    private readonly claude: ClaudeService,
+    private readonly ai: AiService,
   ) {}
 
   @ApiOperation({
@@ -88,6 +88,6 @@ export class MarketingController {
   @ApiData(aiBudgetResponseSchema)
   @Get('ai-budget')
   budget(@Param('hotelId') hotelId: string) {
-    return this.claude.budget(hotelId);
+    return this.ai.budget(hotelId);
   }
 }

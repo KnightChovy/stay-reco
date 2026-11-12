@@ -24,7 +24,7 @@ import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditAction, AuditService } from '../audit/audit.service';
 import { BrandVoiceService } from './brand-voice.service';
-import { ClaudeService } from './claude.service';
+import { AiService } from './ai.service';
 
 /** What the model writes. The body is the post; the title is optional because a caption has none. */
 const writtenContentSchema = z.object({
@@ -115,7 +115,7 @@ const toContent = (
 export class ContentService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly claude: ClaudeService,
+    private readonly ai: AiService,
     private readonly brandVoice: BrandVoiceService,
     private readonly access: HotelAccessService,
     private readonly audit: AuditService,
@@ -136,7 +136,7 @@ export class ContentService {
       .filter(Boolean)
       .join('\n');
 
-    const written = await this.claude.ask(
+    const written = await this.ai.ask(
       {
         hotelId,
         hotelStaffId: await this.staffIdOf(user, hotelId),

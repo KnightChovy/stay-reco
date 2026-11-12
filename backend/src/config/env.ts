@@ -43,10 +43,10 @@ const envSchema = z
       (v) => (v === '' ? undefined : v),
       z.coerce.number().int().min(1).default(30),
     ),
-    /** Claude API key for the marketing writer. Leave empty to disable it: the endpoints answer 503. */
-    ANTHROPIC_API_KEY: z.string().optional(),
-    /** Model the marketing writer calls. */
-    ANTHROPIC_MODEL: z.string().default('claude-opus-5-5'),
+    /** Gemini API key for the marketing writer. Leave empty to disable it: the endpoints answer 503. */
+    GEMINI_API_KEY: z.string().optional(),
+    /** Model the marketing writer calls. Flash is the default: a draft costs a fraction of a cent. */
+    GEMINI_MODEL: z.string().default('gemini-3.8-flash'),
     /** Spend cap per hotel per calendar month, in US dollars (phase 5 Definition of Done). */
     AI_MONTHLY_BUDGET_USD: z.preprocess(
       (v) => (v === '' ? undefined : v),
