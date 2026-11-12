@@ -115,6 +115,37 @@ export const PaymentStatus = {
 } as const;
 export type PaymentStatus = (typeof PaymentStatus)[keyof typeof PaymentStatus];
 
+/** What a piece of marketing content is (phase 5). */
+export const ContentType = {
+  /** A social post. */
+  POST: 'POST',
+  BLOG: 'BLOG',
+  /** A short caption for a photo or video. */
+  CAPTION: 'CAPTION',
+  /** A post built around a discount the hotel is running. */
+  PROMOTION: 'PROMOTION',
+} as const;
+export type ContentType = (typeof ContentType)[keyof typeof ContentType];
+
+/** How far a piece of content has got (M7): a staff member writes, the owner approves. */
+export const ContentStatus = {
+  DRAFT: 'DRAFT',
+  PENDING_APPROVAL: 'PENDING_APPROVAL',
+  APPROVED: 'APPROVED',
+  SCHEDULED: 'SCHEDULED',
+  PUBLISHED: 'PUBLISHED',
+  REJECTED: 'REJECTED',
+} as const;
+export type ContentStatus = (typeof ContentStatus)[keyof typeof ContentStatus];
+
+/** Where a post goes. */
+export const SocialPlatform = {
+  FACEBOOK: 'FACEBOOK',
+  INSTAGRAM: 'INSTAGRAM',
+  TIKTOK: 'TIKTOK',
+} as const;
+export type SocialPlatform = (typeof SocialPlatform)[keyof typeof SocialPlatform];
+
 /** Why a review, or one of its photos, was flagged for a platform manager (R11). */
 export const ReportReason = {
   /** Abusive, obscene or otherwise offensive. */

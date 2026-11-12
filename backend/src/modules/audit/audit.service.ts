@@ -76,6 +76,14 @@ export enum AuditAction {
   VOUCHERS_ISSUED = 'VOUCHERS_ISSUED',
   /** A booking took a discount; `new_value` holds the campaign, the code and the amount taken off. */
   BOOKING_DISCOUNT_APPLIED = 'BOOKING_DISCOUNT_APPLIED',
+  /** The AI wrote a marketing draft (M7). */
+  CONTENT_GENERATED = 'CONTENT_GENERATED',
+  /** A staff member sent a draft to the owner. */
+  CONTENT_SUBMITTED = 'CONTENT_SUBMITTED',
+  /** The owner approved content for publishing. */
+  CONTENT_APPROVED = 'CONTENT_APPROVED',
+  /** The owner sent content back; `new_value` holds the reason. */
+  CONTENT_REJECTED = 'CONTENT_REJECTED',
   /** A SePay transfer that confirmed nothing (no or unknown code, wrong amount, other account): for manual handling. */
   SEPAY_TRANSFER_UNMATCHED = 'SEPAY_TRANSFER_UNMATCHED',
   /** A SePay transfer for a booking no longer waiting for payment (expired, already paid): refund by hand. */

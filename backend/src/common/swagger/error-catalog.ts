@@ -313,6 +313,26 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorInfo> = {
     description:
       'The wallet balance does not cover the whole booking; paying from it is all or nothing',
   },
+  AI_UNAVAILABLE: {
+    status: 503,
+    description: 'The AI writer is not configured, or answered unusably',
+  },
+  AI_BUDGET_EXCEEDED: {
+    status: 403,
+    description: 'The hotel has used its AI budget for this calendar month',
+  },
+  AI_REFUSED: {
+    status: 403,
+    description: 'The model declined to write what was asked for',
+  },
+  CONTENT_NOT_FOUND: {
+    status: 404,
+    description: "Marketing content doesn't exist or belongs to another hotel",
+  },
+  CONTENT_STATUS_CONFLICT: {
+    status: 409,
+    description: 'The content status does not allow that action',
+  },
   NOTIFICATION_NOT_FOUND: {
     status: 404,
     description: "Notification doesn't exist or belongs to someone else",

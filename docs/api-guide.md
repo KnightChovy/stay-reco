@@ -220,6 +220,11 @@ There is no `status` field in the body; the HTTP status is already available as 
 | `CHANGE_REQUEST_PENDING` | 409 | The booking already has a change request waiting | Show the waiting request |
 | `CHANGE_REQUEST_STATUS_CONFLICT` | 409 | Accepting or rejecting when no change request is waiting | Reload the booking |
 | `NOTIFICATION_NOT_FOUND` | 404 | Notification doesn't exist or belongs to someone else | Reload the list |
+| `AI_UNAVAILABLE` | 503 | The AI writer is off, or answered unusably | Hide the generate button, or retry once |
+| `AI_BUDGET_EXCEEDED` | 403 | The hotel used its AI budget this month | Show the spend and when it resets |
+| `AI_REFUSED` | 403 | The model declined to write this | Ask the user to rephrase the brief |
+| `CONTENT_NOT_FOUND` | 404 | The content doesn't exist or belongs to another hotel | Reload the list |
+| `CONTENT_STATUS_CONFLICT` | 409 | That action does not fit the content's status | Reload the piece |
 | `REVIEW_NOT_FOUND` | 404 | Review doesn't exist or belongs to another customer | Reload the booking |
 | `REVIEW_NOT_ALLOWED` | 409 | The stay is not completed, so it cannot be reviewed yet | Hide the review button |
 | `REVIEW_ALREADY_EXISTS` | 409 | The booking already has a review; one review per stay | Open the existing review |

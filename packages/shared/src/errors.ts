@@ -165,6 +165,18 @@ export const ErrorCode = {
   /** The wallet balance does not cover the whole booking; paying from it is all or nothing (decision W1). */
   WALLET_INSUFFICIENT: 'WALLET_INSUFFICIENT',
 
+  // AI marketing (phase 5)
+  /** The AI writer is not configured, or answered in a shape we cannot use. */
+  AI_UNAVAILABLE: 'AI_UNAVAILABLE',
+  /** The hotel has used its AI budget for this calendar month. */
+  AI_BUDGET_EXCEEDED: 'AI_BUDGET_EXCEEDED',
+  /** The model declined to write what was asked for. */
+  AI_REFUSED: 'AI_REFUSED',
+  /** The content does not exist, or belongs to another hotel. */
+  CONTENT_NOT_FOUND: 'CONTENT_NOT_FOUND',
+  /** Editing, submitting, approving or deleting content whose status does not allow it. */
+  CONTENT_STATUS_CONFLICT: 'CONTENT_STATUS_CONFLICT',
+
   // Payments
   /** A webhook call (SePay) with a missing or wrong API key; nothing is processed. Not a client error to refresh. */
   INVALID_API_KEY: 'INVALID_API_KEY',

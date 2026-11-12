@@ -1,4 +1,4 @@
-import { INestApplication } from '@nestjs/common';
+import { ForbiddenException, INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import * as argon2 from 'argon2';
 import request from 'supertest';
@@ -8,6 +8,7 @@ import { configureApp } from '../src/app.setup';
 import { UserRole } from '../src/generated/prisma/client';
 import { BookingMailer } from '../src/modules/bookings/booking-mailer';
 import { MailMessage, MailService } from '../src/modules/mail/mail.service';
+import { ClaudeService } from '../src/modules/marketing/claude.service';
 import { StorageService } from '../src/modules/storage/storage.service';
 import { PLATFORM_WALLET_ID } from '../src/modules/wallets/wallet-ledger';
 import { PrismaService } from '../src/prisma/prisma.service';
@@ -71,10 +72,57 @@ export const FILES = {
   text: Buffer.from('not really an image'),
 };
 
+/**
+ * Stands in for the model. Tests set `answer` to whatever the real call would have returned and read `calls` to
+ * check what was asked; `budgetLeft` lets a test put a hotel over its cap without spending anything.
+ */
+export class FakeClaude {
+  calls: { purpose: string; system: string; prompt: string }[] = [];
+  answer: unknown = {
+    summary: 'Ấm áp, xưng "mình", câu ngắn.',
+    audience: 'Gia đình trẻ đi nghỉ cuối tuần',
+    highlights: 'hướng biển, bữa sáng, gần chợ đêm',
+  };
+  budgetLeft = 5;
+  available = true;
+
+  budget() {
+    return Promise.resolve({
+      spentUsd: 5 - this.budgetLeft,
+      limitUsd: 5,
+      remainingUsd: this.budgetLeft,
+    });
+  }
+
+  ask(
+    context: { purpose: string },
+    _schema: unknown,
+    system: string,
+    prompt: string,
+  ) {
+    if (this.budgetLeft <= 0) {
+      return Promise.reject(
+        new ForbiddenException({
+          code: 'AI_BUDGET_EXCEEDED',
+          message: 'This hotel has used its $5 of AI for this month',
+        }),
+      );
+    }
+    this.calls.push({ purpose: context.purpose, system, prompt });
+    return Promise.resolve(this.answer);
+  }
+
+  clear() {
+    this.calls = [];
+    this.budgetLeft = 5;
+  }
+}
+
 /** App with emails captured in `outbox` and Cloudinary replaced by `storage`. */
 export async function createTestApp() {
   const outbox: MailMessage[] = [];
   const storage = new FakeStorage();
+  const claude = new FakeClaude();
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(MailService)
     .useValue({
@@ -85,6 +133,8 @@ export async function createTestApp() {
     })
     .overrideProvider(StorageService)
     .useValue(storage)
+    .overrideProvider(ClaudeService)
+    .useValue(claude)
     .compile();
 
   const app: INestApplication<App> = moduleRef.createNestApplication();
@@ -99,6 +149,7 @@ export async function createTestApp() {
     await app.get(BookingMailer).idle();
     outbox.length = 0;
     storage.clear();
+    claude.clear();
     await prisma.$executeRawUnsafe(
       'TRUNCATE TABLE user_account, audit_log RESTART IDENTITY CASCADE',
     );
@@ -168,5 +219,15 @@ export async function createTestApp() {
     return (res.body.data as { accessToken: string }).accessToken;
   };
 
-  return { app, prisma, api, outbox, storage, reset, signIn, signInStaff };
+  return {
+    app,
+    prisma,
+    api,
+    outbox,
+    storage,
+    claude,
+    reset,
+    signIn,
+    signInStaff,
+  };
 }
