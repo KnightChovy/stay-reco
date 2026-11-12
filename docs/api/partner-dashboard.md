@@ -86,7 +86,7 @@ A booking counts as **sold** when `status ∈ {CONFIRMED, CHECKED_IN, COMPLETED,
 | Average stay | `avgLengthOfStay` | Average nights of the sold bookings whose `checkInDate` is in the period; `null` without such bookings. |
 | Lead time | `avgLeadTimeDays` | Average `checkInDate − Vietnam date of createdAt` (days) of `bookingsCreated`; `null` when 0. |
 | Rating | `avgRating`, `reviewCount` | `review.overallRating` of visible reviews created in the period; `avgRating` has 1 decimal, `null` without reviews. Reviews arrive with the loyalty phase: until then `null` / `0`. |
-| Net received | `netEarnings` | **Cash basis**, from the hotel wallet ledger: the sum of the signed `amount` of the hotel wallet's `wallet_transaction` rows of type `BOOKING_PAYMENT`, `COMMISSION`, `REFUND`, `ADJUSTMENT` with `createdAt` in the period (payments are positive, refunds and commission negative). Excludes `PAYOUT` (money leaving the wallet is not a loss). |
+| Net received | `netEarnings` | **Cash basis**, from the hotel wallet ledger: the sum of the signed `amount` of the hotel wallet's `wallet_transaction` rows of type `BOOKING_PAYMENT`, `COMMISSION`, `REFUND`, `ADJUSTMENT` with `createdAt` in the period (payments are positive, refunds and commission negative). Excludes `PAYOUT` (money leaving the wallet is not a loss) and the `ADJUSTMENT` that gives back a rejected or cancelled withdrawal (key `payout:<id>:return`), since it only returns money already earned. |
 | Commission | `commission` | Sum of the hotel's `COMMISSION` rows in the period, as a positive number. Commission is charged at check-out, so it is `0` until the hotel operations phase. |
 | Refunds | `refunds` | Sum of the hotel's `REFUND` rows in the period, as a positive number. |
 

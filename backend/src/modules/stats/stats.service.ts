@@ -42,8 +42,13 @@ import {
 
 /** Booking statuses that count as sold (decision PD2: no-shows included). */
 const SOLD = Prisma.sql`('CONFIRMED', 'CHECKED_IN', 'COMPLETED', 'NO_SHOW')`;
-/** Hotel wallet rows that make up the net received (payouts excluded). */
-export const EARNINGS = Prisma.sql`('BOOKING_PAYMENT', 'COMMISSION', 'REFUND', 'ADJUSTMENT')`;
+/**
+ * Whether the hotel wallet row `wt` counts in the net received. Withdrawals are left out, and so is what a rejected
+ * or cancelled withdrawal gives back (an `ADJUSTMENT` keyed `payout:<id>:return`): both only move money the hotel
+ * had already earned.
+ */
+export const EARNINGS = Prisma.sql`(wt.type IN ('BOOKING_PAYMENT', 'COMMISSION', 'REFUND')
+  OR (wt.type = 'ADJUSTMENT' AND wt.idempotency_key NOT LIKE 'payout:%'))`;
 /** `BookingSource` of the booking aliased `b` (an AI suggestion wins over a promotion). */
 export const BOOKING_SOURCE = Prisma.sql`CASE
           WHEN b.recommendation_id IS NOT NULL THEN 'AI_RECOMMENDATION'
@@ -542,7 +547,7 @@ export class StatsService {
       ),
       ledger AS (
         SELECT (wt.created_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::date AS day,
-          sum(wt.amount) FILTER (WHERE wt.type IN ${EARNINGS}) AS net,
+          sum(wt.amount) FILTER (WHERE ${EARNINGS}) AS net,
           -sum(wt.amount) FILTER (WHERE wt.type = 'COMMISSION') AS commission,
           -sum(wt.amount) FILTER (WHERE wt.type = 'REFUND') AS refunds
         FROM wallet_transaction wt JOIN wallet w ON w.wallet_id = wt.wallet_id
