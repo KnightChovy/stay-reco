@@ -235,6 +235,11 @@ There is no `status` field in the body; the HTTP status is already available as 
 | `VIOLATION_STATUS_CONFLICT` | 409 | The case is closed, or the status change does not follow OPEN → INVESTIGATING → RESOLVED / DISMISSED | Reload the case |
 | `SUSPENSION_REQUEST_PENDING` | 409 | The partner already has a suspension request waiting for the admin | Show the waiting request |
 | `PARTNER_NOT_FOUND` | 404 | The hotel partner doesn't exist | Reload the list |
+| `PARTNER_STATUS_CONFLICT` | 409 | Reinstating a partner that is not suspended | Reload the account |
+| `SUSPENSION_REQUEST_NOT_FOUND` | 404 | The suspension request doesn't exist | Reload the list |
+| `SUSPENSION_STATUS_CONFLICT` | 409 | The suspension request was already decided | Reload the request |
+| `USER_NOT_FOUND` | 404 | The account doesn't exist | Reload the list |
+| `ACCOUNT_STATUS_CONFLICT` | 409 | The account's status does not allow it (locking a locked account, unlocking an active one) | Reload the account |
 | `LOYALTY_PROGRAM_NOT_FOUND` | 404 | No loyalty programme is running | Hide the points section |
 | `LOYALTY_POINTS_INSUFFICIENT` | 409 | More points than the customer holds | Show the balance and re-quote |
 | `VOUCHER_NOT_FOUND` | 404 | The discount code doesn't exist or belongs to another customer | "Mã không hợp lệ" |

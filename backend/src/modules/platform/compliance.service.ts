@@ -278,6 +278,16 @@ export class ComplianceService {
   ): Promise<PolicyViolation> {
     const current = await this.findOpen(id);
     await this.prisma.$transaction(async (tx) => {
+      // The case row first: a manager closing the case at the same moment either goes first (then the request is
+      // refused below) or waits until the request is recorded on the still open case.
+      await tx.$executeRaw`SELECT 1 FROM policy_violation WHERE policy_violation_id = ${id}::uuid FOR UPDATE`;
+      const { status } = await tx.policyViolation.findUniqueOrThrow({
+        where: { policyViolationId: id },
+        select: { status: true },
+      });
+      if (!(OPEN_STATUSES as readonly string[]).includes(status)) {
+        throw this.statusConflict();
+      }
       // The partner's account row serialises requests about the same partner from several cases.
       await lockAccount(tx, current.hotelPartnerId);
       const partner = await tx.hotelPartner.findUniqueOrThrow({
