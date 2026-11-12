@@ -41,7 +41,7 @@ Every route on this page is for `PLATFORM_MANAGER` only; every other role gets `
 
 ## Withdrawals
 
-*(Draft)* The withdrawal queue (UC74, SRS 3.15.5, BR-22, decisions M1–M3). The partner side and the `Payout` type are in [partner.md](./partner.md#withdrawals).
+The withdrawal queue (UC74, SRS 3.15.5, BR-22, decisions M1–M3). Status: `BE Done`. The partner side and the `Payout` type are in [partner.md](./partner.md#withdrawals).
 
 | Method | Path | Body / Query | Response |
 |---|---|---|---|
@@ -198,7 +198,7 @@ Common rules, as in the partner dashboard ([partner-dashboard.md §2](./partner-
 | Group | Codes |
 |---|---|
 | Verification | `VERIFICATION_NOT_FOUND`, `VERIFICATION_ALREADY_DECIDED`, `VERIFICATION_PENDING`, `HOTEL_NOT_FOUND`, `HOTEL_STATUS_CONFLICT`, `PARTNER_SUSPENDED` |
-| Withdrawals (Draft) | `PAYOUT_NOT_FOUND`, `PAYOUT_STATUS_CONFLICT` |
+| Withdrawals | `PAYOUT_NOT_FOUND`, `PAYOUT_STATUS_CONFLICT` |
 | Compliance (Draft) | `VIOLATION_NOT_FOUND`, `VIOLATION_STATUS_CONFLICT`, `SUSPENSION_REQUEST_PENDING`, `PARTNER_NOT_FOUND`, `UPLOAD_INVALID_FILE` |
 | Every route | `VALIDATION_ERROR` (missing reason, bad period), `FORBIDDEN` |
 

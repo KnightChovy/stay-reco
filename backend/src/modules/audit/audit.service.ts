@@ -80,6 +80,20 @@ export enum AuditAction {
   SEPAY_TRANSFER_UNMATCHED = 'SEPAY_TRANSFER_UNMATCHED',
   /** A SePay transfer for a booking no longer waiting for payment (expired, already paid): refund by hand. */
   SEPAY_TRANSFER_LATE = 'SEPAY_TRANSFER_LATE',
+  /**
+   * Withdrawals (BR-22, M1): events of the `PAYOUT` wallet movement (`entity_type` `wallet_transaction`); the latest
+   * of REQUESTED / PAID / REJECTED / CANCELLED is its state. REQUESTED holds the verification request the beneficiary
+   * account comes from, never the account number.
+   */
+  PAYOUT_REQUESTED = 'PAYOUT_REQUESTED',
+  /** A platform manager opened the withdrawal with the full account number (M3). */
+  PAYOUT_ACCOUNT_VIEWED = 'PAYOUT_ACCOUNT_VIEWED',
+  /** A platform manager made the bank transfer; `new_value` holds the bank reference. */
+  PAYOUT_PAID = 'PAYOUT_PAID',
+  /** A platform manager refused it; `new_value` holds the reason sent to the partner. */
+  PAYOUT_REJECTED = 'PAYOUT_REJECTED',
+  /** The partner took the request back. */
+  PAYOUT_CANCELLED = 'PAYOUT_CANCELLED',
 }
 
 /** audit_log has one actor column per role; the account id is the role row's id. */

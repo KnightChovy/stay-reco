@@ -15,6 +15,10 @@ export const lockHotel = (tx: Prisma.TransactionClient, hotelId: string) =>
 export const lockBooking = (tx: Prisma.TransactionClient, bookingId: string) =>
   tx.$executeRaw`SELECT 1 FROM booking WHERE booking_id = ${bookingId}::uuid FOR UPDATE`;
 
+/** A wallet row: checks on its balances (one pending withdrawal, at most the available balance) stay true. */
+export const lockWallet = (tx: Prisma.TransactionClient, walletId: string) =>
+  tx.$executeRaw`SELECT 1 FROM wallet WHERE wallet_id = ${walletId}::uuid FOR UPDATE`;
+
 export const lockRoomType = (
   tx: Prisma.TransactionClient,
   roomTypeId: string,

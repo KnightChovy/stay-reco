@@ -226,6 +226,11 @@ There is no `status` field in the body; the HTTP status is already available as 
 | `REVIEW_WINDOW_CLOSED` | 409 | The review window closed (`REVIEW_WINDOW_DAYS` after check-out) | "Reviews close <n> days after check-out" |
 | `RATING_CRITERION_NOT_FOUND` | 404 | A sub-rating names a criterion that does not exist | Reload the criteria |
 | `WALLET_INSUFFICIENT` | 409 | The balance does not cover the whole booking | Show the balance and the shortfall; offer a transfer |
+| `PAYOUT_NOT_FOUND` | 404 | The withdrawal doesn't exist, or belongs to another hotel | Reload the list |
+| `PAYOUT_PENDING` | 409 | The hotel already has a withdrawal waiting for a platform manager | Show the pending withdrawal; offer to cancel it |
+| `PAYOUT_EXCEEDS_BALANCE` | 409 | More than the available balance; `details[0].message` holds the available balance | MSG30, show the available balance |
+| `BENEFICIARY_MISSING` | 409 | The hotel has no approved verification with a beneficiary account | Link to the verification request |
+| `PAYOUT_STATUS_CONFLICT` | 409 | The withdrawal is no longer pending (paid, rejected or cancelled in the meantime) | Reload the withdrawal |
 | `LOYALTY_PROGRAM_NOT_FOUND` | 404 | No loyalty programme is running | Hide the points section |
 | `LOYALTY_POINTS_INSUFFICIENT` | 409 | More points than the customer holds | Show the balance and re-quote |
 | `VOUCHER_NOT_FOUND` | 404 | The discount code doesn't exist or belongs to another customer | "Mã không hợp lệ" |

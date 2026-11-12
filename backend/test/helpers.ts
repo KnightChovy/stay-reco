@@ -8,6 +8,7 @@ import { configureApp } from '../src/app.setup';
 import { UserRole } from '../src/generated/prisma/client';
 import { BookingMailer } from '../src/modules/bookings/booking-mailer';
 import { MailMessage, MailService } from '../src/modules/mail/mail.service';
+import { PayoutMailer } from '../src/modules/payouts/payout-mailer';
 import { StorageService } from '../src/modules/storage/storage.service';
 import { PLATFORM_WALLET_ID } from '../src/modules/wallets/wallet-ledger';
 import { PrismaService } from '../src/prisma/prisma.service';
@@ -97,6 +98,7 @@ export async function createTestApp() {
   const reset = async () => {
     // Emails and notifications of the previous test still being written would hit the accounts removed below.
     await app.get(BookingMailer).idle();
+    await app.get(PayoutMailer).idle();
     outbox.length = 0;
     storage.clear();
     await prisma.$executeRawUnsafe(

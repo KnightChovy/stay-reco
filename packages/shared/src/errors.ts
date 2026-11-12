@@ -165,6 +165,18 @@ export const ErrorCode = {
   /** The wallet balance does not cover the whole booking; paying from it is all or nothing (decision W1). */
   WALLET_INSUFFICIENT: 'WALLET_INSUFFICIENT',
 
+  // Withdrawals (BR-22, decisions M1–M3)
+  /** The withdrawal doesn't exist, or belongs to another hotel. */
+  PAYOUT_NOT_FOUND: 'PAYOUT_NOT_FOUND',
+  /** The hotel already has a withdrawal waiting for a platform manager; one at a time. */
+  PAYOUT_PENDING: 'PAYOUT_PENDING',
+  /** More than the available balance (MSG30); `details[0].message` holds the available balance. */
+  PAYOUT_EXCEEDS_BALANCE: 'PAYOUT_EXCEEDS_BALANCE',
+  /** The hotel has no approved verification with a beneficiary account to pay to. */
+  BENEFICIARY_MISSING: 'BENEFICIARY_MISSING',
+  /** The withdrawal is no longer pending (paid, rejected or cancelled in the meantime). */
+  PAYOUT_STATUS_CONFLICT: 'PAYOUT_STATUS_CONFLICT',
+
   // Payments
   /** A webhook call (SePay) with a missing or wrong API key; nothing is processed. Not a client error to refresh. */
   INVALID_API_KEY: 'INVALID_API_KEY',

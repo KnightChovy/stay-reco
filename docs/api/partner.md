@@ -270,7 +270,7 @@ Slide "08. Cancellation And Refund": when a customer cancels a paid booking with
 
 ## Withdrawals
 
-*(Draft)* The "Rút tiền" pop-up of the revenue page (UC59, SRS 3.13.5). Decisions M1–M3 in [phase-6-reporting-admin.md](../phases/phase-6-reporting-admin.md); money rules in [money-rules.md §5.4](../money-rules.md#54-commission-and-payouts). The manager side is in [manager.md](./manager.md#withdrawals).
+The "Rút tiền" pop-up of the revenue page (UC59, SRS 3.13.5). Status: `BE Done`. Decisions M1–M3 in [phase-6-reporting-admin.md](../phases/phase-6-reporting-admin.md); money rules in [money-rules.md §5.4](../money-rules.md#54-commission-and-payouts). The manager side is in [manager.md](./manager.md#withdrawals).
 
 | Method | Path | Access | Body / Query | Response |
 |---|---|---|---|---|
@@ -343,7 +343,7 @@ TypeScript types are in `@stayreco/shared` (`responses/hotel.ts`). Money is a nu
 { "account": { "bankName": "Vietcombank", "accountNumber": "****6789", "accountHolder": "CONG TY AN NHIEN" },
   "verifiedAt": "2026-10-20T08:00:00.000Z", "updatePending": false }
 
-// Payout (responses/payout.ts, Draft): the partner's view; the manager's adds the partner (manager.md)
+// Payout (responses/payout.ts): the partner's view; the manager's adds the partner (manager.md)
 { "id": "uuid", "hotel": { "id": "uuid", "name": "An Nhiên Riverside" },
   "amount": 15000000, "status": "PENDING",            // PENDING | PAID | REJECTED | CANCELLED
   "beneficiary": { "bankName": "Vietcombank", "accountNumber": "****6789", "accountHolder": "CONG TY AN NHIEN" },
@@ -366,6 +366,6 @@ TypeScript types are in `@stayreco/shared` (`responses/hotel.ts`). Money is a nu
 | Files | `UPLOAD_INVALID_FILE`, `UPLOAD_UNAVAILABLE`, `IMAGE_NOT_FOUND`, `IMAGE_LIMIT_REACHED` |
 | Pricing, availability | `PRICING_RULE_NOT_FOUND`, `AVAILABILITY_BELOW_BOOKED` |
 | Bookings, refunds | `BOOKING_NOT_FOUND`, `REFUND_STATUS_CONFLICT` |
-| Withdrawals (Draft) | `PAYOUT_NOT_FOUND`, `PAYOUT_PENDING`, `PAYOUT_EXCEEDS_BALANCE`, `BENEFICIARY_MISSING`, `PAYOUT_STATUS_CONFLICT` |
+| Withdrawals | `PAYOUT_NOT_FOUND`, `PAYOUT_PENDING`, `PAYOUT_EXCEEDS_BALANCE`, `BENEFICIARY_MISSING`, `PAYOUT_STATUS_CONFLICT` |
 
 Meanings and handling: [api-guide.md §4.3](../api-guide.md#43-error-codes).
