@@ -21,6 +21,9 @@ import { BookingsService } from '../bookings/bookings.service';
 import { DevOnly } from './dev-only.guard';
 import { PaymentConfirmationService } from './payment-confirmation.service';
 
+/** Start of the transaction id of a simulated payment, so nothing mistakes it for a SePay notification. */
+export const SIMULATED_TRANSACTION_PREFIX = 'sim-';
+
 @ApiTags('bookings')
 @DevOnly()
 @Controller()
@@ -45,7 +48,7 @@ export class DevPaymentsController {
     const result = await this.payments.confirm({
       code: booking.code,
       amount: booking.totalAmount,
-      transactionId: `sim-${randomUUID()}`,
+      transactionId: `${SIMULATED_TRANSACTION_PREFIX}${randomUUID()}`,
       paidAt: new Date(),
     });
     if (result.status !== 'CONFIRMED') {

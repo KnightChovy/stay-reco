@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| Phase status | 🟡 Partner dashboard and hotel revenue built early; the rest planned (decisions M1–M10) |
-| API status | Partner dashboard (all hotels included), hotel wallet history, withdrawals, platform money, manager dashboard, hotels list, compliance, admin accounts and logs: `BE Done` · admin transactions and payment settings: `Draft` |
+| Phase status | 🟡 BE done (decisions M1–M10), FE integrating |
+| API status | `BE Done` for every endpoint of the phase (system AI settings belong to the AI phase); FE integrating |
 | Agreed on | 2026-11-12 (decisions M1–M10) |
 | BE owners | Khiêm |
 | FE owners | |
@@ -31,7 +31,7 @@ Partners take their money out and see all their hotels together. Platform manage
 | Platform revenue, revenue of one hotel, commissions, cash flow, Excel export (M4–M7) | UC75, UC76, 3.15.1–3.15.4, BR-13 | built |
 | Manager dashboard, hotels list, compliance cases and suspension requests (M8) | UC69, UC71–UC73, 3.14.1, 3.14.4, 3.14.5, BR-15 | built |
 | Admin dashboard, users, account suspension, suspension decisions, commission rate, logs (M9) | UC77, UC80, UC82, UC83, 3.16.1–3.16.3, 3.16.7, BR-13, BR-15 | built |
-| Admin transactions, payment settings (M10) | UC78, UC79, 3.16.4–3.16.6 | planned |
+| Admin transactions, payment settings (M10) | UC78, UC79, 3.16.4–3.16.6 | built |
 
 Order of the pull requests: this contract → withdrawals → `GET /me/hotels/stats` → platform money → manager operations → admin.
 
@@ -121,3 +121,4 @@ New error codes (added to `packages/shared/src/errors.ts` and [api-guide.md §4.
 | 2026-11-12 | BE | Platform money built (M4–M7): `GET /platform/stats/revenue`, `…/revenue/hotels`, `/platform/hotels/:hotelId/revenue`, `…/wallet/transactions`, `/platform/commissions`, `/platform/cashflow`, `/platform/stats/export`; regions from the city (`regionOf` in shared); e2e against a hand-computed ledger, reconciliation included |
 | 2026-11-12 | BE | Manager operations built (M8): `GET /platform/stats/overview` (with the action queue: verifications, withdrawals and overdue ones, content reports, cases, suspension requests), `GET /platform/hotels`, compliance cases `/policy-violations` (list, open with private evidence, detail, update, evidence link, suspension request); no schema change, the case's hotel, evidence, notes and requests are its audit events; error codes `VIOLATION_*`, `SUSPENSION_REQUEST_PENDING`, `PARTNER_NOT_FOUND` |
 | 2026-11-12 | BE | Admin accounts and logs built (M9): `GET /admin/stats`, `GET /admin/users`, `GET /admin/users/:id`, `POST …/suspend`, `POST …/activate`, `PATCH /admin/partners/:partnerId/commission-rate`, `POST …/reinstate`, `GET /admin/suspension-requests`, `POST …/approve`, `POST …/reject`, `GET /admin/audit-logs` (severity from `AUDIT_SEVERITY` in shared, numbers masked); audit actions `ACCOUNT_SUSPENDED`, `ACCOUNT_ACTIVATED`, `PARTNER_REINSTATED`, `COMMISSION_RATE_CHANGED`, `SUSPENSION_APPROVED`, `SUSPENSION_REJECTED`; error codes `USER_NOT_FOUND`, `ACCOUNT_STATUS_CONFLICT`, `PARTNER_STATUS_CONFLICT`, `SUSPENSION_REQUEST_NOT_FOUND`, `SUSPENSION_STATUS_CONFLICT` |
+| 2026-11-12 | BE | Admin transactions and payment settings built (M10): `GET /admin/transactions` (confirmed amount from `BOOKING_CONFIRMED`, refunds, mismatch filter), `…/unmatched`, `…/export`, `…/:invoiceId` (booking history and every wallet movement), `GET /admin/payment-settings` (read-only, masked), `POST /admin/payment-settings/test`; every endpoint of the phase is now `BE Done` |

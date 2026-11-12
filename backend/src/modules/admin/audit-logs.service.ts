@@ -67,7 +67,8 @@ const masked = (value: unknown): unknown => {
   return value;
 };
 
-function details(raw: string | null): Record<string, unknown> | null {
+/** The JSON an event recorded, account and ID card numbers masked; a value that is not an object is wrapped. */
+export function details(raw: string | null): Record<string, unknown> | null {
   if (raw === null) return null;
   try {
     const parsed: unknown = JSON.parse(raw);

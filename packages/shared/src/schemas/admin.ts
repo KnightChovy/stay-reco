@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { AccountStatus, Role } from '../enums';
+import { AccountStatus, PaymentMethod, PaymentStatus, Role } from '../enums';
 import { dateSchema, daysBetween, hasAtMost2Decimals, isCalendarDate, listQuerySchema, repeatedQuery } from './common';
 
 /** Queries and bodies of the admin endpoints (docs/api/admin.md, decisions M8–M10). */
@@ -99,3 +99,47 @@ export const auditLogListQuerySchema = listQuerySchema
     }
   });
 export type AuditLogListQuery = z.infer<typeof auditLogListQuerySchema>;
+
+// ── Transactions and payment settings ───────────────────────
+
+const periodRange = (v: { from?: string; to?: string }, ctx: z.RefinementCtx) => {
+  if ((v.from === undefined) !== (v.to === undefined)) {
+    ctx.addIssue({ code: 'custom', path: ['to'], message: 'from and to must be sent together' });
+    return;
+  }
+  if (!isCalendarDate(v.from) || !isCalendarDate(v.to)) return;
+  if (v.to < v.from) {
+    ctx.addIssue({ code: 'custom', path: ['to'], message: 'to must not be before from' });
+  } else if (daysBetween(v.from, v.to) + 1 > 366) {
+    ctx.addIssue({ code: 'custom', path: ['to'], message: 'at most 366 days' });
+  }
+};
+
+/**
+ * `GET /admin/transactions` (UC79, SRS 3.16.5): one row per invoice, period on its creation (default the last 30 days);
+ * `search` matches the booking code or the SePay transaction id; `mismatch=true` keeps the invoices whose confirmed
+ * amount differs from the expected one.
+ */
+export const adminTransactionListQuerySchema = listQuerySchema
+  .omit({ sort: true })
+  .extend({
+    from: dateSchema.optional(),
+    to: dateSchema.optional(),
+    status: repeatedQuery(z.enum(PaymentStatus)).optional(),
+    method: repeatedQuery(z.enum(PaymentMethod)).optional(),
+    mismatch: z.enum(['true', 'false']).optional(),
+  })
+  .superRefine(periodRange);
+export type AdminTransactionListQuery = z.infer<typeof adminTransactionListQuerySchema>;
+
+/** `GET /admin/transactions/unmatched`: SePay transfers that confirmed nothing or came late, newest first. */
+export const unmatchedTransferListQuerySchema = listQuerySchema
+  .omit({ sort: true, search: true })
+  .extend({ from: dateSchema.optional(), to: dateSchema.optional() })
+  .superRefine(periodRange);
+export type UnmatchedTransferListQuery = z.infer<typeof unmatchedTransferListQuerySchema>;
+
+/** Checks of `POST /admin/payment-settings/test` (decision M10: the settings are read-only). */
+export const PAYMENT_CHECKS = ['ACCOUNT_CONFIGURED', 'WEBHOOK_KEY_SET', 'WEBHOOK_RECEIVED'] as const;
+/** A webhook older than this is reported by the self-test. */
+export const WEBHOOK_SILENCE_DAYS = 7;
