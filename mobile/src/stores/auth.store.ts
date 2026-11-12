@@ -17,7 +17,7 @@ type AuthState = {
   verifyEmail: (email: string, code: string) => Promise<Result>;
   resendVerification: (email: string) => Promise<Result>;
   forgotPassword: (email: string) => Promise<Result>;
-  logout: () => Promise<void>;
+  logout: (everywhere?: boolean) => Promise<void>;
 };
 
 // Cùng thông báo lỗi với frontend/src/stores/auth.store.ts.
@@ -130,9 +130,9 @@ export const useAuthStore = create<AuthState>()((set) => {
       }
     },
 
-    logout: async () => {
+    logout: async (everywhere = false) => {
       try {
-        await authService.logout();
+        await authService.logout(everywhere);
       } catch {
         // Vẫn xóa phiên ở máy dù server lỗi.
       }

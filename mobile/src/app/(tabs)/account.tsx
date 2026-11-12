@@ -32,7 +32,7 @@ type MenuItem = {
   icon: IconName;
   bg: string;
   fg: string;
-  href?: '/notifications' | '/account/password' | '/account/rewards' | '/account/wallet' | '/account/reviews';
+  href?: '/notifications' | '/account/password' | '/account/sessions' | '/account/rewards' | '/account/wallet' | '/account/reviews';
 };
 
 const baseMenu: MenuItem[] = [
@@ -43,6 +43,14 @@ const baseMenu: MenuItem[] = [
     bg: colors.secondaryFixed,
     fg: colors.secondary,
     href: '/account/password',
+  },
+  {
+    title: 'Thiết bị đăng nhập',
+    desc: 'Xem và đăng xuất các thiết bị đang đăng nhập',
+    icon: 'devices',
+    bg: colors.primaryFixed,
+    fg: colors.primary,
+    href: '/account/sessions',
   },
   {
     title: 'Trung tâm thông báo',

@@ -7,6 +7,7 @@ import type {
   LoginInput,
   RegisterCustomerInput,
   RegisterResult,
+  SessionInfo,
   UpdateProfileInput,
   VerifyEmailInput,
 } from "@stayreco/shared";
@@ -54,8 +55,19 @@ export const getMe = async (): Promise<APIResponse<Account>> => {
   return data;
 };
 
-export const logout = async (): Promise<void> => {
-  await apiService.post("/auth/logout");
+/** `everywhere`: đăng xuất mọi thiết bị, kể cả máy này. */
+export const logout = async (everywhere = false): Promise<void> => {
+  await apiService.post(everywhere ? "/auth/logout-all" : "/auth/logout");
+};
+
+/** Các thiết bị đang đăng nhập; `current` là máy này. */
+export const getSessions = async (): Promise<SessionInfo[]> => {
+  const { data } = await apiService.get<APIResponse<SessionInfo[]>>("/auth/sessions");
+  return data.data;
+};
+
+export const revokeSession = async (sessionId: string): Promise<void> => {
+  await apiService.delete(`/auth/sessions/${sessionId}`);
 };
 
 /** Giữ phiên trên máy này, đăng xuất các thiết bị khác. */
