@@ -10,7 +10,17 @@ import type {
   UpdateProfileInput,
   VerifyEmailInput,
 } from "@stayreco/shared";
-import { apiService } from "./ApiService";
+import { apiService, multipart } from "./ApiService";
+
+/** JPEG, PNG hoặc WebP, tối đa 10MB (field `file`); ảnh mới thay ảnh cũ. */
+export const uploadAvatar = async (form: FormData): Promise<Account> => {
+  const { data } = await apiService.post<APIResponse<Account>>("/me/avatar", form, multipart);
+  return data.data;
+};
+
+export const deleteAvatar = async (): Promise<void> => {
+  await apiService.delete("/me/avatar");
+};
 
 export const login = async (payload: LoginInput): Promise<APIResponse<AuthResult>> => {
   const { data } = await apiService.post<APIResponse<AuthResult>>("/auth/login", payload);
