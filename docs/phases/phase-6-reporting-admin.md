@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Phase status | 🟡 Partner dashboard and hotel revenue built early; the rest planned (decisions M1–M10) |
-| API status | Partner dashboard and hotel wallet history: `BE Done` · withdrawals, platform figures, compliance, admin: `Draft` |
+| API status | Partner dashboard, hotel wallet history, withdrawals: `BE Done` · platform figures, compliance, admin: `Draft` |
 | Agreed on | 2026-11-12 (decisions M1–M10) |
 | BE owners | Khiêm |
 | FE owners | |
@@ -26,7 +26,7 @@ Partners take their money out and see all their hotels together. Platform manage
 | Dashboard first release: action items, today, KPIs, chart, occupancy forecast | UC56, 3.11.2 | built, FE wired |
 | Breakdown by room type, source, status, payment method; Excel export | UC56 | built |
 | Hotel wallet history and payout account | UC58, 3.13.4 | built |
-| Withdrawals: request, cancel, manager queue, paid or rejected (M1–M3) | UC59, UC74, 3.13.5, 3.15.5, BR-22 | planned |
+| Withdrawals: request, cancel, manager queue, paid or rejected (M1–M3) | UC59, UC74, 3.13.5, 3.15.5, BR-22 | built |
 | Every hotel of a partner, `GET /me/hotels/stats` | BR-21, 3.11.2 | planned |
 | Platform revenue, revenue of one hotel, commissions, cash flow, Excel export (M4–M7) | UC75, UC76, 3.15.1–3.15.4, BR-13 | planned |
 | Manager dashboard, hotels list, compliance cases and suspension requests (M8) | UC69, UC71–UC73, 3.14.1, 3.14.4, 3.14.5, BR-15 | planned |
@@ -101,7 +101,7 @@ New error codes (added to `packages/shared/src/errors.ts` and [api-guide.md §4.
 ## Definition of Done
 
 - [ ] Dashboard figures match the transaction data (with query tests)
-- [ ] Withdrawals: two simultaneous requests of a hotel leave one; the wallet's available, pending and reserved balances are checked after every step; reconciliation (money-rules §5.3) holds in the tests
+- [x] Withdrawals: two simultaneous requests of a hotel leave one; the wallet's available, pending and reserved balances are checked after every step; reconciliation (money-rules §5.3) holds in the tests
 - [ ] The phase's [api/](../api/README.md) pages match the code, API status `Integrated`
 - [ ] List of deviations from the SRS sent for the report (M6, M10, and the platform-wide loyalty programme against BR-06)
 
@@ -114,3 +114,4 @@ New error codes (added to `packages/shared/src/errors.ts` and [api-guide.md §4.
 | 2026-11-06 | BE | Dashboard breakdown by room type, booking source, status and payment method |
 | 2026-11-09 | BE | Dashboard Excel export; state table of the phase added |
 | 2026-11-12 | BE | Rest of the phase planned: decisions M1–M10, contract of withdrawals, platform figures, compliance and administration (`Draft`) |
+| 2026-11-12 | BE | Withdrawals built (M1–M3): `GET`/`POST /hotels/:hotelId/payouts`, `…/:payoutId/cancel`, `GET /payouts`, `GET /payouts/:id`, `POST /payouts/:id/paid`, `POST /payouts/:id/reject`; no schema change; error codes `PAYOUT_*` and `BENEFICIARY_MISSING`; e2e covers concurrent requests and decisions, balances and reconciliation |

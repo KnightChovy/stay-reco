@@ -317,6 +317,30 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorInfo> = {
     status: 404,
     description: "Notification doesn't exist or belongs to someone else",
   },
+  PAYOUT_NOT_FOUND: {
+    status: 404,
+    description: "Withdrawal doesn't exist or belongs to another hotel",
+  },
+  PAYOUT_PENDING: {
+    status: 409,
+    description:
+      'The hotel already has a withdrawal waiting for a platform manager',
+  },
+  PAYOUT_EXCEEDS_BALANCE: {
+    status: 409,
+    description:
+      'More than the available balance (MSG30); `details[0].message` holds the available balance',
+  },
+  BENEFICIARY_MISSING: {
+    status: 409,
+    description:
+      'The hotel has no approved verification with a beneficiary account',
+  },
+  PAYOUT_STATUS_CONFLICT: {
+    status: 409,
+    description:
+      'The withdrawal is no longer pending (paid, rejected or cancelled in the meantime)',
+  },
   INVALID_API_KEY: {
     status: 401,
     description: 'Missing or wrong webhook API key; nothing is processed',
