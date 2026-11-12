@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Phase status | 🟡 Partner dashboard and hotel revenue built early; the rest planned (decisions M1–M10) |
-| API status | Partner dashboard (all hotels included), hotel wallet history, withdrawals: `BE Done` · platform figures, compliance, admin: `Draft` |
+| API status | Partner dashboard (all hotels included), hotel wallet history, withdrawals, platform money: `BE Done` · manager dashboard, hotels list, compliance, admin: `Draft` |
 | Agreed on | 2026-11-12 (decisions M1–M10) |
 | BE owners | Khiêm |
 | FE owners | |
@@ -28,7 +28,7 @@ Partners take their money out and see all their hotels together. Platform manage
 | Hotel wallet history and payout account | UC58, 3.13.4 | built |
 | Withdrawals: request, cancel, manager queue, paid or rejected (M1–M3) | UC59, UC74, 3.13.5, 3.15.5, BR-22 | built |
 | Every hotel of a partner, `GET /me/hotels/stats` | BR-21, 3.11.2 | built |
-| Platform revenue, revenue of one hotel, commissions, cash flow, Excel export (M4–M7) | UC75, UC76, 3.15.1–3.15.4, BR-13 | planned |
+| Platform revenue, revenue of one hotel, commissions, cash flow, Excel export (M4–M7) | UC75, UC76, 3.15.1–3.15.4, BR-13 | built |
 | Manager dashboard, hotels list, compliance cases and suspension requests (M8) | UC69, UC71–UC73, 3.14.1, 3.14.4, 3.14.5, BR-15 | planned |
 | Admin dashboard, users, account suspension, suspension decisions, commission rate, logs, transactions, payment settings (M9, M10) | UC77–UC80, UC82, UC83, 3.16.1–3.16.7, BR-13, BR-15 | planned |
 
@@ -117,3 +117,4 @@ New error codes (added to `packages/shared/src/errors.ts` and [api-guide.md §4.
 | 2026-11-12 | BE | Withdrawals built (M1–M3): `GET`/`POST /hotels/:hotelId/payouts`, `…/:payoutId/cancel`, `GET /payouts`, `GET /payouts/:id`, `POST /payouts/:id/paid`, `POST /payouts/:id/reject`; no schema change; error codes `PAYOUT_*` and `BENEFICIARY_MISSING`; e2e covers concurrent requests and decisions, balances and reconciliation |
 | 2026-11-12 | BE | A rejected or cancelled withdrawal's `ADJUSTMENT` left out of the dashboard's net received |
 | 2026-11-12 | BE | `GET /me/hotels/stats` built: every hotel of the partner with its own overview figures and action items, totals with occupancy from the summed room nights |
+| 2026-11-12 | BE | Platform money built (M4–M7): `GET /platform/stats/revenue`, `…/revenue/hotels`, `/platform/hotels/:hotelId/revenue`, `…/wallet/transactions`, `/platform/commissions`, `/platform/cashflow`, `/platform/stats/export`; regions from the city (`regionOf` in shared); e2e against a hand-computed ledger, reconciliation included |
