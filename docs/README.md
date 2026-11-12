@@ -16,6 +16,7 @@ Where BE, FE web and mobile agree on **which phase we are in** and **what the AP
 | Path | Content |
 |---|---|
 | [getting-started.md](./getting-started.md) | Run the backend and frontend locally, demo accounts, common errors |
+| [social-setup.md](./social-setup.md) | Getting the Facebook and Instagram credentials that publish posts, and why TikTok is not built |
 | [api-guide.md](./api-guide.md) | Rules for every API: base URL, web/mobile tokens, envelope, error codes, pagination |
 | [api/](./api/README.md) | Endpoints by user role: each endpoint is described once, with its schema, response type and call flow |
 | [money-rules.md](./money-rules.md) | Money rules: prices and pricing rules, holds, SePay payment, wallets, commission, cancellation and refunds |

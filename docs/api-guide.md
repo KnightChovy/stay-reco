@@ -225,6 +225,12 @@ There is no `status` field in the body; the HTTP status is already available as 
 | `AI_REFUSED` | 403 | The model declined to write this | Ask the user to rephrase the brief |
 | `CONTENT_NOT_FOUND` | 404 | The content doesn't exist or belongs to another hotel | Reload the list |
 | `CONTENT_STATUS_CONFLICT` | 409 | That action does not fit the content's status | Reload the piece |
+| `CONTENT_NOT_APPROVED` | 409 | Scheduling content the owner has not approved | Send it for approval first |
+| `SOCIAL_ACCOUNT_NOT_FOUND` | 404 | The page doesn't exist or belongs to another hotel | Reload the connected pages |
+| `SCHEDULE_NOT_FOUND` | 404 | The scheduled post doesn't exist or belongs to another hotel | Reload the calendar |
+| `SCHEDULE_STATUS_CONFLICT` | 409 | Cancelling a post that went out, or reading figures for one that did not | Reload the calendar |
+| `SOCIAL_PUBLISH_FAILED` | 502 | The platform refused or could not be reached | Show `message`: it carries the platform's own words |
+| `SOCIAL_PLATFORM_UNSUPPORTED` | 501 | TikTok, or Instagram without a photo | Show `message`; for Instagram, ask for a photo |
 | `REVIEW_NOT_FOUND` | 404 | Review doesn't exist or belongs to another customer | Reload the booking |
 | `REVIEW_NOT_ALLOWED` | 409 | The stay is not completed, so it cannot be reviewed yet | Hide the review button |
 | `REVIEW_ALREADY_EXISTS` | 409 | The booking already has a review; one review per stay | Open the existing review |

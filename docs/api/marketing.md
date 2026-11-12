@@ -1,8 +1,67 @@
 # AI marketing (phase 5)
 
-The brand voice the AI writer uses, and what it costs. Decisions are in [phase-5-ai-marketing.md](../phases/phase-5-ai-marketing.md). Rules for every API: [../api-guide.md](../api-guide.md).
+The AI writer, the approval it goes through, the calendar it goes out on, and what it all costs. Decisions are in [phase-5-ai-marketing.md](../phases/phase-5-ai-marketing.md). Rules for every API: [../api-guide.md](../api-guide.md). Getting the platform credentials: [../social-setup.md](../social-setup.md).
 
-Status: `BE Done` for the brand voice and the budget. Content generation, scheduling and publishing are not built yet.
+Status: `BE Done` for all 22 endpoints. TikTok publishing is deliberately not built (M12).
+
+## The shape of it
+
+```
+ideas ─→ generate ─→ [DRAFT] ─→ submit ─→ [PENDING_APPROVAL] ─→ approve ─→ [APPROVED]
+                        ↑                                      ↘ reject ─→ [REJECTED]
+                        └──────────── edit ───────────────────────────────────┘
+
+[APPROVED] ─→ schedule ─→ [SCHEDULED] ─→ (the job, every minute) ─→ [PUBLISHED] ─→ metrics
+                                                                 ↘ [FAILED]
+                                      ↘ cancel ─→ [CANCELLED]
+```
+
+Three things are worth knowing before reading the table.
+
+**Staff write, the owner approves.** A staff member with the `MARKETING` permission can ask for a draft, edit it and submit it. Only the **owner** approves or rejects, because what goes out goes out under the hotel's name. The text is frozen on approval, so what was approved is what is posted.
+
+**Suggestions cost nothing.** `marketing-content/ideas` is database queries, not a model call. A booking system already knows what is worth posting about — which rooms are empty this week, which discount is running, which guest just left five stars — so staff pick an idea instead of inventing one.
+
+**There is no "publish now".** Scheduling with no `scheduledAt` means the next run of the publisher, which is within a minute. That *is* the post-now button (M14).
+
+## Endpoints
+
+### The voice and the budget
+
+| Method | Path | Access | Body | Response |
+|---|---|---|---|---|
+| GET | `/hotels/:hotelId/brand-voice` | member | | `BrandVoice` |
+| PATCH | `/hotels/:hotelId/brand-voice` | owner | `updateBrandVoiceSchema` | `BrandVoice` |
+| POST | `/hotels/:hotelId/brand-voice/learn` | owner | `learnBrandVoiceSchema` | `BrandVoice` (200) |
+| GET | `/hotels/:hotelId/ai-budget` | member | | `AiBudget` |
+
+### Content and approval
+
+| Method | Path | Access | Body | Response |
+|---|---|---|---|---|
+| GET | `/hotels/:hotelId/marketing-content/ideas` | member + `MARKETING` | | `ContentIdea[]` |
+| POST | `/hotels/:hotelId/marketing-content/generate` | member + `MARKETING` | `generateContentSchema` | `MarketingContent` (201) |
+| GET | `/hotels/:hotelId/marketing-content` | member + `MARKETING` | | page of `MarketingContent` |
+| GET | `/marketing-content/:id` | member | | `MarketingContent` |
+| PATCH | `/marketing-content/:id` | member | `updateContentSchema` | `MarketingContent` |
+| POST | `/marketing-content/:id/submit` | member | | `MarketingContent` (200) |
+| POST | `/marketing-content/:id/approve` | **owner** | | `MarketingContent` (200) |
+| POST | `/marketing-content/:id/reject` | **owner** | `rejectContentSchema` | `MarketingContent` (200) |
+| DELETE | `/marketing-content/:id` | member | | 204 |
+
+### Pages, calendar and figures
+
+| Method | Path | Access | Body | Response |
+|---|---|---|---|---|
+| POST | `/hotels/:hotelId/social-accounts` | **owner** | `connectSocialAccountSchema` | `SocialAccount` (201) |
+| GET | `/hotels/:hotelId/social-accounts` | member + `MARKETING` | | `SocialAccount[]` |
+| DELETE | `/social-accounts/:id` | **owner** | | 204 |
+| POST | `/marketing-content/:id/schedule` | member | `scheduleContentSchema` | `ContentSchedule` (201) |
+| GET | `/hotels/:hotelId/content-schedules` | member + `MARKETING` | | page of `ContentSchedule` |
+| GET | `/content-schedules/:id` | member | | `ContentSchedule` |
+| DELETE | `/content-schedules/:id` | member | | `ContentSchedule` (200) |
+| GET | `/content-schedules/:id/metrics` | member | | `ContentMetric[]` |
+| POST | `/content-schedules/:id/metrics/refresh` | member | | `ContentMetric` (200) |
 
 ## Why a brand voice exists
 
@@ -11,15 +70,6 @@ Without one, every hotel's posts read the same. A chain in Đà Nẵng and a hom
 Asking an owner to describe their own tone rarely works — few can, and fewer do it consistently. So the way in is the one the industry has settled on: **the hotel pastes 2–5 posts it is happy with, and the model describes the voice it finds in them**. That description is saved and goes into every later prompt.
 
 The voice belongs to the **partner**, not the hotel, so a chain shares one voice across its properties.
-
-## Endpoints
-
-| Method | Path | Access | Body | Response |
-|---|---|---|---|---|
-| GET | `/hotels/:hotelId/brand-voice` | member | | `BrandVoice` |
-| PATCH | `/hotels/:hotelId/brand-voice` | owner | `updateBrandVoiceSchema` | `BrandVoice` |
-| POST | `/hotels/:hotelId/brand-voice/learn` | owner | `learnBrandVoiceSchema` | `BrandVoice` (200) |
-| GET | `/hotels/:hotelId/ai-budget` | member | | `AiBudget` |
 
 ```jsonc
 // POST /hotels/:hotelId/brand-voice/learn
@@ -38,6 +88,103 @@ Learning **replaces** the current voice rather than adding to it. `PATCH` writes
 
 A hotel with no voice set up still works: the writer falls back to a plain, warm brief rather than refusing.
 
+## What the writer is forbidden to do
+
+Every generate call carries the same rules, and they are the reason this is safe to point at a hotel's real page:
+
+- never invent a price, date, discount, award or amenity the brief did not give it
+- never promise anything about availability or refunds
+- no superlatives it cannot back up
+- write as the hotel, not as an assistant describing one
+
+A hotel's own `forbiddenWords` are added on top. Both are tested, so the rules cannot drift into a constant nothing reads.
+
+```jsonc
+// POST /hotels/:hotelId/marketing-content/generate
+{ "contentType": "POST", "brief": "Cuối tuần còn phòng", "platform": "FACEBOOK" }
+
+// → MarketingContent
+{ "id": "…", "status": "DRAFT", "contentType": "POST",
+  "title": "Cuối tuần bên sông Hàn",
+  "body": "Mình còn vài phòng hướng biển cho cuối tuần này…",
+  "authorName": "Nguyễn Thị B", "rejectedReason": null, "createdAt": "…" }
+```
+
+`platform` shapes the length and tone — a TikTok caption is not written like a blog post. `rejectedReason` is read back from the audit log, so the writer sees why rather than guessing.
+
+## Ideas come from the hotel's own figures
+
+```jsonc
+// GET /hotels/:hotelId/marketing-content/ideas
+[ { "kind": "FREE_ROOMS",   "brief": "Còn 6 phòng trống trong 7 ngày tới…",
+    "detail": "6/20 phòng chưa có khách từ 2026-11-12 trong 7 đêm" },
+  { "kind": "PROMOTION",    "brief": "Giới thiệu chương trình \"Giảm 10% cuối năm\"…",
+    "detail": "Chạy tới 2026-12-31" },
+  { "kind": "GREAT_REVIEW", "brief": "Cảm ơn khách vừa để lại đánh giá tốt…",
+    "detail": "5★ — \"Phòng sạch, nhân viên thân thiện…\"" } ]
+```
+
+Each `brief` can be sent straight back to the generate endpoint. An idea whose figure is not there is simply absent: a hotel with every room booked gets no `FREE_ROOMS` idea.
+
+## Connecting a page
+
+```jsonc
+// POST /hotels/:hotelId/social-accounts
+{ "platform": "FACEBOOK",
+  "accountName": "1234567890",            // the Page id, not the display name
+  "accessToken": "EAAG…",                  // a long-lived page token
+  "expiresAt": "2027-01-10T00:00:00.000Z" } // if the platform gave one
+
+// → SocialAccount — note there is no token field
+{ "id": "…", "platform": "FACEBOOK", "accountName": "1234567890",
+  "expiresAt": "…", "usable": true, "createdAt": "…" }
+```
+
+The token goes **in and does not come back out**. It is encrypted at rest with the same cipher as a partner's bank details, because a page token can post as the hotel for months: a leaked row is a leaked ability to post under the hotel's name.
+
+Tokens are pasted rather than obtained through OAuth, on purpose — [../social-setup.md](../social-setup.md) explains how to get one and why this is the route for now (M11).
+
+`usable` turns false once `expiresAt` has passed. The publisher then **skips** the page and writes the reason on the post, rather than calling a platform with a token it knows is dead.
+
+Disconnecting clears the token and **cancels everything still waiting** on that page. The account row is kept, not deleted: a published post points at it, and that record of what went out should outlive the connection.
+
+## Scheduling and publishing
+
+```jsonc
+// POST /marketing-content/:id/schedule
+{ "socialAccountId": "…", "scheduledAt": "2026-11-15T10:00:00.000Z" }
+// scheduledAt null, absent, or in the past → the next run of the job (within a minute)
+
+// → ContentSchedule
+{ "id": "…", "status": "SCHEDULED", "platform": "FACEBOOK",
+  "accountName": "1234567890", "scheduledAt": "…",
+  "publishedAt": null, "externalPostId": null, "failureReason": null }
+```
+
+Only content the owner **approved** can be scheduled, or content already `SCHEDULED` — one approved piece can go to several pages, and the first scheduling is what moved it off `APPROVED`.
+
+A job picks up due posts every minute and is the **only** thing that publishes. That is what makes a double post impossible: a request and a timer firing in the same second would both see a `SCHEDULED` row, and the hotel's followers would see the post twice (M14).
+
+When a platform refuses, the post becomes `FAILED` and `failureReason` carries **the platform's own words** — `Error validating access token: Session has expired` is the one thing that tells an owner what to do next. A failed post is **not retried**: a token that expired at 09:00 is still expired at 09:01, and a retry loop against Meta is how an app meets its rate limit.
+
+| Platform | Built | Note |
+|---|---|---|
+| Facebook | ✅ | One call. A photo is attached by URL; Meta fetches it |
+| Instagram | ✅ | Two calls: a media container, then publish. **Needs a `mediaUrl`** — Instagram has no text-only post |
+| TikTok | ❌ by decision | Its API takes a video, and the writer produces text (M12). Answers `501 SOCIAL_PLATFORM_UNSUPPORTED` with that reason |
+
+## How a post did
+
+```jsonc
+// POST /content-schedules/:id/metrics/refresh  → ContentMetric
+{ "id": "…", "scheduleId": "…", "platform": "FACEBOOK",
+  "views": 1204, "likes": 38, "shares": 4, "comments": 7, "recordedAt": "…" }
+```
+
+Each refresh **appends** a row rather than overwriting one. A post that gained most of its reach on day three is a different thing from one that got it all in the first hour, and an owner deciding when to post needs to tell them apart. `GET …/metrics` returns every reading, newest first.
+
+Refreshing is a request, not a job: insight numbers move for days after a post, so a job would have to decide how long to keep asking about every post a hotel ever made. Asking when someone opens the screen costs one call and answers the question being asked.
+
 ## Cost: logged and capped
 
 Phase 5 requires that **model call costs are capped and every call is logged**. Both are enforced in one place, so a new feature cannot forget either.
@@ -54,27 +201,40 @@ At `remainingUsd: 0` the writer answers `403 AI_BUDGET_EXCEEDED` until the month
 
 The cap is checked before the call and the usage written after, which is **not** a transaction: two calls starting at the same instant can both pass the check and overshoot by one call. That is deliberate — a cap measured in dollars a month does not need to be exact, and holding a lock for the length of a model call would cost more than the overshoot.
 
-Costs keep **six decimals**. A short post costs around a cent, so rounding to cents would record most calls as free.
+Costs keep **six decimals**. One draft costs roughly **$0.0005** on `gemini-3.8-flash` with thinking off, so rounding to cents would record almost every call as free. The $5 cap is about 9,000 drafts a month.
+
+Two details of Gemini's token counting decide whether the figures add up, and neither is obvious from the field names:
+
+- `promptTokenCount` **includes** the part served from cache, so the cached tokens are subtracted out before being billed at the cache rate. Otherwise they are charged twice.
+- `thoughtsTokenCount` is **not** in `candidatesTokenCount`, and Google bills thinking at the output rate. Left out, a thinking model looks far cheaper than the invoice says.
+
+Flash prices **double on 2027-01-01**. Both halves of that are in the price table, so nothing has to be remembered on the day.
 
 ## Settings
 
 ```
-ANTHROPIC_API_KEY=        # empty turns the writer off
-ANTHROPIC_MODEL=claude-opus-5-5
+GEMINI_API_KEY=                   # empty turns the writer off
+GEMINI_MODEL=gemini-3.8-flash     # gemini-3.1-flash-lite is cheaper, a little blunter
 AI_MONTHLY_BUDGET_USD=5
+META_GRAPH_VERSION=v26.0          # must be a version the connected Meta app may use
+BENEFICIARY_ENCRYPTION_KEY=       # also encrypts social access tokens
 ```
 
-Leaving `ANTHROPIC_API_KEY` empty does **not** stop the server starting — the marketing endpoints answer `503 AI_UNAVAILABLE`, the same shape the Cloudinary settings already use. A deployment without a key still runs everything else.
+Leaving `GEMINI_API_KEY` empty does **not** stop the server starting — the marketing endpoints answer `503 AI_UNAVAILABLE`, the same shape the Cloudinary settings already use. A deployment without a key still runs everything else.
 
-## Common error codes
+## Error codes
 
 | Code | Status | When |
 |---|---|---|
 | `AI_UNAVAILABLE` | 503 | No API key configured, or the model answered in a shape we cannot use |
 | `AI_BUDGET_EXCEEDED` | 403 | The hotel has spent its budget for this calendar month |
 | `AI_REFUSED` | 403 | The model declined to write what was asked for |
-| `VALIDATION_ERROR` | 400 | Fewer than 2 or more than 5 samples, or one shorter than 40 characters |
-
-## Not built yet
-
-Content generation, approval, scheduling, publishing to Facebook / Instagram / TikTok, and metrics. The schema has the tables (`marketing_content`, `content_schedule`, `social_account`, `content_metric`); see the phase 5 doc for the order and for the app-review risk that publishing carries.
+| `CONTENT_NOT_FOUND` | 404 | No such content, or it belongs to another hotel |
+| `CONTENT_STATUS_CONFLICT` | 409 | Editing, submitting, approving or deleting content whose status does not allow it |
+| `CONTENT_NOT_APPROVED` | 409 | Scheduling content the owner has not approved |
+| `SOCIAL_ACCOUNT_NOT_FOUND` | 404 | No such page, or it belongs to another hotel |
+| `SCHEDULE_NOT_FOUND` | 404 | No such scheduled post, or it belongs to another hotel |
+| `SCHEDULE_STATUS_CONFLICT` | 409 | Cancelling a post that went out, or reading figures for one that did not |
+| `SOCIAL_PUBLISH_FAILED` | 502 | The platform refused or could not be reached; its own message is passed through |
+| `SOCIAL_PLATFORM_UNSUPPORTED` | 501 | TikTok, or Instagram without a photo |
+| `VALIDATION_ERROR` | 400 | Fewer than 2 or more than 5 voice samples, a brief under 5 characters, a token under 10 |
