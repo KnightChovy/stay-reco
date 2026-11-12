@@ -231,6 +231,10 @@ There is no `status` field in the body; the HTTP status is already available as 
 | `PAYOUT_EXCEEDS_BALANCE` | 409 | More than the available balance; `details[0].message` holds the available balance | MSG30, show the available balance |
 | `BENEFICIARY_MISSING` | 409 | The hotel has no approved verification with a beneficiary account | Link to the verification request |
 | `PAYOUT_STATUS_CONFLICT` | 409 | The withdrawal is no longer pending (paid, rejected or cancelled in the meantime) | Reload the withdrawal |
+| `VIOLATION_NOT_FOUND` | 404 | The compliance case doesn't exist | Reload the list |
+| `VIOLATION_STATUS_CONFLICT` | 409 | The case is closed, or the status change does not follow OPEN → INVESTIGATING → RESOLVED / DISMISSED | Reload the case |
+| `SUSPENSION_REQUEST_PENDING` | 409 | The partner already has a suspension request waiting for the admin | Show the waiting request |
+| `PARTNER_NOT_FOUND` | 404 | The hotel partner doesn't exist | Reload the list |
 | `LOYALTY_PROGRAM_NOT_FOUND` | 404 | No loyalty programme is running | Hide the points section |
 | `LOYALTY_POINTS_INSUFFICIENT` | 409 | More points than the customer holds | Show the balance and re-quote |
 | `VOUCHER_NOT_FOUND` | 404 | The discount code doesn't exist or belongs to another customer | "Mã không hợp lệ" |

@@ -66,7 +66,7 @@ The withdrawal queue (UC74, SRS 3.15.5, BR-22, decisions M1–M3). Status: `BE D
 
 ## Platform figures
 
-Manager dashboard (UC69, 3.14.1), platform revenue (UC75, 3.15.1), revenue of one hotel (3.15.2), commissions (3.15.3), cash flow (3.15.4) and their export (UC76). Decisions M4–M7. Status: `BE Done` for every row except `stats/overview`, which comes with the manager's operations (*Draft*).
+Manager dashboard (UC69, 3.14.1), platform revenue (UC75, 3.15.1), revenue of one hotel (3.15.2), commissions (3.15.3), cash flow (3.15.4) and their export (UC76). Decisions M4–M7. Status: `BE Done`.
 
 | Method | Path | Query | Response |
 |---|---|---|---|
@@ -141,7 +141,7 @@ Common rules, as in the partner dashboard ([partner-dashboard.md §2](./partner-
 
 ## Hotels
 
-*(Draft)* Partners list (UC71, 3.14.4): every hotel past the draft stage, one row per hotel (BR-21).
+Partners list (UC71, 3.14.4): every hotel past the draft stage, one row per hotel (BR-21). Status: `BE Done`.
 
 | Method | Path | Query | Response |
 |---|---|---|---|
@@ -157,13 +157,14 @@ Common rules, as in the partner dashboard ([partner-dashboard.md §2](./partner-
   "openCases": 0 }
 ```
 
-- `search` matches the hotel or partner name; `status` (`PENDING_VERIFICATION`, `ACTIVE`, `SUSPENDED`, `INACTIVE`) and `partnerStatus` may be repeated.
-- `sort`: `bookings-desc` (default), `cancellationRate-desc`, `rating-asc` (weakest first, hotels without reviews last), `gmv-desc`, `name-asc`.
+- `search` matches the hotel or partner name, Vietnamese marks ignored; `status` (`PENDING_VERIFICATION`, `ACTIVE`, `SUSPENDED`, `INACTIVE`) and `partnerStatus` may be repeated; `region` as in the platform figures.
+- `verifiedAt`: when the hotel's latest verification request was approved. `rooms`: physical rooms now. `openCases`: open or investigating compliance cases opened about this hotel.
+- `sort`: `bookings-desc` (default), `cancellationRate-desc`, `rating-asc` (weakest first, hotels without reviews last), `gmv-desc`, `name-asc`; ties by name.
 - Re-verification of an active hotel is the existing `POST /hotels/:hotelId/reverification`.
 
 ## Compliance cases
 
-*(Draft)* Policy violations and suspension requests (UC72, UC73, 3.14.5, BR-15, decision M8).
+Policy violations and suspension requests (UC72, UC73, 3.14.5, BR-15, decision M8). Status: `BE Done`. A case is a `policy_violation` row; the hotel concerned, the evidence, the notes and the suspension requests are its audit events.
 
 | Method | Path | Body / Query | Response |
 |---|---|---|---|
@@ -175,10 +176,10 @@ Common rules, as in the partner dashboard ([partner-dashboard.md §2](./partner-
 | GET | `/policy-violations/:id/evidence/:fileIndex` | | `{ url, expiresAt }` (signed link, 5 minutes) |
 | POST | `/policy-violations/:id/suspension-request` | `{ reason }` | `PolicyViolation` (201) |
 
-- **Open a case**: `{ partnerId, hotelId?, type, severity, description, evidence? }`. `type` is one of `FRAUD`, `FAKE_LISTING`, `GUEST_SAFETY`, `LICENSE_EXPIRED`, `PAYMENT_ABUSE`, `REVIEW_MANIPULATION`, `OTHER`; `hotelId` must be a hotel of that partner; `evidence` is up to 5 `fileId`s uploaded first through `…/evidence` (PDF, JPG, PNG, 10 MB, stored privately like verification documents).
+- **Open a case**: `{ partnerId, hotelId?, type, severity, description, evidence? }`. `type` is one of `FRAUD`, `FAKE_LISTING`, `GUEST_SAFETY`, `LICENSE_EXPIRED`, `PAYMENT_ABUSE`, `REVIEW_MANIPULATION`, `OTHER`; `hotelId` must be a hotel of that partner; `evidence` is up to 5 `fileId`s uploaded first through `…/evidence` by the **same manager** (PDF, JPG, PNG, 10 MB, stored privately like verification documents); another id → `400 VALIDATION_ERROR` on `evidence.<i>`. Unknown partner → `404 PARTNER_NOT_FOUND`; a hotel of another partner → `404 HOTEL_NOT_FOUND`.
 - **List**: `OPEN` and `INVESTIGATING` by default, the most severe first, then the oldest.
 - **Update**: `status` follows `OPEN → INVESTIGATING → RESOLVED | DISMISSED` (`OPEN` may go straight to `RESOLVED` or `DISMISSED`); a closed case cannot change (`409 VIOLATION_STATUS_CONFLICT`). `note` is required and kept in the case's timeline.
-- **Suspension request**: only for an `OPEN` or `INVESTIGATING` case of a partner that is not suspended, with a reason; one pending request per partner (`409 SUSPENSION_REQUEST_PENDING`). The admin decides ([admin.md](./admin.md#suspension-requests)); the manager cannot suspend (BR-15).
+- **Suspension request**: only for an `OPEN` or `INVESTIGATING` case (`409 VIOLATION_STATUS_CONFLICT` otherwise) of a partner that is not suspended (`409 PARTNER_SUSPENDED`), with a reason; one pending request per partner, whatever the case (`409 SUSPENSION_REQUEST_PENDING`). The admin decides ([admin.md](./admin.md#suspension-requests)); the manager cannot suspend (BR-15).
 - Unknown case: `404 VIOLATION_NOT_FOUND`.
 
 ```jsonc
@@ -188,9 +189,10 @@ Common rules, as in the partner dashboard ([partner-dashboard.md §2](./partner-
   "type": "FAKE_LISTING", "severity": "HIGH", "status": "INVESTIGATING",
   "description": "…", "evidence": [ { "index": 0, "fileName": "anh-chup.png" } ],
   "openedBy": { "id": "uuid", "fullName": "…" }, "createdAt": "…", "resolvedAt": null,
-  "suspensionRequest": { "id": "uuid", "status": "PENDING", "reason": "…", "requestedAt": "…",
-                         "decidedAt": null, "decisionReason": null },     // the latest, or null
-  "timeline": [ { "action": "VIOLATION_OPENED", "at": "…", "by": { "fullName": "…" }, "note": null } ] }
+  "suspensionRequest": { "id": "uuid", "status": "PENDING", "reason": "…", "requestedBy": { "id": "uuid", "fullName": "…" },
+                         "requestedAt": "…", "decidedBy": null, "decidedAt": null, "decisionReason": null },   // the latest, or null
+  "timeline": [ { "action": "VIOLATION_OPENED", "at": "…", "by": { "id": "uuid", "fullName": "…" },
+                  "note": null, "status": null, "severity": null } ] }   // VIOLATION_UPDATED carries the note and what changed
 ```
 
 ## Common error codes
@@ -199,7 +201,7 @@ Common rules, as in the partner dashboard ([partner-dashboard.md §2](./partner-
 |---|---|
 | Verification | `VERIFICATION_NOT_FOUND`, `VERIFICATION_ALREADY_DECIDED`, `VERIFICATION_PENDING`, `HOTEL_NOT_FOUND`, `HOTEL_STATUS_CONFLICT`, `PARTNER_SUSPENDED` |
 | Withdrawals | `PAYOUT_NOT_FOUND`, `PAYOUT_STATUS_CONFLICT` |
-| Compliance (Draft) | `VIOLATION_NOT_FOUND`, `VIOLATION_STATUS_CONFLICT`, `SUSPENSION_REQUEST_PENDING`, `PARTNER_NOT_FOUND`, `UPLOAD_INVALID_FILE` |
+| Compliance | `VIOLATION_NOT_FOUND`, `VIOLATION_STATUS_CONFLICT`, `SUSPENSION_REQUEST_PENDING`, `PARTNER_NOT_FOUND`, `PARTNER_SUSPENDED` (409), `HOTEL_NOT_FOUND`, `UPLOAD_INVALID_FILE` |
 | Every route | `VALIDATION_ERROR` (missing reason, bad period), `FORBIDDEN` |
 
 Details: [api-guide.md §4.3](../api-guide.md#43-error-codes).

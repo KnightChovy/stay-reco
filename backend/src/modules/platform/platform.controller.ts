@@ -8,6 +8,9 @@ import {
   hotelRevenueRowResponseSchema,
   platformCashflowResponseSchema,
   platformExportQuerySchema,
+  platformHotelListQuerySchema,
+  platformHotelRowResponseSchema,
+  platformOverviewResponseSchema,
   platformRangeQuerySchema,
   platformRevenueQuerySchema,
   platformRevenueResponseSchema,
@@ -27,9 +30,11 @@ import { UserRole } from '../../generated/prisma/client';
 import { XLSX_MIME } from '../stats/stats-export.service';
 import { PlatformExportService } from './platform-export.service';
 import { PlatformLedgerService } from './platform-ledger.service';
+import { PlatformOpsService } from './platform-ops.service';
 import { PlatformStatsService } from './platform-stats.service';
 
 class PlatformRangeQueryDto extends zodDto(platformRangeQuerySchema) {}
+class PlatformHotelListQueryDto extends zodDto(platformHotelListQuerySchema) {}
 class PlatformRevenueQueryDto extends zodDto(platformRevenueQuerySchema) {}
 class HotelRevenueListQueryDto extends zodDto(hotelRevenueListQuerySchema) {}
 class CommissionListQueryDto extends zodDto(commissionListQuerySchema) {}
@@ -50,7 +55,28 @@ export class PlatformController {
     private readonly stats: PlatformStatsService,
     private readonly ledger: PlatformLedgerService,
     private readonly exporter: PlatformExportService,
+    private readonly ops: PlatformOpsService,
   ) {}
+
+  @ApiOperation({
+    summary: 'The manager dashboard',
+    description: `Partners, hotels and customers (new ones against the previous period), bookings, GMV and commission, and the action queue: verifications, withdrawals (with the overdue ones), content reports, compliance cases and suspension requests waiting now. ${PERIOD}`,
+  })
+  @ApiData(platformOverviewResponseSchema)
+  @Get('stats/overview')
+  overview(@Query() query: PlatformRangeQueryDto) {
+    return this.ops.overview(query);
+  }
+
+  @ApiOperation({
+    summary: 'Every hotel past the draft stage, to monitor the partners',
+    description: `Status, partner, rooms, last verification, bookings, cancellation rate and GMV of the period, rating over all visible reviews, open compliance cases. \`search\` matches the hotel or the partner name (Vietnamese marks ignored); \`status\` and \`partnerStatus\` may be repeated. ${PERIOD}`,
+  })
+  @ApiPage(platformHotelRowResponseSchema)
+  @Get('hotels')
+  hotelsList(@Query() query: PlatformHotelListQueryDto) {
+    return this.ops.hotels(query);
+  }
 
   @ApiOperation({
     summary: 'Platform revenue of a period compared with the previous one',

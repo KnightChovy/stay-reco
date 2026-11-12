@@ -78,3 +78,30 @@ export const platformExportQuerySchema = z
   .object({ ...range, report: z.enum(PLATFORM_REPORTS) })
   .superRefine(checkRange);
 export type PlatformExportQuery = z.infer<typeof platformExportQuerySchema>;
+
+/** Hotel statuses past the draft stage, the ones the hotels list shows. */
+export const LISTED_HOTEL_STATUSES = ['PENDING_VERIFICATION', 'ACTIVE', 'SUSPENDED', 'INACTIVE'] as const;
+export const PARTNER_STATUSES = ['PENDING', 'APPROVED', 'REJECTED', 'SUSPENDED'] as const;
+
+export const PLATFORM_HOTEL_SORTS = [
+  'bookings-desc',
+  'cancellationRate-desc',
+  'rating-asc',
+  'gmv-desc',
+  'name-asc',
+] as const;
+
+/**
+ * `GET /platform/hotels` (SRS 3.14.4): one row per hotel; `search` matches the hotel or the partner name. Figures over
+ * the period (default the last 30 days); the rating is over all visible reviews.
+ */
+export const platformHotelListQuerySchema = listQuerySchema
+  .extend({
+    ...range,
+    status: repeatedQuery(z.enum(LISTED_HOTEL_STATUSES)).optional(),
+    partnerStatus: repeatedQuery(z.enum(PARTNER_STATUSES)).optional(),
+    region: z.enum(REGIONS).optional(),
+    sort: z.enum(PLATFORM_HOTEL_SORTS).default('bookings-desc'),
+  })
+  .superRefine(checkRange);
+export type PlatformHotelListQuery = z.infer<typeof platformHotelListQuerySchema>;

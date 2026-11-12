@@ -152,3 +152,58 @@ export const platformCashflowResponseSchema = z
   })
   .register(responseSchemas, { id: 'PlatformCashflow' });
 export type PlatformCashflow = z.infer<typeof platformCashflowResponseSchema>;
+
+// ── Manager dashboard and hotels ────────────────────────────
+
+const countMetric = metricResponseSchema;
+
+export const platformOverviewResponseSchema = z
+  .object({
+    generatedAt: generatedAt(),
+    period: statsPeriodResponseSchema,
+    previous: statsPeriodResponseSchema,
+    partners: z.object({ active: z.number().int().describe('Approved partners now.'), new: countMetric }),
+    hotels: z.object({
+      active: z.number().int(),
+      new: countMetric.describe('Hotels whose first verification was approved in the period.'),
+    }),
+    customers: z.object({ total: z.number().int(), new: countMetric }),
+    bookings: metricResponseSchema,
+    gmv: metricResponseSchema,
+    commission: metricResponseSchema,
+    queue: z
+      .object({
+        verifications: z.object({ pending: z.number().int(), oldestSubmittedAt: isoDateTime().nullable() }),
+        payouts: z.object({
+          pending: z.number().int(),
+          amount: z.number(),
+          overdue: z.number().int().describe('Still pending 2 working days after the request.'),
+          oldestRequestedAt: isoDateTime().nullable(),
+        }),
+        contentReports: z.object({ open: z.number().int(), oldestCreatedAt: isoDateTime().nullable() }),
+        complianceCases: z.object({ open: z.number().int(), critical: z.number().int() }),
+        suspensionRequests: z.object({ pending: z.number().int() }),
+      })
+      .describe('What waits for the platform now, each block linking to its list.'),
+  })
+  .register(responseSchemas, { id: 'PlatformOverview' });
+export type PlatformOverview = z.infer<typeof platformOverviewResponseSchema>;
+
+export const platformHotelRowResponseSchema = z
+  .object({
+    id: z.uuid(),
+    name: z.string(),
+    city: z.string(),
+    region: z.enum(REGIONS),
+    status: z.enum(HotelStatus),
+    partner: z.object({ id: z.uuid(), name: z.string(), status: z.enum(PartnerStatus) }),
+    rooms: z.number().int(),
+    verifiedAt: isoDateTime().nullable().describe('When its latest verification request was approved.'),
+    bookings: z.number().int().describe('Bookings paid in the period.'),
+    cancellationRate: z.number().nullable(),
+    gmv: z.number(),
+    rating: z.object({ average: z.number().nullable(), count: z.number().int() }),
+    openCases: z.number().int().describe('Open or investigating compliance cases about this hotel.'),
+  })
+  .register(responseSchemas, { id: 'PlatformHotelRow' });
+export type PlatformHotelRow = z.infer<typeof platformHotelRowResponseSchema>;
