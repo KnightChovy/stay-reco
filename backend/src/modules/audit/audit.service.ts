@@ -94,6 +94,18 @@ export enum AuditAction {
   PAYOUT_REJECTED = 'PAYOUT_REJECTED',
   /** The partner took the request back. */
   PAYOUT_CANCELLED = 'PAYOUT_CANCELLED',
+  /**
+   * Compliance cases (BR-15, M8): events of a `policy_violation`. OPENED holds the hotel concerned and the evidence
+   * file ids; UPDATED the status or severity set and the manager's note.
+   */
+  VIOLATION_OPENED = 'VIOLATION_OPENED',
+  VIOLATION_UPDATED = 'VIOLATION_UPDATED',
+  /** A platform manager asks the admin to suspend the partner of a case; `new_value` holds the reason. */
+  SUSPENSION_REQUESTED = 'SUSPENSION_REQUESTED',
+  /** The admin suspended the partner; `new_value` holds the reason. */
+  SUSPENSION_APPROVED = 'SUSPENSION_APPROVED',
+  /** The admin kept the partner as it was; `new_value` holds the reason. */
+  SUSPENSION_REJECTED = 'SUSPENSION_REJECTED',
 }
 
 /** audit_log has one actor column per role; the account id is the role row's id. */

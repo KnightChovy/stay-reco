@@ -177,6 +177,16 @@ export const ErrorCode = {
   /** The withdrawal is no longer pending (paid, rejected or cancelled in the meantime). */
   PAYOUT_STATUS_CONFLICT: 'PAYOUT_STATUS_CONFLICT',
 
+  // Compliance (BR-15, decision M8)
+  /** The compliance case doesn't exist. */
+  VIOLATION_NOT_FOUND: 'VIOLATION_NOT_FOUND',
+  /** The case is closed, or the status change does not follow OPEN → INVESTIGATING → RESOLVED / DISMISSED. */
+  VIOLATION_STATUS_CONFLICT: 'VIOLATION_STATUS_CONFLICT',
+  /** The partner already has a suspension request waiting for the admin. */
+  SUSPENSION_REQUEST_PENDING: 'SUSPENSION_REQUEST_PENDING',
+  /** The hotel partner doesn't exist. */
+  PARTNER_NOT_FOUND: 'PARTNER_NOT_FOUND',
+
   // Payments
   /** A webhook call (SePay) with a missing or wrong API key; nothing is processed. Not a client error to refresh. */
   INVALID_API_KEY: 'INVALID_API_KEY',

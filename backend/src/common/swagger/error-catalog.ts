@@ -336,6 +336,24 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorInfo> = {
     description:
       'The hotel has no approved verification with a beneficiary account',
   },
+  VIOLATION_NOT_FOUND: {
+    status: 404,
+    description: "Compliance case doesn't exist",
+  },
+  VIOLATION_STATUS_CONFLICT: {
+    status: 409,
+    description:
+      'The case is closed, or the change does not follow OPEN → INVESTIGATING → RESOLVED / DISMISSED',
+  },
+  SUSPENSION_REQUEST_PENDING: {
+    status: 409,
+    description:
+      'The partner already has a suspension request waiting for the admin',
+  },
+  PARTNER_NOT_FOUND: {
+    status: 404,
+    description: "Hotel partner doesn't exist",
+  },
   PAYOUT_STATUS_CONFLICT: {
     status: 409,
     description:
