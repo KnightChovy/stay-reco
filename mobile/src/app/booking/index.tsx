@@ -9,6 +9,7 @@ import { createBookingSchema, type ErrorDetail } from '@stayreco/shared';
 import { ScreenHeader } from '@/components/layout/AppHeader';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Chip } from '@/components/ui/chip';
 import { Icon, type IconName } from '@/components/ui/icon';
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
@@ -18,6 +19,7 @@ import { PriceLine } from '@/features/booking/PriceLine';
 import { images } from '@/lib/mock-data';
 import { formatDate, formatVnd, nightsBetween, stayFromParams } from '@/lib/stay';
 import { createBooking } from '@/services/bookings.service';
+import { getDiscountQuote, getMyVouchers } from '@/services/rewards.service';
 import { hotelListingQuery } from '@/services/stays.service';
 import { useAuthStore } from '@/stores/auth.store';
 
@@ -33,6 +35,13 @@ function CardTitle({ icon, title }: { icon: IconName; title: string }) {
 }
 
 type ApiError = AxiosError<{ code?: string; message?: string; details?: ErrorDetail[] }>;
+
+const codeErrors: Record<string, string> = {
+  VOUCHER_NOT_FOUND: 'Mã giảm giá không tồn tại.',
+  VOUCHER_ALREADY_USED: 'Mã này đã được dùng cho một đơn khác.',
+  VOUCHER_EXPIRED: 'Mã này đã hết hạn.',
+  VOUCHER_NOT_APPLICABLE: 'Mã không áp dụng cho khách sạn hoặc giá trị đơn này.',
+};
 
 export default function BookingInfoScreen() {
   const insets = useSafeAreaInsets();
@@ -55,6 +64,70 @@ export default function BookingInfoScreen() {
   const [agreed, setAgreed] = useState(false);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [codeInput, setCodeInput] = useState('');
+  const [code, setCode] = useState<string>();
+  const [codeError, setCodeError] = useState('');
+  const [applying, setApplying] = useState(false);
+  const [usePoints, setUsePoints] = useState(false);
+
+  // Backend tính giảm giá và điểm (BR-06, BR-11); app chỉ hiển thị và gửi lại đúng expectedTotal.
+  const quoteQuery = (pointsToUse: number, withCode = code) => ({
+    queryKey: ['discount-quote', params.roomTypeId, stay.checkIn, stay.checkOut, stay.rooms, withCode ?? null, pointsToUse],
+    queryFn: () =>
+      getDiscountQuote({
+        roomTypeId: params.roomTypeId,
+        checkIn: stay.checkIn,
+        checkOut: stay.checkOut,
+        rooms: stay.rooms,
+        ...(withCode ? { code: withCode } : {}),
+        ...(pointsToUse ? { pointsToUse } : {}),
+      }),
+  });
+  const baseQuote = useQuery({ ...quoteQuery(0), enabled: !!account && !!offer });
+  const maxPoints = baseQuote.data?.points?.maxPointsUsable ?? 0;
+  // Mặc định dùng tối đa; khách gõ số khác thì giữ số đó nhưng không vượt mức tối đa của báo giá hiện tại.
+  const [chosenPoints, setChosenPoints] = useState<number>();
+  const [pointsInput, setPointsInput] = useState<string>();
+  const pointsToUse = usePoints ? Math.min(chosenPoints ?? maxPoints, maxPoints) : 0;
+  const pointsQuote = useQuery({ ...quoteQuery(pointsToUse), enabled: !!account && pointsToUse > 0 });
+  const quote = pointsToUse > 0 ? pointsQuote.data : baseQuote.data;
+  const total = quote?.expectedTotal ?? offer?.total ?? 0;
+  const commitPoints = () => {
+    if (pointsInput === undefined) return;
+    const n = Number.parseInt(pointsInput.replace(/\D/g, ''), 10);
+    setChosenPoints(Number.isNaN(n) ? undefined : Math.max(0, Math.min(n, maxPoints)));
+    setPointsInput(undefined);
+  };
+
+  // shortcut: gợi ý 20 voucher còn dùng được đầu tiên, đủ cho màn đặt phòng; danh sách đầy đủ ở Điểm thưởng.
+  const myVouchers = useQuery({
+    queryKey: ['vouchers', 'active', 'suggest'],
+    queryFn: () => getMyVouchers({ active: true, page: 1, pageSize: 20 }),
+    enabled: !!account,
+  });
+  // Voucher của khách sạn khác sẽ bị từ chối (VOUCHER_NOT_APPLICABLE), nên chỉ gợi ý voucher dùng được ở đây.
+  const suggestions = myVouchers.data?.vouchers.filter((v) => v.hotelId === null || v.hotelId === params.hotelId) ?? [];
+
+  const applyCode = async (raw = codeInput) => {
+    const typed = raw.trim().toUpperCase();
+    if (!typed) return;
+    setCodeError('');
+    setApplying(true);
+    try {
+      await queryClient.fetchQuery(quoteQuery(0, typed));
+      setCode(typed);
+    } catch (err) {
+      const body = (err as ApiError).response?.data;
+      setCodeError((body?.code && codeErrors[body.code]) || body?.message || 'Không kiểm tra được mã. Vui lòng thử lại.');
+    } finally {
+      setApplying(false);
+    }
+  };
+  const removeCode = () => {
+    setCode(undefined);
+    setCodeInput('');
+    setCodeError('');
+  };
 
   const submit = async (expectedTotal: number) => {
     const input = createBookingSchema.safeParse({
@@ -66,6 +139,8 @@ export default function BookingInfoScreen() {
       guestName: name,
       contactPhone: phone,
       ...(requests.trim() ? { specialRequests: requests } : {}),
+      ...(code ? { code } : {}),
+      ...(usePoints && quote?.points?.pointsUsed ? { pointsToUse: quote.points.pointsUsed } : {}),
       expectedTotal,
     });
     if (!input.success) {
@@ -85,10 +160,19 @@ export default function BookingInfoScreen() {
         const newTotal = Number(body.details?.find((d) => d.field === 'expectedTotal')?.message);
         // Tải lại giá để chi tiết giá và tổng tiền trên màn hiện theo giá mới.
         void queryClient.invalidateQueries({ queryKey: ['stays', 'hotel', params.hotelId] });
+        void queryClient.invalidateQueries({ queryKey: ['discount-quote'] });
         Alert.alert('Giá phòng đã thay đổi', `Tổng tiền mới là ${formatVnd(newTotal)}. Bạn có muốn tiếp tục đặt phòng?`, [
           { text: 'Hủy', style: 'cancel' },
           { text: 'Đặt với giá mới', onPress: () => void submit(newTotal) },
         ]);
+      } else if (body?.code && codeErrors[body.code]) {
+        // Mã vừa hết lượt / hết hạn giữa lúc báo giá và lúc đặt.
+        removeCode();
+        setCodeError(codeErrors[body.code]);
+      } else if (body?.code === 'LOYALTY_POINTS_INSUFFICIENT') {
+        setUsePoints(false);
+        void queryClient.invalidateQueries({ queryKey: ['discount-quote'] });
+        setError('Số điểm StayMiles không còn đủ. Vui lòng kiểm tra lại tổng tiền.');
       } else if (body?.code === 'ROOM_SOLD_OUT') {
         setError('Rất tiếc, hạng phòng này vừa hết phòng cho ngày bạn chọn. Vui lòng chọn phòng khác.');
         void queryClient.invalidateQueries({ queryKey: ['stays', 'hotel', params.hotelId] });
@@ -249,15 +333,117 @@ export default function BookingInfoScreen() {
             />
           ))}
           <PriceLine label="Thuế VAT & Phí phục vụ" value="Đã bao gồm" />
+          {quote?.discount && (
+            <PriceLine
+              icon="sell"
+              tone={colors.tertiary}
+              label={quote.discount.code ? `Mã ${quote.discount.code}` : quote.discount.name}
+              value={`-${formatVnd(quote.discount.amount)}`}
+            />
+          )}
+          {usePoints && !!quote?.points?.amount && (
+            <PriceLine
+              icon="stars"
+              tone={colors.tertiary}
+              label={`${quote.points.pointsUsed.toLocaleString('vi-VN')} điểm StayMiles`}
+              value={`-${formatVnd(quote.points.amount)}`}
+            />
+          )}
           <View className="h-px bg-surface-container-high" />
           <View className="flex-row items-center justify-between gap-2">
             <Text variant="label" weight="bold">
               Tổng tiền thanh toán
             </Text>
             <Text variant="price" color={colors.primary}>
-              {formatVnd(offer.total)}
+              {formatVnd(total)}
             </Text>
           </View>
+        </View>
+
+        <View className="gap-3 rounded-lg bg-surface-container-lowest p-4 shadow-card">
+          <CardTitle icon="sell" title="Ưu đãi" />
+          {code ? (
+            <View className="flex-row items-center justify-between gap-2 rounded-md bg-surface-container-low p-3">
+              <Text variant="small" weight="bold" className="flex-1">
+                Đã áp dụng mã {code}
+              </Text>
+              <Button label="Bỏ mã" variant="ghost" size="sm" onPress={removeCode} />
+            </View>
+          ) : (
+            <View className="flex-row items-end gap-2">
+              <View className="flex-1">
+                <Input
+                  placeholder="Nhập mã giảm giá"
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  value={codeInput}
+                  onChangeText={setCodeInput}
+                />
+              </View>
+              <Button
+                label={applying ? 'Đang kiểm tra...' : 'Áp dụng'}
+                variant="secondary"
+                style={{ minHeight: 52 }}
+                disabled={applying || !codeInput.trim()}
+                onPress={() => void applyCode()}
+              />
+            </View>
+          )}
+          {!code && suggestions.length > 0 && (
+            <View className="gap-2">
+              <Text variant="caption" color={colors.onSurfaceVariant}>
+                Voucher của bạn dùng được ở đây:
+              </Text>
+              <View className="flex-row flex-wrap gap-2">
+                {suggestions.map((v) => (
+                  <Chip
+                    key={v.id}
+                    icon="confirmation_number"
+                    label={`${v.code} • ${v.discountType === 'PERCENTAGE' ? `${v.discountValue}%` : formatVnd(v.discountValue)}`}
+                    tone="outline"
+                    onPress={
+                      applying
+                        ? undefined
+                        : () => {
+                            setCodeInput(v.code);
+                            void applyCode(v.code);
+                          }
+                    }
+                  />
+                ))}
+              </View>
+            </View>
+          )}
+          {!!codeError && (
+            <Text variant="caption" color={colors.error}>
+              {codeError}
+            </Text>
+          )}
+          {!code && quote?.discount?.kind === 'PROMOTION' && (
+            <Text variant="caption" color={colors.onSurfaceVariant}>
+              Đang tự áp dụng khuyến mãi {quote.discount.name}. Mã giảm giá chỉ được dùng khi giảm nhiều hơn.
+            </Text>
+          )}
+          {maxPoints > 0 && (
+            <View className="flex-row items-center gap-2">
+              <Checkbox checked={usePoints} onChange={setUsePoints} />
+              <Text variant="small" className="flex-1">
+                Dùng điểm StayMiles (đang có {baseQuote.data!.points!.pointsBalance.toLocaleString('vi-VN')} điểm, dùng tối đa{' '}
+                {maxPoints.toLocaleString('vi-VN')})
+              </Text>
+            </View>
+          )}
+          {usePoints && maxPoints > 0 && (
+            <Input
+              label="Số điểm muốn dùng"
+              keyboardType="number-pad"
+              returnKeyType="done"
+              value={pointsInput ?? String(pointsToUse)}
+              onChangeText={setPointsInput}
+              onEndEditing={commitPoints}
+              onSubmitEditing={commitPoints}
+            />
+          )}
         </View>
 
         <View className="flex-row items-center gap-2 rounded-lg bg-tertiary-fixed p-4">
@@ -293,7 +479,7 @@ export default function BookingInfoScreen() {
             Tổng tiền ({nights} đêm)
           </Text>
           <Text variant="h3" weight="bold" color={colors.primary}>
-            {formatVnd(offer.total)}
+            {formatVnd(total)}
           </Text>
         </View>
         <Button
@@ -301,8 +487,9 @@ export default function BookingInfoScreen() {
           leadingIcon="lock"
           size="sm"
           className="flex-1" style={{ minHeight: 52 }}
-          disabled={!agreed || submitting}
-          onPress={() => void submit(offer.total)}
+          // Chờ báo giá để không gửi tổng chưa trừ khuyến mãi tự áp dụng.
+          disabled={!agreed || submitting || baseQuote.isPending || (pointsToUse > 0 && pointsQuote.isPending) || pointsInput !== undefined}
+          onPress={() => void submit(total)}
         />
       </View>
     </View>
