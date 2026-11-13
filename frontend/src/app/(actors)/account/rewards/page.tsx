@@ -64,8 +64,9 @@ function ErrorRow({ error, onRetry }: { error: unknown; onRetry: () => void }) {
 /** StayMiles balance, tier and how far the next tier is (`GET /me/loyalty`). */
 function PointsBanner({ account }: { account: LoyaltyAccount }) {
   const next = account.nextTier;
-  const from = TIER_THRESHOLDS[account.tier];
-  const to = next ? TIER_THRESHOLDS[next.tier] : from;
+  // The next mark comes from the API; only the start of the current tier is a local constant, capped by what was earned.
+  const from = Math.min(TIER_THRESHOLDS[account.tier], account.lifetimePoints);
+  const to = next ? account.lifetimePoints + next.pointsNeeded : from;
   const progress = next ? Math.min(100, Math.round(((account.lifetimePoints - from) / Math.max(1, to - from)) * 100)) : 100;
 
   return (
