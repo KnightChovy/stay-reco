@@ -84,6 +84,21 @@ Four things this had to get right, each with a test:
 
 **App review still gates less than it appears to.** In Development mode this flow is real for anyone holding a role in the app - Admin, Developer, Tester - on pages they administer, so a hotel can connect its own page through the product today by being invited as a Tester. Review plus **Business Verification** are what open it to hotels outside the app, and verification wants a registered legal entity: a company matter, not a code one. Leaving Development mode is the whole migration.
 
+### What the first real post taught (M17, 2026-11-13)
+
+A draft went from Gemini through approval and the job onto a live Page on 2026-11-13 for $0.000856. Publishing worked first time. Reading the figures back did not, and the three reasons were all invisible to the test suite, because a fake publisher answers whatever it is told to:
+
+| # | Decision |
+|---|---|
+| M17 | **Each figure is fetched so that a refusal costs only that figure.** Meta puts them behind three different permissions - `shares` behind none, `likes.summary` behind `pages_read_engagement`, `comments.summary` behind `pages_read_user_content` - and asking for all three at once meant one refusal returned nothing at all, on a post whose shares were readable. The combined call is still tried first, so a fully-permitted page costs one request, not three. |
+
+Two findings worth keeping, because both are Meta contradicting itself and both cost an afternoon:
+
+- **`comments.summary` requires a permission that cannot be granted.** `pages_read_user_content` was retired from the OAuth dialog - ask for it and the dialog answers `Invalid Scopes` - but the Graph API still demands it to read a comment count. Comments are therefore unobtainable on a Page connected today, regardless of what the app asks for.
+- **`post_impressions` was retired in June 2026 across every API version**, replaced by `post_media_view`. It does not fail loudly: it answers `(#100) The value must be a valid insights metric`, which the `catch` around insights turned into a permanent, silent zero. A test with a fake publisher would never have caught it, and neither would a reviewer - the code looked right. This is the argument for publishing to a real page once before calling a feature done.
+
+A figure we are refused is still recorded as zero, which the API documents as "check the token's scopes" rather than "nobody engaged". Distinguishing the two needs a nullable column and is open below.
+
 ### The model: Gemini, not Claude (2026-11-12)
 
 The writer calls **Gemini** (`gemini-3.8-flash` by default), because that is what the team codes against. Only `ai.service.ts` and the price table changed — M3's single door is what made the swap that small, which is the clearest evidence it was worth insisting on.
@@ -161,6 +176,8 @@ Still open:
 - [ ] Is $5 a hotel a month the right cap, and should a partner be able to raise it? At $0.0005 a draft it is ~9,000 drafts, which looks generous rather than tight.
 - [ ] A page the owner disconnects on Facebook's side, rather than ours, is only noticed when a post fails. Nothing polls `/debug_token`.
 - [ ] Nothing warns an owner before a token expires. `usable` turns false and the next post fails with a clear reason, which is late but not silent.
+- [ ] A figure Meta refuses is stored as `0`, the same as a figure that is genuinely nought. Telling them apart needs nullable columns on `content_metric`, and the UI would have to say "not available" rather than draw a zero.
+- [ ] `POST /social-accounts` still inserts rather than upserts, so pasting a token for a page that is already connected adds a second row. The unique index added for M16 makes that a constraint error rather than a duplicate, but the error is not the one the caller deserves.
 - [ ] A post longer than a platform's limit is sent and refused, rather than caught first. Postiz's `checkValidity()` is the shape of the fix.
 
 ## Definition of Done
@@ -175,6 +192,7 @@ Still open:
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-11-13 | Phúc | First real post, and three bugs only a real post could find (M17): `post_impressions` was retired by Meta in June 2026 and its replacement, "must be a valid insights metric", was being swallowed into a permanent zero; the three engagement counts shared one request, so one forbidden figure took the other two with it; and `comments.summary` turns out to sit behind a permission Meta's own dialog rejects as invalid. Each figure now degrades on its own. 5 unit tests |
 | 2026-11-13 | Phúc | The owner-facing connect flow (M16): three endpoints, no token typed or seen, state and connection handle encrypted rather than stored, pages read from Facebook again before anything is written, reconnect updating the row a published post points at. One migration (unique page per hotel), three error codes, 22 e2e |
 | 2026-11-12 | Phúc | Pages, calendar, publishing and metrics built (M7–M15): staff write and the owner approves, ideas read out of the hotel's own figures, approved content scheduled onto connected Facebook and Instagram pages by a job that is the only writer, tokens encrypted at rest, platform refusals recorded with the platform's own words, and each metrics refresh kept as its own reading. TikTok deliberately refused with its reason. The AI writer also moved from Claude to Gemini — one file, because every call already went through one door. Eight new error codes, one migration, [../social-setup.md](../social-setup.md), and 359 e2e across 31 suites |
 | 2026-11-12 | Phúc | Brand voice and the AI cost cap built (M1–M6): voice learned from the hotel's own posts, `ai_usage` logging every call, a monthly dollar cap per hotel, and the writer switched off cleanly when no API key is set. Three new error codes and [api/marketing.md](../api/marketing.md) |

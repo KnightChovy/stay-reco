@@ -86,8 +86,8 @@ Open the [Graph API Explorer](https://developers.facebook.com/tools/explorer), p
 |---|---|
 | `pages_show_list` | to find the Page id at all |
 | `pages_manage_posts` | to publish |
-| `pages_read_engagement` | likes, comments and shares |
-| `read_insights` | impressions, which is the `views` figure |
+| `pages_read_engagement` | the likes count |
+| `read_insights` | the `views` figure |
 | `instagram_basic`, `instagram_content_publish` | only if Instagram is also being connected |
 
 What you get is a **user** token that lasts an hour or two. It is not what to paste.
@@ -121,6 +121,10 @@ GET https://graph.facebook.com/debug_token
 ```
 
 `expires_at: 0` means it does not expire. Confirm the `scopes` list holds the permissions from step 2 — a token missing `read_insights` publishes fine and then reports every post as 0 views.
+
+**A Page token carries the scopes its user token held at the moment it was read.** Granting a permission afterwards does not strengthen a token already issued: step 4 has to be run again to mint a new one. That is the usual reason a figure stays zero after the permission was plainly granted.
+
+**Engagement figures are fetched one at a time when the token cannot read them all**, so a refused figure costs only itself. `shares` needs no permission, which is why it is the one that still arrives when the others do not.
 
 ## Instagram: the same token, a different id
 
@@ -180,7 +184,8 @@ The token is encrypted on the way in and has **no field in any response**: it is
 | `failureReason: "…has no usable token: reconnect it"` | same, caught before the platform was called |
 | `Error validating access token: Session has expired` | the platform rejected it. A user token was pasted instead of a Page token, or the password changed |
 | `(#200) Requires pages_manage_posts` | step 2's permissions were not all granted |
-| Published fine, `views: 0` forever | `read_insights` is missing from the token's scopes |
+| Published fine, every figure `0` | the token may read none of them. `likes` needs `pages_read_engagement`, `views` needs `read_insights`; `shares` needs nothing, so a non-zero `shares` beside zero likes points at a permission, not a quiet post |
+| `comments` always `0`, the rest right | expected, and nothing to fix. `comments.summary` sits behind `pages_read_user_content`, which Meta's own OAuth dialog rejects as an invalid scope - ask for it and the dialog answers `Invalid Scopes`. It cannot be held on a Page connected today |
 | `503 SOCIAL_OAUTH_DISABLED` | `META_APP_ID`, `META_APP_SECRET` or `META_OAUTH_REDIRECT_URI` is empty on the server |
 | `400 SOCIAL_OAUTH_INVALID`, "not one we started" | the `state` or `connectionToken` was not signed by this server, or the key changed |
 | `400 SOCIAL_OAUTH_INVALID`, "expired" | more than 15 minutes on the consent screen, or 10 minutes picking pages. Start again |

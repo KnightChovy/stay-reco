@@ -46,51 +46,110 @@ export class FacebookPublisher implements SocialPublisher {
   /**
    * How the post did.
    *
-   * Three of the four numbers come off the post itself with summary counts; impressions are an insight and live on
-   * a different edge, so this is two calls. Insights can be missing - a brand-new post, or a Page without the
-   * permission - and that is reported as zero views rather than as a failure, because a metrics refresh must never
-   * be the thing that breaks a published post's row.
+   * Every figure is fetched so that a refusal costs only that figure. Meta hands these out behind three different
+   * permissions, and an app rarely holds all of them: `shares` needs none, `likes.summary` needs
+   * `pages_read_engagement`, and `comments.summary` needs `pages_read_user_content` - which Meta's own OAuth
+   * dialog rejects as an invalid scope, so on a Page connected today comments are simply not obtainable. Asking
+   * for all three in one call, as this used to, meant one forbidden figure took the other two with it and a post
+   * with real shares reported nothing.
+   *
+   * A figure we are refused is reported as zero, the same as a brand-new post with no activity. That is the
+   * convention the schema allows, and it is why the API documents a column of zeroes as "check the token's
+   * scopes" rather than "nobody engaged". A refresh must never be the thing that breaks a published post's row.
    */
   async metrics(
     target: PublishTarget,
     externalPostId: string,
   ): Promise<PostMetrics> {
-    const counts = await graphCall<{
-      likes?: { summary?: { total_count?: number } };
-      comments?: { summary?: { total_count?: number } };
-      shares?: { count?: number };
-    }>(
-      'Facebook',
-      this.version,
-      externalPostId,
-      {
-        access_token: target.accessToken,
-        fields: 'likes.summary(true),comments.summary(true),shares',
-      },
-      'GET',
+    const [counts, views] = await Promise.all([
+      this.counts(target, externalPostId),
+      this.views(target, externalPostId),
+    ]);
+    return { views, ...counts };
+  }
+
+  /**
+   * The three engagement counts: one call when the token may read all of them, otherwise one call each.
+   *
+   * The combined call is tried first because that is one request instead of three on a page where everything is
+   * permitted, and the fallback only runs on the refusal.
+   */
+  private async counts(target: PublishTarget, postId: string) {
+    const together = await this.field<CountsAnswer>(
+      target,
+      postId,
+      'likes.summary(true),comments.summary(true),shares',
     );
+    if (together) return shapeCounts(together);
 
-    let views = 0;
-    try {
-      const insights = await graphCall<{
-        data?: { values?: { value?: number }[] }[];
-      }>(
-        'Facebook',
-        this.version,
-        `${externalPostId}/insights`,
-        { access_token: target.accessToken, metric: 'post_impressions' },
-        'GET',
-      );
-      views = insights.data?.[0]?.values?.[0]?.value ?? 0;
-    } catch {
-      views = 0;
-    }
-
+    const [likes, comments, shares] = await Promise.all([
+      this.field<CountsAnswer>(target, postId, 'likes.summary(true)'),
+      this.field<CountsAnswer>(target, postId, 'comments.summary(true)'),
+      this.field<CountsAnswer>(target, postId, 'shares'),
+    ]);
     return {
-      views,
-      likes: counts.likes?.summary?.total_count ?? 0,
-      comments: counts.comments?.summary?.total_count ?? 0,
-      shares: counts.shares?.count ?? 0,
+      likes: shapeCounts(likes).likes,
+      comments: shapeCounts(comments).comments,
+      shares: shapeCounts(shares).shares,
     };
   }
+
+  /**
+   * Impressions, which live on their own edge.
+   *
+   * `post_impressions` was retired in June 2026 across every API version; `post_media_view` is what replaced it.
+   * The old name did not start failing loudly - it answers "must be a valid insights metric", which the catch
+   * below turned into a permanent zero. That is why the metric name is pinned here with the date it changed.
+   */
+  private async views(target: PublishTarget, postId: string): Promise<number> {
+    const insights = await this.read<InsightsAnswer>(
+      target,
+      `${postId}/insights`,
+      { metric: 'post_media_view' },
+    );
+    return insights?.data?.[0]?.values?.[0]?.value ?? 0;
+  }
+
+  /** One `fields=` read of the post, or null if Meta refused it. */
+  private field<T>(target: PublishTarget, postId: string, fields: string) {
+    return this.read<T>(target, postId, { fields });
+  }
+
+  /** A read that answers null instead of throwing: the caller wants a figure, not an exception. */
+  private async read<T>(
+    target: PublishTarget,
+    path: string,
+    params: Record<string, string>,
+  ): Promise<T | null> {
+    try {
+      return await graphCall<T>(
+        'Facebook',
+        this.version,
+        path,
+        { access_token: target.accessToken, ...params },
+        'GET',
+      );
+    } catch {
+      return null;
+    }
+  }
+}
+
+interface CountsAnswer {
+  likes?: { summary?: { total_count?: number } };
+  comments?: { summary?: { total_count?: number } };
+  shares?: { count?: number };
+}
+
+interface InsightsAnswer {
+  data?: { values?: { value?: number }[] }[];
+}
+
+/** Meta leaves a field out entirely when it is zero, so a missing count and a count of zero are the same thing. */
+function shapeCounts(answer: CountsAnswer | null) {
+  return {
+    likes: answer?.likes?.summary?.total_count ?? 0,
+    comments: answer?.comments?.summary?.total_count ?? 0,
+    shares: answer?.shares?.count ?? 0,
+  };
 }
