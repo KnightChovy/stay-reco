@@ -14,11 +14,13 @@ import { BookingProgress } from '@/features/booking/BookingProgress';
 import { PriceLine } from '@/features/booking/PriceLine';
 import { images } from '@/lib/mock-data';
 import { bookingStatusLabel, formatDate, formatVnd } from '@/lib/stay';
+import { apiErrorMessage } from '@/services/ApiService';
 import { getBooking, simulatePayment } from '@/services/bookings.service';
+import { getMyWallet, payWithWallet } from '@/services/rewards.service';
 
 /** Giây còn lại tới `expiresAt`, cập nhật mỗi giây. */
 function useSecondsLeft(expiresAt: string | null | undefined) {
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
@@ -51,6 +53,25 @@ export default function PaymentScreen() {
       .catch(() => {})
       .then(() => refetch())
       .finally(() => setSimulating(false));
+  };
+
+  const wallet = useQuery({ queryKey: ['wallet'], queryFn: getMyWallet });
+  const [payingWallet, setPayingWallet] = useState(false);
+  const [walletError, setWalletError] = useState('');
+  const payFromWallet = () => {
+    setPayingWallet(true);
+    setWalletError('');
+    void payWithWallet(id)
+      .then(() => {
+        void queryClient.invalidateQueries({ queryKey: ['wallet'] });
+        return refetch();
+      })
+      .catch((err: unknown) => {
+        setWalletError(apiErrorMessage(err, 'Không thanh toán được bằng ví. Vui lòng thử lại.'));
+        void wallet.refetch();
+        void refetch();
+      })
+      .finally(() => setPayingWallet(false));
   };
 
   useEffect(() => {
@@ -94,6 +115,9 @@ export default function PaymentScreen() {
     );
   }
 
+  const subtotal = booking.items.reduce((sum, i) => sum + i.subtotal, 0);
+  // W1: ví chỉ trả được cả đơn, không trả một phần.
+  const walletCovers = (wallet.data?.balanceAvailable ?? 0) >= payment.amount;
   const mm = `${Math.floor(secondsLeft / 60)}`.padStart(2, '0');
   const ss = `${secondsLeft % 60}`.padStart(2, '0');
 
@@ -135,7 +159,15 @@ export default function PaymentScreen() {
             </View>
           </View>
           <View className="gap-2 rounded-md bg-surface-container-low p-3">
-            <PriceLine label={`Tiền phòng (${booking.nights} đêm)`} value={formatVnd(booking.totalAmount)} />
+            <PriceLine label={`Tiền phòng (${booking.nights} đêm)`} value={formatVnd(subtotal)} />
+            {subtotal > booking.totalAmount && (
+              <PriceLine
+                label="Ưu đãi & điểm StayMiles"
+                icon="sell"
+                tone={colors.tertiary}
+                value={`-${formatVnd(subtotal - booking.totalAmount)}`}
+              />
+            )}
             <PriceLine label="Thuế VAT & Phí dịch vụ" value="Đã bao gồm" />
             <View className="h-px bg-surface-container-high" />
             <View className="flex-row items-center justify-between gap-2">
@@ -148,6 +180,32 @@ export default function PaymentScreen() {
             </View>
           </View>
         </View>
+
+        {walletCovers && (
+          <View className="gap-3 rounded-lg bg-surface-container-lowest p-4 shadow-card">
+            <View className="flex-row items-center gap-2">
+              <Icon name="account_balance_wallet" size={20} color={colors.primaryContainer} />
+              <Text variant="label" weight="bold" style={{ fontSize: 16, flexShrink: 1 }}>
+                Thanh toán bằng ví StayReco
+              </Text>
+            </View>
+            <Text variant="caption" color={colors.onSurfaceVariant}>
+              Số dư {formatVnd(wallet.data!.balanceAvailable)} đủ trả cả đơn. Đơn được xác nhận ngay, không cần chuyển khoản.
+            </Text>
+            <Button
+              label={payingWallet ? 'Đang thanh toán...' : `Trả ${formatVnd(payment.amount)} bằng ví`}
+              leadingIcon="account_balance_wallet"
+              variant="secondary"
+              disabled={payingWallet}
+              onPress={payFromWallet}
+            />
+          </View>
+        )}
+        {!!walletError && (
+          <Text variant="small" color={colors.error}>
+            {walletError}
+          </Text>
+        )}
 
         <View className="rounded-lg bg-surface-container-lowest p-4 shadow-card">
           <View className="flex-row items-center justify-between gap-2">

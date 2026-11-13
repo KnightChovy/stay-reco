@@ -14,6 +14,7 @@ import { colors, radius } from '@/constants/theme';
 import { images } from '@/lib/mock-data';
 import { bookingStatusLabel, formatDate, formatVnd } from '@/lib/stay';
 import { getMyBookings } from '@/services/bookings.service';
+import { getReviewEligibility } from '@/services/reviews.service';
 import { useAuthStore } from '@/stores/auth.store';
 
 type Tab = (typeof MY_BOOKING_TABS)[number];
@@ -52,6 +53,40 @@ function TripCardSkeleton() {
       </View>
     </View>
   );
+}
+
+/** Hỏi backend có viết đánh giá được không thay vì tự suy luật (hạn 30 ngày, một đánh giá mỗi đơn). */
+function ReviewAction({ bookingId }: { bookingId: string }) {
+  const { data } = useQuery({
+    queryKey: ['bookings', bookingId, 'review-eligibility'],
+    queryFn: () => getReviewEligibility(bookingId),
+  });
+  if (data?.canReview)
+    return (
+      <Button
+        label="Viết đánh giá"
+        leadingIcon="star"
+        size="lg"
+        onPress={() => router.push({ pathname: '/booking/review', params: { id: bookingId } })}
+      />
+    );
+  if (data?.reason === 'REVIEW_ALREADY_EXISTS' && data.reviewId) {
+    const reviewId = data.reviewId;
+    // Sửa được trong cùng hạn đánh giá; hết hạn thì chỉ còn lời cảm ơn.
+    return data.closesAt && new Date(data.closesAt) > new Date() ? (
+      <Button
+        label="Sửa đánh giá"
+        leadingIcon="edit"
+        variant="ghost"
+        onPress={() => router.push({ pathname: '/booking/review', params: { id: bookingId, reviewId } })}
+      />
+    ) : (
+      <Text variant="caption" color={colors.onSurfaceVariant} center>
+        Bạn đã đánh giá chuyến đi này. Cảm ơn bạn!
+      </Text>
+    );
+  }
+  return null;
 }
 
 function TripCard({ booking }: { booking: BookingSummary }) {
@@ -129,6 +164,7 @@ function TripCard({ booking }: { booking: BookingSummary }) {
             onPress={() => router.push({ pathname: '/confirmation', params: { id: booking.id } })}
           />
         )}
+        {booking.status === 'COMPLETED' && <ReviewAction bookingId={booking.id} />}
         {booking.paymentStatus === 'REFUND_PENDING' ? (
           <Text variant="caption" color={colors.onSurfaceVariant} center>
             Đã gửi yêu cầu hủy, đang chờ khách sạn duyệt hoàn tiền.

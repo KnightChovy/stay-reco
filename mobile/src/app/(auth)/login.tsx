@@ -32,8 +32,9 @@ export default function LoginScreen() {
     const result = await login(email.trim(), password, remember);
     setLoading(false);
     // Mở từ màn đặt phòng thì quay lại đó để đặt tiếp.
-    if (result.success) router.canGoBack() ? router.back() : router.replace('/');
-    else setError(result.message);
+    if (!result.success) setError(result.message);
+    else if (router.canGoBack()) router.back();
+    else router.replace('/');
   };
 
   return (

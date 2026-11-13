@@ -31,9 +31,11 @@ export default function StaffBookingsScreen() {
   const { filter: initial } = useLocalSearchParams<{ filter?: Filter }>();
   const [filter, setFilter] = useState<Filter>(initial ?? 'all');
   // Tab vẫn mounted khi quay lại, nên đổi bộ lọc theo param mỗi lần được mở bằng link mới.
-  useEffect(() => {
+  const [seenInitial, setSeenInitial] = useState(initial);
+  if (initial !== seenInitial) {
+    setSeenInitial(initial);
     if (initial && filters.some((f) => f.key === initial)) setFilter(initial);
-  }, [initial]);
+  }
   const [query, setQuery] = useState('');
   const [search, setSearch] = useState('');
   // Chờ người dùng ngừng gõ rồi mới gọi API.

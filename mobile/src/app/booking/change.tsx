@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Alert, ScrollView, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -42,15 +42,17 @@ export default function ChangeBookingScreen() {
   const [submitting, setSubmitting] = useState(false);
   const b = booking.data;
 
-  useEffect(() => {
-    if (b)
-      setForm({
-        guestName: b.guestName,
-        contactPhone: b.contactPhone,
-        arrivalTime: b.arrivalTime ?? '',
-        specialRequests: b.specialRequests ?? '',
-      });
-  }, [b]);
+  // Điền sẵn mỗi khi đơn được tải lại (cập nhật state lúc render, không cần effect).
+  const [filledFrom, setFilledFrom] = useState<typeof b>();
+  if (b && filledFrom !== b) {
+    setFilledFrom(b);
+    setForm({
+      guestName: b.guestName,
+      contactPhone: b.contactPhone,
+      arrivalTime: b.arrivalTime ?? '',
+      specialRequests: b.specialRequests ?? '',
+    });
+  }
 
   const set = (key: keyof typeof form) => (value: string) => setForm((f) => ({ ...f, [key]: value }));
 

@@ -14,7 +14,8 @@ import { colors } from '@/constants/theme';
 import { images } from '@/lib/mock-data';
 import { formatDate } from '@/lib/stay';
 import { apiErrorMessage } from '@/services/ApiService';
-import { updateProfile } from '@/services/auth.service';
+import { deleteAvatar, updateProfile, uploadAvatar } from '@/services/auth.service';
+import { pickImageForm } from '@/lib/pick-image';
 import { useAuthStore } from '@/stores/auth.store';
 
 const genders: { key: Gender; label: string }[] = [
@@ -64,6 +65,23 @@ export default function EditProfileScreen() {
     onError: (err) => setError(apiErrorMessage(err, 'Không lưu được hồ sơ. Vui lòng thử lại.')),
   });
 
+  // Ảnh đại diện lưu ngay, không chờ nút "Lưu thay đổi"; `remove` là xóa ảnh hiện tại.
+  const avatar = useMutation({
+    mutationFn: async (remove: boolean) => {
+      if (remove) {
+        await deleteAvatar();
+        return { avatarUrl: null };
+      }
+      const form = await pickImageForm();
+      return form && { avatarUrl: (await uploadAvatar(form)).avatarUrl };
+    },
+    onSuccess: (patch) => {
+      // Chỉ vá avatarUrl để không ghi đè các ô đang sửa dở trong store.
+      const current = useAuthStore.getState().account;
+      if (patch && current) useAuthStore.setState({ account: { ...current, ...patch } });
+    },
+  });
+
   const submit = () => {
     if (!fullName.trim()) return setError('Vui lòng nhập họ và tên.');
     const payload: UpdateProfileInput = { fullName: fullName.trim(), phone: phone.trim() || null };
@@ -96,6 +114,24 @@ export default function EditProfileScreen() {
       <ScrollView contentContainerClassName="gap-4 p-4 pb-8" showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         <View className="gap-4 rounded-lg bg-surface-container-lowest p-4 shadow-card items-center">
           <Image source={account.avatarUrl ?? images.avatar} className="h-24 w-24 rounded-full" contentFit="cover" />
+          <View className="flex-row gap-2">
+            <Button
+              label={avatar.isPending ? 'Đang xử lý…' : 'Đổi ảnh'}
+              leadingIcon="photo_library"
+              variant="secondary"
+              size="sm"
+              disabled={avatar.isPending}
+              onPress={() => avatar.mutate(false)}
+            />
+            {!!account.avatarUrl && (
+              <Button label="Xóa ảnh" leadingIcon="delete" variant="muted" size="sm" disabled={avatar.isPending} onPress={() => avatar.mutate(true)} />
+            )}
+          </View>
+          {avatar.isError && (
+            <Text variant="small" color={colors.error} center>
+              {apiErrorMessage(avatar.error, 'Không cập nhật được ảnh đại diện. Vui lòng thử lại.')}
+            </Text>
+          )}
           <Text variant="h2">{fullName || account.fullName}</Text>
           <Text variant="small" color={colors.onSurfaceVariant}>
             Thành viên từ {new Date(account.createdAt).toLocaleDateString('vi-VN', { month: '2-digit', year: 'numeric' })}
