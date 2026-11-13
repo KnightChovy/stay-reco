@@ -67,6 +67,18 @@ const errorMessages: Record<string, string> = {
   REVIEW_ALREADY_EXISTS: "Bạn đã đánh giá chuyến đi này rồi.",
   REVIEW_WINDOW_CLOSED: "Đã quá thời hạn đánh giá chuyến đi này.",
   RATING_CRITERION_NOT_FOUND: "Tiêu chí chấm điểm không còn tồn tại. Vui lòng tải lại trang.",
+  // Phase 5: AI marketing (docs/api/marketing.md).
+  AI_UNAVAILABLE: "Trợ lý viết AI chưa được cấu hình trên máy chủ (thiếu khoá Gemini) hoặc tạm thời không phản hồi.",
+  AI_BUDGET_EXCEEDED: "Khách sạn đã dùng hết ngân sách AI của tháng này. Ngân sách được làm mới vào đầu tháng sau.",
+  AI_REFUSED: "AI từ chối viết nội dung này. Hãy diễn đạt lại yêu cầu.",
+  CONTENT_NOT_FOUND: "Không tìm thấy nội dung. Danh sách đã được tải lại.",
+  CONTENT_STATUS_CONFLICT: "Trạng thái nội dung đã thay đổi nên không thể thực hiện thao tác này. Nội dung đã được tải lại.",
+  CONTENT_NOT_APPROVED: "Chỉ nội dung đã được chủ khách sạn duyệt mới lên lịch đăng được.",
+  SOCIAL_ACCOUNT_NOT_FOUND: "Không tìm thấy trang mạng xã hội đã kết nối.",
+  SCHEDULE_NOT_FOUND: "Không tìm thấy lịch đăng. Danh sách đã được tải lại.",
+  SCHEDULE_STATUS_CONFLICT: "Lịch đăng đã thay đổi trạng thái (đã đăng hoặc đã huỷ).",
+  SOCIAL_PUBLISH_FAILED: "Nền tảng mạng xã hội từ chối hoặc không phản hồi.",
+  SOCIAL_PLATFORM_UNSUPPORTED: "Nền tảng này chưa hỗ trợ đăng bài (TikTok, hoặc Instagram khi chưa có ảnh).",
 };
 
 /** Custom messages written in the shared zod schemas (packages/shared/src/schemas), also returned in `details`. */

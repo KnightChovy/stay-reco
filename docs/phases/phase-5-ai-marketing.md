@@ -6,7 +6,7 @@
 | API status | Marketing, all 27 endpoints: `BE Done` · recommendations: none yet |
 | Agreed on | Marketing: 2026-11-12 (M1–M15), 2026-11-13 (M16). Recommendations: not agreed yet |
 | BE owners | Phúc |
-| FE owners | |
+| FE owners | Web staff marketing screens: branch `feat/phase-5-frontend` |
 | API | [api/marketing.md](../api/marketing.md). As the other parts start: write their endpoints in [api/](../api/README.md) |
 
 > Rules for every API: [api-guide.md](../api-guide.md).
@@ -268,6 +268,7 @@ Still open:
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-11-13 | FE | Web staff marketing on `feat/phase-5-frontend`: `/staff/marketing/content` (ideas, AI writer, list), `/staff/marketing/content/[id]` (edit, picture, submit, schedule), `/staff/marketing/calendar`, `/staff/marketing/analytics`. Owner screens (approve, connect a page, brand voice) not connected yet |
 | 2026-11-13 | Phúc | Staff upload the picture instead of supplying a URL (M18): two endpoints on the same storage as hotel photos, the file deleted when replaced, removed or the draft is, and a hand-typed URL left alone. One migration, 9 e2e |
 | 2026-11-13 | Phúc | First real post, and three bugs only a real post could find (M17): `post_impressions` was retired by Meta in June 2026 and its replacement, "must be a valid insights metric", was being swallowed into a permanent zero; the three engagement counts shared one request, so one forbidden figure took the other two with it; and `comments.summary` turns out to sit behind a permission Meta's own dialog rejects as invalid. Each figure now degrades on its own. 5 unit tests |
 | 2026-11-13 | Phúc | The owner-facing connect flow (M16): three endpoints, no token typed or seen, state and connection handle encrypted rather than stored, pages read from Facebook again before anything is written, reconnect updating the row a published post points at. One migration (unique page per hotel), three error codes, 22 e2e |
