@@ -54,6 +54,13 @@ export function useMyVouchers(params: PageParams & { active?: boolean }) {
 }
 
 /**
+ * A quote is several backend queries and does not change while the form is open; the backend checks `expectedTotal`
+ * again on `POST /bookings` anyway. So it is not re-asked on every return to the tab, which would also lock the
+ * submit button while it reloads.
+ */
+const QUOTE_FRESHNESS = { staleTime: 30_000, refetchOnWindowFocus: false } as const;
+
+/**
  * The price of a stay with the discount and points the customer chose. Re-run whenever the inputs change; it holds
  * nothing, so the booking form can call it freely. `retry: false` because a refused code is an answer, not a glitch.
  */
@@ -64,8 +71,15 @@ export function useDiscountQuote(input: DiscountQuoteInput | null) {
     enabled: !!input,
     retry: false,
     placeholderData: keepPreviousData,
+    ...QUOTE_FRESHNESS,
   });
 }
+
+/**
+ * At most this many codes are priced when the booking form opens: one quote per code. The soonest to expire go first;
+ * any other code can still be typed in. A batch quote endpoint on the backend would remove the limit.
+ */
+export const MAX_PRICED_VOUCHERS = 10;
 
 export type VoucherOption = {
   voucher: Voucher;
@@ -85,11 +99,14 @@ export function useVoucherOptions(stay: Omit<DiscountQuoteInput, "code" | "point
   const vouchersQuery = useQuery({
     queryKey: rewardsKeys.vouchers({ page: 1, pageSize: 100, active: true }),
     queryFn: () => rewardsService.getMyVouchers({ page: 1, pageSize: 100, active: true }),
-    enabled: !!stay,
+    enabled: !!stay && !!hotelId,
+    ...QUOTE_FRESHNESS,
   });
-  const vouchers = (vouchersQuery.data?.vouchers ?? []).filter(
-    (voucher) => voucher.usable && (voucher.hotelId === null || voucher.hotelId === hotelId),
-  );
+  const usable = (vouchersQuery.data?.vouchers ?? [])
+    .filter((voucher) => voucher.usable && (voucher.hotelId === null || voucher.hotelId === hotelId))
+    // Soonest to expire first; a code with no expiry last.
+    .sort((a, b) => (a.expiresAt ?? "9999").localeCompare(b.expiresAt ?? "9999"));
+  const vouchers = usable.slice(0, MAX_PRICED_VOUCHERS);
 
   const quotes = useQueries({
     queries: vouchers.map((voucher) => {
@@ -99,6 +116,7 @@ export function useVoucherOptions(stay: Omit<DiscountQuoteInput, "code" | "point
         queryFn: () => rewardsService.getDiscountQuote(input),
         enabled: !!stay,
         retry: false,
+        ...QUOTE_FRESHNESS,
       };
     }),
   });
@@ -110,7 +128,12 @@ export function useVoucherOptions(stay: Omit<DiscountQuoteInput, "code" | "point
     isLoading: quotes[index]?.isLoading ?? true,
   }));
 
-  return { options, isLoading: vouchersQuery.isLoading || options.some((option) => option.isLoading) };
+  return {
+    options,
+    /** Usable codes for this hotel that were not priced (beyond MAX_PRICED_VOUCHERS); they can be typed in. */
+    hiddenCount: usable.length - vouchers.length,
+    isLoading: !!stay && !!hotelId && (vouchersQuery.isLoading || options.some((option) => option.isLoading)),
+  };
 }
 
 /** What a code takes off the stay; 0 when the hotel's own campaign saves more and the code would not be spent. */

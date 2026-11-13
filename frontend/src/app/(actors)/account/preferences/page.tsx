@@ -101,7 +101,13 @@ function PreferencesForm({ initial }: { initial: FormState }) {
   const [form, setForm] = useState<FormState>(initial);
   const [saved, setSaved] = useState(false);
   const update = useUpdatePreferences();
-  const dirty = JSON.stringify(form) !== JSON.stringify(initial);
+  // Lists compared as sets: picking the same items in another order is not a change.
+  const sameList = (a: string[], b: string[]) => a.length === b.length && a.every((item) => b.includes(item));
+  const dirty =
+    !sameList(form.styles, initial.styles) ||
+    !sameList(form.amenities, initial.amenities) ||
+    form.city.trim() !== initial.city ||
+    form.budget !== initial.budget;
 
   const submit = (event: FormEvent) => {
     event.preventDefault();

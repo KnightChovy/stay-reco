@@ -2,11 +2,11 @@
 
 |              |                                                                                                                                                         |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Phase status | 🟡 Backend done; customer web FE integrated on `feat/phase-4-frontend` (not merged yet); partner FE not connected |
+| Phase status | 🟡 Backend done; customer web FE integrated (PR #115); partner FE not connected |
 | API status   | `BE Done` for every part: merged into `develop`, FE can integrate |
 | Agreed on    | Reviews and discounts: 2026-11-09 (R1–R9, P1–P8). Loyalty and wallet: 2026-11-10 (L1–L7, W1–W3) |
 | BE owners    | Phúc                                                                                                                                                    |
-| FE owners    | Web customer screens: branch `feat/phase-4-frontend` |
+| FE owners    | Web customer screens: PR #115 |
 | API          | [api/reviews.md](../api/reviews.md), [api/promotions.md](../api/promotions.md), [api/loyalty.md](../api/loyalty.md), [api/customer-wallet.md](../api/customer-wallet.md) |
 
 > Rules for every API: [api-guide.md](../api-guide.md). Money rules (final price, discounts, wallet): [money-rules.md](../money-rules.md), kept in sync with this file.
@@ -167,3 +167,4 @@ These three meet in one place, so build them together rather than screen by scre
 | 2026-11-11 | Phúc | The four branches merged into `develop`. The stay subtotal now adds up every room type of a booking (PR #109), so the discount and the points come off that sum; a booking points at its hotel rather than one room type, which the review, loyalty and wallet queries follow |
 | 2026-11-11 | FE | Web customer integration on `feat/phase-4-frontend`: `/account/rewards`, `/account/wallet`, `/account/preferences`, `/account/bookings/[id]/review`, the hotel page reviews, discount code and points on `/booking`, pay with wallet on `/booking/payment`. Partner screens (promotions, review moderation) are not connected yet |
 | 2026-11-12 | Phúc | Review photos and content reports built (R10–R14): 5 photos a review with Tripadvisor's shape rules, the flag under every review for every role, and a platform manager's queue. Hiding a review moves from the hotel to a platform manager, which changes R5 and breaks that endpoint for FE callers using owner access |
+| 2026-11-13 | FE | Review of PR #115 addressed: at most 10 vouchers priced on `/booking` (soonest to expire first, the rest typed in), quotes kept 30 s and not refetched on tab focus, a stale quote cannot be booked, the voucher list filtered by the hotel the room type belongs to rather than `?hotelId=`, only the four discount-code refusals drop the code, the saved-review notice says when the hotel hid the review, the next-tier mark read from `nextTier.pointsNeeded`. Still open on the backend: a batch quote for several codes, and reading one review (`GET /reviews/:id`) instead of searching `/me/reviews` |

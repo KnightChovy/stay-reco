@@ -101,12 +101,16 @@ function ReviewButton({ bookingId }: { bookingId: string }) {
   );
 }
 
+/** `?reviewed=visible|hidden`, set by the review page from the saved review; a hidden one is not on the hotel page. */
 function ReviewedNotice() {
-  const reviewed = useSearchParams().get('reviewed') === '1';
-  if (!reviewed) return null;
+  const reviewed = useSearchParams().get('reviewed');
+  if (reviewed !== 'visible' && reviewed !== 'hidden') return null;
   return (
     <div className="mx-auto mt-4 flex max-w-marketplace items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-semibold text-emerald-800 sm:px-6">
-      <CheckCircle2 className="size-4" /> Cảm ơn bạn! Đánh giá đã được lưu và hiển thị trên trang khách sạn.
+      <CheckCircle2 className="size-4" /> Cảm ơn bạn! Đánh giá đã được lưu
+      {reviewed === 'visible'
+        ? ' và hiển thị trên trang khách sạn.'
+        : '. Khách sạn đã ẩn đánh giá này nên nó không hiện trên trang khách sạn.'}
     </div>
   );
 }

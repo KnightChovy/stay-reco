@@ -41,6 +41,14 @@ import { formatDate, formatMoney } from '@/features/stays/lib/format';
 const FALLBACK_IMAGE =
   'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=800&q=80';
 
+/** Why a discount code was refused (docs/api/promotions.md). Not `VOUCHER_INVALID`, which is about the check-in QR. */
+const VOUCHER_REFUSALS = new Set([
+  'VOUCHER_NOT_FOUND',
+  'VOUCHER_ALREADY_USED',
+  'VOUCHER_EXPIRED',
+  'VOUCHER_NOT_APPLICABLE',
+]);
+
 function nightsBetween(checkIn: string, checkOut: string) {
   const start = new Date(`${checkIn}T00:00:00`);
   const end = new Date(`${checkOut}T00:00:00`);
@@ -93,12 +101,19 @@ function BookingContent() {
     () => (roomTypeId && checkIn && checkOut ? { roomTypeId, checkIn, checkOut, rooms } : null),
     [roomTypeId, checkIn, checkOut, rooms],
   );
-  const voucherOptions = useVoucherOptions(stayInput, hotelId);
+  // Codes are only offered when the hotel listing confirms the room type belongs to `?hotelId=`: a wrong id shows no
+  // code rather than another hotel's. (`GET /room-types/:id/listing` carries no hotel id to read it from directly.)
+  const pricedHotelId = hotelQuery.data?.roomTypes.some((item) => item.roomType.id === roomTypeId)
+    ? hotelQuery.data.hotel.id
+    : '';
+  const voucherOptions = useVoucherOptions(stayInput, pricedHotelId);
+  // Until the hotel listing is in, the codes cannot even be asked for: that is still loading, not "no code".
+  const vouchersLoading = hotelQuery.isLoading || voucherOptions.isLoading;
   const bestCode = voucherOptions.options.reduce<{ code: string; saving: number } | undefined>((best, option) => {
     const saving = voucherSaving(option);
     return saving > 0 && (!best || saving > best.saving) ? { code: option.voucher.code, saving } : best;
   }, undefined)?.code;
-  const autoPending = selection.mode === 'auto' && voucherOptions.isLoading;
+  const autoPending = selection.mode === 'auto' && vouchersLoading;
   const appliedCode = selection.mode === 'auto' ? (autoPending ? undefined : bestCode) : selection.code;
   const listedCodes = new Set(voucherOptions.options.map((option) => option.voucher.code.toUpperCase()));
 
@@ -176,8 +191,9 @@ function BookingContent() {
       setFormError('Thiếu thông tin hạng phòng hoặc ngày lưu trú.');
       return;
     }
-    if (!quote) {
-      setFormError('Chưa tính được tổng tiền. Vui lòng đợi giây lát hoặc tải lại trang.');
+    // A placeholder is the previous quote shown while the new one loads: its total belongs to other inputs.
+    if (!quote || quoteQuery.isPlaceholderData || quoteQuery.isFetching || autoPending) {
+      setFormError('Tổng tiền đang được tính lại. Vui lòng đợi giây lát rồi bấm lại.');
       return;
     }
 
@@ -212,7 +228,7 @@ function BookingContent() {
             void quoteQuery.refetch();
             return;
           }
-          if (code?.startsWith('VOUCHER_')) {
+          if (code && VOUCHER_REFUSALS.has(code)) {
             // The code stopped working between the quote and the booking: drop it, keep the reason on screen.
             removeCode();
             setCodeError(getApiErrorMessage(error));
@@ -412,12 +428,17 @@ function BookingContent() {
 
                 <VoucherPicker
                   options={voucherOptions.options}
-                  isLoading={voucherOptions.isLoading}
+                  isLoading={vouchersLoading}
                   selectedCode={appliedCode}
                   bestCode={bestCode}
                   onSelect={selectCode}
                   disabled={createBooking.isPending}
                 />
+                {voucherOptions.hiddenCount > 0 && (
+                  <p className="text-[11px] text-slate-500">
+                    Bạn còn {voucherOptions.hiddenCount} voucher khác dùng được tại đây; dùng “+ Nhập mã khác” để áp dụng.
+                  </p>
+                )}
 
                 {appliedCode && !listedCodes.has(appliedCode.toUpperCase()) && (
                   <div className="flex items-center justify-between gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-xs">
