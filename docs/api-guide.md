@@ -274,6 +274,7 @@ The response `meta` (`page`, `pageSize`, `total`, `totalPages`) maps directly to
 ## 6. Generated API docs (Swagger)
 
 - Swagger UI: `http://localhost:3000/api/docs`. OpenAPI spec as JSON: `http://localhost:3000/api/docs-json` (import into Postman or generate FE types from it).
+- **162 operations across 19 tagged groups**, every group carrying a one-line description and a link to its page in [api/](./api/README.md). 18 routes are public and show no lock; the other 144 need a bearer token.
 - Enabled only when `NODE_ENV !== 'production'`.
 - To try authenticated endpoints: call `/auth/login`, copy `accessToken`, click **Authorize** and paste it. Swagger keeps the token across page reloads.
 - Swagger is the primary source for endpoints and DTOs. This file keeps only the overall flows and shared rules.
