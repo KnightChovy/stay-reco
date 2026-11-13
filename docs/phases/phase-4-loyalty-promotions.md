@@ -121,6 +121,24 @@ loyalty_tier: MEMBER -> SILVER (10k) -> GOLD (30k) -> PLATINUM (100k)
 - Add the flag under every review (`POST /reviews/:id/reports`), for every signed-in role. The partner portal needs it too: a hotel reports a review, it can no longer hide one (R12).
 - The "hotel replies within 24h" line still has no API behind it; hide it until R9 is decided.
 
+### Promotions, vouchers and loyalty on the booking screen
+
+These three meet in one place, so build them together rather than screen by screen.
+
+- **One quote call owns the whole price.** `POST /bookings/discount-quote` takes `code` and `pointsToUse` together and answers `subtotal`, `discount`, `points` and `expectedTotal`. Never compute the total in the client: send the `expectedTotal` you were given to `POST /bookings`, and on `409 BOOKING_PRICE_CHANGED` re-quote and show the new price rather than retrying.
+- **A promotion and a voucher never stack** (P-decisions): one `code` field, one `discount` block back, whose `kind` says which it turned out to be. Points are a *third*, separate subtraction on top - see [loyalty.md](../api/loyalty.md#where-points-sit-in-the-price).
+- **The points slider is bounded by the server, not by the balance.** Use `points.maxPointsUsable`, which is already capped by what the stay still owes after the discount. Asking for more than the stay needs is fine and only the needed points are taken; asking for more than the balance is `409 LOYALTY_POINTS_INSUFFICIENT`.
+- **`points: null` in the quote is not an error** - no programme is running. Hide the whole points section.
+- Rewards screen: `GET /me/loyalty` (balance, `tier`, `nextTier`, `balanceValue` in dong) and `GET /me/loyalty/entries` for the history. Two things the design promises and the API does not have: tiers carry **no benefit** yet, and points **never expire** - do not draw an expiry date.
+- `GET /me/vouchers?active=true` for the customer's codes. In the partner portal, `DELETE /promotions/:id` only switches a campaign off (`isActive: false`); it never disappears from the list, because past bookings point at it.
+
+### The wallet
+
+- `GET /me/wallet` - `balanceAvailable` is the only figure a customer screen needs; `balancePending` is always 0 for them.
+- **Paying is all or nothing** (W1). Offer `POST /bookings/:id/pay-with-wallet` only when the balance covers the whole booking; it answers `204` with nothing to read, so reload the booking. On `409 WALLET_INSUFFICIENT`, `details` carries `balance` and `total` - show the shortfall and fall back to the transfer flow.
+- There is **no top-up and no withdrawal**: the balance comes from refunds only and cannot be taken out until phase 6. Worth one line on the wallet screen so customers do not look for the button.
+- `PUT /me/preferences` writes only the keys it is given, deletes the ones set to `null` and leaves the rest alone - so each screen can save its own field without reading the others first. The backend does not interpret the key names; FE and the phase 5 recommender agree on them.
+
 ## Open questions
 
 - [ ] **Loyalty: per hotel or platform-wide?** The schema says per hotel (`loyalty_program.hotel_id` is required), the FE prototype draws one platform-wide "Ví điểm StayMiles" with tiers. The two cannot both be true; taking the FE route means a migration.

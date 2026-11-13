@@ -149,6 +149,25 @@ describe('Swagger (e2e)', () => {
     }
   });
 
+  it('gives every tag a description, so the sidebar says where its guide is', () => {
+    const described = new Map(
+      (document.tags ?? []).map((tag) => [tag.name, tag.description ?? '']),
+    );
+    const used = new Set(
+      operations(document).flatMap(({ op }) => (op.tags ?? []) as string[]),
+    );
+
+    // An undescribed tag is a group of endpoints a frontend developer finds in the sidebar with nothing saying
+    // what they are for or which page in docs/api/ explains them - which is how the phase 4 and 5 groups sat
+    // there unexplained while every earlier one was documented.
+    expect([...used].filter((tag) => !described.has(tag))).toEqual([]);
+    for (const tag of used) {
+      expect(described.get(tag)!.length).toBeGreaterThan(20);
+    }
+    // And nothing described that no route uses, which would be a tag renamed in one place only.
+    expect([...described.keys()].filter((tag) => !used.has(tag))).toEqual([]);
+  });
+
   it('describes path params as uuids', () => {
     const [param] = document.paths['/api/v1/room-types/{id}'].get
       ?.parameters as Json[];

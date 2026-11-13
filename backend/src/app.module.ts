@@ -27,6 +27,7 @@ import { MailModule } from './modules/mail/mail.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { ReviewsModule } from './modules/reviews/reviews.module';
 import { LoyaltyModule } from './modules/loyalty/loyalty.module';
+import { MarketingModule } from './modules/marketing/marketing.module';
 import { PreferencesModule } from './modules/preferences/preferences.module';
 import { PromotionsModule } from './modules/promotions/promotions.module';
 import { StorageModule } from './modules/storage/storage.module';
@@ -78,6 +79,7 @@ import { PrismaModule } from './prisma/prisma.module';
     PromotionsModule,
     LoyaltyModule,
     PreferencesModule,
+    MarketingModule,
   ],
   controllers: [AppController],
   providers: [

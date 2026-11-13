@@ -220,6 +220,20 @@ There is no `status` field in the body; the HTTP status is already available as 
 | `CHANGE_REQUEST_PENDING` | 409 | The booking already has a change request waiting | Show the waiting request |
 | `CHANGE_REQUEST_STATUS_CONFLICT` | 409 | Accepting or rejecting when no change request is waiting | Reload the booking |
 | `NOTIFICATION_NOT_FOUND` | 404 | Notification doesn't exist or belongs to someone else | Reload the list |
+| `AI_UNAVAILABLE` | 503 | The AI writer is off, or answered unusably | Hide the generate button, or retry once |
+| `AI_BUDGET_EXCEEDED` | 403 | The hotel used its AI budget this month | Show the spend and when it resets |
+| `AI_REFUSED` | 403 | The model declined to write this | Ask the user to rephrase the brief |
+| `CONTENT_NOT_FOUND` | 404 | The content doesn't exist or belongs to another hotel | Reload the list |
+| `CONTENT_STATUS_CONFLICT` | 409 | That action does not fit the content's status | Reload the piece |
+| `CONTENT_NOT_APPROVED` | 409 | Scheduling content the owner has not approved | Send it for approval first |
+| `SOCIAL_ACCOUNT_NOT_FOUND` | 404 | The page doesn't exist or belongs to another hotel | Reload the connected pages |
+| `SCHEDULE_NOT_FOUND` | 404 | The scheduled post doesn't exist or belongs to another hotel | Reload the calendar |
+| `SCHEDULE_STATUS_CONFLICT` | 409 | Cancelling a post that went out, or reading figures for one that did not | Reload the calendar |
+| `SOCIAL_PUBLISH_FAILED` | 502 | The platform refused or could not be reached | Show `message`: it carries the platform's own words |
+| `SOCIAL_PLATFORM_UNSUPPORTED` | 501 | TikTok, or Instagram without a photo | Show `message`; for Instagram, ask for a photo |
+| `SOCIAL_OAUTH_DISABLED` | 503 | No Meta app is configured, so the owner cannot be sent to Facebook | Hide the connect button; a token can still be pasted |
+| `SOCIAL_OAUTH_INVALID` | 400 | The `state` or `connectionToken` is not ours, is for another hotel, or has expired | Start the connect flow again |
+| `SOCIAL_OAUTH_FAILED` | 502 | Facebook refused the exchange, or granted no page | Show `message`: it carries Facebook's own words |
 | `REVIEW_NOT_FOUND` | 404 | Review doesn't exist or belongs to another customer | Reload the booking |
 | `REVIEW_NOT_ALLOWED` | 409 | The stay is not completed, so it cannot be reviewed yet | Hide the review button |
 | `REVIEW_ALREADY_EXISTS` | 409 | The booking already has a review; one review per stay | Open the existing review |
@@ -274,6 +288,7 @@ The response `meta` (`page`, `pageSize`, `total`, `totalPages`) maps directly to
 ## 6. Generated API docs (Swagger)
 
 - Swagger UI: `http://localhost:3000/api/docs`. OpenAPI spec as JSON: `http://localhost:3000/api/docs-json` (import into Postman or generate FE types from it).
+- **162 operations across 19 tagged groups**, every group carrying a one-line description and a link to its page in [api/](./api/README.md). 18 routes are public and show no lock; the other 144 need a bearer token.
 - Enabled only when `NODE_ENV !== 'production'`.
 - To try authenticated endpoints: call `/auth/login`, copy `accessToken`, click **Authorize** and paste it. Swagger keeps the token across page reloads.
 - Swagger is the primary source for endpoints and DTOs. This file keeps only the overall flows and shared rules.

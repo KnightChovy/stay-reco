@@ -526,10 +526,16 @@ model ContentSchedule {
   scheduledAt        DateTime?        @map("scheduled_at") @db.Timestamptz(6)
   publishedAt        DateTime?        @map("published_at") @db.Timestamptz(6)
   status             ScheduleStatus   @default(SCHEDULED)
+  /// The platform's own id for the post. The metrics of a post can only be read back against it.
+  externalPostId     String?          @map("external_post_id") @db.VarChar(255)
+  /// Why the platform refused it, so the calendar can say rather than only log (M13).
+  failureReason      String?          @map("failure_reason") @db.VarChar(1000)
   marketingContent   MarketingContent @relation(fields: [marketingContentId], references: [marketingContentId])
   socialAccount      SocialAccount    @relation(fields: [socialAccountId], references: [socialAccountId])
   contentMetrics     ContentMetric[]
 
+  /// The publishing job asks for exactly this every minute: what is SCHEDULED and already due.
+  @@index([status, scheduledAt])
   @@map("content_schedule")
 }
 
@@ -626,6 +632,7 @@ model Hotel {
   verificationRequests HotelVerificationRequest[]
   hotelImages          HotelImage[]
 
+  aiUsages            AiUsage[]
   @@map("hotel")
 }
 
@@ -718,6 +725,7 @@ model HotelStaff {
   marketingContents MarketingContent[]
   conversations     Conversation[]
 
+  aiUsages           AiUsage[]
   @@map("hotel_staff")
 }
 
@@ -840,6 +848,11 @@ model MarketingContent {
   title              String?           @db.VarChar(255)
   body               String
   mediaUrl           String?           @map("media_url") @db.VarChar(500)
+  /**
+   * Cloudinary's id for `mediaUrl`, so replacing or removing the picture deletes the file too. Null when the URL
+   * was set by hand rather than uploaded - we only delete what we uploaded (M18).
+   */
+  mediaStorageKey    String?          @map("media_storage_key") @db.VarChar(255)
   contentType        ContentType       @map("content_type")
   status             ContentStatus     @default(DRAFT)
   createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -1050,6 +1063,30 @@ model Review {
   @@map("review")
 }
 
+/// One call to the language model: what it was for, what it cost, and who it was for.
+/// Phase 5 requires every call to be logged and the spend per hotel to be capped.
+model AiUsage {
+  aiUsageId       String      @id @default(dbgenerated("gen_random_uuid()")) @map("ai_usage_id") @db.Uuid
+  hotelId         String      @map("hotel_id") @db.Uuid
+  /// Who asked for it; null when a job did.
+  hotelStaffId    String?     @map("hotel_staff_id") @db.Uuid
+  /// What it was for, e.g. "brand-voice" or "marketing-content".
+  purpose         String      @db.VarChar(50)
+  model           String      @db.VarChar(100)
+  inputTokens     Int         @map("input_tokens")
+  outputTokens    Int         @map("output_tokens")
+  cacheReadTokens Int         @default(0) @map("cache_read_tokens")
+  /// US dollars, at the model's published rate when the call was made.
+  costUsd         Decimal     @map("cost_usd") @db.Decimal(12, 6)
+  createdAt       DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  hotel           Hotel       @relation(fields: [hotelId], references: [hotelId], onDelete: Cascade)
+  hotelStaff      HotelStaff? @relation(fields: [hotelStaffId], references: [hotelStaffId])
+
+  /// The monthly spend of one hotel is read off this index.
+  @@index([hotelId, createdAt])
+  @@map("ai_usage")
+}
+
 /// A photo a guest attached to their review; hidden with the review it belongs to.
 model ReviewImage {
   reviewImageId String   @id @default(dbgenerated("gen_random_uuid()")) @map("review_image_id") @db.Uuid
@@ -1228,6 +1265,11 @@ model SocialAccount {
   hotel            Hotel             @relation(fields: [hotelId], references: [hotelId])
   contentSchedules ContentSchedule[]
 
+  /**
+   * One row per page per hotel. Reconnecting a page updates the token on this row instead of adding a second,
+   * which is what keeps a disconnected page's published history pointing at the same account (M11).
+   */
+  @@unique([hotelId, platform, accountName])
   @@map("social_account")
 }
 
