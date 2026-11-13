@@ -54,6 +54,13 @@ export function useMyVouchers(params: PageParams & { active?: boolean }) {
 }
 
 /**
+ * A quote is several backend queries and does not change while the form is open; the backend checks `expectedTotal`
+ * again on `POST /bookings` anyway. So it is not re-asked on every return to the tab, which would also lock the
+ * submit button while it reloads.
+ */
+const QUOTE_FRESHNESS = { staleTime: 30_000, refetchOnWindowFocus: false } as const;
+
+/**
  * The price of a stay with the discount and points the customer chose. Re-run whenever the inputs change; it holds
  * nothing, so the booking form can call it freely. `retry: false` because a refused code is an answer, not a glitch.
  */
@@ -67,13 +74,6 @@ export function useDiscountQuote(input: DiscountQuoteInput | null) {
     ...QUOTE_FRESHNESS,
   });
 }
-
-/**
- * A quote is several backend queries and does not change while the form is open; the backend checks `expectedTotal`
- * again on `POST /bookings` anyway. So it is not re-asked on every return to the tab, which would also lock the
- * submit button while it reloads.
- */
-const QUOTE_FRESHNESS = { staleTime: 30_000, refetchOnWindowFocus: false } as const;
 
 /**
  * At most this many codes are priced when the booking form opens: one quote per code. The soonest to expire go first;

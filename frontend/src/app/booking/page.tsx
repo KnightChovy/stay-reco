@@ -101,17 +101,19 @@ function BookingContent() {
     () => (roomTypeId && checkIn && checkOut ? { roomTypeId, checkIn, checkOut, rooms } : null),
     [roomTypeId, checkIn, checkOut, rooms],
   );
-  // The hotel the room type really belongs to, confirmed by its listing rather than trusted from the URL, so a missing
-  // or wrong `?hotelId=` cannot filter out that hotel's own codes. Empty until the listing has loaded.
+  // Codes are only offered when the hotel listing confirms the room type belongs to `?hotelId=`: a wrong id shows no
+  // code rather than another hotel's. (`GET /room-types/:id/listing` carries no hotel id to read it from directly.)
   const pricedHotelId = hotelQuery.data?.roomTypes.some((item) => item.roomType.id === roomTypeId)
     ? hotelQuery.data.hotel.id
     : '';
   const voucherOptions = useVoucherOptions(stayInput, pricedHotelId);
+  // Until the hotel listing is in, the codes cannot even be asked for: that is still loading, not "no code".
+  const vouchersLoading = hotelQuery.isLoading || voucherOptions.isLoading;
   const bestCode = voucherOptions.options.reduce<{ code: string; saving: number } | undefined>((best, option) => {
     const saving = voucherSaving(option);
     return saving > 0 && (!best || saving > best.saving) ? { code: option.voucher.code, saving } : best;
   }, undefined)?.code;
-  const autoPending = selection.mode === 'auto' && voucherOptions.isLoading;
+  const autoPending = selection.mode === 'auto' && vouchersLoading;
   const appliedCode = selection.mode === 'auto' ? (autoPending ? undefined : bestCode) : selection.code;
   const listedCodes = new Set(voucherOptions.options.map((option) => option.voucher.code.toUpperCase()));
 
@@ -426,7 +428,7 @@ function BookingContent() {
 
                 <VoucherPicker
                   options={voucherOptions.options}
-                  isLoading={voucherOptions.isLoading}
+                  isLoading={vouchersLoading}
                   selectedCode={appliedCode}
                   bestCode={bestCode}
                   onSelect={selectCode}
