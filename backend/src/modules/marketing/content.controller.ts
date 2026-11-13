@@ -32,8 +32,10 @@ import {
   ApiHotelAccess,
   ApiPage,
 } from '../../common/swagger/api-docs.decorators';
+import { UploadedFileOf, UploadFile } from '../../common/upload/upload-file';
 import { StaffPermission } from '../../generated/prisma/client';
 import { ContentIdeasService } from './content-ideas.service';
+import { ContentImagesService } from './content-images.service';
 import { ContentService } from './content.service';
 import {
   ContentListQueryDto,
@@ -49,6 +51,7 @@ export class ContentController {
   constructor(
     private readonly content: ContentService,
     private readonly ideas: ContentIdeasService,
+    private readonly images: ContentImagesService,
   ) {}
 
   @ApiOperation({
@@ -178,6 +181,39 @@ export class ContentController {
     @ReqMeta() meta: RequestMeta,
   ) {
     return this.content.reject(user, id, dto, meta);
+  }
+
+  @ApiOperation({
+    summary: 'Attach a picture',
+    description:
+      'Staff with `MARKETING`, while the piece is a draft or has been rejected - the same window in which the words may be changed, because what the owner approved is what goes out. JPEG, PNG or WebP, up to 10MB. Uploading again replaces the picture and deletes the old file. Facebook and Instagram fetch the image themselves, which is why it is hosted rather than sent with the post; Instagram refuses a post without one.',
+  })
+  @UploadFile('image')
+  @ApiData(marketingContentResponseSchema, HttpStatus.CREATED)
+  @ApiErrors(
+    ErrorCode.CONTENT_NOT_FOUND,
+    ErrorCode.CONTENT_STATUS_CONFLICT,
+    ErrorCode.UPLOAD_INVALID_FILE,
+  )
+  @Post('marketing-content/:id/image')
+  setImage(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @UploadedFileOf('image') file: Buffer,
+  ) {
+    return this.images.set(user, id, file);
+  }
+
+  @ApiOperation({
+    summary: 'Remove the picture',
+    description:
+      'Same window as attaching one. The file is deleted too, unless the URL was set by hand rather than uploaded.',
+  })
+  @ApiData(marketingContentResponseSchema)
+  @ApiErrors(ErrorCode.CONTENT_NOT_FOUND, ErrorCode.CONTENT_STATUS_CONFLICT)
+  @Delete('marketing-content/:id/image')
+  removeImage(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.images.remove(user, id);
   }
 
   @ApiOperation({

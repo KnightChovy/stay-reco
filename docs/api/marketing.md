@@ -2,7 +2,7 @@
 
 The AI writer, the approval it goes through, the calendar it goes out on, and what it all costs. Decisions are in [phase-5-ai-marketing.md](../phases/phase-5-ai-marketing.md). Rules for every API: [../api-guide.md](../api-guide.md). Getting the platform credentials: [../social-setup.md](../social-setup.md).
 
-Status: `BE Done` for all 22 endpoints. TikTok publishing is deliberately not built (M12).
+Status: `BE Done` for all 27 endpoints. TikTok publishing is deliberately not built (M12).
 
 ## The shape of it
 
@@ -44,6 +44,8 @@ Three things are worth knowing before reading the table.
 | GET | `/hotels/:hotelId/marketing-content` | member + `MARKETING` | | page of `MarketingContent` |
 | GET | `/marketing-content/:id` | member | | `MarketingContent` |
 | PATCH | `/marketing-content/:id` | member | `updateContentSchema` | `MarketingContent` |
+| POST | `/marketing-content/:id/image` | member + `MARKETING` | `multipart/form-data`, field `file` | `MarketingContent` (201) |
+| DELETE | `/marketing-content/:id/image` | member + `MARKETING` | | `MarketingContent` |
 | POST | `/marketing-content/:id/submit` | member | | `MarketingContent` (200) |
 | POST | `/marketing-content/:id/approve` | **owner** | | `MarketingContent` (200) |
 | POST | `/marketing-content/:id/reject` | **owner** | `rejectContentSchema` | `MarketingContent` (200) |
@@ -185,6 +187,25 @@ Pasting is kept beside the owner-facing flow because it needs no Meta app at all
 `usable` turns false once `expiresAt` has passed. The publisher then **skips** the page and writes the reason on the post, rather than calling a platform with a token it knows is dead.
 
 Disconnecting clears the token and **cancels everything still waiting** on that page. The account row is kept, not deleted: a published post points at it, and that record of what went out should outlive the connection.
+
+## The picture (M18)
+
+```
+POST /marketing-content/:id/image      multipart/form-data, field `file`
+DELETE /marketing-content/:id/image
+```
+
+Staff **upload a file**; they do not find a URL somewhere. JPEG, PNG or WebP up to 10MB, into its own `marketing` folder. The answer is the whole piece, with `mediaUrl` filled in.
+
+The URL is what Meta needs - **it fetches the image itself**, so a local file or a `localhost` address is no use to it - but asking a marketing assistant to produce a public URL before they may illustrate a post is asking them to be a sysadmin. The upload path is the same `StorageService` that hotel and review photos already use.
+
+**The picture may be changed exactly as long as the words may**: while the piece is a `DRAFT` or has been `REJECTED`. What the owner approved is what goes out, and that includes which photograph is attached - a picture swapped after approval would put something on the hotel's page that nobody agreed to.
+
+Uploading again **replaces** the picture and deletes the file it replaced; deleting the draft takes its file too. A `mediaUrl` that was pasted in by hand through `PATCH` is left alone on both counts: the file is not ours to delete, and guessing at it would be deleting someone else's.
+
+**Instagram refuses a post without one**, before anything is sent, so the staff member is told to attach a photo rather than shown a Meta error code. Facebook publishes to `/photos` instead of `/feed` when there is a picture.
+
+Not yet: the writer does not produce one. Gemini writes words, so `mediaUrl` is always null on a fresh draft.
 
 ## Scheduling and publishing
 

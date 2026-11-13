@@ -1,8 +1,9 @@
 import { Module } from '@nestjs/common';
 import { AiService } from './ai.service';
 import { BrandVoiceService } from './brand-voice.service';
-import { ContentController } from './content.controller';
 import { ContentIdeasService } from './content-ideas.service';
+import { ContentImagesService } from './content-images.service';
+import { ContentController } from './content.controller';
 import { ContentService } from './content.service';
 import { MarketingController } from './marketing.controller';
 import { MetricsService } from './metrics.service';
@@ -23,6 +24,7 @@ import { SocialController } from './social.controller';
     BrandVoiceService,
     ContentService,
     ContentIdeasService,
+    ContentImagesService,
     SocialAccountsService,
     FacebookOauthService,
     ScheduleService,

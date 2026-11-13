@@ -22,6 +22,7 @@ import { Paginated } from '../../common/http/api-response';
 import { pageArgs } from '../../common/http/pagination';
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { StorageService } from '../storage/storage.service';
 import { AuditAction, AuditService } from '../audit/audit.service';
 import { BrandVoiceService } from './brand-voice.service';
 import { AiService } from './ai.service';
@@ -119,6 +120,7 @@ export class ContentService {
     private readonly brandVoice: BrandVoiceService,
     private readonly access: HotelAccessService,
     private readonly audit: AuditService,
+    private readonly storage: StorageService,
   ) {}
 
   /** Writes a draft in the hotel's voice. The draft is saved whatever the staff member does next. */
@@ -195,16 +197,27 @@ export class ContentService {
     return toContent(content, await this.rejectionOf(contentId));
   }
 
+  /**
+   * The piece, checked to belong to the caller's hotel and to still be theirs to change.
+   *
+   * Once it is approved the words are frozen, and so is the picture: what the owner approved is what goes out.
+   * Shared with the image service so both answer the same way rather than drifting apart.
+   */
+  async editable(user: AuthUser, contentId: string) {
+    const content = await this.owned(user, contentId, 'member');
+    if (content.status !== 'DRAFT' && content.status !== 'REJECTED') {
+      throw wrongStatus('Only a draft or a rejected piece can be edited');
+    }
+    return content;
+  }
+
   /** Edits a draft. Once it is approved the text is frozen: what was approved is what goes out. */
   async update(
     user: AuthUser,
     contentId: string,
     input: UpdateContentInput,
   ): Promise<MarketingContent> {
-    const content = await this.owned(user, contentId, 'member');
-    if (content.status !== 'DRAFT' && content.status !== 'REJECTED') {
-      throw wrongStatus('Only a draft or a rejected piece can be edited');
-    }
+    const content = await this.editable(user, contentId);
     const updated = await this.prisma.marketingContent.update({
       where: { marketingContentId: contentId },
       data: {
@@ -279,6 +292,14 @@ export class ContentService {
     await this.prisma.marketingContent.delete({
       where: { marketingContentId: contentId },
     });
+    // The row is gone, so nothing points at the file any more. A storage failure here must not fail the delete.
+    if (content.mediaStorageKey) {
+      try {
+        await this.storage.deleteImage(content.mediaStorageKey);
+      } catch {
+        // An orphaned file costs a fraction of a cent; a failed delete costs the staff member their action.
+      }
+    }
   }
 
   private async moveTo(

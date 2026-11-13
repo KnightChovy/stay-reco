@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Phase status | 🟡 Marketing done (TikTok excluded by decision); recommendations not started |
-| API status | Marketing, all 25 endpoints: `BE Done` · recommendations: none yet |
+| API status | Marketing, all 27 endpoints: `BE Done` · recommendations: none yet |
 | Agreed on | Marketing: 2026-11-12 (M1–M15), 2026-11-13 (M16). Recommendations: not agreed yet |
 | BE owners | Phúc |
 | FE owners | |
@@ -83,6 +83,14 @@ Four things this had to get right, each with a test:
 - **Reconnecting updates the row.** A new unique index on `(hotelId, platform, accountName)` makes that the only option, because a published post's schedule row points at that account, and that record of what went out should survive the token being replaced. It also clears the epoch expiry that disconnecting sets, which is the difference between a reconnected page publishing and silently not.
 
 **App review still gates less than it appears to.** In Development mode this flow is real for anyone holding a role in the app - Admin, Developer, Tester - on pages they administer, so a hotel can connect its own page through the product today by being invited as a Tester. Review plus **Business Verification** are what open it to hotels outside the app, and verification wants a registered legal entity: a company matter, not a code one. Leaving Development mode is the whole migration.
+
+### The picture staff upload (M18, 2026-11-13)
+
+| # | Decision |
+|---|---|
+| M18 | **Staff upload a file; they do not supply a URL.** `mediaUrl` took a hosted address because that is what Meta needs - it fetches the image itself - but nothing in the API put one there, so illustrating a post meant producing a public URL by hand first. Two endpoints now do it through the same `StorageService` as hotel and review photos. The picture may be changed in exactly the window the words may, and not a moment longer: what the owner approved is what goes out, and a picture swapped after approval would put something on the hotel's page that nobody agreed to. |
+
+The file is deleted when it is replaced, when it is removed, and when the draft is. A `mediaUrl` typed in by hand is left alone on all three: `mediaStorageKey` is null for it, and deleting a file we did not upload would be deleting someone else's on a guess. One migration for that column.
 
 ### What the first real post taught (M17, 2026-11-13)
 
@@ -178,6 +186,7 @@ Still open:
 - [ ] Nothing warns an owner before a token expires. `usable` turns false and the next post fails with a clear reason, which is late but not silent.
 - [ ] A figure Meta refuses is stored as `0`, the same as a figure that is genuinely nought. Telling them apart needs nullable columns on `content_metric`, and the UI would have to say "not available" rather than draw a zero.
 - [ ] `POST /social-accounts` still inserts rather than upserts, so pasting a token for a page that is already connected adds a second row. The unique index added for M16 makes that a constraint error rather than a duplicate, but the error is not the one the caller deserves.
+- [ ] The writer does not produce a picture. Gemini writes words, so every fresh draft has `mediaUrl: null` and a staff member has to attach one - which, for Instagram, is the difference between a post that can go out and one that cannot.
 - [ ] A post longer than a platform's limit is sent and refused, rather than caught first. Postiz's `checkValidity()` is the shape of the fix.
 
 ## Definition of Done
@@ -192,6 +201,7 @@ Still open:
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-11-13 | Phúc | Staff upload the picture instead of supplying a URL (M18): two endpoints on the same storage as hotel photos, the file deleted when replaced, removed or the draft is, and a hand-typed URL left alone. One migration, 9 e2e |
 | 2026-11-13 | Phúc | First real post, and three bugs only a real post could find (M17): `post_impressions` was retired by Meta in June 2026 and its replacement, "must be a valid insights metric", was being swallowed into a permanent zero; the three engagement counts shared one request, so one forbidden figure took the other two with it; and `comments.summary` turns out to sit behind a permission Meta's own dialog rejects as invalid. Each figure now degrades on its own. 5 unit tests |
 | 2026-11-13 | Phúc | The owner-facing connect flow (M16): three endpoints, no token typed or seen, state and connection handle encrypted rather than stored, pages read from Facebook again before anything is written, reconnect updating the row a published post points at. One migration (unique page per hotel), three error codes, 22 e2e |
 | 2026-11-12 | Phúc | Pages, calendar, publishing and metrics built (M7–M15): staff write and the owner approves, ideas read out of the hotel's own figures, approved content scheduled onto connected Facebook and Instagram pages by a job that is the only writer, tokens encrypted at rest, platform refusals recorded with the platform's own words, and each metrics refresh kept as its own reading. TikTok deliberately refused with its reason. The AI writer also moved from Claude to Gemini — one file, because every call already went through one door. Eight new error codes, one migration, [../social-setup.md](../social-setup.md), and 359 e2e across 31 suites |

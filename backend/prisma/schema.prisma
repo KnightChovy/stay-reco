@@ -848,6 +848,11 @@ model MarketingContent {
   title              String?           @db.VarChar(255)
   body               String
   mediaUrl           String?           @map("media_url") @db.VarChar(500)
+  /**
+   * Cloudinary's id for `mediaUrl`, so replacing or removing the picture deletes the file too. Null when the URL
+   * was set by hand rather than uploaded - we only delete what we uploaded (M18).
+   */
+  mediaStorageKey    String?          @map("media_storage_key") @db.VarChar(255)
   contentType        ContentType       @map("content_type")
   status             ContentStatus     @default(DRAFT)
   createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
