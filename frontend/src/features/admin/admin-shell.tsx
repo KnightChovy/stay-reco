@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { CreditCard, LayoutDashboard, ReceiptText, ShieldCheck, Sparkles, UsersRound } from 'lucide-react';
 import Sidebar, { SidebarProvider, type SidebarItem } from '@/components/common/sidebar/Sidebar';
 import Navbar from '@/components/common/navbar/Navbar';
@@ -19,6 +19,7 @@ const navigation: Omit<SidebarItem, 'isActive'>[] = [
 
 export function AdminShell({ children }: Readonly<{ children: ReactNode }>) {
   const pathname = usePathname();
+  const router = useRouter();
   const user = useAuthStore((state) => state.user);
   const items = navigation.map((item) => ({
     ...item,
@@ -26,18 +27,20 @@ export function AdminShell({ children }: Readonly<{ children: ReactNode }>) {
   }));
 
   return (
-    <SidebarProvider>
-      <Sidebar items={items} roleLabel="System Administration" contextName="StayReco Platform" />
+    <SidebarProvider className="admin-role">
+      <Sidebar items={items} roleLabel="Hệ thống quản trị" contextName="StayReco Admin" collapsibleToIcon />
       <SidebarInset className="min-w-0 bg-background">
         <Navbar
-          context={{ name: 'Trung tâm quản trị StayReco' }}
+          className="sticky top-0 z-20 shrink-0"
+          context={{ name: navigation.find((item) => pathname.startsWith(item.href))?.label ?? 'Quản trị hệ thống', meta: 'StayReco / Quản trị hệ thống' }}
           user={{ name: user?.name ?? 'Quản trị viên', role: 'Admin', avatarUrl: user?.avatarUrl }}
-          searchPlaceholder="Tìm người dùng, giao dịch hoặc cấu hình..."
+          searchPlaceholder="Tìm tên hoặc email người dùng..."
+          onSearch={(query) => router.push(`/admin/users?search=${encodeURIComponent(query)}`)}
           showSidebarTrigger
           profileHref="/admin/dashboard"
         />
-        <main className="min-h-[calc(100dvh-5rem)] bg-background p-3 sm:p-4 lg:p-5">
-          <div className="sr-dense-ui mx-auto min-h-[calc(100dvh-8rem)] max-w-370 rounded-3xl bg-card p-4 shadow-[0_1px_2px_rgb(32_43_54/4%),0_18px_48px_rgb(32_43_54/6%)] ring-1 ring-border/70 md:p-5 xl:p-6">
+        <main className="min-h-[calc(100dvh-5rem)] bg-background px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+          <div className="mx-auto min-h-[calc(100dvh-8rem)] max-w-370">
             {children}
           </div>
         </main>

@@ -1,4 +1,4 @@
-import { AdminScreen } from '@/features/admin/admin-screen';
+import AdminPaymentSettings from '@/features/admin/payment-settings/AdminPaymentSettings';
 export default function PaymentSettingsPage() {
-  return <AdminScreen mode="payment-settings" />;
+  return <AdminPaymentSettings />;
 }

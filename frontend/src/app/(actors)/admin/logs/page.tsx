@@ -1,4 +1,4 @@
-import { AdminScreen } from '@/features/admin/admin-screen';
+import AdminLogs from '@/features/admin/logs/AdminLogs';
 export default function LogsPage() {
-  return <AdminScreen mode="logs" />;
+  return <AdminLogs />;
 }
