@@ -1,4 +1,4 @@
-import { INestApplication } from '@nestjs/common';
+import { ForbiddenException, INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import * as argon2 from 'argon2';
 import request from 'supertest';
@@ -10,6 +10,13 @@ import { BookingMailer } from '../src/modules/bookings/booking-mailer';
 import { MailMessage, MailService } from '../src/modules/mail/mail.service';
 import { PayoutMailer } from '../src/modules/payouts/payout-mailer';
 import { AccountMailer } from '../src/modules/admin/account-mailer';
+import { AiService } from '../src/modules/marketing/ai.service';
+import { PublisherRegistry } from '../src/modules/marketing/publishers/publisher.registry';
+import {
+  publishFailed,
+  type PublishablePost,
+  type PublishTarget,
+} from '../src/modules/marketing/publishers/social-publisher';
 import { StorageService } from '../src/modules/storage/storage.service';
 import { PLATFORM_WALLET_ID } from '../src/modules/wallets/wallet-ledger';
 import { PrismaService } from '../src/prisma/prisma.service';
@@ -73,10 +80,99 @@ export const FILES = {
   text: Buffer.from('not really an image'),
 };
 
+/**
+ * Stands in for the model. Tests set `answer` to whatever the real call would have returned and read `calls` to
+ * check what was asked; `budgetLeft` lets a test put a hotel over its cap without spending anything.
+ */
+export class FakeAi {
+  calls: { purpose: string; system: string; prompt: string }[] = [];
+  answer: unknown = {
+    summary: 'Ấm áp, xưng "mình", câu ngắn.',
+    audience: 'Gia đình trẻ đi nghỉ cuối tuần',
+    highlights: 'hướng biển, bữa sáng, gần chợ đêm',
+  };
+  budgetLeft = 5;
+  available = true;
+
+  budget() {
+    return Promise.resolve({
+      spentUsd: 5 - this.budgetLeft,
+      limitUsd: 5,
+      remainingUsd: this.budgetLeft,
+    });
+  }
+
+  ask(
+    context: { purpose: string },
+    _schema: unknown,
+    system: string,
+    prompt: string,
+  ) {
+    if (this.budgetLeft <= 0) {
+      return Promise.reject(
+        new ForbiddenException({
+          code: 'AI_BUDGET_EXCEEDED',
+          message: 'This hotel has used its $5 of AI for this month',
+        }),
+      );
+    }
+    this.calls.push({ purpose: context.purpose, system, prompt });
+    return Promise.resolve(this.answer);
+  }
+
+  clear() {
+    this.calls = [];
+    this.budgetLeft = 5;
+  }
+}
+
+/**
+ * Stands in for every social platform. Tests read `posts` to see what would have gone out, set `failWith` to make
+ * the platform refuse, and set `metricsAnswer` to whatever the insights call would have returned.
+ */
+export class FakePublisherRegistry {
+  posts: (PublishablePost & { platform: string; accountName: string })[] = [];
+  metricsCalls = 0;
+  nextPostId = 'post_1';
+  /** When set, the platform refuses with this message instead of accepting the post. */
+  failWith: string | null = null;
+  metricsAnswer = { views: 120, likes: 9, shares: 2, comments: 3 };
+
+  for(platform: string) {
+    return {
+      platform,
+      publish: (target: PublishTarget, post: PublishablePost) => {
+        if (this.failWith) {
+          return Promise.reject(publishFailed(platform, this.failWith));
+        }
+        this.posts.push({
+          ...post,
+          platform,
+          accountName: target.accountName,
+        });
+        return Promise.resolve(this.nextPostId);
+      },
+      metrics: () => {
+        this.metricsCalls++;
+        return Promise.resolve(this.metricsAnswer);
+      },
+    };
+  }
+
+  clear() {
+    this.posts = [];
+    this.metricsCalls = 0;
+    this.nextPostId = 'post_1';
+    this.failWith = null;
+  }
+}
+
 /** App with emails captured in `outbox` and Cloudinary replaced by `storage`. */
 export async function createTestApp() {
   const outbox: MailMessage[] = [];
   const storage = new FakeStorage();
+  const ai = new FakeAi();
+  const publisher = new FakePublisherRegistry();
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(MailService)
     .useValue({
@@ -87,6 +183,10 @@ export async function createTestApp() {
     })
     .overrideProvider(StorageService)
     .useValue(storage)
+    .overrideProvider(AiService)
+    .useValue(ai)
+    .overrideProvider(PublisherRegistry)
+    .useValue(publisher)
     .compile();
 
   const app: INestApplication<App> = moduleRef.createNestApplication();
@@ -103,6 +203,8 @@ export async function createTestApp() {
     await app.get(AccountMailer).idle();
     outbox.length = 0;
     storage.clear();
+    ai.clear();
+    publisher.clear();
     await prisma.$executeRawUnsafe(
       'TRUNCATE TABLE user_account, audit_log RESTART IDENTITY CASCADE',
     );
@@ -173,5 +275,16 @@ export async function createTestApp() {
     return (res.body.data as { accessToken: string }).accessToken;
   };
 
-  return { app, prisma, api, outbox, storage, reset, signIn, signInStaff };
+  return {
+    app,
+    prisma,
+    api,
+    outbox,
+    storage,
+    ai,
+    publisher,
+    reset,
+    signIn,
+    signInStaff,
+  };
 }

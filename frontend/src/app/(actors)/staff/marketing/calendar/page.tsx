@@ -1,208 +1,256 @@
 "use client";
 
-import React, { useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
-import {
-  CalendarDays,
-  Plus,
-  ChevronRight,
-  Clock,
-  Mail,
-  Share2,
-  Sparkles,
-  Zap,
-  Globe,
-  Settings,
-  ArrowLeft,
-  Camera,
-} from "lucide-react";
+import { BarChart3, CalendarDays, Link2, Loader2, RefreshCw, XCircle } from "lucide-react";
+import type { ContentSchedule, ScheduleStatus } from "@stayreco/shared";
+import Pagination from "@/components/common/pagination/Pagination";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
+import { formatDateTime } from "@/features/stays/lib/format";
+import { useStaffHotel } from "@/features/staff/components/StaffHotelProvider";
+import { useCancelSchedule, useSchedules, useSocialAccounts } from "@/features/staff/api/marketing-queries";
+import { getMarketingErrorMessage, isMissingMarketingPermission } from "@/features/staff/lib/marketing-errors";
+import {
+  MarketingErrorPanel,
+  MarketingHeader,
+  PlatformPill,
+  ScheduleStatusPill,
+} from "@/features/staff/marketing/MarketingParts";
 
-interface ScheduledPost {
-  id: string;
-  title: string;
-  channel: "Facebook" | "Instagram" | "Email" | "Zalo";
-  scheduledTime: string;
-  status: "Chờ đăng" | "Đã đăng thành công" | "Bản nháp";
-  author: string;
+const PAGE_SIZE = 20;
+
+const TABS: Array<{ id: string; label: string; status?: ScheduleStatus[]; sort?: "published-desc" }> = [
+  { id: "upcoming", label: "Chờ đăng", status: ["SCHEDULED", "PUBLISHING"] },
+  { id: "published", label: "Đã đăng", status: ["PUBLISHED"], sort: "published-desc" },
+  { id: "failed", label: "Đăng lỗi", status: ["FAILED"] },
+  { id: "all", label: "Tất cả" },
+];
+
+const dayFormat = new Intl.DateTimeFormat("vi-VN", {
+  weekday: "long",
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+  timeZone: "Asia/Ho_Chi_Minh",
+});
+const timeFormat = new Intl.DateTimeFormat("vi-VN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Ho_Chi_Minh" });
+
+/** The instant a row belongs to on the calendar: when it went out, else when it is due. */
+function instantOf(schedule: ContentSchedule) {
+  return schedule.publishedAt ?? schedule.scheduledAt;
+}
+
+function groupByDay(schedules: ContentSchedule[]) {
+  const groups = new Map<string, ContentSchedule[]>();
+  for (const schedule of schedules) {
+    const at = instantOf(schedule);
+    const key = at
+      ? dayFormat.format(new Date(at))
+      : schedule.status === "SCHEDULED" || schedule.status === "PUBLISHING"
+        ? "Đăng ở lượt chạy kế tiếp"
+        : "Đăng ngay (không hẹn giờ)";
+    groups.set(key, [...(groups.get(key) ?? []), schedule]);
+  }
+  return [...groups.entries()];
+}
+
+function ScheduleItem({ schedule }: { schedule: ContentSchedule }) {
+  const cancel = useCancelSchedule();
+  const at = instantOf(schedule);
+  return (
+    <li className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-2xs sm:flex-row sm:items-start">
+      <div className="w-16 shrink-0 text-sm font-bold text-slate-900">{at ? timeFormat.format(new Date(at)) : "—"}</div>
+      <div className="min-w-0 flex-1 space-y-1.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <PlatformPill platform={schedule.platform} />
+          <ScheduleStatusPill status={schedule.status} />
+          <span className="font-mono text-[11px] text-slate-400">{schedule.accountName}</span>
+        </div>
+        <Link
+          href={`/staff/marketing/content/${schedule.contentId}`}
+          className="block text-sm font-semibold text-slate-900 hover:text-[#934a33]"
+        >
+          {schedule.title || "(Chưa có tiêu đề)"}
+        </Link>
+        <p className="line-clamp-2 text-xs text-slate-500">{schedule.body}</p>
+        {schedule.failureReason && (
+          <p className="rounded bg-red-50 px-2 py-1 text-[11px] text-red-700">Lý do: {schedule.failureReason}</p>
+        )}
+        {cancel.error && <p className="text-[11px] text-red-600">{getMarketingErrorMessage(cancel.error)}</p>}
+      </div>
+      <div className="flex shrink-0 gap-2">
+        {schedule.status === "SCHEDULED" && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-1.5 text-xs text-red-600"
+            disabled={cancel.isPending}
+            onClick={() => cancel.mutate(schedule.id)}
+          >
+            {cancel.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <XCircle className="size-3.5" />} Huỷ lịch
+          </Button>
+        )}
+        {schedule.status === "PUBLISHED" && (
+          <Link href={`/staff/marketing/analytics?schedule=${schedule.id}`}>
+            <Button size="sm" variant="outline" className="gap-1.5 text-xs">
+              <BarChart3 className="size-3.5" /> Hiệu quả
+            </Button>
+          </Link>
+        )}
+      </div>
+    </li>
+  );
 }
 
 export default function StaffMarketingCalendarPage() {
-  const [scheduledPosts, setScheduledPosts] = useState<ScheduledPost[]>([
-    {
-      id: "sch-1",
-      title: "Ưu Đãi Mùa Thu — Đặt Phòng Deluxe Ocean King Tặng Voucher Spa 300K",
-      channel: "Facebook",
-      scheduledTime: "20/10/2026 18:00",
-      status: "Chờ đăng",
-      author: "Nguyễn Hương Ly",
-    },
-    {
-      id: "sch-2",
-      title: "Story Visual: Trải nghiệm Buffet Sáng Hữu Cơ tại An Nhiên Riverside",
-      channel: "Instagram",
-      scheduledTime: "21/10/2026 09:00",
-      status: "Chờ đăng",
-      author: "AI Marketing",
-    },
-    {
-      id: "sch-3",
-      title: "Email Tri Ân Hội Viên VIP Gold — Tặng Voucher Late Check-out 14:00",
-      channel: "Email",
-      scheduledTime: "15/10/2026 10:00",
-      status: "Đã đăng thành công",
-      author: "Nguyễn Hương Ly",
-    },
-  ]);
+  const { hotel, isLoading: hotelLoading } = useStaffHotel();
+  const hotelId = hotel?.summary.id;
+  const [tab, setTab] = useState("upcoming");
+  const [page, setPage] = useState(1);
+  const current = TABS.find((item) => item.id === tab);
+  const schedulesQuery = useSchedules(
+    hotelId,
+    { page, pageSize: PAGE_SIZE, status: current?.status, sort: current?.sort },
+    { poll: true },
+  );
+  const accountsQuery = useSocialAccounts(hotelId);
+  const schedules = schedulesQuery.data?.schedules ?? [];
+  const meta = schedulesQuery.data?.meta;
+  const forbidden = isMissingMarketingPermission(schedulesQuery.error);
 
   return (
-    <div className="font-sans antialiased text-foreground">
-      <main>
-        <div className="p-8 space-y-6 max-w-7xl mx-auto w-full">
-          {/* Breadcrumb & Navigation */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2 text-xs text-slate-500 mb-1">
-                <Link href="/staff/dashboard" className="hover:text-[#934a33]">Bàn làm việc</Link>
-                <ChevronRight className="w-3 h-3" />
-                <span className="text-slate-800 font-medium">Lịch đăng bài & Kết nối kênh</span>
-              </div>
-              <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-                <CalendarDays className="w-7 h-7 text-[#934a33]" /> Lịch Đăng Bài & Quản Lý Kênh Truyền Thông
-              </h1>
+    <div className="space-y-5">
+      <MarketingHeader
+        title="Lịch đăng & kênh"
+        icon={<CalendarDays className="size-7 text-[#934a33]" />}
+        crumbs={[{ label: "Lịch đăng" }]}
+        description="Các bài đã lên lịch đăng lên trang Facebook / Instagram của khách sạn. Hệ thống tự đăng mỗi phút; bài lỗi ghi rõ lý do từ nền tảng và không tự thử lại."
+        actions={
+          !forbidden && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 text-xs"
+              onClick={() => {
+                void schedulesQuery.refetch();
+                void accountsQuery.refetch();
+              }}
+              disabled={schedulesQuery.isFetching}
+            >
+              <RefreshCw className={cn("size-3.5", schedulesQuery.isFetching && "animate-spin")} /> Làm mới
+            </Button>
+          )
+        }
+      />
+
+      {forbidden ? (
+        <MarketingErrorPanel error={schedulesQuery.error} />
+      ) : (
+        <div className="grid items-start gap-5 lg:grid-cols-3">
+          <section className="space-y-4 lg:col-span-2">
+            <div className="flex flex-wrap items-center gap-1.5" role="tablist" aria-label="Lọc lịch đăng">
+              {TABS.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === item.id}
+                  onClick={() => {
+                    setTab(item.id);
+                    setPage(1);
+                  }}
+                  className={cn(
+                    "rounded-lg px-3 py-1.5 text-xs font-semibold transition",
+                    tab === item.id ? "bg-[#934a33] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200",
+                  )}
+                >
+                  {item.label}
+                </button>
+              ))}
+              {meta && <span className="ml-auto text-xs text-slate-500">{meta.total} bài</span>}
             </div>
 
-            <div className="flex items-center gap-3">
-              <Link href="/staff/marketing/content">
-                <Button variant="outline" className="h-10 text-xs font-semibold border-slate-300">
-                  <ArrowLeft className="w-4 h-4 mr-1.5" /> Thư Viện Nội Dung AI
-                </Button>
-              </Link>
-              <Link href="/staff/marketing/analytics">
-                <Button className="h-10 bg-[#934a33] hover:bg-[#7b3e2b] text-white text-xs font-semibold shadow-md">
-                  <Sparkles className="w-4 h-4 mr-1.5" /> Hiệu Quả Marketing
-                </Button>
-              </Link>
-            </div>
-          </div>
-
-          {/* Social Channel Connections Cards (4 Channels) */}
-          <div className="space-y-3">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
-              Trạng thái kết nối kênh Social Media
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
-                    <Globe className="w-4 h-4 text-blue-600" /> Facebook Fanpage
-                  </span>
-                  <Badge className="bg-emerald-100 text-emerald-800 text-[10px]">Đã kết nối</Badge>
-                </div>
-                <p className="text-[11px] text-slate-500">15.2k Theo dõi • Tự động đăng ON</p>
+            {hotelLoading || schedulesQuery.isLoading ? (
+              <div className="space-y-3">
+                {[0, 1, 2].map((key) => (
+                  <Skeleton key={key} className="h-24 rounded-xl" />
+                ))}
               </div>
-
-              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
-                    <Camera className="w-4 h-4 text-pink-600" /> Instagram Business
-                  </span>
-                  <Badge className="bg-emerald-100 text-emerald-800 text-[10px]">Đã kết nối</Badge>
-                </div>
-                <p className="text-[11px] text-slate-500">8.4k Theo dõi • Story & Reels</p>
+            ) : schedulesQuery.error ? (
+              <MarketingErrorPanel error={schedulesQuery.error} onRetry={() => void schedulesQuery.refetch()} />
+            ) : schedules.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center">
+                <CalendarDays className="mx-auto size-8 text-slate-300" />
+                <p className="mt-2 text-sm font-semibold text-slate-700">Chưa có bài nào ở mục này</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Mở một bài đã được duyệt trong{" "}
+                  <Link href="/staff/marketing/content" className="font-semibold text-[#934a33] underline">
+                    Thư viện nội dung
+                  </Link>{" "}
+                  để lên lịch đăng.
+                </p>
               </div>
-
-              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
-                    <Globe className="w-4 h-4 text-emerald-600" /> Zalo Official Account
-                  </span>
-                  <Badge className="bg-emerald-100 text-emerald-800 text-[10px]">Đã kết nối</Badge>
-                </div>
-                <p className="text-[11px] text-slate-500">Gửi ZNS CSKH tự động</p>
+            ) : (
+              <div className={cn("space-y-5", schedulesQuery.isPlaceholderData && "opacity-60")}>
+                {groupByDay(schedules).map(([day, items]) => (
+                  <div key={day} className="space-y-2">
+                    <h2 className="text-xs font-bold uppercase text-slate-500">{day}</h2>
+                    <ul className="space-y-2">
+                      {items.map((schedule) => (
+                        <ScheduleItem key={schedule.id} schedule={schedule} />
+                      ))}
+                    </ul>
+                  </div>
+                ))}
               </div>
+            )}
 
-              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
-                    <Mail className="w-4 h-4 text-amber-600" /> Email Marketing API
-                  </span>
-                  <Badge className="bg-emerald-100 text-emerald-800 text-[10px]">Đã kết nối</Badge>
-                </div>
-                <p className="text-[11px] text-slate-500">SendGrid / StayReco Mailer</p>
-              </div>
-            </div>
-          </div>
+            {meta && meta.totalPages > 1 && (
+              <Pagination currentPage={meta.page} totalPages={meta.totalPages} onPageChange={setPage} />
+            )}
+          </section>
 
-          {/* Calendar Schedule Grid / Table */}
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 space-y-5">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
-              <div>
-                <h3 className="text-base font-bold text-slate-900">Danh Sách Bài Đăng Theo Lịch (Tháng 10/2026)</h3>
-                <p className="text-xs text-slate-500">Hệ thống sẽ tự động đăng bài lên các kênh đúng mốc giờ đã chọn</p>
-              </div>
-              <Link href="/staff/marketing/content">
-                <Button className="h-9 bg-[#934a33] hover:bg-[#7b3e2b] text-white text-xs font-semibold shadow-2xs">
-                  <Plus className="w-4 h-4 mr-1.5" /> Thêm Bài Đăng Mới
-                </Button>
-              </Link>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead className="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
-                  <tr>
-                    <th className="p-3">Kênh truyền thông</th>
-                    <th className="p-3">Tiêu đề bài đăng</th>
-                    <th className="p-3">Thời gian đăng dự kiến</th>
-                    <th className="p-3">Người biên soạn</th>
-                    <th className="p-3 text-center">Trạng thái</th>
-                    <th className="p-3 text-right">Thao tác</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {scheduledPosts.map((post) => (
-                    <tr key={post.id} className="hover:bg-slate-50 transition">
-                      <td className="p-3">
-                        <Badge variant="outline" className="font-bold text-slate-800 bg-slate-100">
-                          {post.channel}
-                        </Badge>
-                      </td>
-                      <td className="p-3 font-semibold text-slate-900 max-w-sm truncate">
-                        {post.title}
-                      </td>
-                      <td className="p-3 font-mono font-bold text-[#934a33]">
-                        {post.scheduledTime}
-                      </td>
-                      <td className="p-3 text-slate-600">{post.author}</td>
-                      <td className="p-3 text-center">
-                        <Badge
-                          className={`${
-                            post.status === "Đã đăng thành công"
-                              ? "bg-emerald-100 text-emerald-800"
-                              : "bg-amber-100 text-amber-800"
-                          }`}
-                        >
-                          {post.status}
-                        </Badge>
-                      </td>
-                      <td className="p-3 text-right">
-                        <Link href="/staff/marketing/content/sch-1">
-                          <Button variant="outline" className="h-8 text-xs font-semibold border-slate-300">
-                            Chỉnh sửa
-                          </Button>
-                        </Link>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <aside className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-2xs">
+            <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+              <Link2 className="size-4 text-[#934a33]" /> Kênh đã kết nối
+            </h2>
+            {accountsQuery.isLoading ? (
+              <Skeleton className="h-16 rounded-lg" />
+            ) : accountsQuery.error ? (
+              <p className="text-xs text-red-600">{getMarketingErrorMessage(accountsQuery.error)}</p>
+            ) : (accountsQuery.data ?? []).length === 0 ? (
+              <p className="text-xs text-slate-500">Chưa có trang nào được kết nối.</p>
+            ) : (
+              <ul className="space-y-2">
+                {accountsQuery.data!.map((account) => (
+                  <li key={account.id} className="space-y-1 rounded-lg border border-slate-200 p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <PlatformPill platform={account.platform} />
+                      <span
+                        className={cn(
+                          "text-[11px] font-semibold",
+                          account.usable ? "text-emerald-700" : "text-red-600",
+                        )}
+                      >
+                        {account.usable ? "Đang hoạt động" : "Token hết hạn"}
+                      </span>
+                    </div>
+                    <p className="font-mono text-xs text-slate-700">{account.accountName}</p>
+                    <p className="text-[11px] text-slate-400">
+                      {account.expiresAt ? `Hết hạn ${formatDateTime(account.expiresAt)}` : "Không có hạn token"}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="text-[11px] text-slate-500">
+              Chỉ chủ khách sạn mới kết nối hoặc ngắt kết nối trang. TikTok chỉ nhận video nên chưa hỗ trợ đăng bài.
+            </p>
+          </aside>
         </div>
-      </main>
+      )}
     </div>
   );
 }

@@ -313,6 +313,68 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorInfo> = {
     description:
       'The wallet balance does not cover the whole booking; paying from it is all or nothing',
   },
+  AI_UNAVAILABLE: {
+    status: 503,
+    description: 'The AI writer is not configured, or answered unusably',
+  },
+  AI_BUDGET_EXCEEDED: {
+    status: 403,
+    description: 'The hotel has used its AI budget for this calendar month',
+  },
+  AI_REFUSED: {
+    status: 403,
+    description: 'The model declined to write what was asked for',
+  },
+  SOCIAL_ACCOUNT_NOT_FOUND: {
+    status: 404,
+    description: "A connected page doesn't exist or belongs to another hotel",
+  },
+  SCHEDULE_NOT_FOUND: {
+    status: 404,
+    description: "A scheduled post doesn't exist or belongs to another hotel",
+  },
+  SCHEDULE_STATUS_CONFLICT: {
+    status: 409,
+    description:
+      'Cancelling or reading figures for a post whose status does not allow it',
+  },
+  CONTENT_NOT_APPROVED: {
+    status: 409,
+    description: 'Scheduling content the owner has not approved',
+  },
+  SOCIAL_PUBLISH_FAILED: {
+    status: 502,
+    description:
+      'The platform refused the post or could not be reached; its own message is passed through',
+  },
+  SOCIAL_PLATFORM_UNSUPPORTED: {
+    status: 501,
+    description:
+      'Posting to this platform is not built yet (TikTok takes video only)',
+  },
+  SOCIAL_OAUTH_DISABLED: {
+    status: 503,
+    description:
+      'No Meta app is configured on this server, so the owner cannot be sent to Facebook; a page token can still be pasted',
+  },
+  SOCIAL_OAUTH_INVALID: {
+    status: 400,
+    description:
+      'The `state` or `connectionToken` handed back is not ours, is for another hotel, or has expired',
+  },
+  SOCIAL_OAUTH_FAILED: {
+    status: 502,
+    description:
+      'Facebook refused the exchange, or granted no page we can post to; its own message is passed through',
+  },
+  CONTENT_NOT_FOUND: {
+    status: 404,
+    description: "Marketing content doesn't exist or belongs to another hotel",
+  },
+  CONTENT_STATUS_CONFLICT: {
+    status: 409,
+    description: 'The content status does not allow that action',
+  },
   NOTIFICATION_NOT_FOUND: {
     status: 404,
     description: "Notification doesn't exist or belongs to someone else",

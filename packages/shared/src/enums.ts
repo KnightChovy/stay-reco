@@ -115,6 +115,51 @@ export const PaymentStatus = {
 } as const;
 export type PaymentStatus = (typeof PaymentStatus)[keyof typeof PaymentStatus];
 
+/** What a piece of marketing content is (phase 5). */
+export const ContentType = {
+  /** A social post. */
+  POST: 'POST',
+  BLOG: 'BLOG',
+  /** A short caption for a photo or video. */
+  CAPTION: 'CAPTION',
+  /** A post built around a discount the hotel is running. */
+  PROMOTION: 'PROMOTION',
+} as const;
+export type ContentType = (typeof ContentType)[keyof typeof ContentType];
+
+/** How far a piece of content has got (M7): a staff member writes, the owner approves. */
+export const ContentStatus = {
+  DRAFT: 'DRAFT',
+  PENDING_APPROVAL: 'PENDING_APPROVAL',
+  APPROVED: 'APPROVED',
+  SCHEDULED: 'SCHEDULED',
+  PUBLISHED: 'PUBLISHED',
+  REJECTED: 'REJECTED',
+} as const;
+export type ContentStatus = (typeof ContentStatus)[keyof typeof ContentStatus];
+
+/** Where a scheduled post stands (M9). */
+export const ScheduleStatus = {
+  SCHEDULED: 'SCHEDULED',
+  /**
+   * Claimed by the publisher job while the platform is called, so no second run or instance can send it again and a
+   * cancel cannot land mid-call. A row left here means the process stopped during the call: check the page by hand.
+   */
+  PUBLISHING: 'PUBLISHING',
+  PUBLISHED: 'PUBLISHED',
+  FAILED: 'FAILED',
+  CANCELLED: 'CANCELLED',
+} as const;
+export type ScheduleStatus = (typeof ScheduleStatus)[keyof typeof ScheduleStatus];
+
+/** Where a post goes. */
+export const SocialPlatform = {
+  FACEBOOK: 'FACEBOOK',
+  INSTAGRAM: 'INSTAGRAM',
+  TIKTOK: 'TIKTOK',
+} as const;
+export type SocialPlatform = (typeof SocialPlatform)[keyof typeof SocialPlatform];
+
 /** Why a review, or one of its photos, was flagged for a platform manager (R11). */
 export const ReportReason = {
   /** Abusive, obscene or otherwise offensive. */
