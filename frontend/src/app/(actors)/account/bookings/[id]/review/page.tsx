@@ -110,7 +110,8 @@ function ReviewForm({
       setErrors(getApiFieldErrors(error));
       setFormError(getApiErrorMessage(error, 'Không gửi được đánh giá. Vui lòng thử lại.'));
     };
-    const onSuccess = () => router.replace(`/account/bookings/${bookingId}?reviewed=1`);
+    const onSuccess = (review: Review) =>
+      router.replace(`/account/bookings/${bookingId}?reviewed=${review.isVisible ? 'visible' : 'hidden'}`);
 
     if (existing) {
       // Sending `subRatings` replaces all of them, so the whole set always goes.

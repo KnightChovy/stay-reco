@@ -39,7 +39,8 @@ export function VoucherPicker({ options, isLoading, selectedCode, bestCode, onSe
     );
   }
 
-  const sorted = [...options].sort((a, b) => voucherSaving(b) - voucherSaving(a));
+  // Sorted by saving only once every code is priced, so cards do not jump around while quotes arrive.
+  const sorted = isLoading ? options : [...options].sort((a, b) => voucherSaving(b) - voucherSaving(a));
 
   return (
     <div className="space-y-2" role="radiogroup" aria-label="Chọn voucher">
