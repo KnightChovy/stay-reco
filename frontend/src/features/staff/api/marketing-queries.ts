@@ -186,6 +186,8 @@ export function useCancelSchedule() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: [...marketingKeys.all, "schedules"] });
       void queryClient.invalidateQueries({ queryKey: [...marketingKeys.all, "contents"] });
+      // Cancelling the last waiting post puts the piece back to APPROVED: its detail must follow.
+      void queryClient.invalidateQueries({ queryKey: [...marketingKeys.all, "content"] });
     },
   });
 }

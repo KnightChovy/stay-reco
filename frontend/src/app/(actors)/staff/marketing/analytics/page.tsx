@@ -129,7 +129,13 @@ function AnalyticsContent() {
   const { hotel, isLoading: hotelLoading } = useStaffHotel();
   const hotelId = hotel?.summary.id;
   const [page, setPage] = useState(1);
-  const schedulesQuery = useSchedules(hotelId, { page, pageSize: PAGE_SIZE, status: ["PUBLISHED"] });
+  // Latest first, so a post that just went out (the "Xem hiệu quả" link) is on the first page.
+  const schedulesQuery = useSchedules(hotelId, {
+    page,
+    pageSize: PAGE_SIZE,
+    status: ["PUBLISHED"],
+    sort: "published-desc",
+  });
   const schedules = schedulesQuery.data?.schedules ?? [];
   const meta = schedulesQuery.data?.meta;
   const forbidden = isMissingMarketingPermission(schedulesQuery.error);

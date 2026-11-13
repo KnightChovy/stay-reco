@@ -141,6 +141,11 @@ export type ContentStatus = (typeof ContentStatus)[keyof typeof ContentStatus];
 /** Where a scheduled post stands (M9). */
 export const ScheduleStatus = {
   SCHEDULED: 'SCHEDULED',
+  /**
+   * Claimed by the publisher job while the platform is called, so no second run or instance can send it again and a
+   * cancel cannot land mid-call. A row left here means the process stopped during the call: check the page by hand.
+   */
+  PUBLISHING: 'PUBLISHING',
   PUBLISHED: 'PUBLISHED',
   FAILED: 'FAILED',
   CANCELLED: 'CANCELLED',

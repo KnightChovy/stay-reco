@@ -18,6 +18,8 @@ ideas ─→ generate ─→ [DRAFT] ─→ submit ─→ [PENDING_APPROVAL] ─
 
 Three things are worth knowing before reading the table.
 
+**A staff member needs `MARKETING` on every marketing route but the voice and the budget**, including the ones addressed by id (`/marketing-content/:id…`, `/content-schedules/:id…`); the owner always may. Without it a front-desk account could edit, submit or delete a draft, or post on the hotel's page, by knowing an id.
+
 **Staff write, the owner approves.** A staff member with the `MARKETING` permission can ask for a draft, edit it and submit it. Only the **owner** approves or rejects, because what goes out goes out under the hotel's name. The text is frozen on approval, so what was approved is what is posted.
 
 **Suggestions cost nothing.** `marketing-content/ideas` is database queries, not a model call. A booking system already knows what is worth posting about — which rooms are empty this week, which discount is running, which guest just left five stars — so staff pick an idea instead of inventing one.
@@ -42,14 +44,14 @@ Three things are worth knowing before reading the table.
 | GET | `/hotels/:hotelId/marketing-content/ideas` | member + `MARKETING` | | `ContentIdea[]` |
 | POST | `/hotels/:hotelId/marketing-content/generate` | member + `MARKETING` | `generateContentSchema` | `MarketingContent` (201) |
 | GET | `/hotels/:hotelId/marketing-content` | member + `MARKETING` | | page of `MarketingContent` |
-| GET | `/marketing-content/:id` | member | | `MarketingContent` |
-| PATCH | `/marketing-content/:id` | member | `updateContentSchema` | `MarketingContent` |
+| GET | `/marketing-content/:id` | member + `MARKETING` | | `MarketingContent` |
+| PATCH | `/marketing-content/:id` | member + `MARKETING` | `updateContentSchema` | `MarketingContent` |
 | POST | `/marketing-content/:id/image` | member + `MARKETING` | `multipart/form-data`, field `file` | `MarketingContent` (201) |
 | DELETE | `/marketing-content/:id/image` | member + `MARKETING` | | `MarketingContent` |
-| POST | `/marketing-content/:id/submit` | member | | `MarketingContent` (200) |
+| POST | `/marketing-content/:id/submit` | member + `MARKETING` | | `MarketingContent` (200) |
 | POST | `/marketing-content/:id/approve` | **owner** | | `MarketingContent` (200) |
 | POST | `/marketing-content/:id/reject` | **owner** | `rejectContentSchema` | `MarketingContent` (200) |
-| DELETE | `/marketing-content/:id` | member | | 204 |
+| DELETE | `/marketing-content/:id` | member + `MARKETING` | | 204 |
 
 ### Pages, calendar and figures
 
@@ -61,12 +63,12 @@ Three things are worth knowing before reading the table.
 | POST | `/hotels/:hotelId/social-accounts` | **owner** | `connectSocialAccountSchema` | `SocialAccount` (201) |
 | GET | `/hotels/:hotelId/social-accounts` | member + `MARKETING` | | `SocialAccount[]` |
 | DELETE | `/social-accounts/:id` | **owner** | | 204 |
-| POST | `/marketing-content/:id/schedule` | member | `scheduleContentSchema` | `ContentSchedule` (201) |
+| POST | `/marketing-content/:id/schedule` | member + `MARKETING` | `scheduleContentSchema` | `ContentSchedule` (201) |
 | GET | `/hotels/:hotelId/content-schedules` | member + `MARKETING` | | page of `ContentSchedule` |
-| GET | `/content-schedules/:id` | member | | `ContentSchedule` |
-| DELETE | `/content-schedules/:id` | member | | `ContentSchedule` (200) |
-| GET | `/content-schedules/:id/metrics` | member | | `ContentMetric[]` |
-| POST | `/content-schedules/:id/metrics/refresh` | member | | `ContentMetric` (200) |
+| GET | `/content-schedules/:id` | member + `MARKETING` | | `ContentSchedule` |
+| DELETE | `/content-schedules/:id` | member + `MARKETING` | | `ContentSchedule` (200) |
+| GET | `/content-schedules/:id/metrics` | member + `MARKETING` | | `ContentMetric[]` |
+| POST | `/content-schedules/:id/metrics/refresh` | member + `MARKETING` | | `ContentMetric` (200) |
 
 ## Why a brand voice exists
 
@@ -208,6 +210,11 @@ Uploading again **replaces** the picture and deletes the file it replaced; delet
 Not yet: the writer does not produce one. Gemini writes words, so `mediaUrl` is always null on a fresh draft.
 
 ## Scheduling and publishing
+
+`GET /hotels/:hotelId/content-schedules` takes `contentId` (one piece's posts) and `sort`: `scheduled-asc` (default, "post now" rows first, then the soonest) or `published-desc` (latest published first, for figures).
+
+The job **claims** a row before calling the platform (`SCHEDULED → PUBLISHING`), so two runs, two instances or two environments on one database can never send the same post, and a cancel that arrives during the call is refused rather than racing it. A row left in `PUBLISHING` means the process stopped mid-call: check the page by hand. A piece whose posts were all cancelled or failed goes back to `APPROVED`.
+
 
 ```jsonc
 // POST /marketing-content/:id/schedule

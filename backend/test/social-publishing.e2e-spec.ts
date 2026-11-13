@@ -418,13 +418,14 @@ describe('Social accounts, scheduling and publishing (e2e)', () => {
       // The one thing that tells an owner what to do next.
       expect(res.body.data.failureReason).toContain('Session expired');
 
-      // A post that did not go out must not leave the content looking published.
+      // A post that did not go out must not leave the content looking published, nor stuck on the calendar: with
+      // nothing else waiting it is back to APPROVED and can be scheduled again.
       const content = await t
         .api()
         .get(`/api/v1/marketing-content/${h.contentId}`)
         .set(auth(h.token))
         .expect(200);
-      expect(content.body.data.status).toBe('SCHEDULED');
+      expect(content.body.data.status).toBe('APPROVED');
     });
 
     it('does not retry a post that failed', async () => {
@@ -596,6 +597,215 @@ describe('Social accounts, scheduling and publishing (e2e)', () => {
         .set(auth(other.token));
       expect(res.status).toBe(404);
       expect(res.body.code).toBe('SCHEDULE_NOT_FOUND');
+    });
+  });
+
+  describe('Review of #127', () => {
+    /** A hotel with a draft, an approved piece on the calendar, and a staff member of each kind. */
+    const setup = async () => {
+      const h = await hotel();
+      const accountId = idOf(await connect(h.token, h.hotelId).expect(201));
+      const draftId = idOf(
+        await t
+          .api()
+          .post(`/api/v1/hotels/${h.hotelId}/marketing-content/generate`)
+          .set(auth(h.token))
+          .send({ contentType: 'POST', brief: 'Bữa sáng mới mỗi ngày' })
+          .expect(201),
+      );
+      const contentId = await approvedContent(h.token, h.hotelId);
+      const scheduleId = idOf(
+        await schedule(h.token, contentId, {
+          socialAccountId: accountId,
+          scheduledAt: inHours(24),
+        }).expect(201),
+      );
+      const frontDesk = await t.signInStaff(h.hotelId, 'desk@hotel.test', [
+        'FRONT_DESK',
+      ]);
+      const marketer = await t.signInStaff(h.hotelId, 'mkt@hotel.test', [
+        'MARKETING',
+      ]);
+      return {
+        ...h,
+        accountId,
+        draftId,
+        contentId,
+        scheduleId,
+        frontDesk,
+        marketer,
+      };
+    };
+
+    it('refuses every route by id to a staff member without MARKETING', async () => {
+      const s = await setup();
+      const desk = auth(s.frontDesk.token);
+      const content = `/api/v1/marketing-content/${s.draftId}`;
+      const post = `/api/v1/content-schedules/${s.scheduleId}`;
+      // Each call is sent as it is built: a supertest request left unawaited loses its ephemeral server.
+      const calls: Array<[string, () => Promise<{ status: number }>]> = [
+        ['GET content', () => t.api().get(content).set(desk)],
+        [
+          'PATCH content',
+          () => t.api().patch(content).set(desk).send({ body: 'Sửa trộm' }),
+        ],
+        ['submit', () => t.api().post(`${content}/submit`).set(desk)],
+        [
+          'upload image',
+          () =>
+            t.api().post(`${content}/image`).set(desk).attach(
+              'file',
+              // A real 1x1 PNG: a broken file is refused by the upload pipe before the permission is looked at.
+              Buffer.from(
+                'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+                'base64',
+              ),
+              'a.png',
+            ),
+        ],
+        ['remove image', () => t.api().delete(`${content}/image`).set(desk)],
+        ['delete content', () => t.api().delete(content).set(desk)],
+        [
+          'schedule',
+          () =>
+            t
+              .api()
+              .post(`/api/v1/marketing-content/${s.contentId}/schedule`)
+              .set(desk)
+              .send({ socialAccountId: s.accountId }),
+        ],
+        ['GET schedule', () => t.api().get(post).set(desk)],
+        ['cancel schedule', () => t.api().delete(post).set(desk)],
+        ['GET metrics', () => t.api().get(`${post}/metrics`).set(desk)],
+        [
+          'refresh metrics',
+          () => t.api().post(`${post}/metrics/refresh`).set(desk),
+        ],
+      ];
+      for (const [label, call] of calls) {
+        const res = await call();
+        expect({ label, status: res.status }).toEqual({ label, status: 403 });
+      }
+      // Nothing moved: the draft is untouched and the post still waits.
+      const draft = await t.prisma.marketingContent.findUniqueOrThrow({
+        where: { marketingContentId: s.draftId },
+      });
+      expect(draft.status).toBe('DRAFT');
+      expect(draft.body).not.toBe('Sửa trộm');
+      const waiting = await t.prisma.contentSchedule.findUniqueOrThrow({
+        where: { contentScheduleId: s.scheduleId },
+      });
+      expect(waiting.status).toBe('SCHEDULED');
+    });
+
+    it('still lets a staff member with MARKETING work by id', async () => {
+      const s = await setup();
+      await t
+        .api()
+        .patch(`/api/v1/marketing-content/${s.draftId}`)
+        .set(auth(s.marketer.token))
+        .send({ body: 'Bữa sáng có mì Quảng.' })
+        .expect(200);
+      await t
+        .api()
+        .delete(`/api/v1/content-schedules/${s.scheduleId}`)
+        .set(auth(s.marketer.token))
+        .expect(200);
+    });
+
+    it('never sends a post twice when two runs race for it', async () => {
+      const h = await hotel();
+      const accountId = idOf(await connect(h.token, h.hotelId).expect(201));
+      const contentId = await approvedContent(h.token, h.hotelId);
+      await schedule(h.token, contentId, { socialAccountId: accountId }).expect(
+        201,
+      );
+
+      // Two instances of the job, or two environments on one database, see the same due row.
+      const [a, b] = await Promise.all([runJob(), runJob()]);
+      expect(a.published + b.published).toBe(1);
+      expect(t.publisher.posts).toHaveLength(1);
+    });
+
+    it('lists a "post now" row before a timed one', async () => {
+      const h = await hotel();
+      const accountId = idOf(await connect(h.token, h.hotelId).expect(201));
+      const contentId = await approvedContent(h.token, h.hotelId);
+      const timed = idOf(
+        await schedule(h.token, contentId, {
+          socialAccountId: accountId,
+          scheduledAt: inHours(2),
+        }).expect(201),
+      );
+      const now = idOf(
+        await schedule(h.token, contentId, {
+          socialAccountId: accountId,
+        }).expect(201),
+      );
+      const res = await t
+        .api()
+        .get(`/api/v1/hotels/${h.hotelId}/content-schedules`)
+        .set(auth(h.token))
+        .expect(200);
+      expect((res.body.data as { id: string }[]).map((r) => r.id)).toEqual([
+        now,
+        timed,
+      ]);
+    });
+
+    it('puts the content back to APPROVED once its only post is cancelled', async () => {
+      const s = await setup();
+      await t
+        .api()
+        .delete(`/api/v1/content-schedules/${s.scheduleId}`)
+        .set(auth(s.token))
+        .expect(200);
+      const content = await t
+        .api()
+        .get(`/api/v1/marketing-content/${s.contentId}`)
+        .set(auth(s.token))
+        .expect(200);
+      expect(content.body.data.status).toBe('APPROVED');
+    });
+
+    it('filters the calendar by content and lists the latest published first', async () => {
+      const h = await hotel();
+      const accountId = idOf(await connect(h.token, h.hotelId).expect(201));
+      const first = await approvedContent(h.token, h.hotelId);
+      const second = await approvedContent(h.token, h.hotelId);
+      const firstPost = idOf(
+        await schedule(h.token, first, { socialAccountId: accountId }).expect(
+          201,
+        ),
+      );
+      await runJob();
+      const secondPost = idOf(
+        await schedule(h.token, second, { socialAccountId: accountId }).expect(
+          201,
+        ),
+      );
+      await runJob(new Date(Date.now() + 60_000));
+
+      const one = await t
+        .api()
+        .get(`/api/v1/hotels/${h.hotelId}/content-schedules?contentId=${first}`)
+        .set(auth(h.token))
+        .expect(200);
+      expect((one.body.data as { id: string }[]).map((r) => r.id)).toEqual([
+        firstPost,
+      ]);
+
+      const latest = await t
+        .api()
+        .get(
+          `/api/v1/hotels/${h.hotelId}/content-schedules?status=PUBLISHED&sort=published-desc`,
+        )
+        .set(auth(h.token))
+        .expect(200);
+      expect((latest.body.data as { id: string }[]).map((r) => r.id)).toEqual([
+        secondPost,
+        firstPost,
+      ]);
     });
   });
 });

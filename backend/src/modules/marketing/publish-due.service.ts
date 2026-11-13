@@ -12,9 +12,9 @@ const PER_RUN = 20;
 /**
  * Sends the posts that have come due (M13).
  *
- * The only thing that publishes, which is what keeps a post from going out twice: `PeriodicJob` does not overlap
- * runs, and there is no endpoint that publishes, so at any moment exactly one piece of code is looking at a
- * SCHEDULED row (decision M14).
+ * The only thing that publishes (decision M14). `PeriodicJob` keeps the runs of one process apart, and
+ * `publishOne` claims each row (SCHEDULED -> PUBLISHING) before calling the platform, so several instances, or two
+ * environments sharing a database, cannot send the same post twice either.
  *
  * Posts are sent one at a time rather than in parallel. Twenty at once is twenty simultaneous calls to Meta from
  * one app, which is how an app meets its rate limit; the queue here is a minute long, and nothing is waiting.
@@ -44,8 +44,10 @@ export class PublishDueService extends PeriodicJob {
       // A thrown error here would stop the whole run and leave the rest of the queue for the next minute, so each
       // post is kept to itself. `publishOne` already records a platform refusal on the row.
       try {
-        if ((await this.schedules.publishOne(id)) === 'PUBLISHED') published++;
-        else failed++;
+        const outcome = await this.schedules.publishOne(id);
+        // SKIPPED: another run or instance claimed it first, or it was cancelled; not a failure.
+        if (outcome === 'PUBLISHED') published++;
+        else if (outcome === 'FAILED') failed++;
       } catch (err) {
         failed++;
         this.logger.error(`Publishing ${id} threw: ${String(err)}`);

@@ -21,6 +21,7 @@ export const contentTypeLabels: Record<ContentType, string> = {
 
 export const scheduleStatusLabels: Record<ScheduleStatus, Labelled> = {
   SCHEDULED: { label: "Chờ đăng", tone: "info" },
+  PUBLISHING: { label: "Đang đăng", tone: "warning" },
   PUBLISHED: { label: "Đã đăng", tone: "success" },
   FAILED: { label: "Đăng lỗi", tone: "danger" },
   CANCELLED: { label: "Đã huỷ", tone: "muted" },

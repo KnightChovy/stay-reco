@@ -45,7 +45,7 @@ const STATUS_HINT: Record<MarketingContent["status"], string> = {
   DRAFT: "Bản nháp: chỉnh sửa thoải mái, xong thì gửi chủ khách sạn duyệt.",
   PENDING_APPROVAL: "Đang chờ chủ khách sạn duyệt. Nội dung tạm khoá chỉnh sửa.",
   APPROVED: "Chủ khách sạn đã duyệt. Nội dung được giữ nguyên như lúc duyệt; hãy lên lịch đăng.",
-  SCHEDULED: "Đã lên lịch đăng. Có thể đăng thêm lên trang khác.",
+  SCHEDULED: "Đã lên lịch đăng. Khi chưa có lịch nào đăng xong, bạn có thể đăng thêm lên trang khác.",
   PUBLISHED: "Bài đã được đăng.",
   REJECTED: "Chủ khách sạn đã từ chối. Sửa theo góp ý rồi gửi duyệt lại.",
 };
@@ -310,8 +310,8 @@ function ContentWorkspace({
                 <CheckCircle2 className="size-3.5" /> Đã lưu
               </span>
             )}
-            {content.status !== "PUBLISHED" &&
-              content.status !== "SCHEDULED" &&
+            {/* The backend deletes only what may still be edited (DRAFT, REJECTED). */}
+            {editable &&
               (confirmDelete ? (
                 <span className="flex items-center gap-2 text-xs">
                   Xoá nội dung này?

@@ -20,7 +20,7 @@ import {
 } from '../../common/hotel-access/hotel-access.service';
 import { Paginated } from '../../common/http/api-response';
 import { pageArgs } from '../../common/http/pagination';
-import { Prisma } from '../../generated/prisma/client';
+import { Prisma, StaffPermission } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { AuditAction, AuditService } from '../audit/audit.service';
@@ -335,7 +335,10 @@ export class ContentService {
     return (JSON.parse(entry.newValue) as { reason?: string }).reason ?? null;
   }
 
-  /** The piece, checked to belong to a hotel the caller may act on. */
+  /**
+   * The piece, checked to belong to a hotel the caller may act on. A staff member also needs MARKETING, the same as
+   * the routes addressed by hotel: without it, anyone on the front desk could edit, submit or delete a draft by id.
+   */
   private async owned(
     user: AuthUser,
     contentId: string,
@@ -347,7 +350,13 @@ export class ContentService {
           include: contentInclude,
         })
       : null;
-    await this.access.assertResource(user, content?.hotelId, level, notFound);
+    await this.access.assertResource(
+      user,
+      content?.hotelId,
+      level,
+      notFound,
+      level === 'member' ? StaffPermission.MARKETING : undefined,
+    );
     return content!;
   }
 

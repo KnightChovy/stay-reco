@@ -86,6 +86,7 @@ const schemaMessages: Record<string, string> = {
   "phone must be a valid phone number": "Số điện thoại không hợp lệ.",
   "password must contain at least one letter and one number": "Mật khẩu phải có ít nhất một chữ cái và một chữ số.",
   "at least one field is required": "Chưa có thay đổi nào để lưu.",
+  "at least one field must be given": "Chưa có thay đổi nào để lưu.",
   "dateOfBirth must be between 1900-01-01 and today": "Ngày sinh phải từ 01/01/1900 đến hôm nay.",
   "time must be HH:mm": "Giờ phải có dạng HH:mm.",
   "ids must be unique": "Danh sách có mục bị trùng.",

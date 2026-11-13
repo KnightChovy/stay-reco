@@ -21,9 +21,9 @@ import {
 
 const PAGE_SIZE = 20;
 
-const TABS: Array<{ id: string; label: string; status?: ScheduleStatus[] }> = [
-  { id: "upcoming", label: "Chờ đăng", status: ["SCHEDULED"] },
-  { id: "published", label: "Đã đăng", status: ["PUBLISHED"] },
+const TABS: Array<{ id: string; label: string; status?: ScheduleStatus[]; sort?: "published-desc" }> = [
+  { id: "upcoming", label: "Chờ đăng", status: ["SCHEDULED", "PUBLISHING"] },
+  { id: "published", label: "Đã đăng", status: ["PUBLISHED"], sort: "published-desc" },
   { id: "failed", label: "Đăng lỗi", status: ["FAILED"] },
   { id: "all", label: "Tất cả" },
 ];
@@ -48,7 +48,7 @@ function groupByDay(schedules: ContentSchedule[]) {
     const at = instantOf(schedule);
     const key = at
       ? dayFormat.format(new Date(at))
-      : schedule.status === "SCHEDULED"
+      : schedule.status === "SCHEDULED" || schedule.status === "PUBLISHING"
         ? "Đăng ở lượt chạy kế tiếp"
         : "Đăng ngay (không hẹn giờ)";
     groups.set(key, [...(groups.get(key) ?? []), schedule]);
@@ -109,8 +109,12 @@ export default function StaffMarketingCalendarPage() {
   const hotelId = hotel?.summary.id;
   const [tab, setTab] = useState("upcoming");
   const [page, setPage] = useState(1);
-  const status = TABS.find((item) => item.id === tab)?.status;
-  const schedulesQuery = useSchedules(hotelId, { page, pageSize: PAGE_SIZE, status }, { poll: true });
+  const current = TABS.find((item) => item.id === tab);
+  const schedulesQuery = useSchedules(
+    hotelId,
+    { page, pageSize: PAGE_SIZE, status: current?.status, sort: current?.sort },
+    { poll: true },
+  );
   const accountsQuery = useSocialAccounts(hotelId);
   const schedules = schedulesQuery.data?.schedules ?? [];
   const meta = schedulesQuery.data?.meta;

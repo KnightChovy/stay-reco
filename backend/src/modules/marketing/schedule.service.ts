@@ -18,7 +18,7 @@ import {
 } from '../../common/hotel-access/hotel-access.service';
 import { Paginated } from '../../common/http/api-response';
 import { pageArgs } from '../../common/http/pagination';
-import { Prisma } from '../../generated/prisma/client';
+import { Prisma, StaffPermission } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditAction, AuditService } from '../audit/audit.service';
 import { PublisherRegistry } from './publishers/publisher.registry';
@@ -115,6 +115,8 @@ export class ScheduleService {
           code: ErrorCode.CONTENT_NOT_FOUND,
           message: 'Content not found',
         }),
+      // Posting on the hotel's page is a marketing action, not something any staff member may do by id.
+      StaffPermission.MARKETING,
     );
     // SCHEDULED is allowed as well as APPROVED: one approved piece may go to several pages, and the first
     // scheduling is what moved it off APPROVED.
@@ -169,6 +171,7 @@ export class ScheduleService {
   ): Promise<Paginated<ContentSchedule>> {
     const where = {
       marketingContent: { hotelId },
+      ...(query.contentId && { marketingContentId: query.contentId }),
       ...(query.status && { status: { in: query.status } }),
       ...(query.platform && {
         socialAccount: { platform: { in: query.platform } },
@@ -185,8 +188,18 @@ export class ScheduleService {
       this.prisma.contentSchedule.findMany({
         where,
         include: scheduleInclude,
-        // Soonest first, which is what a calendar reads. A null time is due now, so it sorts first.
-        orderBy: [{ scheduledAt: 'asc' }, { contentScheduleId: 'asc' }],
+        orderBy:
+          query.sort === 'published-desc'
+            ? [
+                { publishedAt: { sort: 'desc', nulls: 'last' } },
+                { contentScheduleId: 'asc' },
+              ]
+            : // Soonest first, which is what a calendar reads. A null time is due now, so it sorts first; Postgres
+              // would put NULL last on ASC without saying so.
+              [
+                { scheduledAt: { sort: 'asc', nulls: 'first' } },
+                { contentScheduleId: 'asc' },
+              ],
         ...pageArgs(query),
       }),
       this.prisma.contentSchedule.count({ where }),
@@ -208,11 +221,16 @@ export class ScheduleService {
     if (row.status !== 'SCHEDULED') {
       throw wrongStatus('Only a post still waiting to go out can be cancelled');
     }
-    const updated = await this.prisma.contentSchedule.update({
-      where: { contentScheduleId: scheduleId },
+    // Conditional on SCHEDULED: the publisher may have claimed the row since it was read.
+    const { count } = await this.prisma.contentSchedule.updateMany({
+      where: { contentScheduleId: scheduleId, status: 'SCHEDULED' },
       data: { status: 'CANCELLED' },
-      include: scheduleInclude,
     });
+    if (count === 0) {
+      throw wrongStatus('The post is already being published');
+    }
+    await this.settleContent(row.marketingContentId);
+    const updated = await this.owned(user, scheduleId, 'member');
     await this.audit.log(AuditAction.SCHEDULE_CANCELLED, user.accountId, meta, {
       scheduleId,
     });
@@ -226,7 +244,11 @@ export class ScheduleService {
         status: 'SCHEDULED',
         OR: [{ scheduledAt: null }, { scheduledAt: { lte: now } }],
       },
-      orderBy: { scheduledAt: 'asc' },
+      // "Post now" rows (no time) first, then the most overdue.
+      orderBy: [
+        { scheduledAt: { sort: 'asc', nulls: 'first' } },
+        { contentScheduleId: 'asc' },
+      ],
       take,
       select: { contentScheduleId: true },
     });
@@ -241,12 +263,21 @@ export class ScheduleService {
    * has expired" instead of leaving an owner to guess. A failed post is not retried: a token that expired at 09:00
    * is still expired at 09:01, and a retry loop against Meta is how an app gets rate limited.
    */
-  async publishOne(scheduleId: string): Promise<'PUBLISHED' | 'FAILED'> {
-    const row = await this.prisma.contentSchedule.findUnique({
+  async publishOne(
+    scheduleId: string,
+  ): Promise<'PUBLISHED' | 'FAILED' | 'SKIPPED'> {
+    // Claimed before the platform is called. `PeriodicJob` only keeps runs of one process apart; two instances (or
+    // two environments on one database) would otherwise both see SCHEDULED and post twice. Whoever flips the row
+    // owns it; anyone else, and a cancel arriving mid-call, finds it no longer SCHEDULED.
+    const { count } = await this.prisma.contentSchedule.updateMany({
+      where: { contentScheduleId: scheduleId, status: 'SCHEDULED' },
+      data: { status: 'PUBLISHING' },
+    });
+    if (count === 0) return 'SKIPPED';
+    const row = await this.prisma.contentSchedule.findUniqueOrThrow({
       where: { contentScheduleId: scheduleId },
       include: scheduleInclude,
     });
-    if (!row || row.status !== 'SCHEDULED') return 'FAILED';
 
     const target = await this.accounts.targetFor(row.socialAccountId);
     if (!target) {
@@ -304,6 +335,7 @@ export class ScheduleService {
       where: { contentScheduleId: row.contentScheduleId },
       data: { status: 'FAILED', failureReason: reason },
     });
+    await this.settleContent(row.marketingContentId);
     await this.audit.log(
       AuditAction.CONTENT_PUBLISH_FAILED,
       null,
@@ -315,6 +347,25 @@ export class ScheduleService {
       },
     );
     this.logger.warn(`Publishing ${row.contentScheduleId} failed: ${reason}`);
+  }
+
+  /**
+   * A piece stays SCHEDULED only while one of its posts is waiting, going out or out. Once every one was cancelled or
+   * failed it is back to APPROVED, so the screens and the "approved" filter tell the truth and it can be scheduled
+   * again. Conditional on SCHEDULED, so a piece that has been PUBLISHED meanwhile is left alone.
+   */
+  private async settleContent(contentId: string) {
+    const live = await this.prisma.contentSchedule.count({
+      where: {
+        marketingContentId: contentId,
+        status: { in: ['SCHEDULED', 'PUBLISHING', 'PUBLISHED'] },
+      },
+    });
+    if (live > 0) return;
+    await this.prisma.marketingContent.updateMany({
+      where: { marketingContentId: contentId, status: 'SCHEDULED' },
+      data: { status: 'APPROVED' },
+    });
   }
 
   /** The schedule row, checked to belong to a hotel the caller may act on. */
@@ -334,6 +385,8 @@ export class ScheduleService {
       row?.marketingContent.hotelId,
       level,
       notFound,
+      // Reading, cancelling and refreshing a post need MARKETING, like the calendar addressed by hotel.
+      level === 'member' ? StaffPermission.MARKETING : undefined,
     );
     return row!;
   }

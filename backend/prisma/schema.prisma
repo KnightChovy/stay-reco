@@ -294,6 +294,8 @@ enum ContentStatus {
 
 enum ScheduleStatus {
   SCHEDULED
+  /// Claimed by the publisher job: Meta is being called. Never picked up twice (review of #127).
+  PUBLISHING
   PUBLISHED
   FAILED
   CANCELLED

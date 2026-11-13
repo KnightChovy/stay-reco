@@ -131,7 +131,8 @@ ai_usage:  one row per model call; the month's rows summed give the spend
 
 marketing_content.status: DRAFT → PENDING_APPROVAL → APPROVED → SCHEDULED → PUBLISHED
                                                    ↘ REJECTED
-content_schedule.status:  SCHEDULED → PUBLISHED | FAILED | CANCELLED
+content_schedule.status:  SCHEDULED → PUBLISHING (claimed by the job) → PUBLISHED | FAILED;  SCHEDULED → CANCELLED
+                          SCHEDULED content goes back to APPROVED once none of its posts is waiting or out
                           one job, every minute, is the only writer (M14)
 
 content_metric: one row per refresh, never overwritten (M15)
@@ -268,6 +269,7 @@ Still open:
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-11-14 | FE | Review of #127 on `feat/phase-5-frontend`: every staff route by id now needs `MARKETING`; the job claims a row (`PUBLISHING`, migration) before calling Meta so a post cannot go out twice; "post now" rows sort first (`nulls: first`); content back to `APPROVED` when no post is waiting or out; `contentId` and `sort` on the calendar list; Swagger descriptions for the develop tags `payouts`, `platform`, `compliance`, `admin`. e2e tests for each |
 | 2026-11-13 | FE | Web staff marketing on `feat/phase-5-frontend`: `/staff/marketing/content` (ideas, AI writer, list), `/staff/marketing/content/[id]` (edit, picture, submit, schedule), `/staff/marketing/calendar`, `/staff/marketing/analytics`. Owner screens (approve, connect a page, brand voice) not connected yet |
 | 2026-11-13 | Phúc | Staff upload the picture instead of supplying a URL (M18): two endpoints on the same storage as hotel photos, the file deleted when replaced, removed or the draft is, and a hand-typed URL left alone. One migration, 9 e2e |
 | 2026-11-13 | Phúc | First real post, and three bugs only a real post could find (M17): `post_impressions` was retired by Meta in June 2026 and its replacement, "must be a valid insights metric", was being swallowed into a permanent zero; the three engagement counts shared one request, so one forbidden figure took the other two with it; and `comments.summary` turns out to sit behind a permission Meta's own dialog rejects as invalid. Each figure now degrades on its own. 5 unit tests |

@@ -145,6 +145,13 @@ export const scheduleListQuerySchema = listQuerySchema
   .omit({ sort: true, search: true })
   .extend({
     status: repeatedQuery(z.enum(ScheduleStatus)).optional(),
+    /** Only the posts of one piece of content, for its detail screen. */
+    contentId: z.uuid().optional(),
+    /**
+     * `scheduled-asc` (default): soonest first, "post now" rows on top, for the calendar. `published-desc`: the
+     * latest published first, for figures and for finding a post that just went out.
+     */
+    sort: z.enum(['scheduled-asc', 'published-desc']).default('scheduled-asc'),
     platform: repeatedQuery(z.enum(SocialPlatform)).optional(),
     /** Only posts due on or after this instant; with `until`, the window a calendar screen shows. */
     from: z.iso.datetime().optional(),

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { AlertTriangle, CalendarClock, CheckCircle2, Loader2, Send, XCircle } from "lucide-react";
 import type { ContentSchedule, MarketingContent, SocialAccount } from "@stayreco/shared";
@@ -9,7 +10,13 @@ import { cn } from "@/lib/utils";
 import { DateInput, TimeSelect } from "@/features/partner/components/DateTimeInputs";
 import { todayInVietnam } from "@/features/partner/lib/dates";
 import { formatDateTime } from "@/features/stays/lib/format";
-import { useCancelSchedule, useScheduleContent, useSchedules, useSocialAccounts } from "../api/marketing-queries";
+import {
+  marketingKeys,
+  useCancelSchedule,
+  useScheduleContent,
+  useSchedules,
+  useSocialAccounts,
+} from "../api/marketing-queries";
 import { platformLabels, SCHEDULABLE_STATUSES } from "../lib/marketing-labels";
 import { getMarketingErrorMessage } from "../lib/marketing-errors";
 import { PlatformPill, ScheduleStatusPill } from "./MarketingParts";
@@ -89,7 +96,9 @@ function ScheduleRow({ schedule }: { schedule: ContentSchedule }) {
           ? `Đã đăng lúc ${formatDateTime(schedule.publishedAt)}`
           : schedule.scheduledAt
             ? `Hẹn đăng ${formatDateTime(schedule.scheduledAt)}`
-            : "Đăng ở lượt chạy kế tiếp (trong vòng 1 phút)"}
+            : schedule.status === "SCHEDULED" || schedule.status === "PUBLISHING"
+              ? "Đăng ở lượt chạy kế tiếp (trong vòng 1 phút)"
+              : "Đăng ngay (không hẹn giờ)"}
       </p>
       {schedule.failureReason && (
         <p className="rounded bg-red-50 px-2 py-1 text-[11px] text-red-700">Lý do: {schedule.failureReason}</p>
@@ -111,7 +120,7 @@ function ScheduleRow({ schedule }: { schedule: ContentSchedule }) {
  */
 export function SchedulePanel({ hotelId, content }: { hotelId: string; content: MarketingContent }) {
   const accountsQuery = useSocialAccounts(hotelId);
-  const schedulesQuery = useSchedules(hotelId, { pageSize: 100 }, { poll: true });
+  const schedulesQuery = useSchedules(hotelId, { contentId: content.id, pageSize: 100 }, { poll: true });
   const scheduleContent = useScheduleContent();
   const [accountId, setAccountId] = useState<string | null>(null);
   const [mode, setMode] = useState<"now" | "later">("later");
@@ -120,7 +129,19 @@ export function SchedulePanel({ hotelId, content }: { hotelId: string; content: 
   const [formError, setFormError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
 
-  const schedules = (schedulesQuery.data?.schedules ?? []).filter((item) => item.contentId === content.id);
+  const schedules = schedulesQuery.data?.schedules ?? [];
+
+  // The calendar is polled; when one of this piece's posts goes out or fails, the piece itself has moved too
+  // (PUBLISHED, or back to APPROVED), so its detail is read again rather than left saying SCHEDULED.
+  const queryClient = useQueryClient();
+  const statuses = schedules.map((item) => `${item.id}:${item.status}`).join(",");
+  const seen = useRef<string | null>(null);
+  useEffect(() => {
+    if (seen.current !== null && seen.current !== statuses) {
+      void queryClient.invalidateQueries({ queryKey: marketingKeys.content(content.id) });
+    }
+    seen.current = statuses;
+  }, [statuses, content.id, queryClient]);
   const accounts = accountsQuery.data ?? [];
   const canSchedule = SCHEDULABLE_STATUSES.includes(content.status);
 
