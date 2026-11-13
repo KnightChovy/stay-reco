@@ -402,6 +402,13 @@ describe('Administration (e2e)', () => {
         'PAYOUT_ACCOUNT_VIEWED',
       ]);
       expect(warnings.every((e) => e.severity === 'WARNING')).toBe(true);
+      expect(
+        warnings.find((e) => e.action === 'LOGIN_FAILED')?.details,
+      ).toMatchObject({
+        email: 'admin@stayreco.test',
+        code: 'AUTH_INVALID_CREDENTIALS',
+        reason: 'INCORRECT_PASSWORD',
+      });
       const viewed = warnings.find(
         (e) => e.action === 'PAYOUT_ACCOUNT_VIEWED',
       )!;

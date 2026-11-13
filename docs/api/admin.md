@@ -103,6 +103,7 @@ UC80, SRS 3.16.7, 3.16.9. Read-only: nothing can be changed or deleted.
 - Newest first. `action`, `severity` and `role` may be repeated. `from`/`to` default to the last 7 days, 92 days at most.
 - **Severity** is derived from the action by the list `AUDIT_SEVERITY` in `@stayreco/shared`: `CRITICAL` for `REFRESH_TOKEN_REUSE`, `ACCOUNT_SUSPENDED`, `SUSPENSION_APPROVED`; `WARNING` for `LOGIN_FAILED`, `ACCOUNT_LOCKED`, `SEPAY_TRANSFER_UNMATCHED`, `SEPAY_TRANSFER_LATE`, `REFUND_REJECTED`, `PAYOUT_REJECTED`, `VERIFICATION_REJECTED`, `SUSPENSION_REQUESTED`, `PAYOUT_ACCOUNT_VIEWED`; `INFO` for every other action.
 - `details` is the recorded data of the event; account numbers and ID card numbers in it are masked.
+- New `LOGIN_FAILED` events include `email`, `code`, `reason` and `userAgent` (nullable). Reasons distinguish `EMAIL_NOT_FOUND`, `INCORRECT_PASSWORD`, `PASSWORD_NOT_SET`, `ACCOUNT_TEMPORARILY_LOCKED` (with `lockedUntil`), `ACCOUNT_SUSPENDED`, `ACCOUNT_DEACTIVATED`, `EMAIL_NOT_VERIFIED`, and `ACCOUNT_NOT_ACTIVE` (with `status`). `ACCOUNT_LOCKED` includes `FAILED_LOGIN_LIMIT_REACHED`, `failedLoginCount` and `lockedUntil`. These details are admin-only; public sign-in responses remain unchanged and never include these diagnostic reasons. Older rows are not backfilled because their original cause is unknown. Passwords, hashes and tokens are never recorded.
 
 ```jsonc
 // AuditLogEntry
