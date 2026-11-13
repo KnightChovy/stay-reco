@@ -1,4 +1,10 @@
-import { AdminScreen } from '@/features/admin/admin-screen';
+import { Suspense } from 'react';
+import AdminTransactions from '@/features/admin/transactions/AdminTransactions';
+// AdminTransactions reads `?tab=` and `?status=` with useSearchParams, which needs a Suspense boundary.
 export default function TransactionsPage() {
-  return <AdminScreen mode="transactions" />;
+  return (
+    <Suspense>
+      <AdminTransactions />
+    </Suspense>
+  );
 }

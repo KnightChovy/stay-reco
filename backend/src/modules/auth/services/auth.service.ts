@@ -198,6 +198,18 @@ export class AuthService {
     });
 
     if (account?.lockedUntil && account.lockedUntil > new Date()) {
+      await this.audit.log(
+        AuditAction.LOGIN_FAILED,
+        account.userAccountId,
+        meta,
+        {
+          email: dto.email,
+          code: ErrorCode.AUTH_ACCOUNT_LOCKED,
+          reason: 'ACCOUNT_TEMPORARILY_LOCKED',
+          lockedUntil: account.lockedUntil.toISOString(),
+          userAgent: meta.userAgent ?? null,
+        },
+      );
       throw new ForbiddenException({
         code: ErrorCode.AUTH_ACCOUNT_LOCKED,
         message: 'Too many failed attempts. Please try again later.',
@@ -214,18 +226,49 @@ export class AuthService {
         AuditAction.LOGIN_FAILED,
         account?.userAccountId ?? null,
         meta,
-        { email: dto.email },
+        {
+          email: dto.email,
+          code: ErrorCode.AUTH_INVALID_CREDENTIALS,
+          reason: !account
+            ? 'EMAIL_NOT_FOUND'
+            : !account.passwordHash
+              ? 'PASSWORD_NOT_SET'
+              : 'INCORRECT_PASSWORD',
+          userAgent: meta.userAgent ?? null,
+        },
       );
       throw invalidCredentials();
     }
 
     if (account.status === AccountStatus.SUSPENDED) {
+      await this.audit.log(
+        AuditAction.LOGIN_FAILED,
+        account.userAccountId,
+        meta,
+        {
+          email: dto.email,
+          code: ErrorCode.AUTH_ACCOUNT_SUSPENDED,
+          reason: 'ACCOUNT_SUSPENDED',
+          userAgent: meta.userAgent ?? null,
+        },
+      );
       throw new ForbiddenException({
         code: ErrorCode.AUTH_ACCOUNT_SUSPENDED,
         message: 'Account is suspended',
       });
     }
     if (account.status === AccountStatus.DEACTIVATED) {
+      await this.audit.log(
+        AuditAction.LOGIN_FAILED,
+        account.userAccountId,
+        meta,
+        {
+          email: dto.email,
+          code: ErrorCode.AUTH_ACCOUNT_DEACTIVATED,
+          reason: 'ACCOUNT_DEACTIVATED',
+          userAgent: meta.userAgent ?? null,
+        },
+      );
       throw new ForbiddenException({
         code: ErrorCode.AUTH_ACCOUNT_DEACTIVATED,
         message: 'Account was deactivated by the hotel',
@@ -233,12 +276,35 @@ export class AuthService {
     }
     // Only revealed after the correct password, so it does not leak which emails are registered.
     if (account.status === AccountStatus.PENDING_VERIFICATION) {
+      await this.audit.log(
+        AuditAction.LOGIN_FAILED,
+        account.userAccountId,
+        meta,
+        {
+          email: dto.email,
+          code: ErrorCode.AUTH_EMAIL_NOT_VERIFIED,
+          reason: 'EMAIL_NOT_VERIFIED',
+          userAgent: meta.userAgent ?? null,
+        },
+      );
       throw new ForbiddenException({
         code: ErrorCode.AUTH_EMAIL_NOT_VERIFIED,
         message: 'Email is not verified. Enter the code we sent to your email.',
       });
     }
     if (account.status !== AccountStatus.ACTIVE) {
+      await this.audit.log(
+        AuditAction.LOGIN_FAILED,
+        account.userAccountId,
+        meta,
+        {
+          email: dto.email,
+          code: ErrorCode.AUTH_INVALID_CREDENTIALS,
+          reason: 'ACCOUNT_NOT_ACTIVE',
+          status: account.status,
+          userAgent: meta.userAgent ?? null,
+        },
+      );
       throw invalidCredentials();
     }
 
@@ -263,14 +329,19 @@ export class AuthService {
       select: { failedLoginCount: true },
     });
     if (failedLoginCount >= MAX_FAILED_LOGINS) {
+      const lockedUntil = new Date(Date.now() + LOCK_DURATION_MS);
       await this.prisma.userAccount.update({
         where: { userAccountId: accountId },
         data: {
           failedLoginCount: 0,
-          lockedUntil: new Date(Date.now() + LOCK_DURATION_MS),
+          lockedUntil,
         },
       });
-      await this.audit.log(AuditAction.ACCOUNT_LOCKED, accountId, meta);
+      await this.audit.log(AuditAction.ACCOUNT_LOCKED, accountId, meta, {
+        reason: 'FAILED_LOGIN_LIMIT_REACHED',
+        failedLoginCount,
+        lockedUntil: lockedUntil.toISOString(),
+      });
     }
   }
 
