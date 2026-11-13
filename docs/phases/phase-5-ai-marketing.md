@@ -170,6 +170,73 @@ Where we should **not** copy it: Postiz asks the user what to write. A hotel boo
 - Show the month's spend from `GET /hotels/:hotelId/ai-budget` next to any generate button, and handle `AI_BUDGET_EXCEEDED` by saying when it resets.
 - Hide the AI features when the endpoints answer `503 AI_UNAVAILABLE`, rather than showing a broken button.
 
+Every endpoint, its access level and its request schema is in [api/marketing.md](../api/marketing.md). What follows is only what the table cannot tell you.
+
+### The screens, and who may open them
+
+Four, all in the partner portal. There is no customer-facing marketing screen.
+
+The routes already scaffolded in `frontend/src/app`, and what each one now has a backend for:
+
+| Route | Who | Endpoints |
+|---|---|---|
+| `partner/ai-brand` | **owner** writes, member reads | `GET`/`PATCH /hotels/:id/brand-voice`, `POST .../brand-voice/learn`, `GET .../ai-budget` |
+| `staff/marketing/content` | member + `MARKETING` | ideas, generate, the content list, the editor, the image, submit |
+| `staff/marketing/calendar` | member + `MARKETING` | social accounts, schedule, `GET .../content-schedules` |
+| `staff/marketing/analytics` | member + `MARKETING` | `GET /content-schedules/:id/metrics`, `POST .../metrics/refresh` |
+
+Two things need a home that does not exist yet, and both are **owner-only**, so neither belongs under `staff/`:
+
+- **Approving and rejecting** (`POST /marketing-content/:id/approve` · `reject`). A staff member with `MARKETING` writes and schedules but cannot approve their own words.
+- **Connecting a page** - the three-request Facebook flow below, plus the `/social/facebook/callback` route it redirects to.
+
+Read the role off the session rather than hiding on a 403, but expect the 403 anyway.
+
+### One state machine drives the content screen
+
+`DRAFT -> PENDING_APPROVAL -> APPROVED -> SCHEDULED -> PUBLISHED`, with `REJECTED` branching back to the writer. Derive every button from `status`; do not keep a parallel flag.
+
+- **The words and the picture are editable in exactly the same window**: `DRAFT` and `REJECTED`. `PATCH`, `POST .../image` and `DELETE .../image` all answer `409 CONTENT_STATUS_CONFLICT` outside it. What the owner approved is what goes out, photograph included.
+- `reject` carries a `reason`; show it at the top of the editor when `status === 'REJECTED'`, because it is the writer's only instruction.
+- `DELETE /marketing-content/:id` (204) also deletes the uploaded file. Only a draft can be deleted.
+
+### The image upload
+
+- `POST /marketing-content/:id/image`, `multipart/form-data`, **field name `file`** (not `image`). JPEG/PNG/WebP, 10MB. Answers the whole `MarketingContent` back with the new `mediaUrl`, so render from the response rather than guessing the URL.
+- Uploading again **replaces** and deletes the old file; there is no gallery and no second picture. `DELETE .../image` removes it.
+- A bad file is `400 UPLOAD_INVALID_FILE` - the type is sniffed from the bytes, so a renamed `.png` is still refused. Show the rules before the picker, as the review upload does.
+- `PATCH { mediaUrl }` still accepts a hand-typed URL, kept for a link the hotel already hosts. Prefer the upload; it is the only path that cleans up after itself.
+- **The AI never produces a picture.** Every fresh draft has `mediaUrl: null`, and Instagram refuses a post without one (`501 SOCIAL_PLATFORM_UNSUPPORTED`), so the upload is required before an Instagram schedule, not optional.
+
+### Connecting a Facebook page (M16) - the one flow that needs an FE page of its own
+
+Three requests, and the owner never sees a token:
+
+```
+GET  /hotels/:id/social-accounts/facebook/authorize   -> { authorizeUrl }
+     window.location = authorizeUrl                      (a real navigation, not a fetch)
+     Facebook asks which pages, then redirects to META_OAUTH_REDIRECT_URI?code=&state=
+POST /hotels/:id/social-accounts/facebook/exchange    { code, state }
+     -> { connectionToken, pages: [{ pageId, name, instagramId, connected }] }
+     the owner ticks the pages they want
+POST /hotels/:id/social-accounts/facebook/connect     { connectionToken, pages: [{ pageId, instagram }] }
+```
+
+- **`META_OAUTH_REDIRECT_URI` is a frontend route**, by default `/social/facebook/callback`. It has to exist, read `code` and `state` off its own query string, and post them to the API inside the owner's session - a browser redirect carries no `Authorization` header, which is the whole reason the callback is not a backend route. The exact URI must also be on the Meta app's Valid OAuth Redirect URIs, character for character.
+- **`state` and `connectionToken` are opaque and short-lived**: 15 minutes on the consent screen, 10 minutes picking pages. Pass them back untouched; on `400 SOCIAL_OAUTH_INVALID` start the flow again rather than retrying.
+- `instagram: true` is only valid on a page whose `instagramId` is not null - the page list already says which. `connected: true` means that page is already stored; the tick is a reconnect, not a duplicate.
+- `503 SOCIAL_OAUTH_DISABLED` means the server has no Meta app configured. Fall back to the paste form (`POST /hotels/:id/social-accounts`), which is still there for support and demos.
+- `GET /hotels/:id/social-accounts` never returns a token in any field, by design. `usable: false` means the stored token has expired - prompt a reconnect instead of letting the owner schedule onto a dead page.
+
+### The calendar and the figures
+
+- `POST /marketing-content/:id/schedule` takes a future time; a job picks it up **within a minute** of it, so the row is not published the instant the request returns. Poll or refresh; `status` and `failureReason` on the `ContentSchedule` are what the calendar shows.
+- `failureReason` carries the platform's own words. Show it verbatim - it is the only thing that distinguishes an expired token from a refused photo.
+- `GET /content-schedules/:id/metrics` for likes, comments, shares and views; `POST .../metrics/refresh` to fetch them again. Two honest caveats to put in the UI rather than hide:
+  - **`comments` is always 0** and cannot be fixed from here. It sits behind a permission Meta's own OAuth dialog rejects as invalid. Label it accordingly or leave it out.
+  - **A refused figure is stored as `0`**, indistinguishable from a real zero. A non-zero `shares` next to zero likes points at a token permission, not a quiet post.
+- `GET /hotels/:id/ai-budget` next to every generate button. A draft costs about $0.0009, so the cap is reached by looping, not by one careless click.
+
 ## Open questions
 
 Answered:

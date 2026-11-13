@@ -7,7 +7,9 @@ Where BE, FE web and mobile agree on **which phase we are in** and **what the AP
 | You are | Read in this order |
 |---|---|
 | New to the project | [getting-started.md](./getting-started.md) → [api-guide.md](./api-guide.md) → the API page for the screens you work on |
-| FE web / mobile | [api-guide.md](./api-guide.md) (tokens, envelope, error codes) → [api/](./api/README.md): [auth](./api/auth.md) · [partner](./api/partner.md) · [staff](./api/staff.md) · [manager](./api/manager.md) · [customer](./api/customer.md) |
+| FE web / mobile | [api-guide.md](./api-guide.md) (tokens, envelope, error codes) → [api/](./api/README.md), the page for your screens → the **FE tasks** section of that [phase](./phases/) |
+| FE, phase 4 screens | [reviews](./api/reviews.md) · [promotions](./api/promotions.md) · [loyalty](./api/loyalty.md) · [customer-wallet](./api/customer-wallet.md) → [phase 4 §FE tasks](./phases/phase-4-loyalty-promotions.md#fe-tasks) |
+| FE, phase 5 screens | [marketing](./api/marketing.md) → [phase 5 §FE tasks](./phases/phase-5-ai-marketing.md#fe-tasks) · [social-setup.md](./social-setup.md) for the Facebook connect flow |
 | BE | [../backend/docs/CONVENTIONS.md](../backend/docs/CONVENTIONS.md) (code conventions) → [phases/](./phases/) (decisions, scope) → update [api/](./api/README.md) in the same PR as the code |
 | Using the shared schemas | [../packages/shared/README.md](../packages/shared/README.md) |
 
@@ -24,7 +26,7 @@ Where BE, FE web and mobile agree on **which phase we are in** and **what the AP
 
 ## Where we are
 
-> **Phase 1**: BE done, FE web and mobile integrating. **Phase 2** (search, booking, SePay): BE done (SePay webhook live on staging), FE integrating.
+> **Phases 0-4**: BE done, FE web and mobile integrating. **Phase 5**: marketing is BE done end to end (a real post has gone out on a real Facebook page); recommendations and the assistant are not started.
 > Update this line and the table below in the same PR when a status changes.
 
 | Phase | Content | Status | API |
@@ -33,8 +35,8 @@ Where BE, FE web and mobile agree on **which phase we are in** and **what the AP
 | [1](./phases/phase-1-hotel-onboarding.md) | Partners list their hotels, managers verify them | 🟡 BE done, FE integrating | [partner](./api/partner.md), [staff](./api/staff.md), [manager](./api/manager.md) |
 | [2](./phases/phase-2-search-booking.md) | Search, booking, payment | 🟡 BE done, FE integrating | [customer](./api/customer.md), [partner](./api/partner.md#pricing-rules-phase-2), [staff](./api/staff.md#coming-in-phase-2) |
 | [3](./phases/phase-3-operations.md) | Operations: check-in/out, no-show, commission, change requests, notifications | 🟡 API Draft | [staff](./api/staff.md#front-desk-phase-3), [customer](./api/customer.md#change-requests-phase-3) |
-| [4](./phases/phase-4-loyalty-promotions.md) | Loyalty, promotions, reviews, wallet | ⬜ Not started | |
-| [5](./phases/phase-5-ai-marketing.md) | AI recommendations, assistant, marketing | ⬜ Not started | |
+| [4](./phases/phase-4-loyalty-promotions.md) | Loyalty, promotions, reviews, wallet | 🟡 BE done, FE integrating | [reviews](./api/reviews.md), [promotions](./api/promotions.md), [loyalty](./api/loyalty.md), [customer-wallet](./api/customer-wallet.md) |
+| [5](./phases/phase-5-ai-marketing.md) | AI marketing (done) · recommendations, assistant (not started) | 🟡 Marketing BE done, FE integrating | [marketing](./api/marketing.md) |
 | [6](./phases/phase-6-reporting-admin.md) | Reporting, administration | ⬜ Not started; partner dashboard API `Draft`, built early | [partner-dashboard](./api/partner-dashboard.md) |
 
 Phase status: ⬜ Not started · 🟡 In progress · ✅ Done.
