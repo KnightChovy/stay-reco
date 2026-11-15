@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Alert, ScrollView, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
+import { alert } from '@/lib/alert';
 import { router } from 'expo-router';
 import type { AxiosError } from 'axios';
 import { changePasswordSchema } from '@stayreco/shared';
@@ -33,7 +34,7 @@ export default function ChangePasswordScreen() {
     setSubmitting(true);
     try {
       await changePassword(input.data);
-      Alert.alert('Đã đổi mật khẩu', 'Các thiết bị khác đã được đăng xuất.', [{ text: 'OK', onPress: () => router.back() }]);
+      alert('Đã đổi mật khẩu', 'Các thiết bị khác đã được đăng xuất.', [{ text: 'OK', onPress: () => router.back() }]);
     } catch (err) {
       const body = (err as ApiError).response?.data;
       setError(

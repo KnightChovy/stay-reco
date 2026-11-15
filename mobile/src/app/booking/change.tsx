@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Alert, ScrollView, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
+import { alert } from '@/lib/alert';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
@@ -82,7 +83,7 @@ export default function ChangeBookingScreen() {
     try {
       await requestChange(id, input.data);
       void queryClient.invalidateQueries({ queryKey: ['bookings'] });
-      Alert.alert('Đã gửi yêu cầu', 'Khách sạn sẽ xem xét và báo lại cho bạn qua email và thông báo.', [
+      alert('Đã gửi yêu cầu', 'Khách sạn sẽ xem xét và báo lại cho bạn qua email và thông báo.', [
         { text: 'OK', onPress: () => router.back() },
       ]);
     } catch (err) {

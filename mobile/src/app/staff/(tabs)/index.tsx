@@ -8,9 +8,9 @@ import { Icon, type IconName } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
 import { colors } from '@/constants/theme';
 import type { Tone } from '@/features/staff/data';
-import { Avatar, Card, Grid, KV, Section, Stat, StaffTabScreen, accent, s, useStaffHotel } from '@/features/staff/ui';
+import { Avatar, Card, CleanRoomButton, Grid, KV, Section, Stat, StaffTabScreen, accent, s, useStaffHotel } from '@/features/staff/ui';
 import { bookingStatusLabel, formatDate } from '@/lib/stay';
-import { getActionItems, getTodayStats } from '@/services/staff.service';
+import { getActionItems, getRooms, getTodayStats } from '@/services/staff.service';
 
 const quick: { icon: IconName; label: string; href: Href }[] = [
   { icon: 'key', label: 'Check-in', href: '/staff/check-in' },
@@ -44,6 +44,7 @@ export default function StaffDashboardScreen() {
   const { hotelId } = useStaffHotel();
   const today = useQuery({ queryKey: ['staff', 'today', hotelId], queryFn: () => getTodayStats(hotelId!), enabled: !!hotelId });
   const items = useQuery({ queryKey: ['staff', 'action-items', hotelId], queryFn: () => getActionItems(hotelId!), enabled: !!hotelId });
+  const cleaning = useQuery({ queryKey: ['staff', 'rooms', hotelId, 'CLEANING'], queryFn: () => getRooms(hotelId!, { status: 'CLEANING', pageSize: 100 }), enabled: !!hotelId });
   const t = today.data;
   const tasks = items.data?.items.filter((i) => actionLabels[i.type]) ?? [];
 
@@ -180,6 +181,14 @@ export default function StaffDashboardScreen() {
                 <Text variant="small" weight="bold">
                   {t!.rooms[r.key]} phòng
                 </Text>
+              </View>
+            ))}
+            {cleaning.data?.map((r) => (
+              <View key={r.id} className={`${s.between} border-t border-surface-container-high pt-2.5`}>
+                <Text variant="small" weight="bold">
+                  Phòng {r.roomNumber} · đang dọn
+                </Text>
+                <CleanRoomButton roomId={r.id} roomNumber={r.roomNumber} />
               </View>
             ))}
           </Card>

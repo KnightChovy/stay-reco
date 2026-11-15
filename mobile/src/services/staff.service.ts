@@ -12,6 +12,8 @@ import type {
   HotelTodayStats,
   PageMeta,
   RejectChangeInput,
+  Room,
+  RoomListQuery,
   RoomOptions,
 } from "@stayreco/shared";
 import { apiService } from "./ApiService";
@@ -93,5 +95,17 @@ export const getActionItems = async (hotelId: string) => {
 
 export const getTodayStats = async (hotelId: string) => {
   const { data } = await apiService.get<APIResponse<HotelTodayStats>>(`/hotels/${hotelId}/stats/today`);
+  return data.data;
+};
+
+/** Danh sách phòng của khách sạn, lọc theo trạng thái. */
+export const getRooms = async (hotelId: string, params: Partial<RoomListQuery> = {}) => {
+  const { data } = await apiService.get<APIResponse<Room[]>>(`/hotels/${hotelId}/rooms`, { params });
+  return data.data;
+};
+
+/** Phòng đã dọn xong: `CLEANING` → `AVAILABLE` (quyền FRONT_DESK). */
+export const cleanRoom = async (roomId: string) => {
+  const { data } = await apiService.post<APIResponse<Room>>(`/rooms/${roomId}/clean`);
   return data.data;
 };

@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, TextInput, View } from 'react-native';
 import { Image } from 'expo-image';
-import { router } from 'expo-router';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { router, useFocusEffect } from 'expo-router';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ContentStatus, ContentType, SocialPlatform } from '@stayreco/shared';
 import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
@@ -107,6 +107,10 @@ function GenerateSheet({ hotelId, brief, setBrief, onClose }: { hotelId: string;
 
 export default function StaffMarketingContentScreen() {
   const { hotelId } = useStaffHotel();
+  const changed = useMarketingChanged();
+  // Chủ khách sạn duyệt/từ chối ở nơi khác: quay lại màn này thì đọc lại để thấy trạng thái mới.
+  const queryClient = useQueryClient();
+  useFocusEffect(useCallback(() => void queryClient.invalidateQueries({ queryKey: ['marketing'] }), [queryClient]));
   const [tab, setTab] = useState<Tab>('all');
   // null: sheet đóng; chuỗi: đề bài đang soạn (điền sẵn khi mở từ một gợi ý).
   const [brief, setBrief] = useState<string | null>(null);
@@ -136,7 +140,7 @@ export default function StaffMarketingContentScreen() {
         </Card>
       )}
 
-      <Section title="Gợi ý chủ đề" action="Làm mới" onAction={() => void ideas.refetch()} />
+      <Section title="Gợi ý chủ đề" action="Làm mới" onAction={changed} />
       {ideas.isPending ? (
         <ActivityIndicator color={colors.primary} />
       ) : ideas.isError ? (

@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Alert, ScrollView, TextInput, View } from 'react-native';
+import { ScrollView, TextInput, View } from 'react-native';
+import { alert } from '@/lib/alert';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -45,7 +46,7 @@ export default function CancelBookingScreen() {
     try {
       const result = await cancelBooking(id, input.data);
       void queryClient.invalidateQueries({ queryKey: ['bookings'] });
-      Alert.alert(
+      alert(
         result.status === 'CANCELLED' ? 'Đã hủy đặt phòng' : 'Đã gửi yêu cầu hoàn tiền',
         result.status === 'CANCELLED'
           ? `Đơn ${result.code} đã được hủy.`

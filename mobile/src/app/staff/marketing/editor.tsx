@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, TextInput, View } from 'react-native';
+import { alert } from '@/lib/alert';
 import { Image } from 'expo-image';
 import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery } from '@tanstack/react-query';
@@ -224,7 +225,7 @@ function Workspace({ content, hotelId, generated }: { content: MarketingContent;
     if (form) upload.mutate(form);
   };
   const confirmDelete = () =>
-    Alert.alert('Xoá nội dung này?', 'Ảnh đã tải lên cũng sẽ bị xoá.', [
+    alert('Xoá nội dung này?', 'Ảnh đã tải lên cũng sẽ bị xoá.', [
       { text: 'Không', style: 'cancel' },
       { text: 'Xoá', style: 'destructive', onPress: () => remove.mutate() },
     ]);
@@ -333,8 +334,8 @@ export default function StaffMarketingEditorScreen() {
     queryKey: ['marketing', 'content', id],
     queryFn: () => getContent(id!),
     enabled: !!id,
-    // Job đăng bài chạy mỗi phút: khi bài đang chờ đăng thì đọc lại (cùng các lịch của bài) để thấy nó chuyển trạng thái.
-    refetchInterval: (query) => (query.state.data?.status === 'SCHEDULED' ? 20000 : false),
+    // Bài đang chờ chủ duyệt hoặc chờ job đăng (chạy mỗi phút) thì đọc lại để thấy nó chuyển trạng thái.
+    refetchInterval: (query) => (['PENDING_APPROVAL', 'SCHEDULED'].includes(query.state.data?.status ?? '') ? 20000 : false),
   });
 
   // Bài mới được tạo từ sheet "Viết bài bằng AI" ở thư viện, màn này luôn cần id.

@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Alert, ScrollView, TextInput, View } from 'react-native';
+import { ScrollView, TextInput, View } from 'react-native';
+import { alert } from '@/lib/alert';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -161,7 +162,7 @@ export default function BookingInfoScreen() {
         // Tải lại giá để chi tiết giá và tổng tiền trên màn hiện theo giá mới.
         void queryClient.invalidateQueries({ queryKey: ['stays', 'hotel', params.hotelId] });
         void queryClient.invalidateQueries({ queryKey: ['discount-quote'] });
-        Alert.alert('Giá phòng đã thay đổi', `Tổng tiền mới là ${formatVnd(newTotal)}. Bạn có muốn tiếp tục đặt phòng?`, [
+        alert('Giá phòng đã thay đổi', `Tổng tiền mới là ${formatVnd(newTotal)}. Bạn có muốn tiếp tục đặt phòng?`, [
           { text: 'Hủy', style: 'cancel' },
           { text: 'Đặt với giá mới', onPress: () => void submit(newTotal) },
         ]);
