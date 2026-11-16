@@ -62,21 +62,29 @@ export class PromotionsService {
   ): Promise<Paginated<Promotion>> {
     const today = todayInVietnam();
     const where = { hotelId } satisfies Prisma.PromotionWhereInput;
+    const orderBy = [
+      { createdAt: 'desc' as const },
+      { promotionId: 'asc' as const },
+    ];
+    if (query.active) {
+      // `usable` is computed, not a column, so it is filtered over every campaign and only then paged: filtering one
+      // page would drop usable campaigns that sit on a later page and report that page's length as the total.
+      const usable = (await this.prisma.promotion.findMany({ where, orderBy }))
+        .map((p) => toPromotion(p, today))
+        .filter((p) => p.usable);
+      return Paginated.of(pageOf(usable, query), {
+        ...query,
+        total: usable.length,
+      });
+    }
     const [rows, total] = await Promise.all([
-      this.prisma.promotion.findMany({
-        where,
-        orderBy: [{ createdAt: 'desc' }, { promotionId: 'asc' }],
-        ...pageArgs(query),
-      }),
+      this.prisma.promotion.findMany({ where, orderBy, ...pageArgs(query) }),
       this.prisma.promotion.count({ where }),
     ]);
-    const mapped = rows.map((p) => toPromotion(p, today));
-    // `usable` is computed, not a column, so an `active` filter has to be applied after the rows are mapped.
-    const kept = query.active ? mapped.filter((p) => p.usable) : mapped;
-    return Paginated.of(kept, {
-      ...query,
-      total: query.active ? kept.length : total,
-    });
+    return Paginated.of(
+      rows.map((p) => toPromotion(p, today)),
+      { ...query, total },
+    );
   }
 
   async create(
@@ -237,21 +245,39 @@ export class PromotionsService {
   async listMine(customerId: string, query: PromotionListQuery) {
     const today = todayInVietnam();
     const where = { customerId } satisfies Prisma.VoucherWhereInput;
+    const orderBy = [
+      { createdAt: 'desc' as const },
+      { voucherId: 'asc' as const },
+    ];
+    if (query.active) {
+      // Same as `list`: `usable` is computed, so it is filtered over all of the customer's codes before paging.
+      const usable = (
+        await this.prisma.voucher.findMany({
+          where,
+          include: { promotion: true },
+          orderBy,
+        })
+      )
+        .map((v) => toVoucher(v, today))
+        .filter((v) => v.usable);
+      return Paginated.of(pageOf(usable, query), {
+        ...query,
+        total: usable.length,
+      });
+    }
     const [rows, total] = await Promise.all([
       this.prisma.voucher.findMany({
         where,
         include: { promotion: true },
-        orderBy: [{ createdAt: 'desc' }, { voucherId: 'asc' }],
+        orderBy,
         ...pageArgs(query),
       }),
       this.prisma.voucher.count({ where }),
     ]);
-    const mapped = rows.map((v) => toVoucher(v, today));
-    const kept = query.active ? mapped.filter((v) => v.usable) : mapped;
-    return Paginated.of(kept, {
-      ...query,
-      total: query.active ? kept.length : total,
-    });
+    return Paginated.of(
+      rows.map((v) => toVoucher(v, today)),
+      { ...query, total },
+    );
   }
 
   /** The campaign, checked to belong to a hotel the caller may change. */
@@ -278,4 +304,10 @@ function voucherCode(): string {
   let code = '';
   for (const byte of bytes) code += CODE_ALPHABET[byte % CODE_ALPHABET.length];
   return code;
+}
+
+/** One page of rows already filtered in memory, with the same page arithmetic as `pageArgs`. */
+function pageOf<T>(rows: T[], query: { page: number; pageSize: number }): T[] {
+  const { skip, take } = pageArgs(query);
+  return rows.slice(skip, skip + take);
 }
