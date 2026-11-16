@@ -1,5 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import type { Review } from '@stayreco/shared';
+import { lockReview } from '../../common/db/locks';
 import { ErrorCode } from '../../common/errors/error-code';
 import { isUuid } from '../../common/hotel-access/hotel-access.service';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -34,32 +39,38 @@ export class ReviewImagesService {
     file: Buffer,
   ): Promise<Review> {
     await this.reviews.assertEditable(reviewId, customerId);
+    // Checked early so a full review costs no upload; checked again below, under the lock, before the row is added.
     assertRoom(await this.prisma.reviewImage.count({ where: { reviewId } }));
 
     // Uploaded first, because only Cloudinary knows the real dimensions; a refused shape is deleted again.
     const uploaded = await this.storage.uploadImage(file, 'reviews');
     try {
       assertImageShape(uploaded.width, uploaded.height);
+      // The upload takes seconds, so two photos sent together both pass the early check. Counting again with the
+      // review locked makes the second one wait for the first and see its row: the limit holds (UC32).
+      await this.prisma.$transaction(async (tx) => {
+        await lockReview(tx, reviewId);
+        assertRoom(await tx.reviewImage.count({ where: { reviewId } }));
+        const last = await tx.reviewImage.findFirst({
+          where: { reviewId },
+          orderBy: { sortOrder: 'desc' },
+          select: { sortOrder: true },
+        });
+        await tx.reviewImage.create({
+          data: {
+            reviewId,
+            imageUrl: uploaded.url,
+            storageKey: uploaded.storageKey,
+            width: uploaded.width,
+            height: uploaded.height,
+            sortOrder: (last?.sortOrder ?? -1) + 1,
+          },
+        });
+      });
     } catch (err) {
       await this.storage.deleteImage(uploaded.storageKey);
       throw err;
     }
-
-    const last = await this.prisma.reviewImage.findFirst({
-      where: { reviewId },
-      orderBy: { sortOrder: 'desc' },
-      select: { sortOrder: true },
-    });
-    await this.prisma.reviewImage.create({
-      data: {
-        reviewId,
-        imageUrl: uploaded.url,
-        storageKey: uploaded.storageKey,
-        width: uploaded.width,
-        height: uploaded.height,
-        sortOrder: (last?.sortOrder ?? -1) + 1,
-      },
-    });
     return this.load(reviewId);
   }
 
@@ -74,7 +85,21 @@ export class ReviewImagesService {
     if (!image) throw imageNotFound();
     await this.reviews.assertEditable(image.reviewId, customerId);
 
-    await this.prisma.reviewImage.delete({ where: { reviewImageId } });
+    // A photo under an open report is the evidence a platform manager decides on, and deleting the row would also
+    // cascade the report away. Checked with the review locked, as a new report on it takes the same lock.
+    await this.prisma.$transaction(async (tx) => {
+      await lockReview(tx, image.reviewId);
+      const open = await tx.contentReport.count({
+        where: { reviewImageId, status: { in: ['OPEN', 'INVESTIGATING'] } },
+      });
+      if (open) {
+        throw new ConflictException({
+          code: ErrorCode.REVIEW_IMAGE_REPORTED,
+          message: 'This photo is being looked at and cannot be removed yet',
+        });
+      }
+      await tx.reviewImage.delete({ where: { reviewImageId } });
+    });
     // Best effort: a file left behind must not fail the request.
     await this.storage.deleteImage(image.storageKey);
     return this.load(image.reviewId);

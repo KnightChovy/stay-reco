@@ -542,4 +542,131 @@ describe('Review photos and content reports (e2e)', () => {
       expect(again.body.code).toBe('REPORT_STATUS_CONFLICT');
     });
   });
+
+  describe('Requests sent at the same time', () => {
+    it('keeps the limit of 5 photos when two arrive together', async () => {
+      const h = await hotel();
+      const guest = await t.signIn('CUSTOMER', 'guest@mail.test');
+      const reviewId = await review(guest.token, h);
+      for (let i = 0; i < 4; i++)
+        await addPhoto(guest.token, reviewId).expect(201);
+
+      // Both pass the early count while the other is still uploading; only one may be stored.
+      const results = await Promise.all([
+        addPhoto(guest.token, reviewId),
+        addPhoto(guest.token, reviewId),
+      ]);
+      expect(results.map((r) => r.status).sort()).toEqual([201, 400]);
+      expect(await t.prisma.reviewImage.count({ where: { reviewId } })).toBe(5);
+      // The refused one's file is deleted again, so nothing is left unreferenced.
+      expect(t.storage.deleted).toHaveLength(1);
+    });
+
+    it('answers 409, not 500, when the same review is sent twice at once', async () => {
+      const h = await hotel();
+      const guest = await t.signIn('CUSTOMER', 'guest@mail.test');
+      const booking = await completedStay(guest.token, h);
+      const send = () =>
+        t
+          .api()
+          .post(`/api/v1/bookings/${booking.id}/reviews`)
+          .set(auth(guest.token))
+          .send({
+            content: 'Phòng ổn, sạch sẽ.',
+            subRatings: criteria.map((c) => ({ criterionId: c.id, score: 4 })),
+          });
+
+      const results = await Promise.all([send(), send()]);
+      expect(results.map((r) => r.status).sort()).toEqual([201, 409]);
+      const refused = results.find((r) => r.status === 409)!;
+      expect(refused.body.code).toBe('REVIEW_ALREADY_EXISTS');
+    });
+
+    it('lets only one of two managers decide the same report', async () => {
+      const h = await hotel();
+      const guest = await t.signIn('CUSTOMER', 'guest@mail.test');
+      const first = await t.signIn('PLATFORM_MANAGER', 'first@stayreco.test');
+      const second = await t.signIn('PLATFORM_MANAGER', 'second@stayreco.test');
+      const reviewId = await review(guest.token, h);
+      const report = await t
+        .api()
+        .post(`/api/v1/reviews/${reviewId}/reports`)
+        .set(auth(h.token))
+        .send({ reason: 'OTHER' })
+        .expect(201);
+      const decide = (token: string, status: string) =>
+        t
+          .api()
+          .post(`/api/v1/content-reports/${idOf(report)}/decide`)
+          .set(auth(token))
+          .send({ status, resolution: status });
+
+      const results = await Promise.all([
+        decide(first.token, 'DISMISSED'),
+        decide(second.token, 'RESOLVED'),
+      ]);
+      expect(results.map((r) => r.status).sort()).toEqual([200, 409]);
+      // The stored decision is the one that was answered 200, not overwritten by the other.
+      const winner = results.find((r) => r.status === 200)!;
+      const row = await t.prisma.contentReport.findUniqueOrThrow({
+        where: { contentReportId: idOf(report) },
+      });
+      expect(row.status).toBe(winner.body.data.status);
+    });
+  });
+
+  describe('A photo under an open report', () => {
+    const reportedPhoto = async () => {
+      const h = await hotel();
+      const guest = await t.signIn('CUSTOMER', 'guest@mail.test');
+      const manager = await t.signIn(
+        'PLATFORM_MANAGER',
+        'manager@stayreco.test',
+      );
+      const reviewId = await review(guest.token, h);
+      const added = await addPhoto(guest.token, reviewId).expect(201);
+      const imageId = (added.body.data as { images: { id: string }[] })
+        .images[0].id;
+      const report = await t
+        .api()
+        .post(`/api/v1/reviews/${reviewId}/reports`)
+        .set(auth(h.token))
+        .send({ reason: 'OFFENSIVE', reviewImageId: imageId })
+        .expect(201);
+      return { guest, manager, imageId, reportId: idOf(report) };
+    };
+    const remove = (token: string, imageId: string) =>
+      t.api().delete(`/api/v1/review-images/${imageId}`).set(auth(token));
+
+    it('cannot be removed by its author while the report waits', async () => {
+      const r = await reportedPhoto();
+      const res = await remove(r.guest.token, r.imageId).expect(409);
+      expect(res.body.code).toBe('REVIEW_IMAGE_REPORTED');
+
+      // The evidence and the report are both still there.
+      expect(
+        await t.prisma.reviewImage.count({
+          where: { reviewImageId: r.imageId },
+        }),
+      ).toBe(1);
+      expect(
+        await t.prisma.contentReport.count({
+          where: { contentReportId: r.reportId },
+        }),
+      ).toBe(1);
+      expect(t.storage.deleted).toHaveLength(0);
+    });
+
+    it('can be removed once the report is decided', async () => {
+      const r = await reportedPhoto();
+      await t
+        .api()
+        .post(`/api/v1/content-reports/${r.reportId}/decide`)
+        .set(auth(r.manager.token))
+        .send({ status: 'DISMISSED' })
+        .expect(200);
+
+      await remove(r.guest.token, r.imageId).expect(200);
+    });
+  });
 });

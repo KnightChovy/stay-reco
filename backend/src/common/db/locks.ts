@@ -15,6 +15,10 @@ export const lockHotel = (tx: Prisma.TransactionClient, hotelId: string) =>
 export const lockBooking = (tx: Prisma.TransactionClient, bookingId: string) =>
   tx.$executeRaw`SELECT 1 FROM booking WHERE booking_id = ${bookingId}::uuid FOR UPDATE`;
 
+/** A review row: its photo limit, and one decision per report, stay true under concurrent requests. */
+export const lockReview = (tx: Prisma.TransactionClient, reviewId: string) =>
+  tx.$executeRaw`SELECT 1 FROM review WHERE review_id = ${reviewId}::uuid FOR UPDATE`;
+
 /** A wallet row: checks on its balances (one pending withdrawal, at most the available balance) stay true. */
 export const lockWallet = (tx: Prisma.TransactionClient, walletId: string) =>
   tx.$executeRaw`SELECT 1 FROM wallet WHERE wallet_id = ${walletId}::uuid FOR UPDATE`;
