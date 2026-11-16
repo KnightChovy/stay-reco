@@ -60,6 +60,13 @@ const toSchedule = (row: ScheduleRow): ContentSchedule => ({
   failureReason: row.failureReason,
 });
 
+/** How long a claimed post may stay PUBLISHING before the job gives up on it; far beyond the platform timeout. */
+const STUCK_AFTER_MS = 10 * 60_000;
+
+/** The reason given to a post whose run never finished: it may or may not be on the page. */
+const INTERRUPTED =
+  'Publishing was interrupted before the result was saved. Check the page before scheduling it again.';
+
 /** As much of a platform's complaint as the column holds. */
 const reasonOf = (err: unknown): string => {
   const message =
@@ -271,7 +278,7 @@ export class ScheduleService {
     // owns it; anyone else, and a cancel arriving mid-call, finds it no longer SCHEDULED.
     const { count } = await this.prisma.contentSchedule.updateMany({
       where: { contentScheduleId: scheduleId, status: 'SCHEDULED' },
-      data: { status: 'PUBLISHING' },
+      data: { status: 'PUBLISHING', claimedAt: new Date() },
     });
     if (count === 0) return 'SKIPPED';
     const row = await this.prisma.contentSchedule.findUniqueOrThrow({
@@ -330,11 +337,40 @@ export class ScheduleService {
     return 'PUBLISHED';
   }
 
+  /**
+   * Gives up on posts a run claimed and never finished: the process restarted while the platform was being called,
+   * or the database failed after it answered. Nothing else ever moves such a row, and a cancel only takes SCHEDULED,
+   * so it would show as going out for ever. It becomes FAILED with a reason that says the post may already be on the
+   * page, because there is no way to know whether the platform received it.
+   *
+   * Only rows claimed more than `STUCK_AFTER_MS` ago: a call to the platform times out long before, so a row that
+   * old is not being sent by any run. A slow call that does finish still writes PUBLISHED over this, and that record
+   * wins. Rows claimed before `claimed_at` existed have none and are given up on too.
+   */
+  async failInterrupted(now = new Date()): Promise<number> {
+    const rows = await this.prisma.contentSchedule.findMany({
+      where: {
+        status: 'PUBLISHING',
+        OR: [
+          { claimedAt: null },
+          { claimedAt: { lte: new Date(now.getTime() - STUCK_AFTER_MS) } },
+        ],
+      },
+      include: scheduleInclude,
+    });
+    for (const row of rows) {
+      await this.fail(row, INTERRUPTED);
+    }
+    return rows.length;
+  }
+
   private async fail(row: ScheduleRow, reason: string) {
-    await this.prisma.contentSchedule.update({
-      where: { contentScheduleId: row.contentScheduleId },
+    // Conditional on PUBLISHING: a post that went out meanwhile keeps its PUBLISHED record.
+    const { count } = await this.prisma.contentSchedule.updateMany({
+      where: { contentScheduleId: row.contentScheduleId, status: 'PUBLISHING' },
       data: { status: 'FAILED', failureReason: reason },
     });
+    if (!count) return;
     await this.settleContent(row.marketingContentId);
     await this.audit.log(
       AuditAction.CONTENT_PUBLISH_FAILED,

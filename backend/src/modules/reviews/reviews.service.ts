@@ -15,6 +15,7 @@ import type {
 } from '@stayreco/shared';
 import type { AuthUser } from '../../common/decorators/current-user.decorator';
 import type { RequestMeta } from '../../common/decorators/request-meta.decorator';
+import { lockBooking } from '../../common/db/locks';
 import { ErrorCode } from '../../common/errors/error-code';
 import {
   HotelAccessService,
@@ -36,6 +37,12 @@ const notFound = () =>
   new NotFoundException({
     code: ErrorCode.REVIEW_NOT_FOUND,
     message: 'Review not found',
+  });
+
+const alreadyReviewed = () =>
+  new ConflictException({
+    code: ErrorCode.REVIEW_ALREADY_EXISTS,
+    message: 'This stay already has a review',
   });
 
 const windowClosed = () =>
@@ -177,12 +184,7 @@ export class ReviewsService {
     now = new Date(),
   ): Promise<Review> {
     const booking = await this.ownBooking(customerId, bookingId);
-    if (booking.review) {
-      throw new ConflictException({
-        code: ErrorCode.REVIEW_ALREADY_EXISTS,
-        message: 'This stay already has a review',
-      });
-    }
+    if (booking.review) throw alreadyReviewed();
     const closesAt = this.closesAt(booking.checkOutDate, booking.status);
     if (!closesAt) {
       throw new ConflictException({
@@ -195,6 +197,12 @@ export class ReviewsService {
     const { hotelId } = booking;
     const overallRating = await this.weightedOverall(input.subRatings);
     const review = await this.prisma.$transaction(async (tx) => {
+      // Checked again with the booking locked: a review sent twice at once would otherwise reach the unique key on
+      // `booking_id` and answer 500 instead of saying the stay already has one.
+      await lockBooking(tx, bookingId);
+      if (await tx.review.count({ where: { bookingId } })) {
+        throw alreadyReviewed();
+      }
       const created = await tx.review.create({
         data: {
           customerId,

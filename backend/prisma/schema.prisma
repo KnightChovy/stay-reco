@@ -532,6 +532,8 @@ model ContentSchedule {
   externalPostId     String?          @map("external_post_id") @db.VarChar(255)
   /// Why the platform refused it, so the calendar can say rather than only log (M13).
   failureReason      String?          @map("failure_reason") @db.VarChar(1000)
+  /// When the publisher claimed the row (SCHEDULED -> PUBLISHING); lets the job give up on a run that never finished.
+  claimedAt          DateTime?        @map("claimed_at") @db.Timestamptz(6)
   marketingContent   MarketingContent @relation(fields: [marketingContentId], references: [marketingContentId])
   socialAccount      SocialAccount    @relation(fields: [socialAccountId], references: [socialAccountId])
   contentMetrics     ContentMetric[]
