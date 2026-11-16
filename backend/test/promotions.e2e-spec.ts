@@ -595,5 +595,38 @@ describe('Promotions, vouchers and discounts (e2e)', () => {
         .expect(200);
       expect(after.body.data).toHaveLength(0);
     });
+
+    it('pages the usable codes after filtering, with their real total', async () => {
+      const h = await hotel();
+      const guest = await t.signIn('CUSTOMER', 'guest@mail.test');
+      const promo = idOf(
+        await campaign(h.token, h.hotelId, {
+          name: 'Giảm 300k',
+          discountType: 'FIXED_AMOUNT',
+          discountValue: 300000,
+        }).expect(201),
+      );
+      await issue(h.token, promo, guest.id);
+      await issue(h.token, promo, guest.id);
+      // The newest code, first in the list, is spent: filtering one page would have hidden the others behind it.
+      const spent = await issue(h.token, promo, guest.id);
+      await book(guest.token, h.roomTypeId, 1700000, spent).expect(201);
+
+      const first = await t
+        .api()
+        .get('/api/v1/me/vouchers?active=true&page=1&pageSize=1')
+        .set(auth(guest.token))
+        .expect(200);
+      expect(first.body.data).toHaveLength(1);
+      expect(first.body.meta).toMatchObject({ total: 2, totalPages: 2 });
+
+      const second = await t
+        .api()
+        .get('/api/v1/me/vouchers?active=true&page=2&pageSize=1')
+        .set(auth(guest.token))
+        .expect(200);
+      expect(second.body.data).toHaveLength(1);
+      expect(second.body.data[0].code).not.toBe(first.body.data[0].code);
+    });
   });
 });

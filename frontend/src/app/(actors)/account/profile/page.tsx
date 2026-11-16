@@ -37,6 +37,58 @@ import {
   useUploadAvatar,
 } from '@/features/account/api/account-queries';
 import { getApiErrorMessage, getApiFieldErrors, validateWith, type FieldErrors } from '@/lib/api-error';
+import { useMyLoyalty, useMyVouchers } from '@/features/account/api/rewards-queries';
+import { useMyBookings } from '@/features/booking/api/booking-queries';
+import { TIER_LABELS, formatPoints } from '@/features/account/lib/rewards-labels';
+import { formatMoney } from '@/features/stays/lib/format';
+
+/** StayMiles of the signed-in customer (`GET /me/loyalty`), the same figures as `/account/rewards`. */
+function MembershipBanner() {
+  const { data: account, isLoading, error } = useMyLoyalty();
+
+  return (
+    <div className="w-full rounded-2xl bg-linear-to-r from-[#124b6d] via-[#193b56] to-[#ae583c] p-6 text-white flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-md relative overflow-hidden">
+      <div className="flex items-center gap-4 z-10">
+        <div className="size-12 rounded-xl bg-white/15 backdrop-blur-md flex items-center justify-center text-amber-300">
+          <Sparkles className="size-6" />
+        </div>
+        <div>
+          {account ? (
+            <>
+              <h3 className="text-lg font-bold">
+                {account.programName} · Hạng {TIER_LABELS[account.tier]}
+              </h3>
+              <p className="text-xs text-white/80 mt-0.5">
+                {account.nextTier
+                  ? `Tích thêm ${formatPoints(account.nextTier.pointsNeeded)} để lên hạng ${TIER_LABELS[account.nextTier.tier]}`
+                  : 'Bạn đang ở hạng cao nhất'}
+              </p>
+            </>
+          ) : (
+            <p className="text-sm text-white/85">
+              {isLoading ? 'Đang tải điểm StayMiles…' : getApiErrorMessage(error, 'Không tải được điểm StayMiles.')}
+            </p>
+          )}
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3 z-10 w-full md:w-auto justify-between md:justify-end">
+        {account && (
+          <div className="text-left md:text-right">
+            <span className="text-[11px] text-white/70 block">Điểm hiện có</span>
+            <span className="text-sm font-bold text-white">{formatPoints(account.pointsBalance)}</span>
+            <span className="text-[11px] text-white/70 block">Trị giá {formatMoney(account.balanceValue)}</span>
+          </div>
+        )}
+        <Link href="/account/rewards">
+          <Button className="h-9 px-4 bg-white text-primary hover:bg-slate-100 font-semibold text-xs shrink-0">
+            Xem điểm & voucher
+          </Button>
+        </Link>
+      </div>
+    </div>
+  );
+}
 
 type ProfileForm = {
   fullName: string;
@@ -120,6 +172,9 @@ function ProfileBody({
   error: unknown;
   onRetry: () => void;
 }) {
+  // Counts only: one row per list is enough to read `meta.total`.
+  const endedTrips = useMyBookings({ tab: 'completed', page: 1, pageSize: 1 }).data?.meta.total;
+  const usableVouchers = useMyVouchers({ page: 1, pageSize: 1, active: true }).data?.meta.total;
   const [formData, setFormData] = useState<ProfileForm>(() =>
     account ? toForm(account) : { fullName: '', phone: '', dateOfBirth: '', gender: '', nationality: '' },
   );
@@ -245,37 +300,7 @@ function ProfileBody({
             </p>
           </div>
 
-          {/* Membership Banner */}
-          <div className="w-full rounded-2xl bg-linear-to-r from-[#124b6d] via-[#193b56] to-[#ae583c] p-6 text-white flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-md relative overflow-hidden">
-            <div className="flex items-center gap-4 z-10">
-              <div className="size-12 rounded-xl bg-white/15 backdrop-blur-md flex items-center justify-center text-amber-300">
-                <Sparkles className="size-6" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="text-lg font-bold">StayReco Elite Bạc</h3>
-                  <span className="bg-white/20 text-white text-[10px] px-2 py-0.5 rounded-full font-medium">
-                    Cấp 2/4
-                  </span>
-                </div>
-                <p className="text-xs text-white/80 mt-0.5">
-                  Mã hội viên: <span className="font-mono font-bold text-white">SR-99482</span>
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3 z-10 w-full md:w-auto justify-between md:justify-end">
-              <div className="text-left md:text-right">
-                <span className="text-[11px] text-white/70 block">Điểm tích lũy hiện tại</span>
-                <span className="text-sm font-bold text-white">2.450 Điểm StayMiles</span>
-              </div>
-              <Link href="/account/rewards">
-                <Button className="h-9 px-4 bg-white text-primary hover:bg-slate-100 font-semibold text-xs shrink-0">
-                  Đổi quà
-                </Button>
-              </Link>
-            </div>
-          </div>
+          <MembershipBanner />
 
           {/* Main Card */}
           {isLoading ? (
@@ -579,8 +604,11 @@ function ProfileBody({
                 <CheckCircle2 className="size-5" />
               </div>
               <div>
-                <span className="text-[11px] text-muted-foreground block">Chuyến đi đã hoàn tất</span>
-                <span className="text-xs sm:text-sm font-bold text-foreground">8 Kỳ nghỉ thành công</span>
+                {/* The "completed" tab also holds no-shows, so the label says ended rather than successful. */}
+                <span className="text-[11px] text-muted-foreground block">Chuyến đi đã kết thúc</span>
+                <span className="text-xs sm:text-sm font-bold text-foreground">
+                  {endedTrips === undefined ? '—' : `${endedTrips} chuyến`}
+                </span>
               </div>
             </Card>
 
@@ -589,8 +617,10 @@ function ProfileBody({
                 <Gift className="size-5" />
               </div>
               <div>
-                <span className="text-[11px] text-muted-foreground block">E-Voucher khả dụng</span>
-                <span className="text-xs sm:text-sm font-bold text-foreground">3 Phiếu ưu đãi 15%</span>
+                <span className="text-[11px] text-muted-foreground block">Voucher còn dùng được</span>
+                <Link href="/account/rewards" className="text-xs sm:text-sm font-bold text-foreground hover:text-primary">
+                  {usableVouchers === undefined ? '—' : `${usableVouchers} voucher`}
+                </Link>
               </div>
             </Card>
 
