@@ -50,6 +50,7 @@ export class StayDiscountService {
     const afterDiscount = payable(subtotal, discount);
     const points = await this.points(
       customerId,
+      hotelId,
       afterDiscount,
       input.pointsToUse,
     );
@@ -61,14 +62,23 @@ export class StayDiscountService {
     };
   }
 
-  /** The points part of a quote; null when no programme is running, so the FE simply hides the section. */
+  /**
+   * The points part of a quote at the stay's hotel, under its redemption conditions; null when no programme is
+   * running, so the FE simply hides the section.
+   */
   async points(
     customerId: string,
+    hotelId: string,
     afterDiscount: Prisma.Decimal,
     pointsToUse = 0,
   ): Promise<PointsQuote | null> {
     try {
-      return await this.loyalty.quote(customerId, afterDiscount, pointsToUse);
+      return await this.loyalty.quote(
+        customerId,
+        hotelId,
+        afterDiscount,
+        pointsToUse,
+      );
     } catch (err) {
       if (
         err instanceof NotFoundException &&

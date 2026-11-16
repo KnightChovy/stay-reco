@@ -1,3 +1,4 @@
+import { LOYALTY_LIMITS } from '@stayreco/shared';
 import { Prisma } from '../../generated/prisma/client';
 import { toWholeDong } from '../pricing/price-engine';
 
@@ -63,6 +64,36 @@ export function pointsToSpend(
   // customer's favour, since `pointsValue` caps what it is worth at the amount owed.
   const needed = payableAfterDiscount.dividedBy(pointValue).ceil().toNumber();
   return Math.min(points, needed);
+}
+
+/**
+ * The part of a stay points may pay at a hotel (decision L10): `maxRedeemPercent` of what is left after the
+ * discount, rounded **down** to whole dong so the cap is never exceeded. 100 % leaves the amount untouched.
+ */
+export function redeemCap(
+  payableAfterDiscount: Prisma.Decimal,
+  maxRedeemPercent: Prisma.Decimal,
+): Prisma.Decimal {
+  if (maxRedeemPercent.greaterThanOrEqualTo(100)) return payableAfterDiscount;
+  if (maxRedeemPercent.lessThanOrEqualTo(0)) return new Prisma.Decimal(0);
+  return payableAfterDiscount
+    .times(maxRedeemPercent)
+    .dividedBy(100)
+    .toDecimalPlaces(0, Prisma.Decimal.ROUND_DOWN);
+}
+
+/**
+ * The earning rate at a hotel (decision L9): its own rate kept between the platform rate and three times it. Clamped
+ * here as well as when it is saved, so lowering or raising the platform rate later never leaves a hotel outside.
+ */
+export function earnRate(
+  platformRate: Prisma.Decimal,
+  hotelRate: Prisma.Decimal | null,
+): Prisma.Decimal {
+  if (!hotelRate) return platformRate;
+  const max = platformRate.times(LOYALTY_LIMITS.maxEarnMultiplier);
+  if (hotelRate.lessThan(platformRate)) return platformRate;
+  return hotelRate.greaterThan(max) ? max : hotelRate;
 }
 
 /** The tier a customer has reached, from every point they have ever earned. */

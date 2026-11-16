@@ -72,6 +72,8 @@ export enum AuditAction {
   PROMOTION_CREATED = 'PROMOTION_CREATED',
   /** The hotel changed a campaign; `new_value` holds the fields that changed. */
   PROMOTION_UPDATED = 'PROMOTION_UPDATED',
+  /** The owner saved the hotel's own loyalty rules (L8–L10); `new_value` holds the hotel and the rules before and after. */
+  LOYALTY_PROGRAM_UPDATED = 'LOYALTY_PROGRAM_UPDATED',
   /** Personal discount codes handed to customers of a campaign. */
   VOUCHERS_ISSUED = 'VOUCHERS_ISSUED',
   /** A booking took a discount; `new_value` holds the campaign, the code and the amount taken off. */

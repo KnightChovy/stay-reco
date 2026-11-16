@@ -42,9 +42,43 @@ export const pointsQuoteResponseSchema = z
     maxPointsUsable: z
       .number()
       .int()
-      .describe('Never more than the balance, nor more than the stay still owes after the discount.'),
+      .describe(
+        'Never more than the balance, nor more than the share of the stay after the discount the hotel allows.',
+      ),
     pointsUsed: z.number().int().describe('What the asked-for points come to after capping.'),
     amount: z.number().describe('What those points take off the stay, in whole dong.'),
+    acceptsPoints: z.boolean().describe('False when the hotel does not take points: maxPointsUsable is then 0.'),
+    maxRedeemPercent: z
+      .number()
+      .describe('The share of the stay after the discount that points may pay at this hotel.'),
   })
   .register(responseSchemas, { id: 'PointsQuote' });
 export type PointsQuote = z.infer<typeof pointsQuoteResponseSchema>;
+
+/** `GET` / `PUT /hotels/:hotelId/loyalty-program`: a hotel's own rules on top of the platform programme (L8–L11). */
+export const hotelLoyaltyProgramResponseSchema = z
+  .object({
+    custom: z.boolean().describe('True once the hotel has saved its own rules, switched on or not.'),
+    appliesNow: z.boolean().describe('True when the hotel rules are switched on and the platform programme runs.'),
+    isActive: z.boolean(),
+    pointsPerCurrency: z.number().describe('Points earned per dong paid at this hotel; the platform rate until saved.'),
+    earnMultiplier: z.number().describe('pointsPerCurrency / the platform rate, rounded to 2 decimals.'),
+    acceptsPoints: z.boolean(),
+    maxRedeemPercent: z.number(),
+    platform: z
+      .object({
+        name: z.string(),
+        isActive: z.boolean(),
+        pointsPerCurrency: z.number(),
+        pointValue: z.number().describe('What one point is worth in dong; the same at every hotel.'),
+      })
+      .describe('The platform programme the hotel rules sit on.'),
+    limits: z.object({
+      minPointsPerCurrency: z.number().describe('The platform rate: a hotel never earns less.'),
+      maxPointsPerCurrency: z.number().describe('Three times the platform rate.'),
+      minRedeemPercent: z.number(),
+      maxRedeemPercent: z.number(),
+    }),
+  })
+  .register(responseSchemas, { id: 'HotelLoyaltyProgram' });
+export type HotelLoyaltyProgram = z.infer<typeof hotelLoyaltyProgramResponseSchema>;

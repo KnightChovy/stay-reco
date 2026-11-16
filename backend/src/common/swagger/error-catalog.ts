@@ -313,6 +313,11 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorInfo> = {
     status: 409,
     description: 'Spending more points than the customer holds',
   },
+  LOYALTY_POINTS_NOT_ACCEPTED: {
+    status: 409,
+    description:
+      'The hotel of the stay does not take loyalty points as payment',
+  },
   WALLET_INSUFFICIENT: {
     status: 409,
     description:

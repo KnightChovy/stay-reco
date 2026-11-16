@@ -1,6 +1,7 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Put, Query } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
+  hotelLoyaltyProgramResponseSchema,
   loyaltyAccountResponseSchema,
   loyaltyEntryResponseSchema,
 } from '@stayreco/shared';
@@ -8,18 +9,26 @@ import {
   type AuthUser,
   CurrentUser,
 } from '../../common/decorators/current-user.decorator';
+import {
+  ReqMeta,
+  type RequestMeta,
+} from '../../common/decorators/request-meta.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { ErrorCode } from '../../common/errors/error-code';
+import { HotelAccessRequired } from '../../common/hotel-access/hotel-access.guard';
 import {
   ApiData,
   ApiErrors,
   ApiPage,
 } from '../../common/swagger/api-docs.decorators';
 import { UserRole } from '../../generated/prisma/client';
-import { LoyaltyEntryQueryDto } from './dto/loyalty.dto';
+import {
+  HotelLoyaltyProgramDto,
+  LoyaltyEntryQueryDto,
+} from './dto/loyalty.dto';
 import { LoyaltyService } from './loyalty.service';
 
-/** The platform-wide loyalty programme as a customer sees it (BR-11). */
+/** The platform-wide loyalty programme as a customer sees it (BR-11), and the rules a hotel adds on top (L8–L11). */
 @ApiTags('loyalty')
 @Controller()
 export class LoyaltyController {
@@ -48,5 +57,36 @@ export class LoyaltyController {
   @Get('me/loyalty/entries')
   entries(@CurrentUser() user: AuthUser, @Query() query: LoyaltyEntryQueryDto) {
     return this.loyalty.entries(user.accountId, query);
+  }
+
+  @ApiOperation({
+    summary: "The hotel's own loyalty rules",
+    description:
+      "What applies to stays at this hotel on top of the platform programme: the earning rate, whether points are taken and the share of a stay they may pay. While the hotel has saved nothing, `custom` is false and the platform rules are shown. `limits` gives the range a save must respect; the value of a point is the platform's and the same at every hotel.",
+  })
+  @HotelAccessRequired('owner-view')
+  @ApiData(hotelLoyaltyProgramResponseSchema)
+  @ApiErrors(ErrorCode.LOYALTY_PROGRAM_NOT_FOUND)
+  @Get('hotels/:hotelId/loyalty-program')
+  hotelProgram(@Param('hotelId') hotelId: string) {
+    return this.loyalty.hotelProgram(hotelId);
+  }
+
+  @ApiOperation({
+    summary: "Save the hotel's own loyalty rules",
+    description:
+      'Replaces the rules as a whole. `pointsPerCurrency` runs from the platform rate to three times it (a hotel can add points, never take them away); `maxRedeemPercent` is 1-100 of the stay after the discount; `acceptsPoints: false` refuses points at this hotel. `isActive: false` goes back to the platform rules and keeps the saved values. Applies to quotes and bookings made afterwards, and to every check-out from now on.',
+  })
+  @HotelAccessRequired('owner')
+  @ApiData(hotelLoyaltyProgramResponseSchema)
+  @ApiErrors(ErrorCode.LOYALTY_PROGRAM_NOT_FOUND)
+  @Put('hotels/:hotelId/loyalty-program')
+  saveHotelProgram(
+    @CurrentUser() user: AuthUser,
+    @Param('hotelId') hotelId: string,
+    @Body() dto: HotelLoyaltyProgramDto,
+    @ReqMeta() meta: RequestMeta,
+  ) {
+    return this.loyalty.saveHotelProgram(hotelId, dto, user.accountId, meta);
   }
 }
