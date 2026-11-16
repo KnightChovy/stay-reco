@@ -372,6 +372,7 @@ export class FrontDeskService {
         tx,
         booking.customerId,
         bookingId,
+        booking.hotelId,
         booking.invoice!.totalAmount,
       );
       await recordBookingEvent(tx, {

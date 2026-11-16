@@ -827,19 +827,26 @@ model LoyaltyAccount {
 
 model LoyaltyProgram {
   loyaltyProgramId  String           @id @default(dbgenerated("gen_random_uuid()")) @map("loyalty_program_id") @db.Uuid
-  /// Null for the platform-wide programme every hotel earns into; set for a programme one hotel runs on its own.
+  /// Null for the platform-wide programme every hotel earns into; set for one hotel's own rules on top of it, which
+  /// change the earning rate and the redemption conditions at that hotel but never the value of a point.
   hotelId           String?          @map("hotel_id") @db.Uuid
   name              String           @db.VarChar(200)
   /// Points earned per dong spent, e.g. 0.001 = 1 point per 1,000 d.
   pointsPerCurrency Decimal          @map("points_per_currency") @db.Decimal(8, 4)
   /// What one point is worth in dong when it is spent.
   pointValue        Decimal          @default(0) @map("point_value") @db.Decimal(14, 2)
+  /// False when stays at the hotel cannot be paid with points. On the platform row: the rule for hotels without their own.
+  acceptsPoints     Boolean          @default(true) @map("accepts_points")
+  /// The share of a stay, after the discount, that points may pay (1-100).
+  maxRedeemPercent  Decimal          @default(100) @map("max_redeem_percent") @db.Decimal(5, 2)
   isActive          Boolean          @default(true) @map("is_active")
   createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
-  hotel             Hotel?           @relation(fields: [hotelId], references: [hotelId])
+  hotel             Hotel?           @relation(fields: [hotelId], references: [hotelId], onDelete: Cascade)
   bookings          Booking[]
   loyaltyAccounts   LoyaltyAccount[]
 
+  /// A hotel has at most one set of its own rules; the platform programme rows have no hotel.
+  @@unique([hotelId])
   @@map("loyalty_program")
 }
 

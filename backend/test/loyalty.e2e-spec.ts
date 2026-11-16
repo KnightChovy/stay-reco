@@ -474,4 +474,223 @@ describe('Loyalty points (e2e)', () => {
       });
     });
   });
+
+  describe("A hotel's own rules (L8–L11)", () => {
+    const rulesUrl = (hotelId: string) =>
+      `/api/v1/hotels/${hotelId}/loyalty-program`;
+    const saveRules = (
+      token: string,
+      hotelId: string,
+      rules: Partial<{
+        isActive: boolean;
+        pointsPerCurrency: number;
+        acceptsPoints: boolean;
+        maxRedeemPercent: number;
+      }> = {},
+    ) =>
+      t
+        .api()
+        .put(rulesUrl(hotelId))
+        .set(auth(token))
+        .send({
+          isActive: true,
+          pointsPerCurrency: 0.001,
+          acceptsPoints: true,
+          maxRedeemPercent: 100,
+          ...rules,
+        });
+
+    it('shows the platform rules while the hotel has saved none', async () => {
+      const h = await hotel();
+      const res = await t
+        .api()
+        .get(rulesUrl(h.hotelId))
+        .set(auth(h.token))
+        .expect(200);
+      expect(res.body.data).toEqual({
+        custom: false,
+        appliesNow: false,
+        isActive: false,
+        pointsPerCurrency: 0.001,
+        earnMultiplier: 1,
+        acceptsPoints: true,
+        maxRedeemPercent: 100,
+        platform: {
+          name: 'StayMiles',
+          isActive: true,
+          pointsPerCurrency: 0.001,
+          pointValue: 100,
+        },
+        limits: {
+          minPointsPerCurrency: 0.001,
+          maxPointsPerCurrency: 0.003,
+          minRedeemPercent: 1,
+          maxRedeemPercent: 100,
+        },
+      });
+    });
+
+    it('saves the rules, reads them back and writes the change to the audit log', async () => {
+      const h = await hotel();
+      const saved = await saveRules(h.token, h.hotelId, {
+        pointsPerCurrency: 0.0015,
+        maxRedeemPercent: 30,
+      }).expect(200);
+      expect(saved.body.data).toMatchObject({
+        custom: true,
+        appliesNow: true,
+        pointsPerCurrency: 0.0015,
+        earnMultiplier: 1.5,
+        maxRedeemPercent: 30,
+      });
+
+      const read = await t
+        .api()
+        .get(rulesUrl(h.hotelId))
+        .set(auth(h.token))
+        .expect(200);
+      expect(read.body.data).toEqual(saved.body.data);
+
+      // Saving again updates the one row of the hotel instead of adding a second.
+      await saveRules(h.token, h.hotelId, { isActive: false }).expect(200);
+      expect(
+        await t.prisma.loyaltyProgram.count({ where: { hotelId: h.hotelId } }),
+      ).toBe(1);
+
+      const logs = await t.prisma.auditLog.findMany({
+        where: { action: 'LOYALTY_PROGRAM_UPDATED' },
+        orderBy: { createdAt: 'asc' },
+      });
+      expect(logs).toHaveLength(2);
+      expect(JSON.parse(logs[0].newValue ?? '{}')).toMatchObject({
+        hotelId: h.hotelId,
+        before: null,
+        after: { pointsPerCurrency: 0.0015, maxRedeemPercent: 30 },
+      });
+      expect(JSON.parse(logs[1].newValue ?? '{}')).toMatchObject({
+        before: { isActive: true },
+        after: { isActive: false, pointsPerCurrency: 0.001 },
+      });
+    });
+
+    it('refuses an earning rate below the platform one or above three times it', async () => {
+      const h = await hotel();
+      for (const pointsPerCurrency of [0.0005, 0.0031]) {
+        const res = await saveRules(h.token, h.hotelId, {
+          pointsPerCurrency,
+        }).expect(400);
+        expect(res.body.code).toBe('VALIDATION_ERROR');
+        expect(res.body.details).toEqual([
+          { field: 'pointsPerCurrency', message: 'from 0.001 to 0.003' },
+        ]);
+      }
+      for (const maxRedeemPercent of [0, 100.5, 33.333]) {
+        await saveRules(h.token, h.hotelId, { maxRedeemPercent }).expect(400);
+      }
+      expect(
+        await t.prisma.loyaltyProgram.count({ where: { hotelId: h.hotelId } }),
+      ).toBe(0);
+    });
+
+    it('lets only the owner change the rules; staff and other partners are kept out', async () => {
+      const h = await hotel();
+      const staff = await t.signInStaff(h.hotelId, 'staff@hotel.test', [
+        'FRONT_DESK',
+      ]);
+      await saveRules(staff.token, h.hotelId).expect(403);
+      await t.api().get(rulesUrl(h.hotelId)).set(auth(staff.token)).expect(403);
+
+      const other = await hotel('other@hotel.test');
+      await saveRules(other.token, h.hotelId).expect(404);
+      const guest = await t.signIn('CUSTOMER', 'guest@mail.test');
+      // The access guard hides a hotel from every account outside it.
+      await saveRules(guest.token, h.hotelId).expect(404);
+    });
+
+    it('earns at the hotel rate at check-out', async () => {
+      const h = await hotel();
+      await saveRules(h.token, h.hotelId, { pointsPerCurrency: 0.002 }).expect(
+        200,
+      );
+      const guest = await t.signIn('CUSTOMER', 'guest@mail.test');
+      await completedStay(guest.token, h);
+
+      // 2,000,000 paid at 2 points per 1,000 d.
+      const res = await account(guest.token).expect(200);
+      expect(res.body.data.pointsBalance).toBe(4000);
+    });
+
+    it('caps the points at the share of the stay the hotel allows', async () => {
+      const h = await hotel();
+      await saveRules(h.token, h.hotelId, { maxRedeemPercent: 30 }).expect(200);
+      const guest = await t.signIn('CUSTOMER', 'guest@mail.test');
+      await givePoints(guest.id, 50000);
+
+      // 30 % of 2,000,000 = 600,000, so 6,000 points at 100 d each.
+      const res = await quote(guest.token, h.roomTypeId, 50000).expect(200);
+      expect(res.body.data.points).toMatchObject({
+        maxPointsUsable: 6000,
+        pointsUsed: 6000,
+        amount: 600000,
+        acceptsPoints: true,
+        maxRedeemPercent: 30,
+      });
+      expect(res.body.data.expectedTotal).toBe(1400000);
+
+      await book(guest.token, h.roomTypeId, 1400000, 50000).expect(201);
+      const after = await account(guest.token).expect(200);
+      expect(after.body.data.pointsBalance).toBe(44000);
+    });
+
+    it('refuses points at a hotel that does not take them', async () => {
+      const h = await hotel();
+      await saveRules(h.token, h.hotelId, { acceptsPoints: false }).expect(200);
+      const guest = await t.signIn('CUSTOMER', 'guest@mail.test');
+      await givePoints(guest.id, 5000);
+
+      const plain = await quote(guest.token, h.roomTypeId).expect(200);
+      expect(plain.body.data.points).toMatchObject({
+        acceptsPoints: false,
+        maxPointsUsable: 0,
+        pointsUsed: 0,
+      });
+      expect(plain.body.data.expectedTotal).toBe(2000000);
+
+      const quoted = await quote(guest.token, h.roomTypeId, 1000).expect(409);
+      expect(quoted.body.code).toBe('LOYALTY_POINTS_NOT_ACCEPTED');
+      const booked = await book(
+        guest.token,
+        h.roomTypeId,
+        1900000,
+        1000,
+      ).expect(409);
+      expect(booked.body.code).toBe('LOYALTY_POINTS_NOT_ACCEPTED');
+
+      // A booking without points goes through, and the balance is untouched.
+      await book(guest.token, h.roomTypeId, 2000000).expect(201);
+      const after = await account(guest.token).expect(200);
+      expect(after.body.data.pointsBalance).toBe(5000);
+    });
+
+    it('goes back to the platform rules when the hotel switches its own off', async () => {
+      const h = await hotel();
+      await saveRules(h.token, h.hotelId, {
+        isActive: false,
+        pointsPerCurrency: 0.003,
+        acceptsPoints: false,
+      }).expect(200);
+      const guest = await t.signIn('CUSTOMER', 'guest@mail.test');
+      await givePoints(guest.id, 5000);
+
+      // The saved rules are kept but not applied: points are taken and earned at the platform rate.
+      const res = await quote(guest.token, h.roomTypeId, 5000).expect(200);
+      expect(res.body.data.points).toMatchObject({
+        acceptsPoints: true,
+        pointsUsed: 5000,
+      });
+      await completedStay(guest.token, h, 1500000, 5000);
+      const after = await account(guest.token).expect(200);
+      expect(after.body.data.pointsBalance).toBe(1500);
+    });
+  });
 });

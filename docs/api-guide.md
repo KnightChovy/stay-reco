@@ -256,6 +256,7 @@ There is no `status` field in the body; the HTTP status is already available as 
 | `ACCOUNT_STATUS_CONFLICT` | 409 | The account's status does not allow it (locking a locked account, unlocking an active one) | Reload the account |
 | `LOYALTY_PROGRAM_NOT_FOUND` | 404 | No loyalty programme is running | Hide the points section |
 | `LOYALTY_POINTS_INSUFFICIENT` | 409 | More points than the customer holds | Show the balance and re-quote |
+| `LOYALTY_POINTS_NOT_ACCEPTED` | 409 | The hotel of the stay does not take loyalty points | Hide the points field for this hotel and re-quote without `pointsToUse` |
 | `VOUCHER_NOT_FOUND` | 404 | The discount code doesn't exist or belongs to another customer | "Mã không hợp lệ" |
 | `REVIEW_IMAGE_NOT_FOUND` | 404 | The photo doesn't exist or belongs to another review | Reload the review |
 | `REPORT_ALREADY_RAISED` | 409 | You already flagged this review or photo | "Bạn đã báo cáo nội dung này" |

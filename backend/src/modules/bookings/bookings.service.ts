@@ -190,6 +190,7 @@ export class BookingsService {
     // Points are the third subtraction (money-rules §2.1), taken off what the discount left.
     const points = await this.stayDiscount.points(
       user.accountId,
+      hotelId,
       afterDiscount,
       input.pointsToUse,
     );
