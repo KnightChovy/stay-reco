@@ -155,7 +155,7 @@ export class PromotionsController {
   @ApiOperation({
     summary: 'What a stay would cost with a discount',
     description:
-      'Read-only: holds nothing and spends nothing. Answers the stay subtotal, the one discount that applies and `expectedTotal`, which is what `POST /bookings` must be sent. Leaving `code` out shows the automatic campaigns only. A booking takes a campaign **or** a code, never both, and always the one that saves more. A code that cannot be used answers its own error rather than silently falling back.',
+      'Read-only: holds nothing and spends nothing. Send the stay exactly as `POST /bookings` will: `items` for one or several room types of one hotel (the older `roomTypeId` with `rooms` is still accepted). Answers the subtotal of every room, the one discount that applies and `expectedTotal`, which is what `POST /bookings` must be sent. Leaving `code` out shows the automatic campaigns only. A booking takes a campaign **or** a code, never both, and always the one that saves more. A code that cannot be used answers its own error rather than silently falling back.',
   })
   @ApiData(discountQuoteResponseSchema)
   @ApiErrors(
