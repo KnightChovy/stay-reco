@@ -213,7 +213,7 @@ Not yet: the writer does not produce one. Gemini writes words, so `mediaUrl` is 
 
 `GET /hotels/:hotelId/content-schedules` takes `contentId` (one piece's posts) and `sort`: `scheduled-asc` (default, "post now" rows first, then the soonest) or `published-desc` (latest published first, for figures).
 
-The job **claims** a row before calling the platform (`SCHEDULED → PUBLISHING`), so two runs, two instances or two environments on one database can never send the same post, and a cancel that arrives during the call is refused rather than racing it. A row left in `PUBLISHING` means the process stopped mid-call: check the page by hand. A piece whose posts were all cancelled or failed goes back to `APPROVED`.
+The job **claims** a row before calling the platform (`SCHEDULED → PUBLISHING`), so two runs, two instances or two environments on one database can never send the same post, and a cancel that arrives during the call is refused rather than racing it. A row left in `PUBLISHING` means the process stopped mid-call. The job gives up on it **10 minutes after it was claimed** (`claimed_at`): it becomes `FAILED` with the reason "Publishing was interrupted before the result was saved. Check the page before scheduling it again.", since nobody can tell whether the platform received it, and it is never sent again on its own. A piece whose posts were all cancelled or failed goes back to `APPROVED`.
 
 
 ```jsonc

@@ -440,6 +440,55 @@ describe('Social accounts, scheduling and publishing (e2e)', () => {
       void h;
     });
 
+    /** A run claimed the post `minutesAgo` ago and never wrote what happened: the process stopped mid-call. */
+    const claimedAndLeft = (scheduleId: string, minutesAgo: number) =>
+      t.prisma.contentSchedule.update({
+        where: { contentScheduleId: scheduleId },
+        data: {
+          status: 'PUBLISHING',
+          claimedAt: new Date(Date.now() - minutesAgo * 60_000),
+        },
+      });
+
+    it('gives up on a post a run claimed and never finished', async () => {
+      const h = await readyToPublish();
+      await claimedAndLeft(h.scheduleId, 11);
+
+      // Not sent again: it may already be on the page.
+      expect(await runJob()).toEqual({ published: 0, failed: 0 });
+      expect(t.publisher.posts).toHaveLength(0);
+
+      const res = await t
+        .api()
+        .get(`/api/v1/content-schedules/${h.scheduleId}`)
+        .set(auth(h.token))
+        .expect(200);
+      expect(res.body.data.status).toBe('FAILED');
+      expect(res.body.data.failureReason).toMatch(/interrupted/);
+      const content = await t
+        .api()
+        .get(`/api/v1/marketing-content/${h.contentId}`)
+        .set(auth(h.token))
+        .expect(200);
+      expect(content.body.data.status).toBe('APPROVED');
+      expect(
+        await t.prisma.auditLog.count({
+          where: { action: 'CONTENT_PUBLISH_FAILED' },
+        }),
+      ).toBe(1);
+    });
+
+    it('leaves alone a post a run claimed only moments ago', async () => {
+      const h = await readyToPublish();
+      await claimedAndLeft(h.scheduleId, 1);
+
+      await runJob();
+      const row = await t.prisma.contentSchedule.findUniqueOrThrow({
+        where: { contentScheduleId: h.scheduleId },
+      });
+      expect(row.status).toBe('PUBLISHING');
+    });
+
     it('fails with something actionable when the page has no usable token', async () => {
       const h = await readyToPublish();
       await t.prisma.socialAccount.update({
