@@ -1,25 +1,33 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type {
-  LoyaltyAccount,
-  LoyaltyEntry,
-  LoyaltyEntryQuery,
-  PointsQuote,
+import {
+  type HotelLoyaltyProgram,
+  type HotelLoyaltyProgramInput,
+  LOYALTY_LIMITS,
+  type LoyaltyAccount,
+  type LoyaltyEntry,
+  type LoyaltyEntryQuery,
+  type PointsQuote,
 } from '@stayreco/shared';
+import type { RequestMeta } from '../../common/decorators/request-meta.decorator';
 import { ErrorCode } from '../../common/errors/error-code';
 import { Paginated } from '../../common/http/api-response';
 import { toNumber } from '../../common/http/decimal';
 import { pageArgs } from '../../common/http/pagination';
-import { Prisma } from '../../generated/prisma/client';
+import { type LoyaltyProgram, Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AuditAction, AuditService } from '../audit/audit.service';
 import {
+  earnRate,
   nextTier,
   pointsEarned,
   pointsToSpend,
   pointsValue,
+  redeemCap,
   tierFor,
 } from './points';
 
@@ -50,7 +58,10 @@ const noProgramme = () =>
  */
 @Injectable()
 export class LoyaltyService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
 
   /** The one platform-wide programme, or nothing when the seed has not created it. */
   private programme(
@@ -60,6 +71,30 @@ export class LoyaltyService {
       where: { hotelId: null, isActive: true },
       orderBy: { createdAt: 'asc' },
     });
+  }
+
+  /**
+   * What applies to a stay at a hotel (decisions L8–L10): the platform programme, with the hotel's own earning rate
+   * and redemption conditions when it has switched them on. The value of a point is always the platform's, because
+   * every point lands in the same balance. Null when no platform programme runs: then nothing is earned or spent.
+   */
+  private async rulesAt(
+    tx: Prisma.TransactionClient | PrismaService,
+    hotelId: string,
+  ) {
+    const programme = await this.programme(tx);
+    if (!programme) return null;
+    const own = await tx.loyaltyProgram.findUnique({ where: { hotelId } });
+    const rules = own?.isActive ? own : programme;
+    return {
+      programme,
+      pointsPerCurrency: earnRate(
+        programme.pointsPerCurrency,
+        own?.isActive ? own.pointsPerCurrency : null,
+      ),
+      acceptsPoints: rules.acceptsPoints,
+      maxRedeemPercent: rules.maxRedeemPercent,
+    };
   }
 
   /**
@@ -110,26 +145,42 @@ export class LoyaltyService {
   }
 
   /**
-   * How many of the points a customer asked to spend can actually be used on a stay, and what they take off.
-   * Read-only: nothing is spent until the booking is created.
+   * How many of the points a customer asked to spend can actually be used on a stay at `hotelId`, and what they take
+   * off. The hotel's redemption conditions apply (L10): none when it does not take points, otherwise at most its
+   * share of the stay. Read-only: nothing is spent until the booking is created.
    */
   async quote(
     customerId: string,
+    hotelId: string,
     payableAfterDiscount: Prisma.Decimal,
     pointsRequested: number,
   ): Promise<PointsQuote> {
-    const programme = await this.programme();
-    if (!programme) throw noProgramme();
+    const rules = await this.rulesAt(this.prisma, hotelId);
+    if (!rules) throw noProgramme();
+    const { programme } = rules;
     const row = await this.openAccount(
       this.prisma,
       customerId,
       programme.loyaltyProgramId,
     );
 
+    if (!rules.acceptsPoints && pointsRequested > 0) {
+      throw new ConflictException({
+        code: ErrorCode.LOYALTY_POINTS_NOT_ACCEPTED,
+        message: 'This hotel does not take loyalty points',
+        details: [
+          { field: 'pointsToUse', message: 'not accepted at this hotel' },
+        ],
+      });
+    }
+    // What points may pay at this hotel: nothing when it does not take them, else its share of the stay.
+    const cap = rules.acceptsPoints
+      ? redeemCap(payableAfterDiscount, rules.maxRedeemPercent)
+      : new Prisma.Decimal(0);
     const maxPointsUsable = pointsToSpend(
       row.pointsBalance,
       programme.pointValue,
-      payableAfterDiscount,
+      cap,
     );
     if (pointsRequested > row.pointsBalance) {
       throw new ConflictException({
@@ -143,16 +194,16 @@ export class LoyaltyService {
     const pointsUsed = pointsToSpend(
       pointsRequested,
       programme.pointValue,
-      payableAfterDiscount,
+      cap,
     );
     return {
       programId: programme.loyaltyProgramId,
       pointsBalance: row.pointsBalance,
       maxPointsUsable,
       pointsUsed,
-      amount: toNumber(
-        pointsValue(pointsUsed, programme.pointValue, payableAfterDiscount),
-      ),
+      amount: toNumber(pointsValue(pointsUsed, programme.pointValue, cap)),
+      acceptsPoints: rules.acceptsPoints,
+      maxRedeemPercent: toNumber(rules.maxRedeemPercent),
     };
   }
 
@@ -197,23 +248,25 @@ export class LoyaltyService {
 
   /**
    * Credits the points of a completed stay, on what the booking was actually paid rather than on its list price: a
-   * customer earns on money spent, so a discount lowers the points too (decision L3).
+   * customer earns on money spent, so a discount lowers the points too (decision L3). The rate is the hotel's own
+   * when it has switched its rules on, as they stand at check-out (L9).
    */
   async earn(
     tx: Prisma.TransactionClient,
     customerId: string,
     bookingId: string,
+    hotelId: string,
     amountPaid: Prisma.Decimal,
   ) {
-    const programme = await this.programme(tx);
-    if (!programme) return 0;
-    const points = pointsEarned(amountPaid, programme.pointsPerCurrency);
+    const rules = await this.rulesAt(tx, hotelId);
+    if (!rules) return 0;
+    const points = pointsEarned(amountPaid, rules.pointsPerCurrency);
     if (points <= 0) return 0;
 
     const account = await this.openAccount(
       tx,
       customerId,
-      programme.loyaltyProgramId,
+      rules.programme.loyaltyProgramId,
     );
     const updated = await tx.loyaltyAccount.update({
       where: { loyaltyAccountId: account.loyaltyAccountId },
@@ -347,6 +400,83 @@ export class LoyaltyService {
     return new Map(bookings.map((b) => [b.bookingId, b.hotel.name]));
   }
 
+  /**
+   * The platform programme a hotel's rules sit on, switched on or not, so a partner can still read and prepare its
+   * rules while the platform has paused the programme.
+   */
+  private platform() {
+    return this.prisma.loyaltyProgram.findFirst({
+      where: { hotelId: null },
+      orderBy: [{ isActive: 'desc' }, { createdAt: 'asc' }],
+    });
+  }
+
+  /** `GET /hotels/:hotelId/loyalty-program`: the hotel's own rules, or the platform's while it has none. */
+  async hotelProgram(hotelId: string): Promise<HotelLoyaltyProgram> {
+    const platform = await this.platform();
+    if (!platform) throw noProgramme();
+    const own = await this.prisma.loyaltyProgram.findUnique({
+      where: { hotelId },
+    });
+    return toHotelProgram(platform, own);
+  }
+
+  /**
+   * `PUT /hotels/:hotelId/loyalty-program`: saves the hotel's own rules as a whole (L8–L10). The earning rate must sit
+   * between the platform rate and three times it; the value of a point is copied from the platform and never set by
+   * the hotel. One row per hotel (unique `hotel_id`), so two saves at once update the same row.
+   */
+  async saveHotelProgram(
+    hotelId: string,
+    input: HotelLoyaltyProgramInput,
+    actorId: string,
+    meta: RequestMeta,
+  ): Promise<HotelLoyaltyProgram> {
+    const platform = await this.platform();
+    if (!platform) throw noProgramme();
+    const rate = new Prisma.Decimal(input.pointsPerCurrency);
+    const min = platform.pointsPerCurrency;
+    const max = min.times(LOYALTY_LIMITS.maxEarnMultiplier);
+    if (rate.lessThan(min) || rate.greaterThan(max)) {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'Validation failed',
+        details: [
+          {
+            field: 'pointsPerCurrency',
+            message: `from ${min.toString()} to ${max.toString()}`,
+          },
+        ],
+      });
+    }
+
+    const before = await this.prisma.loyaltyProgram.findUnique({
+      where: { hotelId },
+    });
+    const rules = {
+      isActive: input.isActive,
+      pointsPerCurrency: rate,
+      acceptsPoints: input.acceptsPoints,
+      maxRedeemPercent: new Prisma.Decimal(input.maxRedeemPercent),
+    };
+    const saved = await this.prisma.loyaltyProgram.upsert({
+      where: { hotelId },
+      create: {
+        hotelId,
+        name: `${platform.name} (hotel rules)`.slice(0, 200),
+        pointValue: platform.pointValue,
+        ...rules,
+      },
+      update: rules,
+    });
+    await this.audit.log(AuditAction.LOYALTY_PROGRAM_UPDATED, actorId, meta, {
+      hotelId,
+      before: before && snapshot(before),
+      after: snapshot(saved),
+    });
+    return toHotelProgram(platform, saved);
+  }
+
   /** One movement, written against the loyalty account so the history reads off the audit log's entity index. */
   private record(
     tx: Prisma.TransactionClient,
@@ -366,4 +496,52 @@ export class LoyaltyService {
       },
     });
   }
+}
+
+/** What the audit log keeps of a hotel's rules before and after a change. */
+function snapshot(row: LoyaltyProgram) {
+  return {
+    isActive: row.isActive,
+    pointsPerCurrency: toNumber(row.pointsPerCurrency),
+    acceptsPoints: row.acceptsPoints,
+    maxRedeemPercent: toNumber(row.maxRedeemPercent),
+  };
+}
+
+/** A hotel's rules as the partner reads them, with the platform programme and the bounds a save must respect. */
+function toHotelProgram(
+  platform: LoyaltyProgram,
+  own: LoyaltyProgram | null,
+): HotelLoyaltyProgram {
+  const rules = own ?? platform;
+  const base = platform.pointsPerCurrency;
+  return {
+    custom: own !== null,
+    appliesNow: Boolean(own?.isActive) && platform.isActive,
+    isActive: own?.isActive ?? false,
+    pointsPerCurrency: toNumber(rules.pointsPerCurrency),
+    earnMultiplier: base.isZero()
+      ? 1
+      : toNumber(
+          rules.pointsPerCurrency
+            .dividedBy(base)
+            .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP),
+        ),
+    acceptsPoints: rules.acceptsPoints,
+    maxRedeemPercent: toNumber(rules.maxRedeemPercent),
+    platform: {
+      name: platform.name,
+      isActive: platform.isActive,
+      pointsPerCurrency: toNumber(base),
+      pointValue: toNumber(platform.pointValue),
+    },
+    limits: {
+      minPointsPerCurrency: toNumber(base),
+      maxPointsPerCurrency: toNumber(
+        base.times(LOYALTY_LIMITS.maxEarnMultiplier),
+      ),
+      minRedeemPercent: LOYALTY_LIMITS.redeemPercent.min,
+      maxRedeemPercent: LOYALTY_LIMITS.redeemPercent.max,
+    },
+  };
 }

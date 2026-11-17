@@ -1,9 +1,11 @@
 import { Prisma } from '../../generated/prisma/client';
 import {
+  earnRate,
   nextTier,
   pointsEarned,
   pointsToSpend,
   pointsValue,
+  redeemCap,
   tierFor,
 } from './points';
 
@@ -100,5 +102,43 @@ describe('nextTier', () => {
 
   it('answers nothing once PLATINUM is reached', () => {
     expect(nextTier(100_000)).toBeNull();
+  });
+});
+
+describe('redeemCap', () => {
+  it('keeps the whole stay at 100 %', () => {
+    expect(redeemCap(d(1_500_000), d(100)).toNumber()).toBe(1_500_000);
+  });
+
+  it('takes the hotel share of the stay after the discount', () => {
+    expect(redeemCap(d(1_500_000), d(30)).toNumber()).toBe(450_000);
+  });
+
+  it('rounds down to whole dong, so the cap is never exceeded', () => {
+    // 999,999 x 33.33 % = 333,299.6667
+    expect(redeemCap(d(999_999), d(33.33)).toNumber()).toBe(333_299);
+  });
+
+  it('caps what points may take off together with pointsToSpend', () => {
+    const cap = redeemCap(d(2_000_000), d(50));
+    // 1,000,000 at 100 d a point: 10,000 points at most, whatever the balance.
+    expect(pointsToSpend(50_000, d(100), cap)).toBe(10_000);
+    expect(pointsValue(50_000, d(100), cap).toNumber()).toBe(1_000_000);
+  });
+});
+
+describe('earnRate', () => {
+  it('is the platform rate when the hotel has no rules on', () => {
+    expect(earnRate(d(0.001), null).toNumber()).toBe(0.001);
+  });
+
+  it('uses the hotel rate between 1x and 3x the platform rate', () => {
+    expect(earnRate(d(0.001), d(0.002)).toNumber()).toBe(0.002);
+  });
+
+  it('never goes below the platform rate nor above three times it', () => {
+    // The platform rate changed after the hotel saved its own.
+    expect(earnRate(d(0.002), d(0.001)).toNumber()).toBe(0.002);
+    expect(earnRate(d(0.0005), d(0.003)).toNumber()).toBe(0.0015);
   });
 });

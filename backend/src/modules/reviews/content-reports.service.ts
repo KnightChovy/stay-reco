@@ -11,6 +11,7 @@ import type {
 } from '@stayreco/shared';
 import type { AuthUser } from '../../common/decorators/current-user.decorator';
 import type { RequestMeta } from '../../common/decorators/request-meta.decorator';
+import { lockReview } from '../../common/db/locks';
 import { ErrorCode } from '../../common/errors/error-code';
 import { isUuid } from '../../common/hotel-access/hotel-access.service';
 import { Paginated } from '../../common/http/api-response';
@@ -84,28 +85,31 @@ export class ContentReportsService {
         message: 'Review not found',
       });
     }
-    if (input.reviewImageId) {
-      const image = await this.prisma.reviewImage.count({
-        where: { reviewImageId: input.reviewImageId, reviewId },
-      });
-      if (!image) {
-        throw new NotFoundException({
-          code: ErrorCode.REVIEW_IMAGE_NOT_FOUND,
-          message: 'Review photo not found',
-        });
-      }
-    }
-
     try {
-      const report = await this.prisma.contentReport.create({
-        data: {
-          reporterId,
-          reviewId,
-          reviewImageId: input.reviewImageId ?? null,
-          reason: input.reason,
-          note: input.note ?? null,
-        },
-        include: reportInclude,
+      // With the review locked, so the photo cannot be removed between this check and the report pointing at it.
+      const report = await this.prisma.$transaction(async (tx) => {
+        await lockReview(tx, reviewId);
+        if (input.reviewImageId) {
+          const image = await tx.reviewImage.count({
+            where: { reviewImageId: input.reviewImageId, reviewId },
+          });
+          if (!image) {
+            throw new NotFoundException({
+              code: ErrorCode.REVIEW_IMAGE_NOT_FOUND,
+              message: 'Review photo not found',
+            });
+          }
+        }
+        return tx.contentReport.create({
+          data: {
+            reporterId,
+            reviewId,
+            reviewImageId: input.reviewImageId ?? null,
+            reason: input.reason,
+            note: input.note ?? null,
+          },
+          include: reportInclude,
+        });
       });
       await this.audit.log(AuditAction.REVIEW_REPORTED, reporterId, meta, {
         reportId: report.contentReportId,
@@ -162,14 +166,30 @@ export class ContentReportsService {
         })
       : null;
     if (!report) throw reportNotFound();
-    if (report.status === 'RESOLVED' || report.status === 'DISMISSED') {
-      throw new ConflictException({
+    const alreadyDecided = () =>
+      new ConflictException({
         code: ErrorCode.REPORT_STATUS_CONFLICT,
         message: 'This report has already been decided',
       });
+    if (report.status === 'RESOLVED' || report.status === 'DISMISSED') {
+      throw alreadyDecided();
     }
 
     const decided = await this.prisma.$transaction(async (tx) => {
+      // Conditional on a status still open: two managers deciding at once cannot both act; the second is told.
+      const { count } = await tx.contentReport.updateMany({
+        where: {
+          contentReportId: reportId,
+          status: { in: ['OPEN', 'INVESTIGATING'] },
+        },
+        data: {
+          status: input.status,
+          resolution: input.resolution ?? null,
+          platformManagerId: user.accountId,
+          ...(input.status !== 'INVESTIGATING' && { resolvedAt: new Date() }),
+        },
+      });
+      if (!count) throw alreadyDecided();
       if (input.hide) {
         if (report.reviewImageId) {
           // Hidden, not deleted: a decision has to keep the evidence it was made on, and deleting the row would
@@ -185,14 +205,8 @@ export class ContentReportsService {
           });
         }
       }
-      return tx.contentReport.update({
+      return tx.contentReport.findUniqueOrThrow({
         where: { contentReportId: reportId },
-        data: {
-          status: input.status,
-          resolution: input.resolution ?? null,
-          platformManagerId: user.accountId,
-          ...(input.status !== 'INVESTIGATING' && { resolvedAt: new Date() }),
-        },
         include: reportInclude,
       });
     });

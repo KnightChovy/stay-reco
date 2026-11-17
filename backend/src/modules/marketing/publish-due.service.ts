@@ -37,6 +37,13 @@ export class PublishDueService extends PeriodicJob {
   async publishDue(
     now = new Date(),
   ): Promise<{ published: number; failed: number }> {
+    // Posts an earlier run claimed and never finished; kept apart so a failure here does not stop the queue.
+    try {
+      const given = await this.schedules.failInterrupted(now);
+      if (given) this.logger.warn(`Gave up on ${given} interrupted post(s)`);
+    } catch (err) {
+      this.logger.error(`Checking interrupted posts threw: ${String(err)}`);
+    }
     const ids = await this.schedules.due(now, PER_RUN);
     let published = 0;
     let failed = 0;

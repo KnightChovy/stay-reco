@@ -59,6 +59,8 @@ export class BookingsController {
     ErrorCode.ROOM_TYPE_NOT_FOUND,
     ErrorCode.ROOM_SOLD_OUT,
     ErrorCode.BOOKING_PRICE_CHANGED,
+    ErrorCode.LOYALTY_POINTS_INSUFFICIENT,
+    ErrorCode.LOYALTY_POINTS_NOT_ACCEPTED,
   )
   @Post('bookings')
   create(@CurrentUser() user: AuthUser, @Body() dto: CreateBookingDto) {

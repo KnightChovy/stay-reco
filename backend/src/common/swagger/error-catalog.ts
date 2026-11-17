@@ -274,6 +274,11 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorInfo> = {
     status: 409,
     description: 'The report is already resolved or dismissed',
   },
+  REVIEW_IMAGE_REPORTED: {
+    status: 409,
+    description:
+      'The photo is under an open report and cannot be removed until a platform manager decides',
+  },
   VOUCHER_NOT_FOUND: {
     status: 404,
     description: "Discount code doesn't exist or belongs to another customer",
@@ -307,6 +312,11 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorInfo> = {
   LOYALTY_POINTS_INSUFFICIENT: {
     status: 409,
     description: 'Spending more points than the customer holds',
+  },
+  LOYALTY_POINTS_NOT_ACCEPTED: {
+    status: 409,
+    description:
+      'The hotel of the stay does not take loyalty points as payment',
   },
   WALLET_INSUFFICIENT: {
     status: 409,

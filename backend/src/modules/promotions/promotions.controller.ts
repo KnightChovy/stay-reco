@@ -164,6 +164,8 @@ export class PromotionsController {
     ErrorCode.VOUCHER_ALREADY_USED,
     ErrorCode.VOUCHER_EXPIRED,
     ErrorCode.VOUCHER_NOT_APPLICABLE,
+    ErrorCode.LOYALTY_POINTS_INSUFFICIENT,
+    ErrorCode.LOYALTY_POINTS_NOT_ACCEPTED,
   )
   @Roles(UserRole.CUSTOMER)
   @Post('bookings/discount-quote')

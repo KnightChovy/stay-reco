@@ -22,6 +22,7 @@ Keep customers coming back: rate the stay they just had, pay less next time with
 - **Promotions and vouchers** (BR-06): campaigns a hotel runs, personal codes handed to customers, the discount applied when booking. ✅ built
 - **Reviews** after check-out (BR-12): rating criteria, writing and editing, a hotel's reviews and rating figures, photos, reporting, and a platform manager's moderation queue. ✅ built
 - **Loyalty** (BR-11): one platform-wide programme, points earned at check-out, points spent on a later stay. ✅ built
+- **A hotel's own loyalty rules** (L8–L11): earning rate and redemption conditions per hotel, on top of the one balance. ✅ built
 - **Customer wallet**: balance, movements and paying a whole booking from it. ✅ built; withdrawing moves to phase 6 (W3)
 - **Preferences**: the key-value preferences the recommender of [phase 5](./phase-5-ai-marketing.md) reads. ✅ built
 
@@ -86,6 +87,17 @@ Keep customers coming back: rate the stay they just had, pay less next time with
 | L6  | **Tiers come from `lifetime_points`**, a new column that rises on every earn and never falls, so spending points cannot drop a customer a tier. MEMBER 0, SILVER 10k, GOLD 30k, PLATINUM 100k, as constants for now. Tiers carry no benefit yet; they are a label the rewards screen shows.                                                                                                                                                                |
 | L7  | Point movements are written to the **audit log**, keyed by the loyalty account, instead of a table of their own — the same approach [money-rules.md §7.1](../money-rules.md) takes for cancellation reasons and fees.                                                                                                                                                                                                                                      |
 
+### A hotel's own rules (L8–L11, decided 2026-11-16)
+
+The registration form has the partner manage *"the hotel's loyalty points and voucher program, including configuring point-earning rules … and setting redemption conditions"*; L1 left that out. Added on top of L1, without a second balance. Built by Khiêm (backend) while Phúc works on phase 5.
+
+| #   | Decision |
+| --- | -------- |
+| L8  | A hotel may save **its own rules** on a `loyalty_program` row with its `hotel_id` (one row per hotel, unique). The customer keeps **one StayMiles balance**: the rules change what is earned and spent at that hotel, never the value of a point. No row, or a row switched off, means the platform rules. No platform programme running means nothing is earned or spent anywhere. |
+| L9  | **Earning**: the hotel rate runs from the platform rate to **3×** it, so a hotel can add points but never opt out of the programme. Applied at check-out with the rate in force then, and kept in that range there too, so a later change of the platform rate never leaves a hotel outside it. |
+| L10 | **Redemption conditions**: `accepts_points` (false refuses points at the hotel, `409 LOYALTY_POINTS_NOT_ACCEPTED`) and `max_redeem_percent` (1–100, the most points may pay of the stay after the discount, rounded down to whole dong). Two new columns, approved 2026-11-16; the platform row carries the defaults (true, 100). |
+| L11 | **Who pays** is unchanged from M4 ([money-rules.md §9](../money-rules.md)): until the platform makes up the value of the points, the hotel where they are spent is credited the total after points, and the redemption conditions are how it limits that. Bonus points earned at one hotel and spent at another are part of the same open item. |
+
 ### Customer wallet (W1–W3, decided 2026-11-10)
 
 | #   | Decision                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
@@ -104,6 +116,7 @@ booking.promotion_id / voucher_id: set at creation, cleared when the discount is
 loyalty_account.points_balance: +earned at check-out, -spent at booking, +back if the stay never happens
 loyalty_account.lifetime_points: only ever rises; the tier is read from it
 loyalty_tier: MEMBER -> SILVER (10k) -> GOLD (30k) -> PLATINUM (100k)
+loyalty_program (hotel row): none -> saved, is_active true ⇄ false (never deleted; false = platform rules)
 ```
 
 ## Adding endpoints
@@ -127,7 +140,8 @@ These three meet in one place, so build them together rather than screen by scre
 
 - **One quote call owns the whole price.** `POST /bookings/discount-quote` takes `code` and `pointsToUse` together and answers `subtotal`, `discount`, `points` and `expectedTotal`. Never compute the total in the client: send the `expectedTotal` you were given to `POST /bookings`, and on `409 BOOKING_PRICE_CHANGED` re-quote and show the new price rather than retrying.
 - **A promotion and a voucher never stack** (P-decisions): one `code` field, one `discount` block back, whose `kind` says which it turned out to be. Points are a *third*, separate subtraction on top - see [loyalty.md](../api/loyalty.md#where-points-sit-in-the-price).
-- **The points slider is bounded by the server, not by the balance.** Use `points.maxPointsUsable`, which is already capped by what the stay still owes after the discount. Asking for more than the stay needs is fine and only the needed points are taken; asking for more than the balance is `409 LOYALTY_POINTS_INSUFFICIENT`.
+- **The points slider is bounded by the server, not by the balance.** Use `points.maxPointsUsable`, which is already capped by what the stay still owes after the discount and by the hotel's share (`points.maxRedeemPercent`). Asking for more than the stay needs is fine and only the needed points are taken; asking for more than the balance is `409 LOYALTY_POINTS_INSUFFICIENT`. When `points.acceptsPoints` is false, show that the hotel does not take points and send no `pointsToUse` (`409 LOYALTY_POINTS_NOT_ACCEPTED`).
+- **Partner portal, loyalty rules**: `GET` / `PUT /hotels/:hotelId/loyalty-program` (owner). Bound the inputs with `limits` from the GET; see [loyalty.md](../api/loyalty.md#a-hotels-own-rules-l8l11).
 - **`points: null` in the quote is not an error** - no programme is running. Hide the whole points section.
 - Rewards screen: `GET /me/loyalty` (balance, `tier`, `nextTier`, `balanceValue` in dong) and `GET /me/loyalty/entries` for the history. Two things the design promises and the API does not have: tiers carry **no benefit** yet, and points **never expire** - do not draw an expiry date.
 - `GET /me/vouchers?active=true` for the customer's codes. In the partner portal, `DELETE /promotions/:id` only switches a campaign off (`isActive: false`); it never disappears from the list, because past bookings point at it.
@@ -141,7 +155,7 @@ These three meet in one place, so build them together rather than screen by scre
 
 ## Open questions
 
-- [ ] **Loyalty: per hotel or platform-wide?** The schema says per hotel (`loyalty_program.hotel_id` is required), the FE prototype draws one platform-wide "Ví điểm StayMiles" with tiers. The two cannot both be true; taking the FE route means a migration.
+- [x] **Loyalty: per hotel or platform-wide?** Both: one platform-wide balance (L1) with each hotel's own rules on top (L8–L11).
 - [ ] **How much is a point worth** when spent, and is it earned on the total or on the amount after discounts?
 - [ ] **Paying from the wallet**: part of a booking with the rest by transfer, or all-or-nothing? This touches the SePay flow, where the transferred amount must match the booking exactly.
 - [ ] Automatic NSFW screening on upload through the Cloudinary add-on already in use (~$0.001 an image).
@@ -168,3 +182,5 @@ These three meet in one place, so build them together rather than screen by scre
 | 2026-11-11 | FE | Web customer integration on `feat/phase-4-frontend`: `/account/rewards`, `/account/wallet`, `/account/preferences`, `/account/bookings/[id]/review`, the hotel page reviews, discount code and points on `/booking`, pay with wallet on `/booking/payment`. Partner screens (promotions, review moderation) are not connected yet |
 | 2026-11-12 | Phúc | Review photos and content reports built (R10–R14): 5 photos a review with Tripadvisor's shape rules, the flag under every review for every role, and a platform manager's queue. Hiding a review moves from the hotel to a platform manager, which changes R5 and breaks that endpoint for FE callers using owner access |
 | 2026-11-13 | FE | Review of PR #115 addressed: at most 10 vouchers priced on `/booking` (soonest to expire first, the rest typed in), quotes kept 30 s and not refetched on tab focus, a stale quote cannot be booked, the voucher list filtered by the hotel the room type belongs to rather than `?hotelId=`, only the four discount-code refusals drop the code, the saved-review notice says when the hotel hid the review, the next-tier mark read from `nextTier.pointsNeeded`. Still open on the backend: a batch quote for several codes, and reading one review (`GET /reviews/:id`) instead of searching `/me/reviews` |
+| 2026-11-16 | Khiêm | Concurrency fixes: the 5-photo limit is checked again with the review locked (two uploads at once could make 6); a review sent twice at once answers `409 REVIEW_ALREADY_EXISTS` instead of 500; two managers deciding one report keep only the first decision; a photo under an open report cannot be removed by its author (`409 REVIEW_IMAGE_REPORTED`), so the evidence and the report survive; vouchers are created one after another inside their transaction |
+| 2026-11-16 | Khiêm | A hotel's own loyalty rules (L8–L11): `GET` / `PUT /hotels/:hotelId/loyalty-program` for the owner, the earning rate (1–3× the platform rate) applied at check-out, `acceptsPoints` and `maxRedeemPercent` applied to the quote and the booking. Migration: `loyalty_program.accepts_points`, `max_redeem_percent`, unique `hotel_id`, and the hotel foreign key now deletes the hotel's rules with the hotel instead of turning them into a platform row. New error code `LOYALTY_POINTS_NOT_ACCEPTED`; `PointsQuote` gains `acceptsPoints` and `maxRedeemPercent`. money-rules §2.1 and §9 updated |

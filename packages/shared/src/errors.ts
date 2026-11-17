@@ -140,6 +140,8 @@ export const ErrorCode = {
   REPORT_NOT_FOUND: 'REPORT_NOT_FOUND',
   /** Deciding a report that is already resolved or dismissed. */
   REPORT_STATUS_CONFLICT: 'REPORT_STATUS_CONFLICT',
+  /** Removing a photo a platform manager has still to decide on: it is the evidence of an open report. */
+  REVIEW_IMAGE_REPORTED: 'REVIEW_IMAGE_REPORTED',
 
   // Promotions and vouchers (BR-06)
   /** The discount code does not exist, or belongs to another customer. */
@@ -160,6 +162,8 @@ export const ErrorCode = {
   LOYALTY_PROGRAM_NOT_FOUND: 'LOYALTY_PROGRAM_NOT_FOUND',
   /** Spending more points than the customer holds. */
   LOYALTY_POINTS_INSUFFICIENT: 'LOYALTY_POINTS_INSUFFICIENT',
+  /** The hotel of the stay does not take points as payment (decision L10). */
+  LOYALTY_POINTS_NOT_ACCEPTED: 'LOYALTY_POINTS_NOT_ACCEPTED',
 
   // Customer wallet
   /** The wallet balance does not cover the whole booking; paying from it is all or nothing (decision W1). */
