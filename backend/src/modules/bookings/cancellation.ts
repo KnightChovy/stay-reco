@@ -15,16 +15,21 @@ export interface CancellationAmounts {
  * Fee and refund of a cancellation made `now` (money-rules §7.1, BR-08): no fee before the free-cancellation
  * deadline, otherwise the fee percent of the amount paid; refund = paid − fee, rounded half up to 2 decimals. The
  * refund goes to the customer wallet, not through a bank transfer, so it keeps decimals.
+ *
+ * `prepaidAddOns` are paid back in full: the fee is a percent of the room part only, since a service the guest never
+ * used costs the hotel nothing.
  */
 export function cancellationAmounts(
   terms: CancellationTerms,
   paid: Prisma.Decimal,
   now = new Date(),
+  prepaidAddOns: Prisma.Decimal = new Prisma.Decimal(0),
 ): CancellationAmounts {
   const free = terms.freeCancelUntil !== null && now < terms.freeCancelUntil;
+  const roomPart = Prisma.Decimal.max(paid.minus(prepaidAddOns), 0);
   const fee = free
     ? new Prisma.Decimal(0)
-    : paid
+    : roomPart
         .times(terms.cancelFeePercent)
         .dividedBy(100)
         .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);

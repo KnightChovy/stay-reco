@@ -63,6 +63,10 @@ const TAGS: [name: string, description: string][] = [
     'Discount campaigns and personal voucher codes, and the quote that decides what a booking is charged. Guide: docs/api/promotions.md, rules: docs/money-rules.md',
   ],
   [
+    'add-ons',
+    'Services a hotel sells on top of the room: the catalogue, booking them with the stay, and front-desk add-ons collected at check-out. Guide: docs/api/add-ons.md',
+  ],
+  [
     'loyalty',
     'Loyalty points: the balance and tier, earning at check-out, spending on a booking, the history. Guide: docs/api/loyalty.md',
   ],

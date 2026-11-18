@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { DiscountType } from '../enums';
+import { addOnLinesSchema } from './add-on';
 import { dateSchema, listQuerySchema, moneySchema } from './common';
 
 /**
@@ -76,5 +77,7 @@ export const discountQuoteSchema = z.strictObject({
   code: z.string().trim().min(1).max(50).optional(),
   /** Loyalty points to spend on top of the discount; capped at the balance and at what the stay still owes. */
   pointsToUse: z.number().int().min(0).max(100_000_000).optional(),
+  /** Add-ons to book with the stay; added to `expectedTotal`, never discounted. */
+  addOns: addOnLinesSchema.optional(),
 });
 export type DiscountQuoteInput = z.infer<typeof discountQuoteSchema>;

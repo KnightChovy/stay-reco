@@ -194,6 +194,11 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorInfo> = {
     status: 404,
     description: "Booking doesn't exist or the caller cannot see it",
   },
+  ADD_ON_NOT_FOUND: {
+    status: 404,
+    description:
+      "Add-on doesn't exist, belongs to another hotel, is off sale or cannot be booked in advance",
+  },
   BOOKING_STATUS_CONFLICT: {
     status: 409,
     description: "The booking's status does not allow the action",

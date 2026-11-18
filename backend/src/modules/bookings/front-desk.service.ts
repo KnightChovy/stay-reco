@@ -1,3 +1,5 @@
+import { addOnsOf } from './booking-invoice';
+import { addOnNotFound, AddOnsService } from '../add-ons/add-ons.service';
 import {
   BadRequestException,
   ConflictException,
@@ -11,6 +13,7 @@ import type {
   CheckInInput,
   CheckOutInput,
   CheckOutQuote,
+  AddBookingAddOnInput,
   RoomOption,
   Room,
   RoomOptions,
@@ -88,6 +91,7 @@ const stayRowSelect = {
     select: { roomTypeId: true, numRooms: true, nightlyPrices: true },
   },
   invoice: { select: { paymentStatus: true, totalAmount: true } },
+  addOns: { select: { payment: true, amount: true } },
   hotel: {
     select: {
       checkOutTime: true,
@@ -97,6 +101,26 @@ const stayRowSelect = {
 } satisfies Prisma.BookingSelect;
 
 type StayRow = Prisma.BookingGetPayload<{ select: typeof stayRowSelect }>;
+
+/** Front-desk add-ons go on a paid stay that has not checked out: CONFIRMED and PAID, or CHECKED_IN. */
+const addOnsOpenWhere = {
+  OR: [
+    { status: 'CHECKED_IN' },
+    { status: 'CONFIRMED', invoice: { paymentStatus: 'PAID' } },
+  ],
+} satisfies Prisma.BookingWhereInput;
+
+function assertAddOnsOpen(booking: StayRow) {
+  const open =
+    booking.status === 'CHECKED_IN' ||
+    (booking.status === 'CONFIRMED' &&
+      booking.invoice?.paymentStatus === 'PAID');
+  if (!open) {
+    throw bookingStatusConflict(
+      'Add-ons can be added to a paid stay until check-out',
+    );
+  }
+}
 
 /**
  * The front desk (staff.md "Front desk", decisions O2–O9): finding the guest's booking by code or voucher QR, the
@@ -112,6 +136,7 @@ export class FrontDeskService {
     private readonly ledger: WalletLedger,
     private readonly loyalty: LoyaltyService,
     private readonly noShows: NoShowService,
+    private readonly addOns: AddOnsService,
     private readonly config: ConfigService<Env, true>,
   ) {}
 
@@ -288,6 +313,100 @@ export class FrontDeskService {
     return this.bookings.findOne(user, bookingId);
   }
 
+  /**
+   * A service used during the stay, added by the front desk and collected there at check-out (FRONT_DESK): it is not
+   * in the booking total and carries no commission. Any active add-on of the hotel, prebookable or not, while the
+   * booking is paid and not yet checked out. Name and price are fixed on the line.
+   */
+  async addAddOn(
+    user: AuthUser,
+    bookingId: string,
+    input: AddBookingAddOnInput,
+  ): Promise<Booking> {
+    const booking = await this.findForFrontDesk(user, bookingId);
+    assertAddOnsOpen(booking);
+    const {
+      lines: [line],
+    } = await this.addOns.price(booking.hotelId, [input], 'staff', 'body');
+    const now = new Date();
+    await this.prisma.$transaction(async (tx) => {
+      // The lock check-out takes, so a line is never added to a stay that has just been closed.
+      await lockRoomTypes(tx, typesOf(booking));
+      await this.assertStillOpen(tx, bookingId);
+      const created = await tx.bookingAddOn.create({
+        data: {
+          bookingId,
+          hotelAddOnId: line.hotelAddOnId,
+          name: line.name,
+          unitPrice: line.unitPrice,
+          quantity: line.quantity,
+          amount: line.amount,
+          payment: 'FRONT_DESK',
+          addedBy: user.accountId,
+          createdAt: now,
+        },
+      });
+      await recordBookingEvent(tx, {
+        action: AuditAction.BOOKING_ADD_ON_ADDED,
+        bookingId,
+        actor: hotelActor(user),
+        at: now,
+        value: {
+          lineId: created.bookingAddOnId,
+          name: line.name,
+          quantity: line.quantity,
+          amount: line.amount.toNumber(),
+        },
+      });
+    });
+    return this.bookings.findOne(user, bookingId);
+  }
+
+  /** Takes back a FRONT_DESK line entered by mistake, before check-out. Prepaid lines were paid and stay. */
+  async removeAddOn(
+    user: AuthUser,
+    bookingId: string,
+    lineId: string,
+  ): Promise<Booking> {
+    const booking = await this.findForFrontDesk(user, bookingId);
+    assertAddOnsOpen(booking);
+    const now = new Date();
+    await this.prisma.$transaction(async (tx) => {
+      await lockRoomTypes(tx, typesOf(booking));
+      await this.assertStillOpen(tx, bookingId);
+      const line = isUuid(lineId)
+        ? await tx.bookingAddOn.findFirst({
+            where: { bookingAddOnId: lineId, bookingId, payment: 'FRONT_DESK' },
+          })
+        : null;
+      if (!line) throw addOnNotFound();
+      await tx.bookingAddOn.delete({ where: { bookingAddOnId: lineId } });
+      await recordBookingEvent(tx, {
+        action: AuditAction.BOOKING_ADD_ON_REMOVED,
+        bookingId,
+        actor: hotelActor(user),
+        at: now,
+        value: {
+          lineId,
+          name: line.name,
+          quantity: line.quantity,
+          amount: line.amount.toNumber(),
+        },
+      });
+    });
+    return this.bookings.findOne(user, bookingId);
+  }
+
+  private async assertStillOpen(
+    tx: Prisma.TransactionClient,
+    bookingId: string,
+  ) {
+    const still = await tx.booking.count({
+      where: { bookingId, ...addOnsOpenWhere },
+    });
+    if (!still) throw bookingStatusConflict('The booking changed meanwhile');
+  }
+
   /** What checking out now means, for the check-out screen (UC39, L6): nights released, delay, late check-out fee. */
   async checkOutQuote(
     user: AuthUser,
@@ -308,6 +427,7 @@ export class FrontDeskService {
         nightPrice: toNumber(late.fee.nightPrice),
       },
       amountPaid: toNumber(booking.invoice!.totalAmount),
+      addOnsDue: toNumber(addOnsOf(booking, 'FRONT_DESK')),
     };
   }
 

@@ -188,10 +188,24 @@ Changing dates, room type or guests is not offered: cancel and book again (BR-09
   ],
   "roomType": { "id": "uuid", "name": "…" },   // deprecated: the first item, until the apps read items
   "checkIn": "2026-11-20", "checkOut": "2026-11-22", "nights": 2, "rooms": 1, "guests": 2,   // rooms: over every item
+  "guestName": "Trần Thị B", "contactPhone": "0905123456",   // who is staying
+  "bookedBy": { "name": "Nguyễn Văn A", "phone": null },     // the account that booked; differs when booked for someone
   "totalAmount": 3600000, "createdAt": "…" }
 
 // Booking = BookingSummary +
-{ "guestName": "…", "contactPhone": "…", "arrivalTime": "14:00", "specialRequests": null,
+{ "arrivalTime": "14:00", "specialRequests": null,
+  "invoice": {
+    "number": "SR-261022-0842",           // same as code
+    "paymentMethod": "SEPAY",             // WALLET once paid from the wallet
+    "subtotal": 4000000,                  // rooms + prepaid add-ons
+    "addOnsTotal": 0,                     // prepaid add-ons inside subtotal, never discounted
+    "discount": { "kind": "VOUCHER", "name": "Giảm 10%", "code": "SUMMER10", "amount": 400000 },   // null: none; code null for a PROMOTION
+    "points": null,                       // { "used": 5000, "amount": 500000 } when points were spent
+    "tax": 0,                             // always 0 for now: prices include tax
+    "total": 3600000,                     // subtotal − discount − points + tax
+    "frontDeskDue": 0,                    // front-desk add-ons, collected at check-out, not in total
+    "currency": "VND" },
+  "addOns": [],                           // BookingAddOn[], see api/add-ons.md
   "nightlyPrices": [ { "date": "2026-11-20", "price": 1800000 } ],   // deprecated: the first item's
   "cancellation": { "freeUntil": "…", "feePercent": 50 },
   "holdExpiresAt": null,                  // set while PENDING

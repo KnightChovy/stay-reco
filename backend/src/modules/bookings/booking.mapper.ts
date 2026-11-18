@@ -10,6 +10,8 @@ import { toNumber } from '../../common/http/decimal';
 import type { Prisma } from '../../generated/prisma/client';
 import { fromTime } from '../hotels/hotel.mapper';
 import type { BookingHistory } from './booking-history';
+import { type InvoiceParts, toBookingInvoice } from './booking-invoice';
+import { bookingAddOnsInclude, toBookingAddOn } from '../add-ons/add-on.mapper';
 
 /** The items of a booking in room type name order: the first one fills the deprecated single-type fields. */
 export const bookingItemsInclude = {
@@ -33,10 +35,17 @@ export const bookingSummaryInclude = {
     },
   },
   items: bookingItemsInclude,
+  customer: {
+    select: { userAccount: { select: { fullName: true, phone: true } } },
+  },
 } satisfies Prisma.BookingInclude;
 
 export const bookingInclude = {
   ...bookingSummaryInclude,
+  promotion: { select: { name: true } },
+  voucher: { select: { code: true } },
+  loyaltyProgram: { select: { pointValue: true } },
+  addOns: bookingAddOnsInclude,
   roomCalendars: {
     where: { status: 'HELD' },
     select: { holdExpiresAt: true },
@@ -105,6 +114,12 @@ export function toBookingSummary(b: BookingSummaryRow): BookingSummary {
     nights: daysBetween(checkIn, checkOut),
     rooms,
     guests: b.numGuests ?? rooms,
+    guestName: b.guestName,
+    contactPhone: b.contactPhone,
+    bookedBy: {
+      name: b.customer.userAccount.fullName,
+      phone: b.customer.userAccount.phone,
+    },
     totalAmount: toNumber(b.totalAmount),
     createdAt: b.createdAt.toISOString(),
   };
@@ -122,6 +137,7 @@ export function toBooking(
   paymentDetails: PaymentDetails,
   history: BookingHistory,
   assignedRooms: AssignedRoom[],
+  invoiceParts: InvoiceParts,
 ): Booking {
   const { cancelRequest, rejection, changeRequest, lateCheckout } = history;
   const invoice = b.invoice!;
@@ -143,8 +159,6 @@ export function toBooking(
 
   return {
     ...summary,
-    guestName: b.guestName,
-    contactPhone: b.contactPhone,
     arrivalTime: fromTime(b.arrivalTime),
     specialRequests: b.specialRequests,
     nightlyPrices: summary.items[0].nightlyPrices,
@@ -154,6 +168,8 @@ export function toBooking(
     },
     holdExpiresAt: holdExpiresAt?.toISOString() ?? null,
     paidAt: invoice.paidAt?.toISOString() ?? null,
+    invoice: toBookingInvoice(b, invoiceParts),
+    addOns: b.addOns.map(toBookingAddOn),
     payment: holdExpiresAt
       ? paymentDetails({
           amount: totalAmount,

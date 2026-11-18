@@ -66,7 +66,10 @@ export const discountQuoteResponseSchema = z
     subtotal: z.number().describe('Sum of the nightly prices for every room, before any discount.'),
     discount: appliedDiscountResponseSchema.nullable().describe('null when nothing applies.'),
     points: pointsQuoteResponseSchema.nullable().describe('The loyalty points part; null when no programme is running.'),
-    expectedTotal: z.number().describe('subtotal - discount - points, never below 0; send this to POST /bookings.'),
+    addOnsTotal: z.number().describe('The add-ons sent, at their current prices; never discounted.'),
+    expectedTotal: z
+      .number()
+      .describe('subtotal - discount - points (never below 0) + addOnsTotal; send this to POST /bookings.'),
   })
   .register(responseSchemas, { id: 'DiscountQuote' });
 export type DiscountQuote = z.infer<typeof discountQuoteResponseSchema>;

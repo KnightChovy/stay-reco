@@ -1,6 +1,7 @@
 import { z } from 'zod';
-import { BookingStatus, DayOfWeek, PaymentStatus, PriceAdjustmentType, PriceRuleType, RoomStatus } from '../enums';
+import { BookingStatus, DayOfWeek, PaymentMethod, PaymentStatus, PriceAdjustmentType, PriceRuleType, RoomStatus } from '../enums';
 import { CHANGE_REQUEST_STATUSES } from '../schemas/booking';
+import { bookingAddOnResponseSchema, hotelAddOnResponseSchema } from './add-on';
 import {
   amenityResponseSchema,
   cancellationPolicyResponseSchema,
@@ -140,6 +141,7 @@ export const hotelListingResponseSchema = z
       policies: z.record(z.string(), z.string()),
       cancellationPolicy: cancellationPolicyResponseSchema,
       lateCheckoutPolicy: lateCheckoutPolicyResponseSchema.nullable().describe('null: no late check-out fee.'),
+      addOns: z.array(hotelAddOnResponseSchema).describe('Active add-ons, by name; `prebookable` ones can go on POST /bookings.'),
     }),
     roomTypes: z.array(roomTypeListingResponseSchema),
   })
@@ -174,6 +176,11 @@ export const bookingSummaryResponseSchema = z
     nights: z.number().int(),
     rooms: z.number().int().describe('Rooms over every item.'),
     guests: z.number().int(),
+    guestName: z.string().describe('Who is staying; may differ from `bookedBy` when the stay was booked for someone.'),
+    contactPhone: z.string(),
+    bookedBy: z
+      .object({ name: z.string(), phone: z.string().nullable() })
+      .describe('The customer account that made the booking.'),
     totalAmount: z.number(),
     createdAt: isoDateTime(),
   })
@@ -197,10 +204,42 @@ export const bookingPaymentResponseSchema = z
   });
 export type BookingPayment = z.infer<typeof bookingPaymentResponseSchema>;
 
+export const bookingInvoiceResponseSchema = z
+  .object({
+    number: z.string().describe('Same as the booking `code`.'),
+    paymentMethod: z
+      .enum(PaymentMethod)
+      .describe('SEPAY until the booking is paid from the wallet, then WALLET.'),
+    subtotal: z.number().describe('Rooms plus the prepaid add-ons, before any subtraction.'),
+    addOnsTotal: z.number().describe('The PREPAID add-ons inside `subtotal`; the discount and points never touch them.'),
+    discount: z
+      .object({
+        kind: z.enum(['PROMOTION', 'VOUCHER']),
+        name: z.string().describe('Name of the campaign.'),
+        code: z.string().nullable().describe('The voucher code; null for a promotion, which has none.'),
+        amount: z.number(),
+      })
+      .nullable()
+      .describe('The promotion or the voucher (never both); null when none applied.'),
+    points: z
+      .object({ used: z.number().int(), amount: z.number().describe('What the points took off, in dong.') })
+      .nullable()
+      .describe('Loyalty points spent on the stay; null when none.'),
+    tax: z.number().describe('Always 0 for now: prices include tax and no tax line is computed.'),
+    total: z.number().describe('subtotal − discount − points + tax; what was charged.'),
+    frontDeskDue: z
+      .number()
+      .describe('FRONT_DESK add-ons, collected at the desk at check-out; not in `total`, no commission.'),
+    currency: z.string(),
+  })
+  .register(responseSchemas, {
+    id: 'BookingInvoice',
+    description: 'The invoice of a booking: what the stay cost and how it was paid (money-rules §2.1).',
+  });
+export type BookingInvoice = z.infer<typeof bookingInvoiceResponseSchema>;
+
 export const bookingResponseSchema = bookingSummaryResponseSchema
   .extend({
-    guestName: z.string(),
-    contactPhone: z.string(),
     arrivalTime: z.string().nullable().describe('"HH:mm", start of the one-hour arrival window.'),
     specialRequests: z.string().nullable(),
     nightlyPrices: z
@@ -212,6 +251,8 @@ export const bookingResponseSchema = bookingSummaryResponseSchema
     }),
     holdExpiresAt: isoDateTime().nullable().describe('Set while PENDING.'),
     paidAt: isoDateTime().nullable(),
+    invoice: bookingInvoiceResponseSchema,
+    addOns: z.array(bookingAddOnResponseSchema).describe('Prepaid and front-desk add-ons, oldest first, then by name.'),
     payment: bookingPaymentResponseSchema.nullable().describe('Set while PENDING.'),
     refund: z
       .object({ status: z.enum(PaymentStatus), amount: z.number() })
@@ -297,6 +338,7 @@ export const checkOutQuoteResponseSchema = z
       .nullable()
       .describe('null: within the grace period, not late, or the hotel has no late check-out policy.'),
     amountPaid: z.number(),
+    addOnsDue: z.number().describe('FRONT_DESK add-ons to collect at the desk, besides the late fee.'),
   })
   .register(responseSchemas, {
     id: 'CheckOutQuote',

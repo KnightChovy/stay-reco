@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { addOnLinesSchema } from './add-on';
 import { BookingStatus, PaymentStatus } from '../enums';
 import {
   dateSchema,
@@ -146,6 +147,8 @@ export const createBookingSchema = z
     code: z.string().trim().min(1).max(50).optional(),
     /** Loyalty points to spend; the backend caps them and checks `expectedTotal` against the result. */
     pointsToUse: z.number().int().min(0).max(100_000_000).optional(),
+    /** Add-ons booked with the stay and paid in its transfer; only active, prebookable add-ons of the hotel. */
+    addOns: addOnLinesSchema.optional(),
     expectedTotal: moneySchema,
   })
   .superRefine((v, ctx) => {

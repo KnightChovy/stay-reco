@@ -68,6 +68,8 @@ import {
 } from './booking.mapper';
 import { assertCanSeeBookings } from './booking-access';
 import { loadBookingHistory, type StayRoom } from './booking-history';
+import { loadInvoiceParts } from './booking-invoice';
+import { AddOnsService } from '../add-ons/add-ons.service';
 import { HoldExpiryService } from './hold-expiry.service';
 import { SepayPayment } from './sepay-payment';
 import { signVoucher } from './voucher-token';
@@ -112,6 +114,7 @@ export class BookingsService {
     private readonly discounts: DiscountService,
     private readonly stayDiscount: StayDiscountService,
     private readonly loyalty: LoyaltyService,
+    private readonly addOns: AddOnsService,
     private readonly audit: AuditService,
     private readonly config: ConfigService<Env, true>,
   ) {}
@@ -194,7 +197,9 @@ export class BookingsService {
       afterDiscount,
       input.pointsToUse,
     );
-    const total = afterPoints(afterDiscount, points);
+    // Prepaid add-ons ride on the same transfer but are never discounted: the campaign and the points are on the room.
+    const addOns = await this.addOns.price(hotelId, input.addOns, 'customer');
+    const total = afterPoints(afterDiscount, points).plus(addOns.total);
     if (!total.equals(input.expectedTotal)) {
       throw new ConflictException({
         code: ErrorCode.BOOKING_PRICE_CHANGED,
@@ -285,6 +290,16 @@ export class BookingsService {
                 subtotal: i.subtotal,
               })),
             },
+            addOns: {
+              create: addOns.lines.map((l) => ({
+                hotelAddOnId: l.hotelAddOnId,
+                name: l.name,
+                unitPrice: l.unitPrice,
+                quantity: l.quantity,
+                amount: l.amount,
+                payment: 'PREPAID' as const,
+              })),
+            },
           },
           select: { bookingId: true },
         });
@@ -304,7 +319,10 @@ export class BookingsService {
             code: ErrorCode.BOOKING_PRICE_CHANGED,
             message: 'The points are no longer available',
             details: [
-              { field: 'expectedTotal', message: afterDiscount.toString() },
+              {
+                field: 'expectedTotal',
+                message: afterDiscount.plus(addOns.total).toString(),
+              },
             ],
           });
         }
@@ -313,7 +331,7 @@ export class BookingsService {
           data: {
             bookingId: booking.bookingId,
             invoiceNumber: await this.unusedCode(tx, now),
-            subtotal,
+            subtotal: subtotal.plus(addOns.total),
             taxAmount: 0,
             discountAmount: (discount?.amount ?? 0) + (points?.amount ?? 0),
             totalAmount: total,
@@ -479,12 +497,13 @@ export class BookingsService {
       }),
       loadBookingHistory(this.prisma, bookingId),
     ]);
+    const invoiceParts = await loadInvoiceParts(this.prisma, booking);
     const rooms = history.checkedInRooms
       ? await this.withRoomTypes(history.checkedInRooms)
       : forHotel
         ? await this.heldRooms(bookingId)
         : [];
-    return toBooking(booking, this.sepay.details, history, rooms);
+    return toBooking(booking, this.sepay.details, history, rooms, invoiceParts);
   }
 
   /** Every room the booking has a night on, in room number order. */

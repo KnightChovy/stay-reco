@@ -138,6 +138,19 @@ enum BookingStatus {
   @@map("booking_status")
 }
 
+/// When a hotel add-on is delivered; a label for the catalogue, it does not limit when it can be booked.
+enum AddOnTiming {
+  BEFORE_STAY
+  DURING_STAY
+  AFTER_STAY
+}
+
+/// PREPAID: booked with the stay and paid in its transfer. FRONT_DESK: added by staff, collected at the desk.
+enum AddOnPayment {
+  PREPAID
+  FRONT_DESK
+}
+
 enum PaymentMethod {
   VNPAY
   SEPAY
@@ -467,6 +480,7 @@ model Booking {
   review             Review?
   conversations      Conversation[]
   aiFunctionCalls    AiFunctionCall[]
+  addOns             BookingAddOn[]
 
   // Hotel-scoped reads: by stay date (bookings list, arrivals, dashboard figures) and by booking date (bookings
   // created in a period).
@@ -635,8 +649,10 @@ model Hotel {
   knowledgeArticles    KnowledgeArticle[]
   verificationRequests HotelVerificationRequest[]
   hotelImages          HotelImage[]
+  addOns               HotelAddOn[]
 
-  aiUsages            AiUsage[]
+  aiUsages AiUsage[]
+
   @@map("hotel")
 }
 
@@ -729,7 +745,8 @@ model HotelStaff {
   marketingContents MarketingContent[]
   conversations     Conversation[]
 
-  aiUsages           AiUsage[]
+  aiUsages AiUsage[]
+
   @@map("hotel_staff")
 }
 
@@ -863,7 +880,7 @@ model MarketingContent {
    * Cloudinary's id for `mediaUrl`, so replacing or removing the picture deletes the file too. Null when the URL
    * was set by hand rather than uploaded - we only delete what we uploaded (M18).
    */
-  mediaStorageKey    String?          @map("media_storage_key") @db.VarChar(255)
+  mediaStorageKey    String?           @map("media_storage_key") @db.VarChar(255)
   contentType        ContentType       @map("content_type")
   status             ContentStatus     @default(DRAFT)
   createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -936,7 +953,8 @@ model PlatformManager {
   policyViolations          PolicyViolation[]
   walletTransactions        WalletTransaction[]
 
-  contentReports    ContentReport[]
+  contentReports ContentReport[]
+
   @@map("platform_manager")
 }
 
@@ -1100,18 +1118,18 @@ model AiUsage {
 
 /// A photo a guest attached to their review; hidden with the review it belongs to.
 model ReviewImage {
-  reviewImageId String   @id @default(dbgenerated("gen_random_uuid()")) @map("review_image_id") @db.Uuid
-  reviewId      String   @map("review_id") @db.Uuid
-  imageUrl      String   @map("image_url") @db.VarChar(500)
+  reviewImageId String          @id @default(dbgenerated("gen_random_uuid()")) @map("review_image_id") @db.Uuid
+  reviewId      String          @map("review_id") @db.Uuid
+  imageUrl      String          @map("image_url") @db.VarChar(500)
   /// Cloudinary public id, used to delete the file.
-  storageKey    String   @map("storage_key") @db.VarChar(255)
+  storageKey    String          @map("storage_key") @db.VarChar(255)
   /// Kept so the aspect ratio a photo was accepted with can be read back.
   width         Int
   height        Int
-  sortOrder     Int      @default(0) @map("sort_order")
+  sortOrder     Int             @default(0) @map("sort_order")
   /// A manager hides a photo rather than deleting it, so the evidence behind the decision survives.
-  isVisible     Boolean  @default(true) @map("is_visible")
-  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  isVisible     Boolean         @default(true) @map("is_visible")
+  createdAt     DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
   review        Review          @relation(fields: [reviewId], references: [reviewId], onDelete: Cascade)
   reports       ContentReport[]
 
@@ -1308,7 +1326,8 @@ model UserAccount {
   authSessions       AuthSession[]
   verificationTokens VerificationToken[]
 
-  contentReports      ContentReport[]
+  contentReports ContentReport[]
+
   @@map("user_account")
 }
 
@@ -1440,4 +1459,46 @@ model WalletTransaction {
   // A wallet's ledger over a period (dashboard cash figures, statements).
   @@index([walletId, createdAt])
   @@map("wallet_transaction")
+}
+
+/// A service a hotel sells on top of the room (airport pick-up, breakfast, spa…).
+model HotelAddOn {
+  hotelAddOnId  String         @id @default(dbgenerated("gen_random_uuid()")) @map("hotel_add_on_id") @db.Uuid
+  hotelId       String         @map("hotel_id") @db.Uuid
+  name          String         @db.VarChar(200)
+  description   String?
+  /// Price of one unit in dong.
+  price         Decimal        @db.Decimal(14, 2)
+  timing        AddOnTiming
+  /// False: only staff can add it to a stay (paid at the desk), the customer cannot book it in advance.
+  prebookable   Boolean        @default(true)
+  isActive      Boolean        @default(true) @map("is_active")
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  hotel         Hotel          @relation(fields: [hotelId], references: [hotelId], onDelete: Cascade)
+  bookingAddOns BookingAddOn[]
+
+  @@index([hotelId])
+  @@map("hotel_add_on")
+}
+
+/// One add-on line of a booking, with its name and price fixed when it was added.
+model BookingAddOn {
+  bookingAddOnId String       @id @default(dbgenerated("gen_random_uuid()")) @map("booking_add_on_id") @db.Uuid
+  bookingId      String       @map("booking_id") @db.Uuid
+  hotelAddOnId   String       @map("hotel_add_on_id") @db.Uuid
+  name           String       @db.VarChar(200)
+  unitPrice      Decimal      @map("unit_price") @db.Decimal(14, 2)
+  quantity       Int
+  /// unitPrice × quantity.
+  amount         Decimal      @db.Decimal(14, 2)
+  payment        AddOnPayment
+  /// The account that added a FRONT_DESK line; null for lines booked by the customer.
+  addedBy        String?      @map("added_by") @db.Uuid
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  booking        Booking      @relation(fields: [bookingId], references: [bookingId], onDelete: Cascade)
+  hotelAddOn     HotelAddOn   @relation(fields: [hotelAddOnId], references: [hotelAddOnId])
+
+  @@index([bookingId])
+  @@map("booking_add_on")
 }

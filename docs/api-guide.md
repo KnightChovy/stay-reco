@@ -206,6 +206,7 @@ There is no `status` field in the body; the HTTP status is already available as 
 | `BOOKING_PRICE_CHANGED` | 409 | The total differs from `expectedTotal`; `details` holds the new total | MSG13, ask the customer to confirm the new total |
 | `BOOKING_NOT_FOUND` | 404 | Booking doesn't exist or the caller cannot see it | Reload the list |
 | `BOOKING_STATUS_CONFLICT` | 409 | The booking's status does not allow the action (cancel twice, voucher of a cancelled booking…) | Reload the booking |
+| `ADD_ON_NOT_FOUND` | 404 | Add-on doesn't exist, belongs to another hotel, is off sale or cannot be booked in advance | Reload the hotel's add-ons |
 | `CANCELLATION_NOT_ALLOWED` | 409 | Cancelling after check-in (BR-09) | "This booking can no longer be cancelled" |
 | `REFUND_STATUS_CONFLICT` | 409 | Deciding a refund that is not pending | Reload the booking |
 | `INVALID_API_KEY` | 401 | SePay webhook called with a missing or wrong API key | Not for clients: check `SEPAY_WEBHOOK_API_KEY` and the key in the SePay dashboard |

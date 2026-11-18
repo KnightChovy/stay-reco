@@ -164,6 +164,12 @@ describe('Hotel bookings and refund decisions (e2e)', () => {
       const all = await t.api().get(url).set(auth(h.token)).expect(200);
       expect(ids(all.body)).toEqual([early.id, late.id]);
       expect(all.body.meta).toMatchObject({ total: 2 });
+      // Who is staying and who booked, which differ when the customer books for someone else.
+      expect(all.body.data[1]).toMatchObject({
+        guestName: 'Trần Thị B',
+        contactPhone: '0905123456',
+        bookedBy: { name: 'guest', phone: null },
+      });
 
       const queue = await t
         .api()

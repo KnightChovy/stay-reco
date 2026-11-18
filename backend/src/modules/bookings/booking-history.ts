@@ -19,6 +19,8 @@ const HISTORY_ACTIONS = {
   [AuditAction.BOOKING_CHANGE_REQUESTED]: 'CHANGE_REQUESTED',
   [AuditAction.BOOKING_CHANGE_ACCEPTED]: 'CHANGE_ACCEPTED',
   [AuditAction.BOOKING_CHANGE_REJECTED]: 'CHANGE_REJECTED',
+  [AuditAction.BOOKING_ADD_ON_ADDED]: 'ADD_ON_ADDED',
+  [AuditAction.BOOKING_ADD_ON_REMOVED]: 'ADD_ON_REMOVED',
 } as const;
 
 /** The audit actions that open and close a change request, latest first decides whether one is waiting. */

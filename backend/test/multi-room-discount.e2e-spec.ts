@@ -254,6 +254,30 @@ describe('Discounts and points on a booking of several room types (e2e)', () => 
     expect(invoice.discountAmount.toNumber()).toBe(1000000);
     expect(invoice.totalAmount.toNumber()).toBe(4000000);
 
+    // The invoice row keeps the two subtractions as one figure; the booking shows them apart.
+    const detail = await t
+      .api()
+      .get(`/api/v1/bookings/${idOf(res)}`)
+      .set(auth(guest.token))
+      .expect(200);
+    expect(detail.body.data.invoice).toEqual({
+      number: detail.body.data.code,
+      paymentMethod: 'SEPAY',
+      subtotal: 5000000,
+      addOnsTotal: 0,
+      discount: {
+        kind: 'PROMOTION',
+        name: 'Giảm 10%',
+        code: null,
+        amount: 500000,
+      },
+      points: { used: 5000, amount: 500000 },
+      tax: 0,
+      total: 4000000,
+      frontDeskDue: 0,
+      currency: 'VND',
+    });
+
     const account = await t
       .api()
       .get('/api/v1/me/loyalty')
@@ -290,6 +314,18 @@ describe('Discounts and points on a booking of several room types (e2e)', () => 
       where: { customerId: guest.id },
     });
     expect(customerWallet.balanceAvailable.toNumber()).toBe(0);
+
+    const detail = await t
+      .api()
+      .get(`/api/v1/bookings/${idOf(res)}`)
+      .set(auth(guest.token))
+      .expect(200);
+    expect(detail.body.data.invoice).toMatchObject({
+      paymentMethod: 'WALLET',
+      discount: null,
+      points: null,
+      total: 5000000,
+    });
   });
 
   it('quotes the stay the booking will be priced at', async () => {

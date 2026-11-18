@@ -54,6 +54,8 @@ export enum AuditAction {
   BOOKING_CHANGE_ACCEPTED = 'BOOKING_CHANGE_ACCEPTED',
   /** The hotel kept the booking as it was; `new_value` holds the reason sent to the customer (UC43). */
   BOOKING_CHANGE_REJECTED = 'BOOKING_CHANGE_REJECTED',
+  BOOKING_ADD_ON_ADDED = 'BOOKING_ADD_ON_ADDED',
+  BOOKING_ADD_ON_REMOVED = 'BOOKING_ADD_ON_REMOVED',
   /** The guest wrote the review of a completed stay (BR-12). */
   REVIEW_CREATED = 'REVIEW_CREATED',
   /** The author edited their review inside the review window. */
