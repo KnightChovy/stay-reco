@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { DiscountType } from '../enums';
 import { addOnLinesSchema } from './add-on';
+import { BOOKING_LIMITS, bookingItemInputSchema, bookingItemsOf } from './booking';
 import { dateSchema, listQuerySchema, moneySchema } from './common';
 
 /**
@@ -64,20 +65,44 @@ export const issueVouchersSchema = z.strictObject({
 export type IssueVouchersInput = z.infer<typeof issueVouchersSchema>;
 
 /**
- * `POST /bookings/quote-discount`: what a stay would cost with the discounts applied, before the customer commits.
- * The same stay fields as `POST /bookings`, plus the typed code. Sent on every keystroke-free "Apply" click, so it
+ * `POST /bookings/discount-quote`: what a stay would cost with the discounts applied, before the customer commits.
+ * The same stay fields as `POST /bookings`, plus the typed code: `items` (1–5 room types of one hotel, at most 8 rooms
+ * in total), or the older `roomTypeId` with `rooms`, never both. Sent on every keystroke-free "Apply" click, so it
  * holds nothing and changes nothing.
  */
-export const discountQuoteSchema = z.strictObject({
-  roomTypeId: z.uuid(),
-  checkIn: dateSchema,
-  checkOut: dateSchema,
-  rooms: z.number().int().min(1).max(8).default(1),
-  /** The code the customer typed; left out to see the automatic campaigns only. */
-  code: z.string().trim().min(1).max(50).optional(),
-  /** Loyalty points to spend on top of the discount; capped at the balance and at what the stay still owes. */
-  pointsToUse: z.number().int().min(0).max(100_000_000).optional(),
-  /** Add-ons to book with the stay; added to `expectedTotal`, never discounted. */
-  addOns: addOnLinesSchema.optional(),
-});
+export const discountQuoteSchema = z
+  .strictObject({
+    items: z
+      .array(bookingItemInputSchema)
+      .min(1)
+      .max(BOOKING_LIMITS.maxItems)
+      .refine((items) => new Set(items.map((i) => i.roomTypeId)).size === items.length, 'room types must be different')
+      .optional(),
+    /** @deprecated send `items`. */
+    roomTypeId: z.uuid().optional(),
+    /** @deprecated send `items`; 1 when left out. */
+    rooms: z.number().int().min(1).max(BOOKING_LIMITS.maxRooms).optional(),
+    checkIn: dateSchema,
+    checkOut: dateSchema,
+    /** The code the customer typed; left out to see the automatic campaigns only. */
+    code: z.string().trim().min(1).max(50).optional(),
+    /** Loyalty points to spend on top of the discount; capped at the balance and at what the stay still owes. */
+    pointsToUse: z.number().int().min(0).max(100_000_000).optional(),
+    /** Add-ons to book with the stay; added to `expectedTotal`, never discounted. */
+    addOns: addOnLinesSchema.optional(),
+  })
+  .superRefine((v, ctx) => {
+    if (v.items && (v.roomTypeId || v.rooms !== undefined)) {
+      ctx.addIssue({ code: 'custom', path: ['items'], message: 'send either items or roomTypeId with rooms' });
+      return;
+    }
+    if (!v.items && !v.roomTypeId) {
+      ctx.addIssue({ code: 'custom', path: ['items'], message: 'Required' });
+      return;
+    }
+    const total = bookingItemsOf(v).reduce((n, i) => n + i.rooms, 0);
+    if (total > BOOKING_LIMITS.maxRooms) {
+      ctx.addIssue({ code: 'custom', path: ['items'], message: `at most ${BOOKING_LIMITS.maxRooms} rooms in total` });
+    }
+  });
 export type DiscountQuoteInput = z.infer<typeof discountQuoteSchema>;

@@ -36,14 +36,15 @@ Loyalty points are a third, separate subtraction and come with their own branch.
 
 ## Booking with a discount
 
-1. The customer picks a stay. The FE calls `POST /bookings/discount-quote` with the stay and, if one was typed, the `code`.
+1. The customer picks a stay. The FE calls `POST /bookings/discount-quote` with the stay **exactly as it will send it to `POST /bookings`**: `items` (1–5 room types of one hotel, at most 8 rooms), or the older `roomTypeId` with `rooms`, never both. Add the `code` if one was typed. The quote prices every room of every room type, so its `expectedTotal` is the one the booking accepts.
 2. The quote answers `subtotal`, the single `discount` that applies, and `expectedTotal`.
 3. The FE sends `POST /bookings` with that **`expectedTotal`** and the same `code`. The backend prices the stay again and refuses with `409 BOOKING_PRICE_CHANGED` if the result differs — the same check phase 2 already did, now over the discounted total.
 
 ```jsonc
 // POST /bookings/discount-quote
-{ "roomTypeId": "…", "checkIn": "2026-11-20", "checkOut": "2026-11-22",
-  "rooms": 1, "code": "KHUYENMAI1" }     // code optional
+{ "items": [ { "roomTypeId": "…", "rooms": 1 } ],
+  "checkIn": "2026-11-20", "checkOut": "2026-11-22",
+  "code": "KHUYENMAI1" }                // code optional
 
 // → DiscountQuote
 { "subtotal": 2000000,

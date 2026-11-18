@@ -94,10 +94,9 @@ describe('Discounts and points on a booking of several room types (e2e)', () => 
       .post('/api/v1/bookings/discount-quote')
       .set(auth(token))
       .send({
-        roomTypeId: h.deluxe,
+        items: items(h),
         checkIn: day(0),
         checkOut: day(2),
-        rooms: 1,
         ...extra,
       });
 
@@ -337,9 +336,34 @@ describe('Discounts and points on a booking of several room types (e2e)', () => 
       discountValue: 10,
     }).expect(201);
 
-    // The quote endpoint still takes one room type, so it prices the Deluxe only. Worth pinning down: the FE must
-    // not use it as the total of a booking of several room types.
+    // Every room type of the stay: 2 nights of Deluxe and Suite, 5,000,000, less 10 %.
     const res = await quote(guest.token, h).expect(200);
-    expect(res.body.data.subtotal).toBe(2000000);
+    expect(res.body.data.subtotal).toBe(5000000);
+    expect(res.body.data.discount.amount).toBe(500000);
+    expect(res.body.data.expectedTotal).toBe(4500000);
+
+    // The total it gives is the one the booking accepts.
+    const { expectedTotal } = res.body.data as { expectedTotal: number };
+    await book(guest.token, h, expectedTotal).expect(201);
+  });
+
+  it('quotes points against the whole stay too', async () => {
+    const h = await hotel();
+    const guest = await t.signIn('CUSTOMER', 'guest@mail.test');
+    await givePoints(guest.id, 40000);
+
+    // 40,000 points are worth 4,000,000: more than the Deluxe alone, less than the whole 5,000,000 stay.
+    const res = await quote(guest.token, h, { pointsToUse: 40000 }).expect(200);
+    expect(res.body.data.points).toMatchObject({
+      pointsUsed: 40000,
+      amount: 4000000,
+    });
+    expect(res.body.data.expectedTotal).toBe(1000000);
+  });
+
+  it('refuses a quote that sends both forms of the stay', async () => {
+    const h = await hotel();
+    const guest = await t.signIn('CUSTOMER', 'guest@mail.test');
+    await quote(guest.token, h, { roomTypeId: h.deluxe }).expect(400);
   });
 });
