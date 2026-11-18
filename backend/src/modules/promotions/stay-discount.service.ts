@@ -1,10 +1,12 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { ErrorCode } from '../../common/errors/error-code';
-import type {
-  AppliedDiscount,
-  DiscountQuote,
-  DiscountQuoteInput,
-  PointsQuote,
+import {
+  type AppliedDiscount,
+  type BookingItemInput,
+  bookingItemsOf,
+  type DiscountQuote,
+  type DiscountQuoteInput,
+  type PointsQuote,
 } from '@stayreco/shared';
 import { toNumber } from '../../common/http/decimal';
 import { Prisma } from '../../generated/prisma/client';
@@ -33,13 +35,9 @@ export class StayDiscountService {
     customerId: string,
     input: DiscountQuoteInput,
   ): Promise<DiscountQuote> {
-    const hotelId = await this.hotelOf(input.roomTypeId);
-    const subtotal = await this.subtotal(
-      input.roomTypeId,
-      input.checkIn,
-      input.checkOut,
-      input.rooms,
-    );
+    const items = bookingItemsOf(input);
+    const hotelId = await this.hotelOf(items.map((i) => i.roomTypeId));
+    const subtotal = await this.subtotal(items, input.checkIn, input.checkOut);
     const discount = await this.discounts.forStay(
       customerId,
       hotelId,
@@ -91,28 +89,45 @@ export class StayDiscountService {
     }
   }
 
-  /** The sum of the nightly prices for every room, before any discount. */
-  async subtotal(
-    roomTypeId: string,
+  /**
+   * The sum of the nightly prices for every room of every room type, before any discount: the same subtotal
+   * `POST /bookings` computes, so a quote of several room types matches the booking it leads to.
+   */
+  private async subtotal(
+    items: BookingItemInput[],
     checkIn: string,
     checkOut: string,
-    rooms: number,
   ): Promise<Prisma.Decimal> {
-    const quote = (
-      await this.engine.quote([roomTypeId], checkIn, checkOut)
-    ).get(roomTypeId);
-    if (!quote) throw roomTypeNotFound();
-    return quote.total.times(rooms);
+    const quotes = await this.engine.quote(
+      items.map((i) => i.roomTypeId),
+      checkIn,
+      checkOut,
+    );
+    return items.reduce((sum, item) => {
+      const quote = quotes.get(item.roomTypeId);
+      if (!quote) throw roomTypeNotFound();
+      return sum.plus(quote.total.times(item.rooms));
+    }, new Prisma.Decimal(0));
   }
 
-  /** The hotel a room type belongs to, refusing one that is not on sale, exactly as `POST /bookings` does. */
-  async hotelOf(roomTypeId: string): Promise<string> {
-    const roomType = await this.prisma.roomType.findFirst({
-      where: { roomTypeId, ...sellableRoomType, hotel: bookableHotel },
+  /**
+   * The one hotel the room types belong to, refusing any that is not on sale or a mix of hotels, exactly as
+   * `POST /bookings` does (docs/design/booking-items.md §3).
+   */
+  private async hotelOf(roomTypeIds: string[]): Promise<string> {
+    const roomTypes = await this.prisma.roomType.findMany({
+      where: {
+        roomTypeId: { in: roomTypeIds },
+        ...sellableRoomType,
+        hotel: bookableHotel,
+      },
       select: { hotelId: true },
     });
-    if (!roomType) throw roomTypeNotFound();
-    return roomType.hotelId;
+    const hotels = new Set(roomTypes.map((r) => r.hotelId));
+    if (roomTypes.length !== roomTypeIds.length || hotels.size !== 1) {
+      throw roomTypeNotFound();
+    }
+    return roomTypes[0].hotelId;
   }
 }
 
