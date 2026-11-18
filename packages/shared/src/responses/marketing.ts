@@ -47,6 +47,15 @@ export const marketingContentResponseSchema = z
   .register(responseSchemas, { id: 'MarketingContent' });
 export type MarketingContent = z.infer<typeof marketingContentResponseSchema>;
 
+/** One version written by `POST .../marketing-content/variants`; not saved until staff pick it. */
+export const contentVariantResponseSchema = z
+  .object({
+    title: z.string().nullable().describe('null when the format has no title.'),
+    body: z.string(),
+  })
+  .register(responseSchemas, { id: 'ContentVariant' });
+export type ContentVariant = z.infer<typeof contentVariantResponseSchema>;
+
 /** Something worth posting about, found in the hotel's own figures rather than asked of the user. */
 export const contentIdeaResponseSchema = z
   .object({

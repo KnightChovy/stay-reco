@@ -41,6 +41,27 @@ export const generateContentSchema = z.strictObject({
 });
 export type GenerateContentInput = z.infer<typeof generateContentSchema>;
 
+/** How many versions `POST .../marketing-content/variants` writes for staff to choose from. */
+export const CONTENT_VARIANTS = 3;
+
+/**
+ * `POST /hotels/:hotelId/marketing-content`: saves the version staff picked from the variants (or wrote themselves)
+ * as a `DRAFT`. Nothing the model writes is stored until this is called.
+ */
+export const createContentSchema = z.strictObject({
+  contentType: z.enum(ContentType),
+  title: z.string().trim().max(255).nullable().optional(),
+  body: z.string().trim().min(1).max(10_000),
+});
+export type CreateContentInput = z.infer<typeof createContentSchema>;
+
+/** `POST /marketing-content/:id/image/generate`: the AI draws the picture of a draft. */
+export const generateImageSchema = z.strictObject({
+  /** What the picture should show; the post's own words are used when left out. */
+  prompt: z.string().trim().min(5).max(500).optional(),
+});
+export type GenerateImageInput = z.infer<typeof generateImageSchema>;
+
 /** `PATCH /marketing-content/:id`: the staff member edits the draft before sending it for approval. */
 export const updateContentSchema = z
   .strictObject({

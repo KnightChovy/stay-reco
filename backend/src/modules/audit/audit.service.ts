@@ -54,6 +54,8 @@ export enum AuditAction {
   BOOKING_CHANGE_ACCEPTED = 'BOOKING_CHANGE_ACCEPTED',
   /** The hotel kept the booking as it was; `new_value` holds the reason sent to the customer (UC43). */
   BOOKING_CHANGE_REJECTED = 'BOOKING_CHANGE_REJECTED',
+  BOOKING_ADD_ON_ADDED = 'BOOKING_ADD_ON_ADDED',
+  BOOKING_ADD_ON_REMOVED = 'BOOKING_ADD_ON_REMOVED',
   /** The guest wrote the review of a completed stay (BR-12). */
   REVIEW_CREATED = 'REVIEW_CREATED',
   /** The author edited their review inside the review window. */
@@ -80,6 +82,8 @@ export enum AuditAction {
   BOOKING_DISCOUNT_APPLIED = 'BOOKING_DISCOUNT_APPLIED',
   /** The AI wrote a marketing draft (M7). */
   CONTENT_GENERATED = 'CONTENT_GENERATED',
+  /** Staff saved a draft they picked from the AI variants, or wrote themselves. */
+  CONTENT_CREATED = 'CONTENT_CREATED',
   /** A staff member sent a draft to the owner. */
   CONTENT_SUBMITTED = 'CONTENT_SUBMITTED',
   /** The owner approved content for publishing. */

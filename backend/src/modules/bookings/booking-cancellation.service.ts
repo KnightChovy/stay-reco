@@ -22,6 +22,7 @@ import { AuditAction } from '../audit/audit.service';
 import { LoyaltyService } from '../loyalty/loyalty.service';
 import { DiscountService } from '../promotions/discount.service';
 import { closePendingChange, recordBookingEvent } from './booking-history';
+import { addOnsOf } from './booking-invoice';
 import { cancellationAmounts } from './cancellation';
 
 const bookingNotFound = () =>
@@ -43,6 +44,7 @@ const cancellableSelect = {
   freeCancelUntil: true,
   cancelFeePercent: true,
   invoice: { select: { paymentStatus: true, totalAmount: true } },
+  addOns: { select: { payment: true, amount: true } },
 } satisfies Prisma.BookingSelect;
 
 type CancellableBooking = Prisma.BookingGetPayload<{
@@ -69,7 +71,12 @@ export class BookingCancellationService {
     const booking = await this.findOwn(user, bookingId);
     assertCancellable(booking);
     const paid = booking.invoice!.totalAmount;
-    const { fee, refund } = cancellationAmounts(booking, paid);
+    const { fee, refund } = cancellationAmounts(
+      booking,
+      paid,
+      undefined,
+      addOnsOf(booking, 'PREPAID'),
+    );
     return {
       freeUntil: booking.freeCancelUntil?.toISOString() ?? null,
       feePercent: toNumber(booking.cancelFeePercent),
@@ -90,7 +97,12 @@ export class BookingCancellationService {
     assertCancellable(booking);
     const now = new Date();
     const paid = booking.invoice!.totalAmount;
-    const { fee, refund } = cancellationAmounts(booking, paid, now);
+    const { fee, refund } = cancellationAmounts(
+      booking,
+      paid,
+      now,
+      addOnsOf(booking, 'PREPAID'),
+    );
 
     await this.prisma.$transaction(async (tx) => {
       // The lock check-in takes: a cancel and a check-in at once run one after the other, and the later one sees the

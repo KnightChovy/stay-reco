@@ -207,7 +207,8 @@ Read the role off the session rather than hiding on a 403, but expect the 403 an
 - Uploading again **replaces** and deletes the old file; there is no gallery and no second picture. `DELETE .../image` removes it.
 - A bad file is `400 UPLOAD_INVALID_FILE` - the type is sniffed from the bytes, so a renamed `.png` is still refused. Show the rules before the picker, as the review upload does.
 - `PATCH { mediaUrl }` still accepts a hand-typed URL, kept for a link the hotel already hosts. Prefer the upload; it is the only path that cleans up after itself.
-- **The AI never produces a picture.** Every fresh draft has `mediaUrl: null`, and Instagram refuses a post without one (`501 SOCIAL_PLATFORM_UNSUPPORTED`), so the upload is required before an Instagram schedule, not optional.
+- **The AI draws a picture only when asked** (`POST .../image/generate`, A4). Every fresh draft still has `mediaUrl: null`, and Instagram refuses a post without one (`501 SOCIAL_PLATFORM_UNSUPPORTED`), so a picture (uploaded or drawn) is required before an Instagram schedule.
+- **Variants** (A5): `POST /hotels/:hotelId/marketing-content/variants` answers 3 versions and saves nothing; show them side by side and save the picked one with `POST /hotels/:hotelId/marketing-content`.
 
 ### Connecting a Facebook page (M16) - the one flow that needs an FE page of its own
 
@@ -254,7 +255,8 @@ Still open:
 - [ ] Nothing warns an owner before a token expires. `usable` turns false and the next post fails with a clear reason, which is late but not silent.
 - [ ] A figure Meta refuses is stored as `0`, the same as a figure that is genuinely nought. Telling them apart needs nullable columns on `content_metric`, and the UI would have to say "not available" rather than draw a zero.
 - [ ] `POST /social-accounts` still inserts rather than upserts, so pasting a token for a page that is already connected adds a second row. The unique index added for M16 makes that a constraint error rather than a duplicate, but the error is not the one the caller deserves.
-- [ ] The writer does not produce a picture. Gemini writes words, so every fresh draft has `mediaUrl: null` and a staff member has to attach one - which, for Instagram, is the difference between a post that can go out and one that cannot.
+- [x] The writer does not produce a picture. Done (A4, 2026-11-18): the image model draws one on request; a fresh draft still has none.
+- [ ] Should an AI-drawn picture be marked as such on the post? Nothing records whether `mediaUrl` was uploaded or drawn.
 - [ ] A post longer than a platform's limit is sent and refused, rather than caught first. Postiz's `checkValidity()` is the shape of the fix.
 
 ## Definition of Done
@@ -269,6 +271,7 @@ Still open:
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-11-18 | Phúc | FE requests A4 and A5: the AI draws the picture of a draft on request (`image/generate`, `GEMINI_IMAGE_MODEL`, priced at about $0.07 a picture against the same monthly cap), and writes 3 unsaved versions to choose from (`variants`, one model call) with `POST /hotels/:hotelId/marketing-content` saving the pick. 10 e2e |
 | 2026-11-14 | FE | Review of #127 on `feat/phase-5-frontend`: every staff route by id now needs `MARKETING`; the job claims a row (`PUBLISHING`, migration) before calling Meta so a post cannot go out twice; "post now" rows sort first (`nulls: first`); content back to `APPROVED` when no post is waiting or out; `contentId` and `sort` on the calendar list; Swagger descriptions for the develop tags `payouts`, `platform`, `compliance`, `admin`. e2e tests for each |
 | 2026-11-13 | FE | Web staff marketing on `feat/phase-5-frontend`: `/staff/marketing/content` (ideas, AI writer, list), `/staff/marketing/content/[id]` (edit, picture, submit, schedule), `/staff/marketing/calendar`, `/staff/marketing/analytics`. Owner screens (approve, connect a page, brand voice) not connected yet |
 | 2026-11-13 | Phúc | Staff upload the picture instead of supplying a URL (M18): two endpoints on the same storage as hotel photos, the file deleted when replaced, removed or the draft is, and a hand-typed URL left alone. One migration, 9 e2e |

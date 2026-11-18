@@ -1,3 +1,4 @@
+import { toHotelAddOn } from '../add-ons/add-on.mapper';
 import { Injectable, NotFoundException } from '@nestjs/common';
 import type {
   CancellationPolicy,
@@ -154,6 +155,10 @@ export class StaysService {
               include: roomTypeInclude,
               orderBy: { createdAt: 'asc' },
             },
+            addOns: {
+              where: { isActive: true },
+              orderBy: [{ name: 'asc' }, { hotelAddOnId: 'asc' }],
+            },
           },
         })
       : null;
@@ -189,6 +194,7 @@ export class StaysService {
         policies: details.policies,
         cancellationPolicy: details.cancellationPolicy,
         lateCheckoutPolicy: details.lateCheckoutPolicy,
+        addOns: hotel.addOns.map(toHotelAddOn),
       },
       roomTypes: hotel.roomTypes.map((rt) =>
         toRoomTypeListing(rt, offers?.get(rt.roomTypeId) ?? null),

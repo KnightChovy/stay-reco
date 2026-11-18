@@ -3,12 +3,15 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type {
-  ContentListQuery,
-  GenerateContentInput,
-  MarketingContent,
-  RejectContentInput,
-  UpdateContentInput,
+import {
+  CONTENT_VARIANTS,
+  type ContentListQuery,
+  type ContentVariant,
+  type CreateContentInput,
+  type GenerateContentInput,
+  type MarketingContent,
+  type RejectContentInput,
+  type UpdateContentInput,
 } from '@stayreco/shared';
 import { z } from 'zod';
 import type { AuthUser } from '../../common/decorators/current-user.decorator';
@@ -38,6 +41,16 @@ const writtenContentSchema = z.object({
     .string()
     .describe(
       'The post itself, ready to publish, in the hotel’s own language.',
+    ),
+});
+
+/** Several versions of the same brief in one call, so staff choose rather than regenerate (A5). */
+const variantsSchema = z.object({
+  variants: z
+    .array(writtenContentSchema)
+    .min(CONTENT_VARIANTS)
+    .describe(
+      `Exactly ${CONTENT_VARIANTS} versions of the post, each taking a clearly different angle or opening.`,
     ),
 });
 
@@ -130,14 +143,7 @@ export class ContentService {
     input: GenerateContentInput,
     meta: RequestMeta = {},
   ): Promise<MarketingContent> {
-    const voice = await this.brandVoice.promptFor(hotelId);
-    const shape = [
-      TYPE_BRIEFS[input.contentType],
-      input.platform ? PLATFORM_BRIEFS[input.platform] : null,
-    ]
-      .filter(Boolean)
-      .join('\n');
-
+    const { system, prompt } = await this.promptFor(hotelId, input);
     const written = await this.ai.ask(
       {
         hotelId,
@@ -145,26 +151,110 @@ export class ContentService {
         purpose: 'marketing-content',
       },
       writtenContentSchema,
-      `${SYSTEM}\n\n${voice}`,
-      `${shape}\n\nWrite about: ${input.brief}`,
+      system,
+      prompt,
     );
+    return this.save(user, hotelId, {
+      contentType: input.contentType,
+      title: written.title,
+      body: written.body,
+      meta,
+      generated: true,
+    });
+  }
 
+  /**
+   * Writes several versions of the same brief and saves none of them (A5).
+   *
+   * One model call, not three: the versions come back together, so they are told apart by angle rather than by
+   * chance, and the cost is one call against the budget. Staff pick one and send it to `create`.
+   */
+  async variants(
+    user: AuthUser,
+    hotelId: string,
+    input: GenerateContentInput,
+  ): Promise<ContentVariant[]> {
+    const { system, prompt } = await this.promptFor(hotelId, input);
+    const written = await this.ai.ask(
+      {
+        hotelId,
+        hotelStaffId: await this.staffIdOf(user, hotelId),
+        purpose: 'marketing-variants',
+      },
+      variantsSchema,
+      system,
+      `${prompt}\n\nWrite ${CONTENT_VARIANTS} different versions.`,
+    );
+    return written.variants.slice(0, CONTENT_VARIANTS).map((v) => ({
+      title: v.title.trim() || null,
+      body: v.body,
+    }));
+  }
+
+  /** Saves the version staff picked (or wrote) as a draft. */
+  async create(
+    user: AuthUser,
+    hotelId: string,
+    input: CreateContentInput,
+    meta: RequestMeta = {},
+  ): Promise<MarketingContent> {
+    return this.save(user, hotelId, {
+      contentType: input.contentType,
+      title: input.title ?? '',
+      body: input.body,
+      meta,
+      generated: false,
+    });
+  }
+
+  private async promptFor(hotelId: string, input: GenerateContentInput) {
+    const voice = await this.brandVoice.promptFor(hotelId);
+    const shape = [
+      TYPE_BRIEFS[input.contentType],
+      input.platform ? PLATFORM_BRIEFS[input.platform] : null,
+    ]
+      .filter(Boolean)
+      .join('\n');
+    return {
+      system: `${SYSTEM}\n\n${voice}`,
+      prompt: `${shape}\n\nWrite about: ${input.brief}`,
+    };
+  }
+
+  private async save(
+    user: AuthUser,
+    hotelId: string,
+    draft: {
+      contentType: CreateContentInput['contentType'];
+      title: string;
+      body: string;
+      meta: RequestMeta;
+      generated: boolean;
+    },
+  ): Promise<MarketingContent> {
     const content = await this.prisma.marketingContent.create({
       data: {
         hotelId,
         hotelStaffId: await this.staffIdOf(user, hotelId),
-        contentType: input.contentType,
-        title: written.title.trim() || null,
-        body: written.body,
+        contentType: draft.contentType,
+        title: draft.title.trim() || null,
+        body: draft.body,
         status: 'DRAFT',
       },
       include: contentInclude,
     });
-    await this.audit.log(AuditAction.CONTENT_GENERATED, user.accountId, meta, {
-      contentId: content.marketingContentId,
-      hotelId,
-      contentType: input.contentType,
-    });
+    await this.audit.log(
+      draft.generated
+        ? AuditAction.CONTENT_GENERATED
+        : AuditAction.CONTENT_CREATED,
+      user.accountId,
+      draft.meta,
+      {
+        contentId: content.marketingContentId,
+        hotelId,
+        contentType: draft.contentType,
+      },
+    );
     return toContent(content);
   }
 

@@ -55,16 +55,23 @@ export const MODEL_PRICES: Record<string, PriceSchedule> = {
   'gemini-3.1-flash-lite': {
     price: { input: 0.25, output: 1.5, cacheRead: 0.025 },
   },
+  /**
+   * The picture model (A4). An image is billed as output tokens at the image rate - about 1,100 tokens for a
+   * square picture, so roughly 7 cents each. That is the number to keep in mind against a $5 monthly cap.
+   */
+  'gemini-3.1-flash-image': {
+    price: { input: 0.5, output: 60, cacheRead: 0.05 },
+  },
 };
 
 /**
  * The price of a model we have no entry for. Deliberately at least as expensive as the dearest rate we know, the
- * post-increase Flash rate included: an unknown model must never look cheap, or a cap set in dollars would stop
+ * post-increase Flash rate and the image rate included: an unknown model must never look cheap, or a cap set in dollars would stop
  * protecting anything.
  */
 export const UNKNOWN_MODEL_PRICE: ModelPrice = {
   input: 1.5,
-  output: 7.5,
+  output: 60,
   cacheRead: 0.15,
 };
 

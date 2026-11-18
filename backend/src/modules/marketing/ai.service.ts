@@ -1,4 +1,9 @@
-import { FinishReason, GoogleGenAI } from '@google/genai';
+import {
+  FinishReason,
+  type GenerateContentResponse,
+  GoogleGenAI,
+  Modality,
+} from '@google/genai';
 import {
   ForbiddenException,
   Injectable,
@@ -69,6 +74,7 @@ export class AiService {
   private readonly logger = new Logger(AiService.name);
   private readonly client: GoogleGenAI | null;
   private readonly model: string;
+  private readonly imageModel: string;
   private readonly monthlyBudget: number;
 
   constructor(
@@ -79,6 +85,7 @@ export class AiService {
     // No key means the feature is off, not that the server cannot start - as with Cloudinary.
     this.client = apiKey ? new GoogleGenAI({ apiKey }) : null;
     this.model = config.get('GEMINI_MODEL', { infer: true });
+    this.imageModel = config.get('GEMINI_IMAGE_MODEL', { infer: true });
     this.monthlyBudget = config.get('AI_MONTHLY_BUDGET_USD', { infer: true });
     if (!this.client) {
       this.logger.warn('GEMINI_API_KEY is not set: the AI writer is off');
@@ -122,14 +129,7 @@ export class AiService {
     prompt: string,
   ): Promise<T['_zod']['output']> {
     if (!this.client) throw disabled();
-
-    const { remainingUsd, limitUsd } = await this.budget(context.hotelId);
-    if (remainingUsd <= 0) {
-      throw new ForbiddenException({
-        code: ErrorCode.AI_BUDGET_EXCEEDED,
-        message: `This hotel has used its $${limitUsd} of AI for this month`,
-      });
-    }
+    await this.assertBudget(context.hotelId);
 
     const response = await this.client.models.generateContent({
       model: this.model,
@@ -147,19 +147,9 @@ export class AiService {
     });
 
     // Recorded before anything is thrown: a call that was refused or came back unusable was still paid for.
-    await this.record(context, response.usageMetadata);
+    await this.record(context, this.model, response.usageMetadata);
 
-    const finish = response.candidates?.[0]?.finishReason;
-    // A prompt can be stopped before the model sees it, or the answer stopped on its way out; both are a refusal.
-    if (
-      response.promptFeedback?.blockReason ??
-      (finish && REFUSALS.includes(finish))
-    ) {
-      throw new ForbiddenException({
-        code: ErrorCode.AI_REFUSED,
-        message: 'The model declined to write this',
-      });
-    }
+    const finish = this.assertAnswered(response);
     if (finish === FinishReason.MAX_TOKENS) {
       throw unusable('The model ran out of room before finishing');
     }
@@ -181,9 +171,69 @@ export class AiService {
     return parsed.data;
   }
 
+  /**
+   * Asks the image model for one picture, and records what it cost (A4).
+   *
+   * The same door as `ask`: the budget is checked first and the call recorded whatever comes back, so a picture is
+   * capped with the words, in the same monthly dollars. An image costs far more than a caption, which is why the
+   * price list carries the image model separately.
+   */
+  async image(context: CallContext, prompt: string): Promise<Buffer> {
+    if (!this.client) throw disabled();
+    await this.assertBudget(context.hotelId);
+
+    const response = await this.client.models.generateContent({
+      model: this.imageModel,
+      contents: prompt,
+      config: {
+        responseModalities: [Modality.IMAGE],
+        // Square crops cleanly to every feed, Instagram's included.
+        imageConfig: { aspectRatio: '1:1' },
+      },
+    });
+    await this.record(context, this.imageModel, response.usageMetadata);
+    this.assertAnswered(response);
+
+    const data = response.candidates?.[0]?.content?.parts?.find(
+      (p) => p.inlineData?.data,
+    )?.inlineData?.data;
+    if (!data) throw unusable('The model returned no picture');
+    return Buffer.from(data, 'base64');
+  }
+
+  /** Refuses a hotel over its monthly cap before anything is spent. */
+  private async assertBudget(hotelId: string) {
+    const { remainingUsd, limitUsd } = await this.budget(hotelId);
+    if (remainingUsd <= 0) {
+      throw new ForbiddenException({
+        code: ErrorCode.AI_BUDGET_EXCEEDED,
+        message: `This hotel has used its $${limitUsd} of AI for this month`,
+      });
+    }
+  }
+
+  /**
+   * Throws when the model declined. A prompt can be stopped before the model sees it, or the answer stopped on its
+   * way out; both are a refusal. Returns the finish reason for the checks that are not.
+   */
+  private assertAnswered(response: GenerateContentResponse) {
+    const finish = response.candidates?.[0]?.finishReason;
+    if (
+      response.promptFeedback?.blockReason ??
+      (finish && REFUSALS.includes(finish))
+    ) {
+      throw new ForbiddenException({
+        code: ErrorCode.AI_REFUSED,
+        message: 'The model declined to do this',
+      });
+    }
+    return finish;
+  }
+
   /** Writes the usage row. A failure here is logged, never thrown: the caller already has its answer. */
   private async record(
     context: CallContext,
+    model: string,
     usage: GeminiUsageMetadata | undefined,
   ) {
     const tokens = tokensOf(usage);
@@ -193,9 +243,9 @@ export class AiService {
           hotelId: context.hotelId,
           hotelStaffId: context.hotelStaffId ?? null,
           purpose: context.purpose,
-          model: this.model,
+          model,
           ...tokens,
-          costUsd: costOf(this.model, tokens),
+          costUsd: costOf(model, tokens),
         },
       });
     } catch (err) {

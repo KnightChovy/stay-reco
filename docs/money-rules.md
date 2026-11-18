@@ -179,7 +179,7 @@ When the customer books, the booking stores the **free-cancellation deadline** (
 
 ### 7.1 Formula
 
-**Cancellation fee** = 0 before the free-cancellation deadline; otherwise fee percent × amount paid.
+**Cancellation fee** = 0 before the free-cancellation deadline; otherwise fee percent × (amount paid − prepaid add-ons). Prepaid add-ons are refunded in full ([api/add-ons.md](./api/add-ons.md)).
 
 **Refund** = amount paid − cancellation fee − amount already refunded; never negative and never more than the amount paid (BR-08). Rounded half up to 2 decimals.
 

@@ -282,3 +282,18 @@ export const WalletTxnType = {
   SETTLEMENT: 'SETTLEMENT',
 } as const;
 export type WalletTxnType = (typeof WalletTxnType)[keyof typeof WalletTxnType];
+
+/** When a hotel add-on is delivered; a catalogue label, it does not limit when the add-on can be booked. */
+export const AddOnTiming = {
+  BEFORE_STAY: 'BEFORE_STAY',
+  DURING_STAY: 'DURING_STAY',
+  AFTER_STAY: 'AFTER_STAY',
+} as const;
+export type AddOnTiming = (typeof AddOnTiming)[keyof typeof AddOnTiming];
+
+/** PREPAID: booked with the stay and paid in its transfer. FRONT_DESK: added by staff, collected at the desk. */
+export const AddOnPayment = {
+  PREPAID: 'PREPAID',
+  FRONT_DESK: 'FRONT_DESK',
+} as const;
+export type AddOnPayment = (typeof AddOnPayment)[keyof typeof AddOnPayment];

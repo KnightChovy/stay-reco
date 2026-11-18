@@ -1,6 +1,8 @@
+import { AddBookingAddOnDto } from '../add-ons/dto/add-on.dto';
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -134,9 +136,56 @@ export class FrontDeskController {
   }
 
   @ApiOperation({
+    summary: 'Add a service used during the stay',
+    description:
+      'Any active add-on of the hotel (prebookable or not), on a booking that is `CONFIRMED` and paid or `CHECKED_IN` (otherwise `BOOKING_STATUS_CONFLICT`). The line is `FRONT_DESK`: collected at the desk at check-out, not in the booking total and without commission; `invoice.frontDeskDue` and the check-out quote `addOnsDue` add it up. Name and price are fixed on the line. The timeline shows `ADD_ON_ADDED`.',
+  })
+  @ApiHotelAccess('member', ErrorCode.BOOKING_NOT_FOUND)
+  @ApiAccess(FRONT_DESK_ACCESS)
+  @ApiData(bookingResponseSchema)
+  @ApiErrors(
+    ErrorCode.FORBIDDEN,
+    ErrorCode.PARTNER_SUSPENDED,
+    ErrorCode.BOOKING_STATUS_CONFLICT,
+    ErrorCode.ADD_ON_NOT_FOUND,
+  )
+  @Post('bookings/:id/add-ons')
+  @HttpCode(HttpStatus.OK)
+  addAddOn(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body() dto: AddBookingAddOnDto,
+  ) {
+    return this.frontDesk.addAddOn(user, id, dto);
+  }
+
+  @ApiOperation({
+    summary: 'Remove a front-desk add-on',
+    description:
+      'Only a `FRONT_DESK` line (a prepaid one was paid with the stay and stays), under the same status rule as adding. Another line answers `ADD_ON_NOT_FOUND`. The timeline shows `ADD_ON_REMOVED`.',
+  })
+  @ApiHotelAccess('member', ErrorCode.BOOKING_NOT_FOUND)
+  @ApiAccess(FRONT_DESK_ACCESS)
+  @ApiData(bookingResponseSchema)
+  @ApiErrors(
+    ErrorCode.FORBIDDEN,
+    ErrorCode.PARTNER_SUSPENDED,
+    ErrorCode.BOOKING_STATUS_CONFLICT,
+    ErrorCode.ADD_ON_NOT_FOUND,
+  )
+  @Delete('bookings/:id/add-ons/:lineId')
+  removeAddOn(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Param('lineId') lineId: string,
+  ) {
+    return this.frontDesk.removeAddOn(user, id, lineId);
+  }
+
+  @ApiOperation({
     summary: 'What checking out now means',
     description:
-      'UC39, decisions L2–L6, for the check-out screen. `scheduledAt` (the check-out date at the hotel check-out time), `early` and `releasedNights` (leaving before the check-out date, no refund), `minutesLate`, `lateFee` under the hotel late check-out policy (null within the grace period or without a policy; paid at the front desk), `amountPaid`. Only a `CHECKED_IN` booking.',
+      'UC39, decisions L2–L6, for the check-out screen. `addOnsDue`: front-desk add-ons to collect besides the late fee. `scheduledAt` (the check-out date at the hotel check-out time), `early` and `releasedNights` (leaving before the check-out date, no refund), `minutesLate`, `lateFee` under the hotel late check-out policy (null within the grace period or without a policy; paid at the front desk), `amountPaid`. Only a `CHECKED_IN` booking.',
   })
   @ApiHotelAccess('member', ErrorCode.BOOKING_NOT_FOUND)
   @ApiAccess(FRONT_DESK_ACCESS)

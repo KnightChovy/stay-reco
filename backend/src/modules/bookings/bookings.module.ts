@@ -1,3 +1,4 @@
+import { AddOnsModule } from '../add-ons/add-ons.module';
 import { Module, forwardRef } from '@nestjs/common';
 import { LoyaltyModule } from '../loyalty/loyalty.module';
 import { PromotionsModule } from '../promotions/promotions.module';
@@ -29,6 +30,7 @@ import { SettlementService } from './settlement.service';
     NotificationsModule,
     PromotionsModule,
     LoyaltyModule,
+    AddOnsModule,
   ],
   controllers: [
     BookingsController,

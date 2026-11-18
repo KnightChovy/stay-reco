@@ -96,6 +96,8 @@ export const ErrorCode = {
   BOOKING_STATUS_CONFLICT: 'BOOKING_STATUS_CONFLICT',
   /** Cancelling after check-in (BR-09). */
   CANCELLATION_NOT_ALLOWED: 'CANCELLATION_NOT_ALLOWED',
+  /** Add-on does not exist, belongs to another hotel, is off sale or (for a customer) not prebookable. */
+  ADD_ON_NOT_FOUND: 'ADD_ON_NOT_FOUND',
   /** Deciding a refund that is not pending. */
   REFUND_STATUS_CONFLICT: 'REFUND_STATUS_CONFLICT',
 

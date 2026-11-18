@@ -22,6 +22,8 @@ Three things are worth knowing before reading the table.
 
 **Staff write, the owner approves.** A staff member with the `MARKETING` permission can ask for a draft, edit it and submit it. Only the **owner** approves or rejects, because what goes out goes out under the hotel's name. The text is frozen on approval, so what was approved is what is posted.
 
+**Staff can choose between versions.** `variants` writes three versions of one brief and saves none of them; staff pick one, edit it if they like, and save it with `POST /hotels/:hotelId/marketing-content`. `generate` still writes one and saves it straight away.
+
 **Suggestions cost nothing.** `marketing-content/ideas` is database queries, not a model call. A booking system already knows what is worth posting about — which rooms are empty this week, which discount is running, which guest just left five stars — so staff pick an idea instead of inventing one.
 
 **There is no "publish now".** Scheduling with no `scheduledAt` means the next run of the publisher, which is within a minute. That *is* the post-now button (M14).
@@ -43,11 +45,14 @@ Three things are worth knowing before reading the table.
 |---|---|---|---|---|
 | GET | `/hotels/:hotelId/marketing-content/ideas` | member + `MARKETING` | | `ContentIdea[]` |
 | POST | `/hotels/:hotelId/marketing-content/generate` | member + `MARKETING` | `generateContentSchema` | `MarketingContent` (201) |
+| POST | `/hotels/:hotelId/marketing-content/variants` | member + `MARKETING` | `generateContentSchema` | `ContentVariant[]` (200), 3 versions, **not saved** |
+| POST | `/hotels/:hotelId/marketing-content` | member + `MARKETING` | `createContentSchema` | `MarketingContent` (201), the picked version as a `DRAFT` |
 | GET | `/hotels/:hotelId/marketing-content` | member + `MARKETING` | | page of `MarketingContent` |
 | GET | `/marketing-content/:id` | member + `MARKETING` | | `MarketingContent` |
 | PATCH | `/marketing-content/:id` | member + `MARKETING` | `updateContentSchema` | `MarketingContent` |
 | POST | `/marketing-content/:id/image` | member + `MARKETING` | `multipart/form-data`, field `file` | `MarketingContent` (201) |
 | DELETE | `/marketing-content/:id/image` | member + `MARKETING` | | `MarketingContent` |
+| POST | `/marketing-content/:id/image/generate` | member + `MARKETING` | `generateImageSchema` | `MarketingContent` (200), with the drawn picture |
 | POST | `/marketing-content/:id/submit` | member + `MARKETING` | | `MarketingContent` (200) |
 | POST | `/marketing-content/:id/approve` | **owner** | | `MarketingContent` (200) |
 | POST | `/marketing-content/:id/reject` | **owner** | `rejectContentSchema` | `MarketingContent` (200) |
@@ -207,7 +212,16 @@ Uploading again **replaces** the picture and deletes the file it replaced; delet
 
 **Instagram refuses a post without one**, before anything is sent, so the staff member is told to attach a photo rather than shown a Meta error code. Facebook publishes to `/photos` instead of `/feed` when there is a picture.
 
-Not yet: the writer does not produce one. Gemini writes words, so `mediaUrl` is always null on a fresh draft.
+### Drawn by the AI (A4)
+
+```jsonc
+// POST /marketing-content/:id/image/generate
+{ "prompt": "Hồ bơi lúc hoàng hôn" }   // optional, 5-500; the post's own words when left out
+```
+
+The image model (`GEMINI_IMAGE_MODEL`) draws one square picture, which is uploaded and attached **exactly like an upload**: same window (`DRAFT`, `REJECTED`), same `marketing` folder, replaces and deletes the old file. The model is told: photorealistic, no text or logos, no recognisable faces, nothing that claims a price or an award. The owner sees the picture before approving it, and that is the human check on what the model drew.
+
+A fresh draft still has `mediaUrl: null`; the picture is drawn only when staff ask for it, because one picture costs far more than a draft (see below).
 
 ## Scheduling and publishing
 
@@ -267,7 +281,7 @@ At `remainingUsd: 0` the writer answers `403 AI_BUDGET_EXCEEDED` until the month
 
 The cap is checked before the call and the usage written after, which is **not** a transaction: two calls starting at the same instant can both pass the check and overshoot by one call. That is deliberate — a cap measured in dollars a month does not need to be exact, and holding a lock for the length of a model call would cost more than the overshoot.
 
-Costs keep **six decimals**. One draft costs roughly **$0.0005** on `gemini-3.8-flash` with thinking off, so rounding to cents would record almost every call as free. The $5 cap is about 9,000 drafts a month.
+Costs keep **six decimals**. One draft costs roughly **$0.0005** on `gemini-3.8-flash` with thinking off, so rounding to cents would record almost every call as free. The $5 cap is about 9,000 drafts a month. Three `variants` are one call, a little longer. **A picture is about $0.07** on `gemini-3.1-flash-image`, so the same $5 is about 70 pictures: the picture and the words share one cap.
 
 Two details of Gemini's token counting decide whether the figures add up, and neither is obvious from the field names:
 
@@ -281,6 +295,7 @@ Flash prices **double on 2027-01-01**. Both halves of that are in the price tabl
 ```
 GEMINI_API_KEY=                   # empty turns the writer off
 GEMINI_MODEL=gemini-3.8-flash     # gemini-3.1-flash-lite is cheaper, a little blunter
+GEMINI_IMAGE_MODEL=gemini-3.1-flash-image   # draws the picture of a draft; priced in model-pricing.ts
 AI_MONTHLY_BUDGET_USD=5
 META_GRAPH_VERSION=v26.0          # must be a version the connected Meta app may use
 BENEFICIARY_ENCRYPTION_KEY=       # also encrypts social access tokens

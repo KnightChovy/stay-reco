@@ -182,6 +182,98 @@ describe('A picture on marketing content (e2e)', () => {
     expect(t.storage.uploads).toHaveLength(0);
   });
 
+  describe('drawn by the AI', () => {
+    const drawn = (token: string, contentId: string, body: object = {}) =>
+      t
+        .api()
+        .post(`/api/v1/marketing-content/${contentId}/image/generate`)
+        .set(auth(token))
+        .send(body);
+
+    it('draws a picture from the post and attaches it like an upload', async () => {
+      const h = await hotel();
+      const staff = await t.signInStaff(h.hotelId, 'staff@hotel.test', [
+        'MARKETING',
+      ]);
+      const id = await draft(staff.token, h.hotelId);
+
+      const res = await drawn(staff.token, id).expect(200);
+
+      expect(dataOf<{ mediaUrl: string }>(res).mediaUrl).toMatch(
+        /^https:\/\/cdn\.test\/marketing\//,
+      );
+      expect(t.storage.uploads).toEqual([
+        { folder: 'marketing', private: false },
+      ]);
+      expect(t.ai.images).toHaveLength(1);
+      const call = t.ai.images[0];
+      expect(call.purpose).toBe('marketing-image');
+      expect(call.prompt).toContain('Mình còn vài phòng hướng biển');
+      expect(call.prompt).toContain('no visible text');
+    });
+
+    it('draws what staff describe when they say what they want', async () => {
+      const h = await hotel();
+      const id = await draft(h.token, h.hotelId);
+
+      await drawn(h.token, id, { prompt: 'Hồ bơi lúc hoàng hôn' }).expect(200);
+
+      expect(t.ai.images[0].prompt).toContain('Hồ bơi lúc hoàng hôn');
+      expect(t.ai.images[0].prompt).not.toContain('Mình còn vài phòng');
+    });
+
+    it('replaces an uploaded picture and deletes its file', async () => {
+      const h = await hotel();
+      const id = await draft(h.token, h.hotelId);
+      const first = dataOf<{ mediaUrl: string }>(
+        await upload(h.token, id),
+      ).mediaUrl;
+
+      await drawn(h.token, id).expect(200);
+
+      expect(t.storage.deleted).toEqual([keyOf(first)]);
+    });
+
+    it('will not draw once the owner has approved the post', async () => {
+      const h = await hotel();
+      const id = await draft(h.token, h.hotelId);
+      for (const step of ['submit', 'approve']) {
+        await t
+          .api()
+          .post(`/api/v1/marketing-content/${id}/${step}`)
+          .set(auth(h.token))
+          .expect(200);
+      }
+
+      const res = await drawn(h.token, id).expect(409);
+      expect(res.body.code).toBe('CONTENT_STATUS_CONFLICT');
+      // Refused before the model is paid for anything.
+      expect(t.ai.images).toHaveLength(0);
+    });
+
+    it('refuses a hotel over its budget and keeps the picture it had', async () => {
+      const h = await hotel();
+      const id = await draft(h.token, h.hotelId);
+      t.ai.budgetLeft = 0;
+
+      const res = await drawn(h.token, id);
+
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe('AI_BUDGET_EXCEEDED');
+      expect(t.storage.uploads).toHaveLength(0);
+    });
+
+    it("refuses another hotel's content as if it did not exist", async () => {
+      const h = await hotel();
+      const other = await hotel('other@hotel.test');
+      const id = await draft(h.token, h.hotelId);
+
+      const res = await drawn(other.token, id).expect(404);
+      expect(res.body.code).toBe('CONTENT_NOT_FOUND');
+      expect(t.ai.images).toHaveLength(0);
+    });
+  });
+
   it('lets a writer swap the picture after a rejection', async () => {
     const h = await hotel();
     const staff = await t.signInStaff(h.hotelId, 'staff@hotel.test', [

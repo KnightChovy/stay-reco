@@ -1,3 +1,4 @@
+import { AddOnsService } from '../add-ons/add-ons.service';
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { ErrorCode } from '../../common/errors/error-code';
 import {
@@ -28,6 +29,7 @@ export class StayDiscountService {
     private readonly engine: PriceEngine,
     private readonly discounts: DiscountService,
     private readonly loyalty: LoyaltyService,
+    private readonly addOns: AddOnsService,
   ) {}
 
   /** What the stay costs, what comes off it, and the total to send to `POST /bookings`. */
@@ -52,11 +54,15 @@ export class StayDiscountService {
       afterDiscount,
       input.pointsToUse,
     );
+    const addOns = await this.addOns.price(hotelId, input.addOns, 'customer');
     return {
       subtotal: toNumber(subtotal),
       discount,
       points,
-      expectedTotal: toNumber(afterPoints(afterDiscount, points)),
+      addOnsTotal: toNumber(addOns.total),
+      expectedTotal: toNumber(
+        afterPoints(afterDiscount, points).plus(addOns.total),
+      ),
     };
   }
 

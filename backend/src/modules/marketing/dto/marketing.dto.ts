@@ -3,7 +3,9 @@ import {
   contentListQuerySchema,
   facebookConnectSchema,
   facebookExchangeSchema,
+  createContentSchema,
   generateContentSchema,
+  generateImageSchema,
   learnBrandVoiceSchema,
   rejectContentSchema,
   scheduleContentSchema,
@@ -16,6 +18,8 @@ import { zodDto } from '../../../common/pipes/validation';
 export class UpdateBrandVoiceDto extends zodDto(updateBrandVoiceSchema) {}
 export class LearnBrandVoiceDto extends zodDto(learnBrandVoiceSchema) {}
 export class GenerateContentDto extends zodDto(generateContentSchema) {}
+export class CreateContentDto extends zodDto(createContentSchema) {}
+export class GenerateImageDto extends zodDto(generateImageSchema) {}
 export class UpdateContentDto extends zodDto(updateContentSchema) {}
 export class RejectContentDto extends zodDto(rejectContentSchema) {}
 export class ContentListQueryDto extends zodDto(contentListQuerySchema) {}
