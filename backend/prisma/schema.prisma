@@ -848,6 +848,8 @@ model LoyaltyProgram {
   loyaltyAccounts   LoyaltyAccount[]
 
   /// A hotel has at most one set of its own rules; the platform programme rows have no hotel.
+  /// At most one platform row too: partial index "loyalty_program_one_platform_row" (WHERE hotel_id IS NULL), created
+  /// in migration 20261118090000 because Prisma cannot declare it. Remove any DROP INDEX for it from a new migration.
   @@unique([hotelId])
   @@map("loyalty_program")
 }
@@ -1125,8 +1127,12 @@ model ContentReport {
   /// Who raised it: any signed-in account, whatever their role.
   reporterId        String           @map("reporter_id") @db.Uuid
   reviewId          String           @map("review_id") @db.Uuid
-  /// Set when one photo was flagged rather than the whole review.
+  /// Set when one photo was flagged rather than the whole review; null again once the author removes that photo.
   reviewImageId     String?          @map("review_image_id") @db.Uuid
+  /// The flagged photo as it was reported, kept after its author removes it: the evidence a manager decides on. Both
+  /// set for a photo report, both null for a report of the whole review. The file stays in storage while it is kept.
+  imageUrl          String?          @map("image_url") @db.VarChar(500)
+  imageStorageKey   String?          @map("image_storage_key") @db.VarChar(255)
   reason            ReportReason
   note              String?
   status            ViolationStatus  @default(OPEN)
@@ -1137,10 +1143,12 @@ model ContentReport {
   createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
   reporter          UserAccount      @relation(fields: [reporterId], references: [userAccountId], onDelete: Cascade)
   review            Review           @relation(fields: [reviewId], references: [reviewId], onDelete: Cascade)
-  reviewImage       ReviewImage?     @relation(fields: [reviewImageId], references: [reviewImageId], onDelete: Cascade)
+  /// SetNull, not Cascade: removing a photo must not delete the reports on it, open or decided.
+  reviewImage       ReviewImage?     @relation(fields: [reviewImageId], references: [reviewImageId], onDelete: SetNull)
   platformManager   PlatformManager? @relation(fields: [platformManagerId], references: [platformManagerId])
 
-  /// One open report per person per review; the queue is for distinct complaints, not repeat clicks.
+  /// One open report per person per review; the queue is for distinct complaints, not repeat clicks. The whole-review
+  /// case is the partial index "content_report_whole_review_unique" (migrations 20261111170232, 20261118100000).
   @@unique([reporterId, reviewId, reviewImageId])
   @@index([status, createdAt])
   @@map("content_report")

@@ -615,7 +615,7 @@ describe('Review photos and content reports (e2e)', () => {
     });
   });
 
-  describe('A photo under an open report', () => {
+  describe('A reported photo removed by its author', () => {
     const reportedPhoto = async () => {
       const h = await hotel();
       const guest = await t.signIn('CUSTOMER', 'guest@mail.test');
@@ -633,40 +633,104 @@ describe('Review photos and content reports (e2e)', () => {
         .set(auth(h.token))
         .send({ reason: 'OFFENSIVE', reviewImageId: imageId })
         .expect(201);
-      return { guest, manager, imageId, reportId: idOf(report) };
+      const photo = await t.prisma.reviewImage.findUniqueOrThrow({
+        where: { reviewImageId: imageId },
+      });
+      return {
+        h,
+        guest,
+        manager,
+        reviewId,
+        imageId,
+        imageUrl: photo.imageUrl,
+        reportId: idOf(report),
+        report: report.body.data as { imageUrl: string | null },
+      };
     };
     const remove = (token: string, imageId: string) =>
       t.api().delete(`/api/v1/review-images/${imageId}`).set(auth(token));
+    const decide = (token: string, reportId: string, body: object) =>
+      t
+        .api()
+        .post(`/api/v1/content-reports/${reportId}/decide`)
+        .set(auth(token))
+        .send(body);
 
-    it('cannot be removed by its author while the report waits', async () => {
+    it('carries a copy of the photo in the report', async () => {
       const r = await reportedPhoto();
-      const res = await remove(r.guest.token, r.imageId).expect(409);
-      expect(res.body.code).toBe('REVIEW_IMAGE_REPORTED');
+      expect(r.report.imageUrl).toBe(r.imageUrl);
+    });
 
-      // The evidence and the report are both still there.
+    it('can be removed by its author while the report waits, and the report keeps its evidence', async () => {
+      const r = await reportedPhoto();
+      // The same hotel also flagged the whole review: once the photo is gone, its report must not look like a second
+      // report of the whole review to the one-per-person rule.
+      await t
+        .api()
+        .post(`/api/v1/reviews/${r.reviewId}/reports`)
+        .set(auth(r.h.token))
+        .send({ reason: 'NOT_A_STAY' })
+        .expect(201);
+
+      await remove(r.guest.token, r.imageId).expect(200);
+
       expect(
         await t.prisma.reviewImage.count({
           where: { reviewImageId: r.imageId },
         }),
-      ).toBe(1);
+      ).toBe(0);
       expect(
-        await t.prisma.contentReport.count({
+        await t.prisma.contentReport.findUniqueOrThrow({
           where: { contentReportId: r.reportId },
         }),
-      ).toBe(1);
+      ).toMatchObject({
+        status: 'OPEN',
+        reviewImageId: null,
+        imageUrl: r.imageUrl,
+      });
+      // The file stays in storage: it is what the manager looks at.
+      expect(t.storage.deleted).toHaveLength(0);
+
+      const queue = await t
+        .api()
+        .get('/api/v1/content-reports')
+        .set(auth(r.manager.token))
+        .expect(200);
+      expect(
+        (queue.body.data as { id: string; imageUrl: string | null }[]).find(
+          (x) => x.id === r.reportId,
+        ),
+      ).toMatchObject({ reviewImageId: null, imageUrl: r.imageUrl });
+    });
+
+    it('can be removed after the report is decided, and the decision stays on record', async () => {
+      const r = await reportedPhoto();
+      await decide(r.manager.token, r.reportId, {
+        status: 'RESOLVED',
+        hide: true,
+      }).expect(200);
+
+      await remove(r.guest.token, r.imageId).expect(200);
+      expect(
+        await t.prisma.contentReport.findUniqueOrThrow({
+          where: { contentReportId: r.reportId },
+        }),
+      ).toMatchObject({ status: 'RESOLVED', imageUrl: r.imageUrl });
       expect(t.storage.deleted).toHaveLength(0);
     });
 
-    it('can be removed once the report is decided', async () => {
+    it('never hides the whole review when the reported photo is already gone', async () => {
       const r = await reportedPhoto();
-      await t
-        .api()
-        .post(`/api/v1/content-reports/${r.reportId}/decide`)
-        .set(auth(r.manager.token))
-        .send({ status: 'DISMISSED' })
-        .expect(200);
-
       await remove(r.guest.token, r.imageId).expect(200);
+
+      await decide(r.manager.token, r.reportId, {
+        status: 'RESOLVED',
+        hide: true,
+      }).expect(200);
+      const row = await t.prisma.review.findUniqueOrThrow({
+        where: { reviewId: r.reviewId },
+      });
+      expect(row.isVisible).toBe(true);
     });
   });
 });

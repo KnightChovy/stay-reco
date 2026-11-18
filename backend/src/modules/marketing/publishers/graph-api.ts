@@ -1,7 +1,7 @@
 import { publishFailed } from './social-publisher';
 
 /** How long we wait on Meta before giving up. A publishing job must not hang on one slow page. */
-const TIMEOUT_MS = 15_000;
+export const GRAPH_TIMEOUT_MS = 15_000;
 
 /** The shape Meta returns when it refuses something. */
 interface GraphError {
@@ -34,7 +34,7 @@ export async function graphCall<T>(
     response = await fetch(url, {
       method,
       ...(method === 'POST' && { body }),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: AbortSignal.timeout(GRAPH_TIMEOUT_MS),
     });
   } catch (err) {
     // A timeout or a DNS failure is the same thing to the caller as a refusal: the post did not go out.

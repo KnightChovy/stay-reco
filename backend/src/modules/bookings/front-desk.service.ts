@@ -368,13 +368,12 @@ export class FrontDeskService {
       const commission = await chargeCommission(tx, this.ledger, bookingId);
       // Loyalty points on what the stay was actually paid (BR-11): a discount lowers them too, because a customer
       // earns on money spent. The conditional status change above makes a second check-out credit them once.
-      const points = await this.loyalty.earn(
-        tx,
-        booking.customerId,
+      const points = await this.loyalty.earn(tx, {
+        customerId: booking.customerId,
         bookingId,
-        booking.hotelId,
-        booking.invoice!.totalAmount,
-      );
+        hotelId: booking.hotelId,
+        amountPaid: booking.invoice!.totalAmount,
+      });
       await recordBookingEvent(tx, {
         action: AuditAction.BOOKING_CHECKED_OUT,
         bookingId,
