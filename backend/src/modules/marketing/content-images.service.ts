@@ -1,9 +1,20 @@
 import { Injectable } from '@nestjs/common';
-import type { MarketingContent } from '@stayreco/shared';
+import type { GenerateImageInput, MarketingContent } from '@stayreco/shared';
 import type { AuthUser } from '../../common/decorators/current-user.decorator';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
+import { AiService } from './ai.service';
+import { BrandVoiceService } from './brand-voice.service';
 import { ContentService } from './content.service';
+
+/**
+ * What the picture model is told every time. A photograph of a real hotel is a claim about it, so the rules are the
+ * picture's version of the writer's "never invent a fact": no text to misspell, no logos, nobody's face.
+ */
+const IMAGE_RULES = `A photograph for a hotel's social media post.
+- Photorealistic, natural light, no visible text, letters, logos or watermarks.
+- No recognisable faces; people, if any, are seen from behind or far away.
+- Show the mood and the setting; do not show a specific price, award or sign.`;
 
 /**
  * The picture that goes out with a post (M18).
@@ -23,7 +34,43 @@ export class ContentImagesService {
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
     private readonly content: ContentService,
+    private readonly ai: AiService,
+    private readonly brandVoice: BrandVoiceService,
   ) {}
+
+  /**
+   * The AI draws the picture of a draft (A4) and attaches it, replacing whatever was there.
+   *
+   * Same window as uploading one - draft or rejected - and the same storage, so an approved post goes out with a
+   * hosted picture exactly as if staff had uploaded it. The owner sees the picture before approving, which is the
+   * human check on what the model drew. Costs one image call against the monthly budget.
+   */
+  async generate(
+    user: AuthUser,
+    contentId: string,
+    input: GenerateImageInput,
+  ): Promise<MarketingContent> {
+    const current = await this.content.editable(user, contentId);
+    const voice = await this.brandVoice.promptFor(current.hotelId);
+    const subject =
+      input.prompt ??
+      [current.title, current.body].filter(Boolean).join('\n\n');
+    const file = await this.ai.image(
+      {
+        hotelId: current.hotelId,
+        hotelStaffId: current.hotelStaffId,
+        purpose: 'marketing-image',
+      },
+      `${IMAGE_RULES}\n\n${voice}\n\nThe post the picture goes with:\n${subject}`,
+    );
+    const uploaded = await this.storage.uploadImage(file, 'marketing');
+    await this.prisma.marketingContent.update({
+      where: { marketingContentId: contentId },
+      data: { mediaUrl: uploaded.url, mediaStorageKey: uploaded.storageKey },
+    });
+    await this.forget(current.mediaStorageKey);
+    return this.content.findOne(user, contentId);
+  }
 
   /**
    * Attaches a picture, replacing whatever was there.

@@ -13,6 +13,7 @@ import {
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
   contentIdeaResponseSchema,
+  contentVariantResponseSchema,
   marketingContentResponseSchema,
   z,
 } from '@stayreco/shared';
@@ -39,7 +40,9 @@ import { ContentImagesService } from './content-images.service';
 import { ContentService } from './content.service';
 import {
   ContentListQueryDto,
+  CreateContentDto,
   GenerateContentDto,
+  GenerateImageDto,
   RejectContentDto,
   UpdateContentDto,
 } from './dto/marketing.dto';
@@ -86,6 +89,45 @@ export class ContentController {
     @ReqMeta() meta: RequestMeta,
   ) {
     return this.content.generate(user, hotelId, dto, meta);
+  }
+
+  @ApiOperation({
+    summary: 'Write three versions to choose from',
+    description:
+      'Same brief and rules as `generate`, but nothing is saved: the answer is three versions, each from a different angle. Staff pick one, edit it if they like, and save it with `POST /hotels/:hotelId/marketing-content`. One model call against the monthly budget, not three.',
+  })
+  @HotelAccessRequired('member', { permission: StaffPermission.MARKETING })
+  @ApiData(z.array(contentVariantResponseSchema))
+  @ApiErrors(
+    ErrorCode.AI_UNAVAILABLE,
+    ErrorCode.AI_BUDGET_EXCEEDED,
+    ErrorCode.AI_REFUSED,
+  )
+  @Post('hotels/:hotelId/marketing-content/variants')
+  @HttpCode(HttpStatus.OK)
+  variants(
+    @CurrentUser() user: AuthUser,
+    @Param('hotelId') hotelId: string,
+    @Body() dto: GenerateContentDto,
+  ) {
+    return this.content.variants(user, hotelId, dto);
+  }
+
+  @ApiOperation({
+    summary: 'Save a draft',
+    description:
+      'Saves the version picked from `variants` (or written by hand) as a `DRAFT`, ready to edit, illustrate and submit. Costs nothing.',
+  })
+  @HotelAccessRequired('member', { permission: StaffPermission.MARKETING })
+  @ApiData(marketingContentResponseSchema, HttpStatus.CREATED)
+  @Post('hotels/:hotelId/marketing-content')
+  create(
+    @CurrentUser() user: AuthUser,
+    @Param('hotelId') hotelId: string,
+    @Body() dto: CreateContentDto,
+    @ReqMeta() meta: RequestMeta,
+  ) {
+    return this.content.create(user, hotelId, dto, meta);
   }
 
   @ApiOperation({
@@ -202,6 +244,29 @@ export class ContentController {
     @UploadedFileOf('image') file: Buffer,
   ) {
     return this.images.set(user, id, file);
+  }
+
+  @ApiOperation({
+    summary: 'Let the AI draw the picture',
+    description:
+      'Same window and the same effect as uploading one: the picture is hosted, attached, and replaces the old one. Drawn from `prompt` when given, otherwise from the post itself, in the brand voice; photorealistic, no text, no logos, no recognisable faces. The owner sees it before approving. One image call against the monthly budget - an image costs far more than a draft.',
+  })
+  @ApiData(marketingContentResponseSchema)
+  @ApiErrors(
+    ErrorCode.CONTENT_NOT_FOUND,
+    ErrorCode.CONTENT_STATUS_CONFLICT,
+    ErrorCode.AI_UNAVAILABLE,
+    ErrorCode.AI_BUDGET_EXCEEDED,
+    ErrorCode.AI_REFUSED,
+  )
+  @Post('marketing-content/:id/image/generate')
+  @HttpCode(HttpStatus.OK)
+  generateImage(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body() dto: GenerateImageDto,
+  ) {
+    return this.images.generate(user, id, dto);
   }
 
   @ApiOperation({

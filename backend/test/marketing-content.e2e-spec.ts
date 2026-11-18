@@ -145,6 +145,102 @@ describe('Marketing content and approval (e2e)', () => {
     });
   });
 
+  describe('Choosing between variants', () => {
+    const variants = (token: string, hotelId: string, body: object = {}) =>
+      t
+        .api()
+        .post(`/api/v1/hotels/${hotelId}/marketing-content/variants`)
+        .set(auth(token))
+        .send({ contentType: 'POST', brief: 'Cuối tuần còn phòng', ...body });
+
+    beforeEach(() => {
+      t.ai.answer = {
+        variants: [
+          { title: 'Sông Hàn gọi', body: 'Bản một.' },
+          { title: '', body: 'Bản hai.' },
+          { title: 'Cuối tuần', body: 'Bản ba.' },
+          { title: 'Thừa', body: 'Bản bốn, model viết dư.' },
+        ],
+      };
+    });
+
+    it('writes three versions in one call and saves none of them', async () => {
+      const h = await hotel();
+      const staff = await t.signInStaff(h.hotelId, 'staff@hotel.test', [
+        'MARKETING',
+      ]);
+
+      const res = await variants(staff.token, h.hotelId, {
+        platform: 'INSTAGRAM',
+      }).expect(200);
+
+      expect(res.body.data).toEqual([
+        { title: 'Sông Hàn gọi', body: 'Bản một.' },
+        { title: null, body: 'Bản hai.' },
+        { title: 'Cuối tuần', body: 'Bản ba.' },
+      ]);
+      expect(t.ai.calls).toHaveLength(1);
+      const call = t.ai.calls[0];
+      expect(call.purpose).toBe('marketing-variants');
+      expect(call.prompt).toContain('Instagram');
+      expect(call.prompt).toContain('3 different versions');
+      expect(call.system).toContain('Never invent a fact');
+      expect(await t.prisma.marketingContent.count()).toBe(0);
+    });
+
+    it('saves the version staff picked as a draft', async () => {
+      const h = await hotel();
+      const staff = await t.signInStaff(h.hotelId, 'staff@hotel.test', [
+        'MARKETING',
+      ]);
+
+      const res = await t
+        .api()
+        .post(`/api/v1/hotels/${h.hotelId}/marketing-content`)
+        .set(auth(staff.token))
+        .send({ contentType: 'POST', title: 'Sông Hàn gọi', body: 'Bản một.' })
+        .expect(201);
+
+      expect(res.body.data).toMatchObject({
+        status: 'DRAFT',
+        contentType: 'POST',
+        title: 'Sông Hàn gọi',
+        body: 'Bản một.',
+        authorName: 'Staff',
+      });
+      // Saving a picked version is free: the model was paid for when the variants were written.
+      expect(t.ai.calls).toHaveLength(0);
+      const log = await t.prisma.auditLog.findFirstOrThrow({
+        where: { action: 'CONTENT_CREATED' },
+      });
+      expect(log.newValue).toContain(idOf(res));
+    });
+
+    it('needs the MARKETING permission for both', async () => {
+      const h = await hotel();
+      const desk = await t.signInStaff(h.hotelId, 'desk@hotel.test', [
+        'FRONT_DESK',
+      ]);
+
+      await variants(desk.token, h.hotelId).expect(403);
+      await t
+        .api()
+        .post(`/api/v1/hotels/${h.hotelId}/marketing-content`)
+        .set(auth(desk.token))
+        .send({ contentType: 'POST', body: 'x' })
+        .expect(403);
+      expect(t.ai.calls).toHaveLength(0);
+    });
+
+    it('refuses a hotel over its budget', async () => {
+      const h = await hotel();
+      t.ai.budgetLeft = 0;
+      const res = await variants(h.token, h.hotelId);
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe('AI_BUDGET_EXCEEDED');
+    });
+  });
+
   describe('The approval round trip', () => {
     it('goes draft, submitted, approved', async () => {
       const h = await hotel();

@@ -82,6 +82,8 @@ export enum AuditAction {
   BOOKING_DISCOUNT_APPLIED = 'BOOKING_DISCOUNT_APPLIED',
   /** The AI wrote a marketing draft (M7). */
   CONTENT_GENERATED = 'CONTENT_GENERATED',
+  /** Staff saved a draft they picked from the AI variants, or wrote themselves. */
+  CONTENT_CREATED = 'CONTENT_CREATED',
   /** A staff member sent a draft to the owner. */
   CONTENT_SUBMITTED = 'CONTENT_SUBMITTED',
   /** The owner approved content for publishing. */

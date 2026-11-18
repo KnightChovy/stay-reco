@@ -86,6 +86,8 @@ export const FILES = {
  */
 export class FakeAi {
   calls: { purpose: string; system: string; prompt: string }[] = [];
+  /** Prompts sent to the picture model. */
+  images: { purpose: string; prompt: string }[] = [];
   answer: unknown = {
     summary: 'Ấm áp, xưng "mình", câu ngắn.',
     audience: 'Gia đình trẻ đi nghỉ cuối tuần',
@@ -120,8 +122,22 @@ export class FakeAi {
     return Promise.resolve(this.answer);
   }
 
+  image(context: { purpose: string }, prompt: string) {
+    if (this.budgetLeft <= 0) {
+      return Promise.reject(
+        new ForbiddenException({
+          code: 'AI_BUDGET_EXCEEDED',
+          message: 'This hotel has used its $5 of AI for this month',
+        }),
+      );
+    }
+    this.images.push({ purpose: context.purpose, prompt });
+    return Promise.resolve(FILES.png);
+  }
+
   clear() {
     this.calls = [];
+    this.images = [];
     this.budgetLeft = 5;
   }
 }
