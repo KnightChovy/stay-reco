@@ -8,7 +8,7 @@ import { Icon } from '@/components/ui/icon';
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
 import { colors } from '@/constants/theme';
-import { Banner, Card, CardHead, KV, StaffScreen, SuccessSheet, accent, s, useStaffHotel } from '@/features/staff/ui';
+import { Banner, Card, CardHead, CleanRoomButton, KV, StaffScreen, SuccessSheet, accent, s, useStaffHotel } from '@/features/staff/ui';
 import { bookingStatusLabel, formatDate, formatVnd } from '@/lib/stay';
 import { apiErrorMessage } from '@/services/ApiService';
 import { checkInBooking, getRoomOptions, lookupBooking, toLookup } from '@/services/staff.service';
@@ -148,11 +148,14 @@ export default function StaffCheckInScreen() {
               {rooms.map((r) => {
                 const on = selected.includes(r.id);
                 const held = options.data?.held.some((h) => h.id === r.id);
+                // Backend chỉ nhận phòng AVAILABLE: phòng đang dọn phải được đánh dấu dọn xong trước.
+                const clean = r.status === 'AVAILABLE';
                 return (
                   <Pressable
                     key={r.id}
                     accessibilityRole="checkbox"
-                    accessibilityState={{ checked: on }}
+                    accessibilityState={{ checked: on, disabled: !clean }}
+                    disabled={!clean}
                     accessibilityLabel={`Phòng ${r.roomNumber}`}
                     onPress={() => toggle(r.id)}
                     className={`flex-row items-center gap-2.5 rounded-lg p-3 ${on ? 'border-2 border-secondary bg-[#fbf3f0]' : 'border border-surface-container-high'}`}
@@ -162,7 +165,7 @@ export default function StaffCheckInScreen() {
                       {r.roomNumber}
                     </Text>
                     {held && <Chip label="Đang giữ" tone="primary" />}
-                    <Chip label={r.status === 'AVAILABLE' ? 'Sẵn sàng' : 'Đang dọn'} tone={r.status === 'AVAILABLE' ? 'tertiary' : 'warning'} />
+                    {clean ? <Chip label="Sẵn sàng" tone="tertiary" /> : <CleanRoomButton roomId={r.id} roomNumber={r.roomNumber} />}
                   </Pressable>
                 );
               })}

@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Alert, ScrollView, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
+import { alert } from '@/lib/alert';
 import { router } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ScreenHeader } from '@/components/layout/AppHeader';
@@ -34,7 +35,7 @@ export default function SessionsScreen() {
   const [loggingOut, setLoggingOut] = useState(false);
 
   const logoutEverywhere = () =>
-    Alert.alert('Đăng xuất mọi thiết bị?', 'Máy này cũng sẽ bị đăng xuất.', [
+    alert('Đăng xuất mọi thiết bị?', 'Máy này cũng sẽ bị đăng xuất.', [
       { text: 'Hủy', style: 'cancel' },
       {
         text: 'Đăng xuất',

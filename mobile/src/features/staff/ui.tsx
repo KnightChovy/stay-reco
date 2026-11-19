@@ -2,13 +2,14 @@ import type { ReactNode } from 'react';
 import { Modal, Pressable, ScrollView, View, type StyleProp, type ViewStyle } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ScreenHeader } from '@/components/layout/AppHeader';
 import { Button } from '@/components/ui/button';
 import { Icon, type IconName } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
 import { colors } from '@/constants/theme';
-import { getMyHotels } from '@/services/staff.service';
+import { apiErrorMessage } from '@/services/ApiService';
+import { cleanRoom, getMyHotels } from '@/services/staff.service';
 
 /** Màu nhấn của portal staff bên web (#934a33) cho nút chính. */
 export const accent = colors.secondary;
@@ -218,6 +219,22 @@ export function SuccessSheet({ visible, onClose, title, text, rows, printLabel }
         <Button label="Về bàn làm việc" className={s.flex} style={{ backgroundColor: accent }} onPress={() => router.navigate('/staff')} />
       </View>
     </Sheet>
+  );
+}
+
+/** Phòng khách vừa trả ở trạng thái "Đang dọn" và không check-in được cho tới khi lễ tân bấm nút này. */
+export function CleanRoomButton({ roomId, roomNumber }: { roomId: string; roomNumber: string }) {
+  const queryClient = useQueryClient();
+  const clean = useMutation({ mutationFn: () => cleanRoom(roomId), onSuccess: () => queryClient.invalidateQueries({ queryKey: ['staff'] }) });
+  return (
+    <View className="items-end gap-1">
+      <Button label={clean.isPending ? 'Đang lưu…' : 'Đã dọn xong'} leadingIcon="check" variant="secondary" size="sm" disabled={clean.isPending} onPress={() => clean.mutate()} />
+      {clean.isError && (
+        <Text variant="caption" color={colors.error}>
+          {apiErrorMessage(clean.error, `Không cập nhật được phòng ${roomNumber}.`)}
+        </Text>
+      )}
+    </View>
   );
 }
 
