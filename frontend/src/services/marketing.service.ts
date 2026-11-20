@@ -6,7 +6,10 @@ import type {
   ContentListQuery,
   ContentMetric,
   ContentSchedule,
+  ContentVariant,
+  CreateContentInput,
   GenerateContentInput,
+  GenerateImageInput,
   MarketingContent,
   ScheduleContentInput,
   ScheduleListQuery,
@@ -57,6 +60,25 @@ export async function generateContent(hotelId: string, input: GenerateContentInp
   return data.data;
 }
 
+/**
+ * Three versions of one brief in a single model call (counted against the budget); none is saved until staff pick one
+ * and send it to `createContent`.
+ */
+export async function generateContentVariants(hotelId: string, input: GenerateContentInput) {
+  const { data } = await api.post<APIResponse<ContentVariant[]>>(
+    `/hotels/${hotelId}/marketing-content/variants`,
+    input,
+    { timeout: 90_000 },
+  );
+  return data.data;
+}
+
+/** Saves the version staff picked (or wrote) as a DRAFT. No model call. */
+export async function createContent(hotelId: string, input: CreateContentInput) {
+  const { data } = await api.post<APIResponse<MarketingContent>>(`/hotels/${hotelId}/marketing-content`, input);
+  return data.data;
+}
+
 export async function getContents(hotelId: string, params: ContentListParams = {}) {
   const { data } = await api.get<APIResponse<MarketingContent[]>>(`/hotels/${hotelId}/marketing-content`, {
     params,
@@ -84,6 +106,19 @@ export async function uploadContentImage(contentId: string, file: File) {
     headers: { "Content-Type": "multipart/form-data" },
     timeout: 60_000,
   });
+  return data.data;
+}
+
+/**
+ * The image model draws the picture of a DRAFT or REJECTED piece and it is attached like an upload, replacing the
+ * current one. About $0.07 a picture, from the same monthly budget as the words.
+ */
+export async function generateContentImage(contentId: string, input: GenerateImageInput) {
+  const { data } = await api.post<APIResponse<MarketingContent>>(
+    `/marketing-content/${contentId}/image/generate`,
+    input,
+    { timeout: 120_000 },
+  );
   return data.data;
 }
 

@@ -9,8 +9,8 @@ import {
   Ban,
   BedDouble,
   CalendarClock,
-  CheckCircle2,
   Clock,
+  ConciergeBell,
   CreditCard,
   History,
   Loader2,
@@ -35,6 +35,9 @@ import { Badge } from "@/components/ui/badge";
 import { getApiErrorMessage } from "@/lib/api-error";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
+import { BookingInvoice } from "@/features/booking/components/BookingInvoice";
+import { BookingTimeline } from "@/features/booking/components/BookingTimeline";
+import { FrontDeskAddOns } from "@/features/booking/components/FrontDeskAddOns";
 import {
   useAcceptChange,
   useBooking,
@@ -231,6 +234,14 @@ export function StaffBookingDetail({ bookingId }: { bookingId: string }) {
             <div className="grid grid-cols-1 gap-4 rounded-xl border border-border bg-slate-50 p-4 md:grid-cols-3">
               <Field label="Họ và tên khách" value={booking.guestName} />
               <Field
+                label="Người đặt"
+                value={
+                  booking.bookedBy.name === booking.guestName
+                    ? "Chính khách lưu trú"
+                    : `${booking.bookedBy.name}${booking.bookedBy.phone ? ` · ${booking.bookedBy.phone}` : ""}`
+                }
+              />
+              <Field
                 label="Số điện thoại"
                 value={
                   <span className="inline-flex items-center gap-1 font-mono">
@@ -349,63 +360,30 @@ export function StaffBookingDetail({ bookingId }: { bookingId: string }) {
                 <CreditCard className="size-5" />
               </div>
               <div>
-                <h2 className="text-base font-bold text-foreground">Quyết toán tài chính</h2>
-                <p className="text-xs text-muted-foreground">Giá đã chốt tại thời điểm đặt phòng</p>
+                <h2 className="text-base font-bold text-foreground">Hoá đơn &amp; thanh toán</h2>
+                <p className="text-xs text-muted-foreground">Giá đã chốt lúc đặt; dịch vụ phát sinh thu tại quầy</p>
               </div>
             </div>
 
-            <div className="overflow-x-auto text-xs">
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="border-b border-border bg-slate-50 text-[10px] font-bold uppercase text-muted-foreground">
-                    <th className="px-3 py-2.5">Đêm</th>
-                    <th className="px-3 py-2.5">Ngày</th>
-                    <th className="px-3 py-2.5 text-right">Giá mỗi đêm</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {booking.nightlyPrices.map((night) => (
-                    <tr key={night.date}>
-                      <td className="px-3 py-3 font-semibold text-foreground">
-                        {formatCalendarDate(night.date)}
-                      </td>
-                      <td className="px-3 py-3 capitalize text-muted-foreground">
-                        {weekdayLabel(night.date)}
-                      </td>
-                      <td className="px-3 py-3 text-right font-mono font-semibold text-foreground">
-                        {formatMoney(night.price)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            {booking.holdExpiresAt && (
+              <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">
+                Đang giữ phòng chờ thanh toán đến {formatDateTime(booking.holdExpiresAt)}
+              </p>
+            )}
+            <BookingInvoice booking={booking} />
+          </Card>
 
-            <div className="flex flex-col items-center justify-between gap-4 rounded-xl bg-primary p-4 text-primary-foreground shadow-sm sm:flex-row">
-              <div className="flex items-center gap-3">
-                <CheckCircle2 className="size-6 shrink-0 text-emerald-400" />
-                <div>
-                  <span className="block text-xs font-bold">
-                    {booking.paymentStatus === "PAID"
-                      ? `Đã thanh toán${booking.paidAt ? ` lúc ${formatDateTime(booking.paidAt)}` : ""}`
-                      : paymentStatusLabels[booking.paymentStatus].label}
-                  </span>
-                  <span className="block text-[11px] text-white/80">
-                    {booking.holdExpiresAt
-                      ? `Giữ phòng đến ${formatDateTime(booking.holdExpiresAt)}`
-                      : `${booking.rooms} phòng × ${booking.nights} đêm`}
-                  </span>
-                </div>
+          <Card className="space-y-4 rounded-2xl border border-border bg-white p-6 shadow-2xs">
+            <div className="flex items-center gap-3 border-b border-border pb-3">
+              <div className="flex size-10 items-center justify-center rounded-xl bg-sky-100 font-bold text-sky-800">
+                <ConciergeBell className="size-5" />
               </div>
-              <div className="text-right">
-                <span className="block text-[10px] font-semibold uppercase text-white/80">
-                  Tổng thanh toán
-                </span>
-                <span className="block font-mono text-xl font-bold text-white">
-                  {formatMoney(booking.totalAmount)}
-                </span>
+              <div>
+                <h2 className="text-base font-bold text-foreground">Dịch vụ thêm</h2>
+                <p className="text-xs text-muted-foreground">Đặt kèm khi đặt phòng, hoặc phát sinh trong kỳ lưu trú</p>
               </div>
             </div>
+            <FrontDeskAddOns booking={booking} />
           </Card>
         </div>
 
@@ -581,21 +559,7 @@ export function StaffBookingDetail({ bookingId }: { bookingId: string }) {
             <h2 className="flex items-center gap-2 text-sm font-bold text-foreground">
               <History className="size-4 text-[#934a33]" /> Lịch sử đơn
             </h2>
-            {booking.timeline.length === 0 ? (
-              <p className="text-xs text-muted-foreground">Chưa có cập nhật.</p>
-            ) : (
-              <ol className="space-y-3">
-                {booking.timeline.map((entry, index) => (
-                  <li key={`${entry.at}-${index}`} className="flex gap-3 text-xs">
-                    <span className="mt-1 size-2 shrink-0 rounded-full bg-primary" />
-                    <div>
-                      <p className="font-semibold text-foreground">{entry.event}</p>
-                      <p className="text-[11px] text-muted-foreground">{formatDateTime(entry.at)}</p>
-                    </div>
-                  </li>
-                ))}
-              </ol>
-            )}
+            <BookingTimeline timeline={booking.timeline} />
           </Card>
 
           <Card className="space-y-3 rounded-2xl border border-border bg-white p-5 shadow-2xs">

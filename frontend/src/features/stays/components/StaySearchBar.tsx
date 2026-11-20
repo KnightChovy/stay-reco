@@ -6,6 +6,7 @@ import { addDays, format, isSameDay, parseISO } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import type { DateRange } from 'react-day-picker';
 import { CalendarDays, MapPin, Search, Users } from 'lucide-react';
+import { BOOKING_LIMITS } from '@stayreco/shared';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
@@ -37,8 +38,11 @@ type StaySearchBarProps = {
   submitLabel?: string;
 };
 
+// text-base on phones keeps iOS from zooming into the field on focus.
 const inputClass =
-  'w-full min-w-0 border-0 bg-transparent p-0 text-[13px] font-semibold text-gray-900 focus:outline-hidden focus:ring-0';
+  'w-full min-w-0 border-0 bg-transparent p-0 text-base font-semibold text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:ring-0 sm:text-sm';
+
+const fieldLabel = 'flex items-center gap-1 text-xs font-semibold text-muted-foreground';
 
 /** Compact stay search used on the landing page and the search results page (public customer area). */
 export function StaySearchBar({
@@ -113,19 +117,19 @@ export function StaySearchBar({
   };
 
   return (
-    <div className="rounded-2xl border border-gray-200/80 bg-white p-1.5 shadow-[0_8px_30px_rgba(20,45,66,0.08)]">
+    <div className="rounded-2xl border border-border bg-card p-1.5 shadow-[0_8px_30px_rgba(20,45,66,0.08)]">
       <div
         className={cn(
-          'grid grid-cols-1 divide-y divide-gray-100 sm:grid-cols-2 sm:divide-y-0 lg:divide-x',
+          'grid grid-cols-1 divide-y divide-border sm:grid-cols-2 sm:divide-y-0 lg:divide-x',
           showDestination
             ? 'lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1.55fr)_minmax(0,0.95fr)_auto]'
             : 'lg:grid-cols-[minmax(0,1.55fr)_minmax(0,0.95fr)_auto]',
         )}
       >
         {showDestination && (
-          <label className="group flex min-w-0 flex-col gap-1 rounded-xl px-3 py-2 transition-colors hover:bg-gray-50">
-            <span className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
-              <MapPin className="size-3" /> Điểm đến
+          <label className="group flex min-h-14 min-w-0 flex-col justify-center gap-1 rounded-xl px-3 py-2 transition-colors hover:bg-muted">
+            <span className={fieldLabel}>
+              <MapPin className="size-3.5" aria-hidden /> Điểm đến
             </span>
             <input
               type="text"
@@ -138,14 +142,14 @@ export function StaySearchBar({
         )}
 
         <Popover>
-          <PopoverTrigger className="group flex min-w-0 flex-col gap-1 rounded-xl px-3 py-2 text-left transition-colors hover:bg-gray-50 focus-visible:outline-hidden">
-            <span className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
-              <CalendarDays className="size-3" /> Ngày nhận – trả phòng
+          <PopoverTrigger className="group flex min-h-14 min-w-0 flex-col justify-center gap-1 rounded-xl px-3 py-2 text-left transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-primary">
+            <span className={fieldLabel}>
+              <CalendarDays className="size-3.5" aria-hidden /> Ngày nhận – trả phòng
             </span>
-            <span className="flex min-w-0 items-center gap-1.5 text-[13px] font-semibold text-gray-900">
+            <span className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-foreground">
               <span className="truncate">{dateLabel}</span>
               {nights > 0 && (
-                <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
                   {nights} đêm
                 </span>
               )}
@@ -164,32 +168,32 @@ export function StaySearchBar({
           </PopoverContent>
         </Popover>
 
-        <div className="group flex min-w-0 flex-col gap-1 rounded-xl px-3 py-2 transition-colors hover:bg-gray-50">
-          <span className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
-            <Users className="size-3" /> Khách &amp; phòng
+        <div className="group flex min-h-14 min-w-0 flex-col justify-center gap-1 rounded-xl px-3 py-2 transition-colors hover:bg-muted">
+          <span className={fieldLabel}>
+            <Users className="size-3.5" aria-hidden /> Khách &amp; phòng
           </span>
-          <div className="flex min-w-0 items-center gap-1 text-[13px] font-semibold text-gray-900">
+          <div className="flex min-w-0 items-center gap-1 text-sm font-semibold text-foreground">
             <input
               type="number"
               min={1}
-              max={20}
+              max={BOOKING_LIMITS.maxGuests}
               value={guests}
-              onChange={(event) => setGuests(Math.max(1, Number(event.target.value) || 1))}
-              className="w-8 min-w-0 appearance-none border-0 bg-transparent p-0 text-center text-[13px] font-semibold focus:outline-hidden focus:ring-0 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              onChange={(event) => setGuests(Math.min(BOOKING_LIMITS.maxGuests, Math.max(1, Number(event.target.value) || 1)))}
+              className="h-8 w-10 min-w-0 appearance-none rounded-md border border-border bg-transparent p-0 text-center text-base font-semibold focus:outline-2 focus:outline-primary sm:text-sm [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
               aria-label="Số khách"
             />
-            <span className="whitespace-nowrap text-xs font-medium text-gray-500">khách</span>
-            <span className="text-gray-300">·</span>
+            <span className="whitespace-nowrap text-sm font-medium text-muted-foreground">khách</span>
+            <span className="text-muted-foreground/50" aria-hidden>·</span>
             <input
               type="number"
               min={1}
-              max={10}
+              max={BOOKING_LIMITS.maxRooms}
               value={rooms}
-              onChange={(event) => setRooms(Math.max(1, Number(event.target.value) || 1))}
-              className="w-7 min-w-0 appearance-none border-0 bg-transparent p-0 text-center text-[13px] font-semibold focus:outline-hidden focus:ring-0 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              onChange={(event) => setRooms(Math.min(BOOKING_LIMITS.maxRooms, Math.max(1, Number(event.target.value) || 1)))}
+              className="h-8 w-10 min-w-0 appearance-none rounded-md border border-border bg-transparent p-0 text-center text-base font-semibold focus:outline-2 focus:outline-primary sm:text-sm [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
               aria-label="Số phòng"
             />
-            <span className="whitespace-nowrap text-xs font-medium text-gray-500">phòng</span>
+            <span className="whitespace-nowrap text-sm font-medium text-muted-foreground">phòng</span>
           </div>
         </div>
 
@@ -198,9 +202,9 @@ export function StaySearchBar({
             type="button"
             onClick={handleSearch}
             disabled={disabled}
-            className="h-full min-h-11 w-full gap-2 whitespace-nowrap rounded-xl bg-[#14344d] px-5 text-[13px] font-semibold text-white shadow-xs hover:bg-[#0f283b]"
+            className="h-full min-h-11 w-full gap-2 rounded-xl px-5 text-sm font-semibold whitespace-nowrap shadow-xs"
           >
-            <Search className="size-4 shrink-0" />
+            <Search className="size-4 shrink-0" aria-hidden />
             <span>{submitLabel}</span>
           </Button>
         </div>

@@ -6,10 +6,15 @@ import Header from '@/components/layout/Header';
 export default function BookingLayout({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col bg-[#f7f9ff] font-sans text-[#202B36] antialiased">
-      <Header />
-      <BookingProgress />
+      {/* Printing the confirmation keeps the voucher and the stay, not the site chrome. */}
+      <div className="contents print:hidden">
+        <Header />
+        <BookingProgress />
+      </div>
       <main className="flex-1">{children}</main>
-      <Footer />
+      <div className="contents print:hidden">
+        <Footer />
+      </div>
     </div>
   );
 }

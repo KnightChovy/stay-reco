@@ -368,6 +368,15 @@ export default function StaffCheckOutPage() {
                       </p>
                     )}
 
+                    {quote.data.addOnsDue > 0 && (
+                      <div className="rounded-lg border border-sky-200 bg-sky-50 p-3 text-sky-900">
+                        <p className="font-semibold">Dịch vụ phát sinh: {formatMoney(quote.data.addOnsDue)}</p>
+                        <p className="mt-1 text-[11px]">
+                          Các dịch vụ lễ tân đã ghi trong kỳ lưu trú, thu tại quầy cùng lúc trả phòng.
+                        </p>
+                      </div>
+                    )}
+
                     {quote.data.early && (
                       <p className="rounded-lg bg-slate-50 p-3 text-slate-600">
                         Trả phòng trước ngày dự kiến: các đêm còn lại được giải phóng và không hoàn tiền.

@@ -140,6 +140,9 @@ function StaffBookingsContent({ initialSearch }: { initialSearch: string }) {
   const exportCsv = () => {
     const header = [
       "Mã đơn",
+      "Khách lưu trú",
+      "Số điện thoại",
+      "Người đặt",
       "Hạng phòng",
       "Check-in",
       "Check-out",
@@ -152,6 +155,9 @@ function StaffBookingsContent({ initialSearch }: { initialSearch: string }) {
     ];
     const lines = bookings.map((booking) => [
       booking.code,
+      booking.guestName,
+      booking.contactPhone,
+      booking.bookedBy.name,
       booking.roomType.name,
       booking.checkIn,
       booking.checkOut,
@@ -409,6 +415,7 @@ function StaffBookingsContent({ initialSearch }: { initialSearch: string }) {
                 <thead>
                   <tr className="h-11 border-b border-border bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                     <th className="pl-5 pr-3">Mã đơn</th>
+                    <th className="px-3">Khách</th>
                     <th className="px-3">Hạng phòng</th>
                     <th className="px-3">Lịch lưu trú</th>
                     <th className="px-3 text-center">Phòng / khách</th>
@@ -422,7 +429,7 @@ function StaffBookingsContent({ initialSearch }: { initialSearch: string }) {
                   {isLoading &&
                     [0, 1, 2, 3, 4].map((row) => (
                       <tr key={row}>
-                        <td colSpan={8} className="px-5 py-3">
+                        <td colSpan={9} className="px-5 py-3">
                           <Skeleton className="h-8 w-full" />
                         </td>
                       </tr>
@@ -462,6 +469,20 @@ function StaffBookingsContent({ initialSearch }: { initialSearch: string }) {
                             <span className="mt-0.5 block text-[10px] text-muted-foreground">
                               Đặt lúc {formatDateTime(booking.createdAt)}
                             </span>
+                          </td>
+
+                          <td className="px-3 py-3.5">
+                            <span className="block font-semibold text-foreground">
+                              {booking.guestName}
+                            </span>
+                            <span className="block font-mono text-[11px] text-muted-foreground">
+                              {booking.contactPhone}
+                            </span>
+                            {booking.bookedBy.name !== booking.guestName && (
+                              <span className="block text-[10px] text-muted-foreground">
+                                Đặt bởi {booking.bookedBy.name}
+                              </span>
+                            )}
                           </td>
 
                           <td className="px-3 py-3.5">

@@ -2,15 +2,24 @@
 
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Sparkles } from "lucide-react";
-import { generateContentSchema, type ContentType, type SocialPlatform } from "@stayreco/shared";
+import { ArrowLeft, Check, Loader2, RefreshCw, Sparkles } from "lucide-react";
+import {
+  CONTENT_VARIANTS,
+  createContentSchema,
+  generateContentSchema,
+  type ContentType,
+  type ContentVariant,
+  type GenerateContentInput,
+  type SocialPlatform,
+} from "@stayreco/shared";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { validateWith } from "@/lib/api-error";
-import { useGenerateContent } from "../api/marketing-queries";
+import { useCreateContent, useGenerateVariants } from "../api/marketing-queries";
 import { contentTypeLabels, platformLabels } from "../lib/marketing-labels";
 import { getMarketingErrorMessage } from "../lib/marketing-errors";
 
@@ -36,8 +45,9 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
 }
 
 /**
- * Asks the AI writer for a draft (`POST /hotels/:id/marketing-content/generate`). The brand voice and the hotel's
- * own figures are added by the backend, so a one-line brief is enough; an idea fills it in.
+ * The AI writer in two steps (A5): `POST .../marketing-content/variants` writes three versions of one brief and saves
+ * none; staff pick one, may edit it, and only that one is saved as a draft (`POST .../marketing-content`). The brand
+ * voice and the hotel's own figures are added by the backend, so a one-line brief is enough; an idea fills it in.
  */
 export function GenerateContentDialog({
   hotelId,
@@ -51,11 +61,34 @@ export function GenerateContentDialog({
   initialBrief?: string;
 }) {
   const router = useRouter();
-  const generate = useGenerateContent();
+  const variants = useGenerateVariants();
+  const create = useCreateContent();
   const [brief, setBrief] = useState(initialBrief);
   const [contentType, setContentType] = useState<ContentType>("POST");
   const [platform, setPlatform] = useState<SocialPlatform | undefined>("FACEBOOK");
   const [errors, setErrors] = useState<Record<string, string>>({});
+  // The request the versions on screen came from, so "Viết lại" asks the same thing again.
+  const [request, setRequest] = useState<GenerateContentInput>();
+  const [versions, setVersions] = useState<ContentVariant[]>([]);
+  const [picked, setPicked] = useState<number>();
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
+
+  const busy = variants.isPending || create.isPending;
+  const choosing = versions.length > 0;
+
+  const write = (input: GenerateContentInput) => {
+    setRequest(input);
+    variants.mutate(
+      { hotelId, input },
+      {
+        onSuccess: (result) => {
+          setVersions(result);
+          setPicked(undefined);
+        },
+      },
+    );
+  };
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -65,7 +98,28 @@ export function GenerateContentDialog({
       return;
     }
     setErrors({});
-    generate.mutate(
+    write(result.data);
+  };
+
+  const pick = (index: number) => {
+    setPicked(index);
+    setTitle(versions[index].title ?? "");
+    setBody(versions[index].body);
+    setErrors({});
+  };
+
+  const save = () => {
+    if (picked === undefined || !request) return;
+    const result = validateWith(createContentSchema, {
+      contentType: request.contentType,
+      title: title.trim() || null,
+      body: body.trim(),
+    });
+    if (result.errors) {
+      setErrors(result.errors);
+      return;
+    }
+    create.mutate(
       { hotelId, input: result.data },
       {
         onSuccess: (content) => {
@@ -76,89 +130,208 @@ export function GenerateContentDialog({
     );
   };
 
+  const back = () => {
+    setVersions([]);
+    setPicked(undefined);
+    setErrors({});
+    variants.reset();
+    create.reset();
+  };
+
   return (
-    <Dialog open={open} onOpenChange={(next) => !generate.isPending && onOpenChange(next)}>
-      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
+    <Dialog open={open} onOpenChange={(next) => !busy && onOpenChange(next)}>
+      <DialogContent className={cn("max-h-[90dvh] overflow-y-auto", choosing ? "sm:max-w-5xl" : "sm:max-w-lg")}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="size-4 text-[#934a33]" /> Viết nội dung bằng AI
+            <Sparkles className="size-4 text-[#934a33]" />
+            {choosing ? `Chọn 1 trong ${versions.length} phương án` : "Viết nội dung bằng AI"}
           </DialogTitle>
           <DialogDescription>
-            AI viết theo giọng thương hiệu của khách sạn và không tự bịa giá, ngày hay ưu đãi. Bản nháp cần chủ khách
-            sạn duyệt trước khi đăng.
+            {choosing
+              ? "Chưa phương án nào được lưu. Chọn bản ưng ý nhất, sửa nếu cần, rồi lưu thành bản nháp. Các bản còn lại sẽ bị bỏ."
+              : `AI viết ${CONTENT_VARIANTS} phương án theo giọng thương hiệu của khách sạn và không tự bịa giá, ngày hay ưu đãi. Bản nháp cần chủ khách sạn duyệt trước khi đăng.`}
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={submit} className="space-y-4" noValidate>
-          <div className="space-y-1.5">
-            <Label htmlFor="brief" className="text-xs font-semibold">
-              Bài viết nói về điều gì? <span className="text-red-500">*</span>
-            </Label>
-            <Textarea
-              id="brief"
-              rows={4}
-              maxLength={500}
-              value={brief}
-              disabled={generate.isPending}
-              onChange={(event) => setBrief(event.target.value)}
-              placeholder="Ví dụ: Cuối tuần này còn phòng hướng biển, mời khách gia đình"
-              aria-invalid={!!errors.brief}
-              className="text-sm"
-            />
-            <div className="flex justify-between text-[11px]">
-              <span className={errors.brief ? "text-red-600" : "text-slate-400"}>
-                {errors.brief ?? "Một câu là đủ; tối thiểu 5 ký tự."}
-              </span>
-              <span className="text-slate-400">{brief.trim().length}/500</span>
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <span className="text-xs font-semibold">Loại nội dung</span>
-            <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Loại nội dung">
-              {TYPES.map((type) => (
-                <Chip key={type} active={contentType === type} onClick={() => setContentType(type)}>
-                  {contentTypeLabels[type]}
-                </Chip>
+        {choosing ? (
+          <div className="space-y-4">
+            <div className="grid gap-3 md:grid-cols-3" role="radiogroup" aria-label="Phương án">
+              {versions.map((version, index) => (
+                <button
+                  key={index}
+                  type="button"
+                  role="radio"
+                  aria-checked={picked === index}
+                  disabled={busy}
+                  onClick={() => pick(index)}
+                  className={cn(
+                    "flex flex-col rounded-xl border p-3 text-left transition",
+                    picked === index
+                      ? "border-[#934a33] bg-[#934a33]/5 ring-2 ring-[#934a33]/30"
+                      : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50",
+                  )}
+                >
+                  <span className="mb-2 flex items-center justify-between text-[11px] font-bold uppercase tracking-wide text-slate-400">
+                    Phương án {index + 1}
+                    {picked === index && (
+                      <span className="flex items-center gap-1 rounded-full bg-[#934a33] px-2 py-0.5 text-[10px] text-white normal-case">
+                        <Check className="size-3" /> Đã chọn
+                      </span>
+                    )}
+                  </span>
+                  {version.title && <span className="mb-1 text-sm font-bold text-slate-800">{version.title}</span>}
+                  <span className="line-clamp-[12] whitespace-pre-line text-xs leading-relaxed text-slate-600">
+                    {version.body}
+                  </span>
+                </button>
               ))}
             </div>
-          </div>
 
-          <div className="space-y-1.5">
-            <span className="text-xs font-semibold">Viết cho nền tảng</span>
-            <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Nền tảng">
-              {PLATFORMS.map((item) => (
-                <Chip key={item ?? "any"} active={platform === item} onClick={() => setPlatform(item)}>
-                  {item ? platformLabels[item] : "Chung"}
-                </Chip>
-              ))}
+            {picked !== undefined && (
+              <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs font-semibold text-slate-700">Sửa phương án {picked + 1} trước khi lưu (không bắt buộc)</p>
+                <div className="space-y-1.5">
+                  <Label htmlFor="variant-title" className="text-xs font-semibold">
+                    Tiêu đề
+                  </Label>
+                  <Input
+                    id="variant-title"
+                    maxLength={255}
+                    value={title}
+                    disabled={busy}
+                    onChange={(event) => setTitle(event.target.value)}
+                    placeholder="Không bắt buộc"
+                    aria-invalid={!!errors.title}
+                    className="bg-white text-sm"
+                  />
+                  {errors.title && <p className="text-[11px] text-red-600">{errors.title}</p>}
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="variant-body" className="text-xs font-semibold">
+                    Nội dung <span className="text-red-500">*</span>
+                  </Label>
+                  <Textarea
+                    id="variant-body"
+                    rows={8}
+                    value={body}
+                    disabled={busy}
+                    onChange={(event) => setBody(event.target.value)}
+                    aria-invalid={!!errors.body}
+                    className="bg-white text-sm"
+                  />
+                  {errors.body && <p className="text-[11px] text-red-600">{errors.body}</p>}
+                </div>
+              </div>
+            )}
+
+            {(variants.error || create.error) && (
+              <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700" role="alert">
+                {getMarketingErrorMessage(
+                  variants.error ?? create.error,
+                  variants.error ? "Không viết lại được. Vui lòng thử lại." : "Không lưu được bản nháp. Vui lòng thử lại.",
+                )}
+              </p>
+            )}
+
+            <DialogFooter className="gap-2 sm:justify-between">
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" onClick={back} disabled={busy} className="gap-1.5">
+                  <ArrowLeft className="size-4" /> Sửa yêu cầu
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => request && write(request)}
+                  disabled={busy || !request}
+                  className="gap-1.5"
+                >
+                  {variants.isPending ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
+                  Viết lại {CONTENT_VARIANTS} bản
+                </Button>
+              </div>
+              <Button
+                type="button"
+                onClick={save}
+                disabled={busy || picked === undefined || !body.trim()}
+                className="gap-1.5 bg-[#934a33] text-white hover:bg-[#7a341e]"
+              >
+                {create.isPending ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
+                {picked === undefined ? "Chọn một phương án" : "Lưu thành bản nháp"}
+              </Button>
+            </DialogFooter>
+          </div>
+        ) : (
+          <form onSubmit={submit} className="space-y-4" noValidate>
+            <div className="space-y-1.5">
+              <Label htmlFor="brief" className="text-xs font-semibold">
+                Bài viết nói về điều gì? <span className="text-red-500">*</span>
+              </Label>
+              <Textarea
+                id="brief"
+                rows={4}
+                maxLength={500}
+                value={brief}
+                disabled={busy}
+                onChange={(event) => setBrief(event.target.value)}
+                placeholder="Ví dụ: Cuối tuần này còn phòng hướng biển, mời khách gia đình"
+                aria-invalid={!!errors.brief}
+                className="text-sm"
+              />
+              <div className="flex justify-between text-[11px]">
+                <span className={errors.brief ? "text-red-600" : "text-slate-400"}>
+                  {errors.brief ?? "Một câu là đủ; tối thiểu 5 ký tự."}
+                </span>
+                <span className="text-slate-400">{brief.trim().length}/500</span>
+              </div>
             </div>
-            <p className="text-[11px] text-slate-400">Nền tảng quyết định độ dài và giọng điệu của bài.</p>
-          </div>
 
-          {generate.error && (
-            <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700" role="alert">
-              {getMarketingErrorMessage(generate.error, "Không tạo được bản nháp. Vui lòng thử lại.")}
-            </p>
-          )}
+            <div className="space-y-1.5">
+              <span className="text-xs font-semibold">Loại nội dung</span>
+              <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Loại nội dung">
+                {TYPES.map((type) => (
+                  <Chip key={type} active={contentType === type} onClick={() => setContentType(type)}>
+                    {contentTypeLabels[type]}
+                  </Chip>
+                ))}
+              </div>
+            </div>
 
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={generate.isPending}>
-              Huỷ
-            </Button>
-            <Button type="submit" disabled={generate.isPending} className="gap-1.5 bg-[#934a33] text-white hover:bg-[#7a341e]">
-              {generate.isPending ? (
-                <>
-                  <Loader2 className="size-4 animate-spin" /> AI đang viết…
-                </>
-              ) : (
-                <>
-                  <Sparkles className="size-4" /> Tạo bản nháp
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </form>
+            <div className="space-y-1.5">
+              <span className="text-xs font-semibold">Viết cho nền tảng</span>
+              <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Nền tảng">
+                {PLATFORMS.map((item) => (
+                  <Chip key={item ?? "any"} active={platform === item} onClick={() => setPlatform(item)}>
+                    {item ? platformLabels[item] : "Chung"}
+                  </Chip>
+                ))}
+              </div>
+              <p className="text-[11px] text-slate-400">Nền tảng quyết định độ dài và giọng điệu của bài.</p>
+            </div>
+
+            {variants.error && (
+              <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700" role="alert">
+                {getMarketingErrorMessage(variants.error, "Không viết được nội dung. Vui lòng thử lại.")}
+              </p>
+            )}
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
+                Huỷ
+              </Button>
+              <Button type="submit" disabled={busy} className="gap-1.5 bg-[#934a33] text-white hover:bg-[#7a341e]">
+                {variants.isPending ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin" /> AI đang viết {CONTENT_VARIANTS} phương án…
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="size-4" /> Viết {CONTENT_VARIANTS} phương án
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        )}
       </DialogContent>
     </Dialog>
   );

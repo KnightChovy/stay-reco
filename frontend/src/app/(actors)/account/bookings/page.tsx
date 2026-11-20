@@ -1,380 +1,309 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
-import Header from '@/components/layout/Header';
-import Footer from '@/components/layout/Footer';
-import AccountSubNav from '@/features/account/AccountSubNav';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { Award, CalendarDays, ChevronRight, Luggage, QrCode, Search, SearchX, X } from 'lucide-react';
+import type { BookingSummary, MyBookingsQuery } from '@stayreco/shared';
 import AppBreadcrumb from '@/components/common/breadcrumb/AppBreadcrumb';
 import Pagination from '@/components/common/pagination/Pagination';
-import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import {
-  AlertCircle,
-  Award,
-  Calendar,
-  CheckCircle2,
-  Clock,
-  Headset,
-  MapPin,
-  QrCode,
-  Search,
-  ShieldCheck,
-  Star,
-} from 'lucide-react';
-import type { BookingStatus, MyBookingsQuery, PaymentStatus } from '@stayreco/shared';
-import { getApiErrorMessage } from '@/lib/api-error';
-import { useAuthStore } from '@/lib/auth-store';
-import { useMyBookings } from '@/features/booking/api/booking-queries';
+import { EmptyState, ErrorState, LoadingState } from '@/components/common/StateViews';
+import { buttonVariants } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { useDebounce } from '@/hooks/use-debounce';
-import { formatDate, formatMoney } from '@/features/stays/lib/format';
-
-const FALLBACK_IMAGE =
-  'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=500&q=80';
+import { AccountPageHeader, accountContainer } from '@/features/account/AccountShell';
+import { SupportCard } from '@/features/account/SupportCard';
+import { TripCard } from '@/features/account/bookings/TripCard';
+import { useMyLoyalty } from '@/features/account/api/rewards-queries';
+import { TIER_LABELS, formatPoints } from '@/features/account/lib/rewards-labels';
+import { useMyBookings } from '@/features/booking/api/booking-queries';
+import { stayRelativeLabel } from '@/features/booking/lib/booking-status';
+import { formatDate } from '@/features/stays/lib/format';
 
 type BookingTab = NonNullable<MyBookingsQuery['tab']>;
 
-const STATUS_TABS: { id: BookingTab; label: string }[] = [
-  { id: 'upcoming', label: 'Sắp tới' },
-  { id: 'staying', label: 'Đang lưu trú' },
-  { id: 'completed', label: 'Đã hoàn tất' },
-  { id: 'cancelled', label: 'Đã hủy' },
+const STATUS_TABS: { id: BookingTab; label: string; empty: string; hint: string }[] = [
+  {
+    id: 'upcoming',
+    label: 'Sắp tới',
+    empty: 'Bạn chưa có chuyến đi sắp tới',
+    hint: 'Tìm chỗ nghỉ và đặt phòng, chuyến đi sẽ hiện ở đây cùng voucher check-in.',
+  },
+  {
+    id: 'staying',
+    label: 'Đang lưu trú',
+    empty: 'Không có chuyến nào đang lưu trú',
+    hint: 'Đơn chuyển sang đây khi lễ tân check-in cho bạn.',
+  },
+  {
+    id: 'completed',
+    label: 'Đã hoàn tất',
+    empty: 'Chưa có chuyến đi đã hoàn tất',
+    hint: 'Sau khi trả phòng, bạn có thể đánh giá kỳ nghỉ từ đây.',
+  },
+  {
+    id: 'cancelled',
+    label: 'Đã huỷ / hết hạn',
+    empty: 'Không có đơn đã huỷ hay hết hạn',
+    hint: 'Đơn bạn huỷ và đơn hết hạn giữ chỗ sẽ hiện ở đây.',
+  },
 ];
 
-const BOOKING_STATUS: Record<BookingStatus, string> = {
-  PENDING: 'Chờ thanh toán',
-  CONFIRMED: 'Đã xác nhận',
-  CHECKED_IN: 'Đang lưu trú',
-  COMPLETED: 'Đã hoàn tất',
-  CANCELLED: 'Đã hủy',
-  EXPIRED: 'Hết hạn giữ chỗ',
-  NO_SHOW: 'Không đến nhận phòng',
-};
+const PAGE_SIZE = 6;
 
-const PAYMENT_STATUS: Record<PaymentStatus, string> = {
-  UNPAID: 'Chưa thanh toán',
-  PAID: 'Đã thanh toán',
-  REFUND_PENDING: 'Chờ hoàn tiền',
-  PARTIALLY_REFUNDED: 'Đã hoàn một phần',
-  REFUNDED: 'Đã hoàn tiền',
-  FAILED: 'Thanh toán thất bại',
-};
+function isTab(value: string | null): value is BookingTab {
+  return STATUS_TABS.some((tab) => tab.id === value);
+}
 
-function tabForStatus(status: BookingStatus): BookingTab {
-  if (status === 'PENDING') return 'upcoming';
-  if (status === 'CONFIRMED') return 'upcoming';
-  if (status === 'CHECKED_IN') return 'staying';
-  if (status === 'COMPLETED' || status === 'NO_SHOW') return 'completed';
-  return 'cancelled';
+/** The points balance in the page header; hidden while it loads or when the programme is unavailable. */
+function LoyaltyBadge() {
+  const loyalty = useMyLoyalty().data;
+  if (!loyalty) return null;
+  return (
+    <Link
+      href="/account/rewards"
+      className="flex shrink-0 items-center gap-3 rounded-xl border border-border bg-card p-3 shadow-xs transition-colors hover:border-primary/30"
+    >
+      <span className="flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+        <Award className="size-5" aria-hidden />
+      </span>
+      <span className="text-sm">
+        <span className="block text-xs text-muted-foreground">Điểm {loyalty.programName}</span>
+        <span className="font-bold text-foreground">
+          {formatPoints(loyalty.pointsBalance)} · Hạng {TIER_LABELS[loyalty.tier]}
+        </span>
+      </span>
+      <ChevronRight className="size-4 text-muted-foreground" aria-hidden />
+    </Link>
+  );
+}
+
+/** The soonest confirmed trip, from the customer's upcoming bookings; nothing is invented when there is none. */
+function NextTripCard() {
+  const { data, isLoading } = useMyBookings({ tab: 'upcoming', page: 1, pageSize: 20 });
+  const next = useMemo(() => {
+    const confirmed = (data?.bookings ?? []).filter((booking) => booking.status === 'CONFIRMED');
+    return confirmed.sort((a, b) => a.checkIn.localeCompare(b.checkIn))[0] as BookingSummary | undefined;
+  }, [data]);
+
+  if (isLoading) return <LoadingState rows={1} />;
+
+  return (
+    <section className="rounded-xl border border-border bg-card p-5 shadow-xs">
+      <h2 className="flex items-center gap-2 text-sm font-bold text-foreground">
+        <CalendarDays className="size-4 text-primary" aria-hidden /> Chuyến đi gần nhất
+      </h2>
+      {next ? (
+        <div className="mt-3 space-y-3">
+          <div>
+            <Link href={`/account/bookings/${next.id}`} className="font-semibold text-foreground hover:text-primary hover:underline">
+              {next.hotel.name}
+            </Link>
+            <p className="text-sm text-muted-foreground">
+              {formatDate(next.checkIn)} → {formatDate(next.checkOut)} · {next.nights} đêm
+            </p>
+            {stayRelativeLabel(next) && (
+              <span className="mt-2 inline-block rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+                {stayRelativeLabel(next)}
+              </span>
+            )}
+          </div>
+          <Link
+            href={`/booking/confirmation?id=${next.id}`}
+            className={cn(buttonVariants({ variant: 'default' }), 'h-10 w-full gap-1.5')}
+          >
+            <QrCode className="size-4" aria-hidden /> Mở voucher check-in
+          </Link>
+        </div>
+      ) : (
+        <div className="mt-3 space-y-3">
+          <p className="text-sm text-muted-foreground">Bạn chưa có chuyến đi nào đã xác nhận.</p>
+          <Link href="/search" className={cn(buttonVariants({ variant: 'outline' }), 'h-10 w-full')}>
+            Tìm chỗ nghỉ
+          </Link>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function MyBookingsContent() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get('tab');
+  const activeTab: BookingTab = isTab(tabParam) ? tabParam : 'upcoming';
+  const urlQuery = searchParams.get('q') ?? '';
+
+  const [searchInput, setSearchInput] = useState(urlQuery);
+  const debouncedSearch = useDebounce(searchInput).trim();
+  // The page belongs to one tab and one search; changing either starts again at page 1.
+  const listKey = `${activeTab}|${urlQuery}`;
+  const [pageState, setPageState] = useState({ key: listKey, page: 1 });
+  const page = pageState.key === listKey ? pageState.page : 1;
+
+  const updateUrl = (next: { tab?: BookingTab; q?: string }) => {
+    const params = new URLSearchParams(searchParams.toString());
+    const tab = next.tab ?? activeTab;
+    const q = next.q ?? urlQuery;
+    if (tab === 'upcoming') params.delete('tab');
+    else params.set('tab', tab);
+    if (q) params.set('q', q);
+    else params.delete('q');
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  };
+
+  // The URL follows the typed search once typing pauses, so a reload or a shared link keeps it.
+  const settled = debouncedSearch === searchInput.trim();
+  useEffect(() => {
+    // Only once the box has settled: a stale debounced value must not undo "Xoá tìm kiếm".
+    if (!settled || debouncedSearch === urlQuery) return;
+    const params = new URLSearchParams(searchParams.toString());
+    if (debouncedSearch) params.set('q', debouncedSearch);
+    else params.delete('q');
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }, [settled, debouncedSearch, urlQuery, searchParams, pathname, router]);
+
+  const params = useMemo(
+    () => ({ tab: activeTab, search: urlQuery || undefined, page, pageSize: PAGE_SIZE }),
+    [activeTab, urlQuery, page],
+  );
+  const { data, isLoading, isFetching, error, refetch } = useMyBookings(params);
+  const bookings = data?.bookings ?? [];
+  const meta = data?.meta;
+  const tabInfo = STATUS_TABS.find((tab) => tab.id === activeTab) ?? STATUS_TABS[0];
+
+  const clearSearch = () => {
+    setSearchInput('');
+    updateUrl({ q: '' });
+  };
+
+  return (
+    <div className={accountContainer.wide}>
+      <AppBreadcrumb
+        items={[
+          { label: 'Tài khoản', href: '/account/profile' },
+          { label: 'Chuyến đi của tôi', active: true },
+        ]}
+      />
+
+      <div className="mt-4 mb-6">
+        <AccountPageHeader
+          title="Chuyến đi của tôi"
+          description="Theo dõi đặt phòng, mở voucher check-in và quản lý đơn ở một nơi."
+          actions={<LoyaltyBadge />}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12 lg:gap-8">
+        <div className="space-y-5 lg:col-span-8">
+          <div className="space-y-3 rounded-xl border border-border bg-card p-4 shadow-xs sm:p-5">
+            <div className="relative">
+              <Search className="absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+              <input
+                type="search"
+                value={searchInput}
+                onChange={(event) => setSearchInput(event.target.value)}
+                aria-label="Tìm đặt phòng theo mã đơn"
+                placeholder="Tìm theo mã đơn, ví dụ SR-261020-0842"
+                className="h-11 w-full rounded-lg border border-transparent bg-muted pr-11 pl-10 text-base text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary/40 focus:bg-card focus:ring-2 focus:ring-primary/20 sm:text-sm [&::-webkit-search-cancel-button]:hidden"
+              />
+              {searchInput && (
+                <button
+                  type="button"
+                  onClick={clearSearch}
+                  aria-label="Xoá tìm kiếm"
+                  className="absolute top-1/2 right-1 flex size-10 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:bg-card hover:text-foreground"
+                >
+                  <X className="size-4" />
+                </button>
+              )}
+            </div>
+
+            <div className="no-scrollbar flex items-center gap-2 overflow-x-auto" role="group" aria-label="Lọc theo trạng thái">
+              {STATUS_TABS.map((tab) => {
+                const active = activeTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => updateUrl({ tab: tab.id })}
+                    className={cn(
+                      'h-10 shrink-0 rounded-full px-4 text-sm font-semibold whitespace-nowrap transition-colors',
+                      active ? 'bg-primary text-primary-foreground shadow-xs' : 'bg-muted text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    {tab.label}
+                    {active && meta && !isLoading && <span className="ml-1.5 opacity-80">({meta.total})</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {error ? (
+            <ErrorState title="Không tải được chuyến đi" error={error} onRetry={() => void refetch()} />
+          ) : isLoading ? (
+            <LoadingState rows={3} label="Đang tải chuyến đi…" className="[&>*]:h-52" />
+          ) : bookings.length === 0 ? (
+            urlQuery ? (
+              <EmptyState
+                icon={SearchX}
+                title={`Không tìm thấy đơn khớp “${urlQuery}”`}
+                description={`Trong mục “${tabInfo.label}”. Kiểm tra lại mã đơn hoặc xem các mục khác.`}
+                action={
+                  <button type="button" onClick={clearSearch} className={cn(buttonVariants({ variant: 'outline' }), 'h-10')}>
+                    Xoá tìm kiếm
+                  </button>
+                }
+              />
+            ) : (
+              <EmptyState
+                icon={Luggage}
+                title={tabInfo.empty}
+                description={tabInfo.hint}
+                action={
+                  activeTab === 'upcoming' ? (
+                    <Link href="/search" className={cn(buttonVariants({ variant: 'default' }), 'h-10 px-5')}>
+                      Tìm chỗ nghỉ
+                    </Link>
+                  ) : undefined
+                }
+              />
+            )
+          ) : (
+            <div className={cn('space-y-4 transition-opacity', isFetching && 'opacity-70')} aria-busy={isFetching}>
+              {bookings.map((booking) => (
+                <TripCard key={booking.id} booking={booking} />
+              ))}
+            </div>
+          )}
+
+          {meta && meta.totalPages > 1 && (
+            <Pagination
+              currentPage={meta.page}
+              totalPages={meta.totalPages}
+              onPageChange={(next) => setPageState({ key: listKey, page: next })}
+            />
+          )}
+        </div>
+
+        <aside className="space-y-4 lg:sticky lg:top-40 lg:col-span-4">
+          <NextTripCard />
+          <SupportCard note="Cần đổi thông tin khách hoặc hỏi về hoàn tiền? Liên hệ StayReco." />
+        </aside>
+      </div>
+    </div>
+  );
 }
 
 export default function MyBookingsPage() {
-  const user = useAuthStore((state) => state.user);
-  const [activeTab, setActiveTab] = useState<BookingTab>('upcoming');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [page, setPage] = useState(1);
-  const debouncedSearch = useDebounce(searchQuery);
-
-  const params = useMemo(
-    () => ({
-      tab: activeTab,
-      search: debouncedSearch.trim() || undefined,
-      page,
-      pageSize: 6,
-    }),
-    [activeTab, debouncedSearch, page],
-  );
-
-  const { data, isLoading, error, refetch } = useMyBookings(params);
-  const bookings = data?.bookings ?? [];
-  const meta = data?.meta;
-
   return (
-    <div className="flex min-h-screen flex-col bg-[#f7f9ff] font-sans text-[#202B36] antialiased">
-      <Header />
-
-      <main className="w-full flex-1 bg-[#f7f9ff]">
-        <AccountSubNav activeTab="bookings" />
-
-        <div className="mx-auto w-full max-w-marketplace px-4 py-6 sm:px-6 sm:py-8">
-          <AppBreadcrumb
-            items={[
-              { label: 'Trang chủ', href: '/' },
-              { label: 'Tài khoản', href: '/account/profile' },
-              { label: 'Chuyến đi của tôi', active: true },
-            ]}
-          />
-
-          <section className="my-6 flex flex-col justify-between gap-4 border-b border-slate-200/60 pb-4 md:flex-row md:items-end">
-            <div>
-              <span className="text-xs font-bold uppercase tracking-wider text-[#934a33]">
-                Tài khoản • {user?.name ?? 'Khách hàng'}
-              </span>
-              <h1 className="mt-1 text-2xl font-bold tracking-tight text-[#013758] sm:text-3xl">
-                Chuyến đi của tôi
-              </h1>
-              <p className="mt-1 max-w-2xl text-xs text-slate-600 sm:text-sm">
-                Quản lý đặt phòng, theo dõi lịch trình lưu trú và mở voucher điện tử khi cần check-in.
-              </p>
-            </div>
-
-            <div className="flex shrink-0 items-center gap-3 rounded-xl border border-slate-200/80 bg-white p-3 shadow-xs">
-              <div className="flex size-10 items-center justify-center rounded-lg bg-[#EAF0F5] text-[#013758]">
-                <Award className="size-5" />
-              </div>
-              <div className="text-xs">
-                <span className="block text-slate-400">Điểm tích lũy</span>
-                <span className="font-bold text-[#202B36]">1.420 điểm (Hạng Bạc)</span>
-              </div>
-            </div>
-          </section>
-
-          <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-12">
-            <div className="space-y-6 lg:col-span-8">
-              <Card className="space-y-4 rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs sm:p-5">
-                <div className="relative w-full">
-                  <Search className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(event) => {
-                      setSearchQuery(event.target.value);
-                      setPage(1);
-                    }}
-                    placeholder="Tìm theo mã đơn (ví dụ: SR-261020-0842)…"
-                    className="w-full rounded-lg bg-[#f1f3f9] py-2.5 pl-10 pr-4 text-xs text-[#202B36] outline-none transition-all placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-[#013758] sm:text-sm"
-                  />
-                </div>
-
-                <div className="flex items-center gap-2 overflow-x-auto pb-1">
-                  {STATUS_TABS.map((tab) => (
-                    <button
-                      key={tab.id}
-                      onClick={() => {
-                        setActiveTab(tab.id);
-                        setPage(1);
-                      }}
-                      className={`shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-xs font-semibold transition-all ${
-                        activeTab === tab.id
-                          ? 'bg-[#234e70] text-white shadow-xs'
-                          : 'bg-white text-slate-600 hover:bg-slate-100 hover:text-[#202B36]'
-                      }`}
-                    >
-                      {tab.label}
-                    </button>
-                  ))}
-                </div>
-              </Card>
-
-              {error && (
-                <Alert variant="destructive" className="bg-red-50 p-4">
-                  <AlertTitle>Không tải được chuyến đi</AlertTitle>
-                  <AlertDescription className="mt-1 flex flex-col items-start gap-3">
-                    <span>{getApiErrorMessage(error, 'Vui lòng thử lại sau.')}</span>
-                    <Button size="sm" variant="outline" onClick={() => void refetch()}>
-                      Thử lại
-                    </Button>
-                  </AlertDescription>
-                </Alert>
-              )}
-
-              {isLoading && (
-                <div className="space-y-4">
-                  {[0, 1].map((item) => (
-                    <Skeleton key={item} className="h-56 w-full rounded-xl" />
-                  ))}
-                </div>
-              )}
-
-              {!isLoading && !error && bookings.length === 0 && (
-                <Card className="rounded-xl border border-slate-200/80 bg-white p-10 text-center shadow-xs">
-                  <Calendar className="mx-auto size-9 text-slate-400" />
-                  <p className="mt-3 text-sm font-semibold text-[#202B36]">Chưa có chuyến đi nào</p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    {searchQuery ? 'Không tìm thấy đơn khớp mã đã nhập.' : 'Đặt phòng đầu tiên của bạn ngay hôm nay.'}
-                  </p>
-                  <Link href="/search">
-                    <Button className="mt-4 bg-[#013758] text-white">Tìm chỗ nghỉ</Button>
-                  </Link>
-                </Card>
-              )}
-
-              <div className="space-y-4">
-                {bookings.map((booking) => {
-                  const tab = tabForStatus(booking.status);
-                  const isUpcoming = tab === 'upcoming';
-                  const isPending = booking.status === 'PENDING';
-                  return (
-                    <Card
-                      key={booking.id}
-                      className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs transition-all hover:shadow-md"
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/60 bg-[#EAF0F5]/60 px-5 py-3 text-xs">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-bold text-[#013758]">Mã đặt phòng: {booking.code}</span>
-                          <span className="text-slate-400">•</span>
-                          <span className="text-slate-500">
-                            Đặt ngày {formatDate(booking.createdAt.slice(0, 10))}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Badge className="gap-1 border-none bg-slate-100 text-[11px] font-semibold text-slate-700">
-                            {isPending ? <Clock className="size-3" /> : <CheckCircle2 className="size-3" />}
-                            {BOOKING_STATUS[booking.status]}
-                          </Badge>
-                          <Badge className="border-none bg-[#EAF0F5] text-[11px] font-semibold text-[#013758]">
-                            {PAYMENT_STATUS[booking.paymentStatus]}
-                          </Badge>
-                        </div>
-                      </div>
-
-                      <div className="flex flex-col gap-5 p-5 md:flex-row">
-                        <div className="relative h-40 w-full shrink-0 overflow-hidden rounded-lg bg-slate-100 md:h-auto md:w-52">
-                          <Image
-                            src={booking.hotel.coverImageUrl ?? FALLBACK_IMAGE}
-                            alt={booking.hotel.name}
-                            fill
-                            className="object-cover"
-                          />
-                          <span className="absolute bottom-2 left-2 rounded bg-white/90 px-2 py-0.5 text-[10px] font-semibold text-[#202B36] shadow-xs">
-                            {booking.rooms} phòng
-                          </span>
-                        </div>
-
-                        <div className="flex min-w-0 flex-1 flex-col justify-between gap-3">
-                          <div className="space-y-1.5">
-                            <span className="flex items-center gap-1 truncate text-xs text-slate-500">
-                              <MapPin className="size-3 text-slate-400" /> {booking.hotel.city}
-                            </span>
-                            <h3 className="text-lg font-bold tracking-tight text-[#202B36]">
-                              {booking.hotel.name}
-                            </h3>
-                            <p className="text-xs text-slate-600">
-                              <strong>{booking.roomType.name}</strong> • {booking.guests} khách
-                            </p>
-
-                            <div className="flex items-center justify-between rounded-lg bg-[#f1f3f9] p-2.5 text-xs text-[#202B36]">
-                              <div className="flex items-center gap-1.5">
-                                <Calendar className="size-4 text-[#013758]" />
-                                <span>
-                                  <strong>Nhận:</strong> {formatDate(booking.checkIn)}
-                                </span>
-                              </div>
-                              <span>→</span>
-                              <div>
-                                <span>
-                                  <strong>Trả:</strong> {formatDate(booking.checkOut)}
-                                </span>
-                                <span className="ml-1 text-slate-500">({booking.nights} đêm)</span>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="flex flex-col items-start justify-between gap-3 pt-2 sm:flex-row sm:items-end">
-                            <div>
-                              <span className="block text-xl font-bold text-[#013758]">
-                                {formatMoney(booking.totalAmount)}
-                              </span>
-                              <span className="text-[11px] text-slate-400">Đã bao gồm thuế &amp; phí dịch vụ</span>
-                            </div>
-
-                            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-                              {isPending ? (
-                                <Link href={`/booking/payment?id=${booking.id}`}>
-                                  <Button className="h-9 gap-1.5 bg-[#013758] px-4 text-xs font-bold text-white hover:bg-[#193B56]">
-                                    Thanh toán ngay
-                                  </Button>
-                                </Link>
-                              ) : (
-                                <>
-                                  {isUpcoming && (
-                                    <Link href={`/booking/confirmation?id=${booking.id}`}>
-                                      <Button className="h-9 gap-1.5 bg-[#013758] px-4 text-xs font-bold text-white hover:bg-[#193B56]">
-                                        <QrCode className="size-4" />
-                                        <span>Xem voucher</span>
-                                      </Button>
-                                    </Link>
-                                  )}
-                                  {booking.status === 'COMPLETED' && (
-                                    <Link href={`/account/bookings/${booking.id}/review`}>
-                                      <Button
-                                        variant="outline"
-                                        className="h-9 gap-1.5 border-[#934a33] px-3 text-xs font-semibold text-[#934a33] hover:bg-[#F5EBE5]"
-                                      >
-                                        <Star className="size-3.5 fill-[#934a33]" />
-                                        <span>Viết đánh giá</span>
-                                      </Button>
-                                    </Link>
-                                  )}
-                                </>
-                              )}
-                              <Link href={`/account/bookings/${booking.id}`}>
-                                <Button
-                                  variant="outline"
-                                  className="h-9 border-slate-300 px-3 text-xs font-semibold"
-                                >
-                                  Chi tiết
-                                </Button>
-                              </Link>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </Card>
-                  );
-                })}
-              </div>
-
-              {meta && meta.totalPages > 1 && (
-                <div className="pt-2">
-                  <Pagination currentPage={meta.page} totalPages={meta.totalPages} onPageChange={setPage} />
-                </div>
-              )}
-            </div>
-
-            <aside className="space-y-6 lg:sticky lg:top-24 lg:col-span-4">
-              <Card className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-xs">
-                <h3 className="flex items-center gap-2 text-sm font-bold text-[#202B36]">
-                  <ShieldCheck className="size-4 text-[#35624A]" /> StayReco Protect
-                </h3>
-                <p className="mt-2 text-xs leading-relaxed text-slate-500">
-                  Hỗ trợ 24/7, hoàn tiền theo chính sách hủy của khách sạn và voucher điện tử xác thực.
-                </p>
-                <div className="mt-4 space-y-2 border-t border-slate-100 pt-3 text-xs text-slate-600">
-                  <p className="flex items-center gap-2">
-                    <CheckCircle2 className="size-3.5 text-[#35624A]" /> Thanh toán an toàn qua SePay
-                  </p>
-                  <p className="flex items-center gap-2">
-                    <CheckCircle2 className="size-3.5 text-[#35624A]" /> Xác nhận tự động trong vài giây
-                  </p>
-                  <p className="flex items-center gap-2">
-                    <CheckCircle2 className="size-3.5 text-[#35624A]" /> Voucher QR chống làm giả
-                  </p>
-                </div>
-              </Card>
-
-              <Card className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-xs">
-                <h3 className="flex items-center gap-2 text-sm font-bold text-[#202B36]">
-                  <Headset className="size-4 text-[#934a33]" /> Cần hỗ trợ?
-                </h3>
-                <p className="mt-2 text-xs text-slate-500">
-                  Liên hệ StayReco nếu bạn cần thay đổi thông tin khách hoặc hủy đặt phòng.
-                </p>
-                <div className="mt-3 flex items-center gap-2 rounded-lg bg-[#F5EBE5] p-3 text-xs text-[#783520]">
-                  <AlertCircle className="size-4 shrink-0" />
-                  <span>Hotline 1900 6868 · 8:00 – 22:00</span>
-                </div>
-              </Card>
-            </aside>
-          </div>
-        </div>
-      </main>
-
-      <Footer />
-    </div>
+    <Suspense fallback={<div className={accountContainer.wide}><LoadingState rows={3} /></div>}>
+      <MyBookingsContent />
+    </Suspense>
   );
 }
