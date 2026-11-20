@@ -33,6 +33,7 @@ const toReport = (r: ReportRow): ContentReport => ({
   id: r.contentReportId,
   reviewId: r.reviewId,
   reviewImageId: r.reviewImageId,
+  imageUrl: r.imageUrl,
   hotelId: r.review.hotelId,
   hotelName: r.review.hotel.name,
   reason: r.reason,
@@ -89,22 +90,26 @@ export class ContentReportsService {
       // With the review locked, so the photo cannot be removed between this check and the report pointing at it.
       const report = await this.prisma.$transaction(async (tx) => {
         await lockReview(tx, reviewId);
-        if (input.reviewImageId) {
-          const image = await tx.reviewImage.count({
-            where: { reviewImageId: input.reviewImageId, reviewId },
+        const image = input.reviewImageId
+          ? await tx.reviewImage.findFirst({
+              where: { reviewImageId: input.reviewImageId, reviewId },
+              select: { imageUrl: true, storageKey: true },
+            })
+          : null;
+        if (input.reviewImageId && !image) {
+          throw new NotFoundException({
+            code: ErrorCode.REVIEW_IMAGE_NOT_FOUND,
+            message: 'Review photo not found',
           });
-          if (!image) {
-            throw new NotFoundException({
-              code: ErrorCode.REVIEW_IMAGE_NOT_FOUND,
-              message: 'Review photo not found',
-            });
-          }
         }
         return tx.contentReport.create({
           data: {
             reporterId,
             reviewId,
             reviewImageId: input.reviewImageId ?? null,
+            // A copy of the photo's place, so the report keeps its evidence if the author removes the photo.
+            imageUrl: image?.imageUrl ?? null,
+            imageStorageKey: image?.storageKey ?? null,
             reason: input.reason,
             note: input.note ?? null,
           },
@@ -191,13 +196,16 @@ export class ContentReportsService {
       });
       if (!count) throw alreadyDecided();
       if (input.hide) {
-        if (report.reviewImageId) {
-          // Hidden, not deleted: a decision has to keep the evidence it was made on, and deleting the row would
-          // cascade away this very report.
-          await tx.reviewImage.update({
-            where: { reviewImageId: report.reviewImageId },
-            data: { isVisible: false },
-          });
+        // A photo report keeps `imageStorageKey` even once the author removed the photo, which also clears
+        // `reviewImageId`: then there is nothing left to hide, and the whole review must not be hidden in its place.
+        if (report.imageStorageKey !== null) {
+          if (report.reviewImageId) {
+            // Hidden, not deleted: the photo stays as the evidence the decision was made on.
+            await tx.reviewImage.update({
+              where: { reviewImageId: report.reviewImageId },
+              data: { isVisible: false },
+            });
+          }
         } else {
           await tx.review.update({
             where: { reviewId: report.reviewId },

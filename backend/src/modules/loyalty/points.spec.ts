@@ -132,13 +132,18 @@ describe('earnRate', () => {
     expect(earnRate(d(0.001), null).toNumber()).toBe(0.001);
   });
 
-  it('uses the hotel rate between 1x and 3x the platform rate', () => {
-    expect(earnRate(d(0.001), d(0.002)).toNumber()).toBe(0.002);
+  it('stays at the platform rate while the limit is 1x', () => {
+    // A hotel giving more would have another hotel pay for its points (money-rules §9, M4).
+    expect(earnRate(d(0.001), d(0.002)).toNumber()).toBe(0.001);
   });
 
-  it('never goes below the platform rate nor above three times it', () => {
+  it('uses the hotel rate inside a wider limit', () => {
+    expect(earnRate(d(0.001), d(0.002), 3).toNumber()).toBe(0.002);
+  });
+
+  it('never goes below the platform rate nor above the limit', () => {
     // The platform rate changed after the hotel saved its own.
-    expect(earnRate(d(0.002), d(0.001)).toNumber()).toBe(0.002);
-    expect(earnRate(d(0.0005), d(0.003)).toNumber()).toBe(0.0015);
+    expect(earnRate(d(0.002), d(0.001), 3).toNumber()).toBe(0.002);
+    expect(earnRate(d(0.0005), d(0.003), 3).toNumber()).toBe(0.0015);
   });
 });

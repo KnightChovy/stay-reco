@@ -15,6 +15,7 @@ import {
 } from '@stayreco/shared';
 import type { RequestMeta } from '../../common/decorators/request-meta.decorator';
 import { ErrorCode } from '../../common/errors/error-code';
+import { lockHotel } from '../../common/db/locks';
 import { Paginated } from '../../common/http/api-response';
 import { toNumber } from '../../common/http/decimal';
 import { pageArgs } from '../../common/http/pagination';
@@ -249,14 +250,21 @@ export class LoyaltyService {
   /**
    * Credits the points of a completed stay, on what the booking was actually paid rather than on its list price: a
    * customer earns on money spent, so a discount lowers the points too (decision L3). The rate is the hotel's own
-   * when it has switched its rules on, as they stand at check-out (L9).
+   * when it has switched its rules on, as they stand at check-out (L9), never above `LOYALTY_LIMITS`.
    */
   async earn(
     tx: Prisma.TransactionClient,
-    customerId: string,
-    bookingId: string,
-    hotelId: string,
-    amountPaid: Prisma.Decimal,
+    {
+      customerId,
+      bookingId,
+      hotelId,
+      amountPaid,
+    }: {
+      customerId: string;
+      bookingId: string;
+      hotelId: string;
+      amountPaid: Prisma.Decimal;
+    },
   ) {
     const rules = await this.rulesAt(tx, hotelId);
     if (!rules) return 0;
@@ -423,7 +431,7 @@ export class LoyaltyService {
 
   /**
    * `PUT /hotels/:hotelId/loyalty-program`: saves the hotel's own rules as a whole (L8–L10). The earning rate must sit
-   * between the platform rate and three times it; the value of a point is copied from the platform and never set by
+   * between the platform rate and `LOYALTY_LIMITS` times it (1x for now); the value of a point is copied from the platform and never set by
    * the hotel. One row per hotel (unique `hotel_id`), so two saves at once update the same row.
    */
   async saveHotelProgram(
@@ -444,30 +452,40 @@ export class LoyaltyService {
         details: [
           {
             field: 'pointsPerCurrency',
-            message: `from ${min.toString()} to ${max.toString()}`,
+            // While the limit is 1x the only rate allowed is the platform's.
+            message: min.equals(max)
+              ? `must be ${min.toString()}, the platform rate`
+              : `from ${min.toString()} to ${max.toString()}`,
           },
         ],
       });
     }
 
-    const before = await this.prisma.loyaltyProgram.findUnique({
-      where: { hotelId },
-    });
     const rules = {
       isActive: input.isActive,
       pointsPerCurrency: rate,
       acceptsPoints: input.acceptsPoints,
       maxRedeemPercent: new Prisma.Decimal(input.maxRedeemPercent),
     };
-    const saved = await this.prisma.loyaltyProgram.upsert({
-      where: { hotelId },
-      create: {
-        hotelId,
-        name: `${platform.name} (hotel rules)`.slice(0, 200),
-        pointValue: platform.pointValue,
-        ...rules,
-      },
-      update: rules,
+    // The hotel is locked so two saves at once run one after the other, and the audit log's `before` is the rules
+    // the save really replaced.
+    const { before, saved } = await this.prisma.$transaction(async (tx) => {
+      await lockHotel(tx, hotelId);
+      const before = await tx.loyaltyProgram.findUnique({
+        where: { hotelId },
+      });
+      const saved = await tx.loyaltyProgram.upsert({
+        where: { hotelId },
+        create: {
+          hotelId,
+          name: `${platform.name} (hotel rules)`.slice(0, 200),
+          // Not read back: a point is always worth the platform's value. Kept only because the column is required.
+          pointValue: platform.pointValue,
+          ...rules,
+        },
+        update: rules,
+      });
+      return { before, saved };
     });
     await this.audit.log(AuditAction.LOYALTY_PROGRAM_UPDATED, actorId, meta, {
       hotelId,

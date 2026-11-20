@@ -21,6 +21,7 @@ import { pageArgs } from '../../common/http/pagination';
 import { Prisma, StaffPermission } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditAction, AuditService } from '../audit/audit.service';
+import { GRAPH_TIMEOUT_MS } from './publishers/graph-api';
 import { PublisherRegistry } from './publishers/publisher.registry';
 import { SocialAccountsService } from './social-accounts.service';
 
@@ -60,8 +61,11 @@ const toSchedule = (row: ScheduleRow): ContentSchedule => ({
   failureReason: row.failureReason,
 });
 
-/** How long a claimed post may stay PUBLISHING before the job gives up on it; far beyond the platform timeout. */
-const STUCK_AFTER_MS = 10 * 60_000;
+/**
+ * How long a claimed post may stay PUBLISHING before the job gives up on it. Derived from the Meta timeout so the two
+ * cannot drift apart: an Instagram post makes two calls, and forty timeouts (10 minutes today) leave a wide margin.
+ */
+const STUCK_AFTER_MS = 40 * GRAPH_TIMEOUT_MS;
 
 /** The reason given to a post whose run never finished: it may or may not be on the page. */
 const INTERRUPTED =

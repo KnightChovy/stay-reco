@@ -209,35 +209,28 @@ export class PromotionsService {
       });
     }
 
-    // One after another: a transaction runs on one connection, and queries sent to it at once are what `pg` warns
-    // about ("client is already executing a query") and will refuse from pg@9.
-    const vouchers = await this.prisma.$transaction(async (tx) => {
-      const created: Prisma.VoucherGetPayload<{
-        include: { promotion: true };
-      }>[] = [];
-      for (const { customerId } of customers) {
-        created.push(
-          await tx.voucher.create({
-            data: {
-              promotionId,
-              customerId,
-              code: voucherCode(),
-              discountType: promotion.discountType,
-              discountValue: promotion.discountValue,
-              maxDiscount:
-                input.maxDiscount === undefined
-                  ? null
-                  : new Prisma.Decimal(input.maxDiscount),
-              expiresAt: input.expiresAt
-                ? fromCalendarDate(input.expiresAt)
-                : null,
-            },
-            include: { promotion: true },
-          }),
-        );
-      }
-      return created;
-    });
+    // One INSERT for every code: all or none, and a single round trip however many customers (up to 100) there are,
+    // so it neither holds a transaction open nor sends queries to one connection at once. The campaign was just read.
+    const maxDiscount =
+      input.maxDiscount === undefined
+        ? null
+        : new Prisma.Decimal(input.maxDiscount);
+    const expiresAt = input.expiresAt
+      ? fromCalendarDate(input.expiresAt)
+      : null;
+    const vouchers = (
+      await this.prisma.voucher.createManyAndReturn({
+        data: customers.map(({ customerId }) => ({
+          promotionId,
+          customerId,
+          code: voucherCode(),
+          discountType: promotion.discountType,
+          discountValue: promotion.discountValue,
+          maxDiscount,
+          expiresAt,
+        })),
+      })
+    ).map((voucher) => ({ ...voucher, promotion }));
     await this.audit.log(AuditAction.VOUCHERS_ISSUED, user.accountId, meta, {
       promotionId,
       count: vouchers.length,
