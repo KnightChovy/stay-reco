@@ -19,7 +19,7 @@ const SORTS: Array<{ id: ReviewListQuery["sort"]; label: string }> = [
   { id: "rating-asc", label: "Điểm thấp nhất" },
 ];
 
-function ratingWord(average: number) {
+export function ratingWord(average: number) {
   if (average >= 4.5) return "Tuyệt hảo";
   if (average >= 4) return "Rất tốt";
   if (average >= 3) return "Tốt";
@@ -45,9 +45,9 @@ export function HotelReviews({ hotelId }: { hotelId: string }) {
   };
 
   return (
-    <section id="reviews" className="rounded-2xl border border-border bg-white p-6 shadow-2xs">
+    <section id="reviews" className="scroll-mt-36 rounded-2xl border border-border bg-card p-5 shadow-2xs sm:p-6">
       <h2 className="mb-4 flex items-center gap-2 text-lg font-bold text-foreground">
-        <MessageSquareText className="size-5 text-primary" /> Đánh giá từ khách đã ở
+        <MessageSquareText className="size-5 text-primary" aria-hidden /> Đánh giá từ khách đã ở
       </h2>
 
       {summaryQuery.isLoading ? (
@@ -56,14 +56,14 @@ export function HotelReviews({ hotelId }: { hotelId: string }) {
         </div>
       ) : summaryQuery.error || !summary ? (
         <div className="flex flex-col items-center gap-2 py-6 text-center">
-          <p className="text-xs text-muted-foreground">{getApiErrorMessage(summaryQuery.error)}</p>
-          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => void summaryQuery.refetch()}>
+          <p className="text-sm text-muted-foreground">{getApiErrorMessage(summaryQuery.error, "Không tải được đánh giá.")}</p>
+          <Button variant="outline" className="h-10 gap-1.5" onClick={() => void summaryQuery.refetch()}>
             <RotateCcw className="size-3.5" /> Thử lại
           </Button>
         </div>
       ) : summary.count === 0 ? (
-        <div className="rounded-xl bg-slate-50 p-6 text-center">
-          <Star className="mx-auto size-7 text-slate-300" />
+        <div className="rounded-xl bg-muted p-6 text-center">
+          <Star className="mx-auto size-7 text-muted-foreground/50" aria-hidden />
           <p className="mt-2 text-sm font-semibold text-foreground">Chưa có đánh giá nào</p>
           <p className="mt-1 text-xs text-muted-foreground">
             Chỉ khách đã hoàn tất kỳ nghỉ tại đây mới có thể đánh giá.
@@ -76,7 +76,7 @@ export function HotelReviews({ hotelId }: { hotelId: string }) {
               <span className="text-4xl font-bold text-primary">{summary.average.toFixed(1)}</span>
               <StarDisplay value={summary.average} className="mt-1" />
               <span className="mt-1 text-xs font-semibold text-foreground">{ratingWord(summary.average)}</span>
-              <span className="text-[11px] text-muted-foreground">{summary.count} đánh giá thực</span>
+              <span className="text-xs text-muted-foreground">{summary.count} đánh giá từ khách đã ở</span>
             </div>
 
             <div className="space-y-1.5 md:col-span-4">
@@ -92,13 +92,13 @@ export function HotelReviews({ hotelId }: { hotelId: string }) {
                       onClick={() => changeFilter({ minRating: active ? undefined : bucket.star })}
                       aria-pressed={active}
                       className={cn(
-                        "flex w-full items-center gap-2 rounded px-1 text-xs transition-colors hover:bg-slate-50",
+                        "flex min-h-8 w-full items-center gap-2 rounded px-1 text-xs transition-colors hover:bg-muted",
                         active && "bg-primary/5",
                       )}
-                      aria-label={`${bucket.star} sao trở lên: lọc đánh giá`}
+                      aria-label={`Lọc đánh giá từ ${bucket.star} sao trở lên (${bucket.count} đánh giá)`}
                     >
                       <span className="w-8 text-left font-semibold text-foreground">{bucket.star} ★</span>
-                      <span className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
+                      <span className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
                         <span className="block h-full rounded-full bg-amber-400" style={{ width: `${share}%` }} />
                       </span>
                       <span className="w-8 text-right text-muted-foreground">{bucket.count}</span>
@@ -114,7 +114,7 @@ export function HotelReviews({ hotelId }: { hotelId: string }) {
                     <span className="text-muted-foreground">{criterion.name}</span>
                     <span className="font-semibold text-foreground">{criterion.average.toFixed(1)}</span>
                   </div>
-                  <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
+                  <div className="h-1.5 overflow-hidden rounded-full bg-muted">
                     <div className="h-full rounded-full bg-primary" style={{ width: `${(criterion.average / 5) * 100}%` }} />
                   </div>
                 </div>
@@ -132,10 +132,10 @@ export function HotelReviews({ hotelId }: { hotelId: string }) {
                   aria-checked={sort === item.id}
                   onClick={() => changeFilter({ sort: item.id })}
                   className={cn(
-                    "rounded-full border px-3 py-1 text-xs font-semibold transition-colors",
+                    "min-h-10 rounded-full border px-3.5 text-sm font-semibold transition-colors",
                     sort === item.id
                       ? "border-primary bg-primary text-primary-foreground"
-                      : "border-border bg-white text-muted-foreground hover:bg-slate-50",
+                      : "border-border bg-card text-muted-foreground hover:bg-muted",
                   )}
                 >
                   {item.label}
@@ -146,7 +146,7 @@ export function HotelReviews({ hotelId }: { hotelId: string }) {
               <button
                 type="button"
                 onClick={() => changeFilter({ minRating: undefined })}
-                className="text-xs font-semibold text-primary hover:underline"
+                className="min-h-10 text-sm font-semibold text-primary hover:underline"
               >
                 Đang lọc từ {minRating} sao · Bỏ lọc
               </button>
@@ -158,9 +158,14 @@ export function HotelReviews({ hotelId }: { hotelId: string }) {
               <Loader2 className="size-4 animate-spin" /> Đang tải đánh giá…
             </div>
           ) : reviewsQuery.error ? (
-            <p className="py-6 text-center text-xs text-muted-foreground">{getApiErrorMessage(reviewsQuery.error)}</p>
+            <div className="flex flex-col items-center gap-2 py-6 text-center">
+              <p className="text-sm text-muted-foreground">{getApiErrorMessage(reviewsQuery.error)}</p>
+              <Button variant="outline" className="h-10 gap-1.5" onClick={() => void reviewsQuery.refetch()}>
+                <RotateCcw className="size-4" /> Thử lại
+              </Button>
+            </div>
           ) : reviews.length === 0 ? (
-            <p className="py-6 text-center text-xs text-muted-foreground">Không có đánh giá nào khớp bộ lọc.</p>
+            <p className="py-6 text-center text-sm text-muted-foreground">Không có đánh giá nào khớp bộ lọc.</p>
           ) : (
             <ul className={cn("space-y-4", reviewsQuery.isPlaceholderData && "opacity-60")}>
               {reviews.map((review) => (
@@ -172,7 +177,7 @@ export function HotelReviews({ hotelId }: { hotelId: string }) {
                       </span>
                       <div>
                         <p className="text-sm font-semibold text-foreground">{review.authorName}</p>
-                        <p className="text-[11px] text-muted-foreground">Lưu trú đến {formatDate(review.stayedAt)}</p>
+                        <p className="text-xs text-muted-foreground">Lưu trú đến {formatDate(review.stayedAt)}</p>
                       </div>
                     </div>
                     <span className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-2 py-1 text-xs font-bold text-primary-foreground">
@@ -180,7 +185,7 @@ export function HotelReviews({ hotelId }: { hotelId: string }) {
                     </span>
                   </div>
                   {review.title && <h3 className="text-sm font-bold text-foreground">{review.title}</h3>}
-                  <p className="whitespace-pre-line text-xs leading-relaxed text-muted-foreground">{review.content}</p>
+                  <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">{review.content}</p>
                 </li>
               ))}
             </ul>

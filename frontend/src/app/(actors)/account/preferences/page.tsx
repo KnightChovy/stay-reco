@@ -1,17 +1,15 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
+import Link from 'next/link';
 import {
-  AlertTriangle,
   Briefcase,
   Check,
-  CheckCircle2,
   Coffee,
   Compass,
   Loader2,
   MapPin,
   Palmtree,
-  RotateCcw,
   Save,
   Sparkles,
   Trees,
@@ -19,17 +17,16 @@ import {
   Utensils,
   Wallet,
 } from 'lucide-react';
-import Header from '@/components/layout/Header';
-import Footer from '@/components/layout/Footer';
 import AppBreadcrumb from '@/components/common/breadcrumb/AppBreadcrumb';
-import AccountSubNav from '@/features/account/AccountSubNav';
-import { Button } from '@/components/ui/button';
+import { ErrorState, LoadingState } from '@/components/common/StateViews';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
 import { getApiErrorMessage } from '@/lib/api-error';
+import { AccountPageHeader, accountContainer, notify } from '@/features/account/AccountShell';
 import { useMyPreferences, useUpdatePreferences } from '@/features/account/api/rewards-queries';
 import type { Preferences } from '@/services/rewards.service';
 
@@ -45,19 +42,19 @@ const KEYS = {
 } as const;
 
 const STYLES = [
-  { id: 'resort', title: 'Nghỉ dưỡng & Relax', icon: Palmtree, desc: 'Resort yên tĩnh, view biển/sông' },
-  { id: 'nature', title: 'Thiên nhiên & Eco', icon: Trees, desc: 'Lodge rừng thông, khu sinh thái' },
-  { id: 'foodie', title: 'Ẩm thực & Văn hóa', icon: Utensils, desc: 'Boutique gần phố cổ & quán ngon' },
-  { id: 'business', title: 'Công tác', icon: Briefcase, desc: 'Khách sạn trung tâm, bàn làm việc' },
-  { id: 'family', title: 'Gia đình & Trẻ nhỏ', icon: Users, desc: 'Phòng rộng, hồ bơi & khu vui chơi' },
-  { id: 'chill', title: 'Coffee & Check-in', icon: Coffee, desc: 'Homestay thiết kế gu, góc chụp đẹp' },
+  { id: 'resort', title: 'Nghỉ dưỡng & thư giãn', icon: Palmtree, desc: 'Khu nghỉ dưỡng yên tĩnh, view biển hoặc sông' },
+  { id: 'nature', title: 'Thiên nhiên & sinh thái', icon: Trees, desc: 'Nhà gỗ trong rừng thông, khu du lịch sinh thái' },
+  { id: 'foodie', title: 'Ẩm thực & văn hoá', icon: Utensils, desc: 'Khách sạn nhỏ gần phố cổ và quán ăn ngon' },
+  { id: 'business', title: 'Công tác', icon: Briefcase, desc: 'Khách sạn trung tâm, có bàn làm việc' },
+  { id: 'family', title: 'Gia đình & trẻ nhỏ', icon: Users, desc: 'Phòng rộng, hồ bơi và khu vui chơi' },
+  { id: 'chill', title: 'Cà phê & chụp ảnh', icon: Coffee, desc: 'Homestay (nhà dân) thiết kế đẹp, nhiều góc chụp' },
 ];
 
 const AMENITIES = [
   { id: 'pool', label: 'Hồ bơi' },
   { id: 'view', label: 'View sông / view biển' },
   { id: 'breakfast', label: 'Bữa sáng bao gồm' },
-  { id: 'spa', label: 'Spa & Massage' },
+  { id: 'spa', label: 'Spa & massage' },
   { id: 'quiet', label: 'Phòng yên tĩnh, tầng cao' },
   { id: 'tub', label: 'Bồn tắm' },
   { id: 'shuttle', label: 'Đưa đón sân bay' },
@@ -97,9 +94,20 @@ function toPayload(form: FormState): Record<string, string | null> {
 
 const toggle = (list: string[], id: string) => (list.includes(id) ? list.filter((item) => item !== id) : [...list, id]);
 
+function SectionTitle({ id, icon: Icon, title, hint }: { id: string; icon: typeof Compass; title: string; hint: string }) {
+  return (
+    <div>
+      <h2 id={id} className="flex items-center gap-2 text-lg font-bold text-foreground">
+        <Icon className="size-5 text-primary" aria-hidden /> {title}
+      </h2>
+      <p className="mt-0.5 text-sm text-muted-foreground">{hint}</p>
+    </div>
+  );
+}
+
 function PreferencesForm({ initial }: { initial: FormState }) {
   const [form, setForm] = useState<FormState>(initial);
-  const [saved, setSaved] = useState(false);
+  const [justSaved, setJustSaved] = useState(false);
   const update = useUpdatePreferences();
   // Lists compared as sets: picking the same items in another order is not a change.
   const sameList = (a: string[], b: string[]) => a.length === b.length && a.every((item) => b.includes(item));
@@ -109,24 +117,43 @@ function PreferencesForm({ initial }: { initial: FormState }) {
     form.city.trim() !== initial.city ||
     form.budget !== initial.budget;
 
+  const edit = (next: (prev: FormState) => FormState) => {
+    setJustSaved(false);
+    setForm(next);
+  };
+
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    setSaved(false);
     update.mutate(toPayload(form), {
       onSuccess: () => {
-        setSaved(true);
-        window.setTimeout(() => setSaved(false), 3500);
+        setJustSaved(true);
+        notify.success('Đã lưu sở thích du lịch', 'Gợi ý khách sạn sẽ theo các lựa chọn mới của bạn.');
       },
     });
   };
 
   return (
-    <form onSubmit={submit} className="space-y-6">
-      <Card className="space-y-6 rounded-2xl border border-border bg-white p-6 shadow-xs sm:p-8">
-        <h2 className="flex items-center gap-2 text-lg font-bold text-foreground">
-          <Compass className="size-5 text-primary" /> Phong cách du lịch yêu thích
-        </h2>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+    <form onSubmit={submit} className="space-y-6 pb-24">
+      {justSaved && !dirty && (
+        <div
+          role="status"
+          className="flex flex-col gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <span className="flex items-center gap-2 font-semibold">
+            <Check className="size-4" aria-hidden /> Đã lưu. Gợi ý cho bạn đã được cập nhật theo sở thích mới.
+          </span>
+          <Link
+            href="/recommendations"
+            className={cn(buttonVariants({ variant: 'outline' }), 'h-10 shrink-0 gap-1.5 px-4')}
+          >
+            <Sparkles className="size-4" aria-hidden /> Xem gợi ý cho bạn
+          </Link>
+        </div>
+      )}
+
+      <Card className="space-y-5 rounded-2xl border border-border bg-card p-6 shadow-xs sm:p-8">
+        <SectionTitle id="styles-title" icon={Compass} title="Phong cách du lịch yêu thích" hint="Chọn nhiều." />
+        <div role="group" aria-labelledby="styles-title" className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           {STYLES.map((item) => {
             const Icon = item.icon;
             const active = form.styles.includes(item.id);
@@ -135,18 +162,18 @@ function PreferencesForm({ initial }: { initial: FormState }) {
                 key={item.id}
                 type="button"
                 aria-pressed={active}
-                onClick={() => setForm((prev) => ({ ...prev, styles: toggle(prev.styles, item.id) }))}
+                onClick={() => edit((prev) => ({ ...prev, styles: toggle(prev.styles, item.id) }))}
                 className={cn(
-                  'relative space-y-2 rounded-xl border-2 p-4 text-left transition-all',
-                  active ? 'border-primary bg-primary/5 shadow-xs' : 'border-border bg-slate-50 hover:bg-white',
+                  'relative min-h-10 space-y-2 rounded-xl border-2 p-4 text-left transition-all',
+                  active ? 'border-primary bg-primary/5 shadow-xs' : 'border-border bg-muted/40 hover:bg-card',
                 )}
               >
                 {active && (
-                  <span className="absolute right-3 top-3 flex size-5 items-center justify-center rounded-full bg-primary text-white">
-                    <Check className="size-3" />
+                  <span className="absolute top-3 right-3 flex size-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                    <Check className="size-3" aria-hidden />
                   </span>
                 )}
-                <Icon className={cn('size-6', active ? 'text-primary' : 'text-slate-500')} />
+                <Icon className={cn('size-6', active ? 'text-primary' : 'text-muted-foreground')} aria-hidden />
                 <span className="block text-sm font-bold text-foreground">{item.title}</span>
                 <span className="block text-xs leading-relaxed text-muted-foreground">{item.desc}</span>
               </button>
@@ -155,9 +182,9 @@ function PreferencesForm({ initial }: { initial: FormState }) {
         </div>
       </Card>
 
-      <Card className="space-y-6 rounded-2xl border border-border bg-white p-6 shadow-xs sm:p-8">
-        <h2 className="text-lg font-bold text-foreground">Tiện nghi ưu tiên</h2>
-        <div className="flex flex-wrap gap-2.5">
+      <Card className="space-y-5 rounded-2xl border border-border bg-card p-6 shadow-xs sm:p-8">
+        <SectionTitle id="amenities-title" icon={Sparkles} title="Tiện nghi ưu tiên" hint="Chọn nhiều." />
+        <div role="group" aria-labelledby="amenities-title" className="flex flex-wrap gap-2.5">
           {AMENITIES.map((item) => {
             const active = form.amenities.includes(item.id);
             return (
@@ -165,52 +192,56 @@ function PreferencesForm({ initial }: { initial: FormState }) {
                 key={item.id}
                 type="button"
                 aria-pressed={active}
-                onClick={() => setForm((prev) => ({ ...prev, amenities: toggle(prev.amenities, item.id) }))}
+                onClick={() => edit((prev) => ({ ...prev, amenities: toggle(prev.amenities, item.id) }))}
                 className={cn(
-                  'flex items-center gap-1.5 rounded-full border px-4 py-2 text-xs font-semibold transition-all',
+                  'flex min-h-10 items-center gap-1.5 rounded-full border px-4 text-sm font-semibold transition-all',
                   active
                     ? 'border-primary bg-primary text-primary-foreground shadow-2xs'
-                    : 'border-border bg-slate-50 text-muted-foreground hover:bg-slate-100',
+                    : 'border-border bg-muted/40 text-muted-foreground hover:bg-muted',
                 )}
               >
-                {active && <Check className="size-3.5" />} {item.label}
+                {active && <Check className="size-3.5" aria-hidden />} {item.label}
               </button>
             );
           })}
         </div>
       </Card>
 
-      <Card className="grid grid-cols-1 gap-6 rounded-2xl border border-border bg-white p-6 shadow-xs sm:grid-cols-2 sm:p-8">
+      <Card className="grid grid-cols-1 gap-6 rounded-2xl border border-border bg-card p-6 shadow-xs sm:grid-cols-2 sm:p-8">
         <div className="space-y-2">
           <Label htmlFor="favouriteCity" className="flex items-center gap-1.5 text-sm font-bold text-foreground">
-            <MapPin className="size-4 text-primary" /> Điểm đến hay đi
+            <MapPin className="size-4 text-primary" aria-hidden /> Điểm đến hay đi
           </Label>
           <Input
             id="favouriteCity"
             value={form.city}
             maxLength={100}
-            onChange={(event) => setForm((prev) => ({ ...prev, city: event.target.value }))}
+            onChange={(event) => edit((prev) => ({ ...prev, city: event.target.value }))}
             placeholder="Ví dụ: Đà Nẵng"
-            className="h-11"
+            aria-describedby="favouriteCity-hint"
+            className="h-11 text-base sm:text-sm"
           />
+          <p id="favouriteCity-hint" className="text-xs text-muted-foreground">
+            Ghi tên tỉnh hoặc thành phố, ví dụ &ldquo;Đà Nẵng&rdquo;, &ldquo;Hà Nội&rdquo;.
+          </p>
         </div>
         <div className="space-y-2">
-          <span className="flex items-center gap-1.5 text-sm font-bold text-foreground">
-            <Wallet className="size-4 text-primary" /> Ngân sách mỗi đêm
+          <span id="budget-title" className="flex items-center gap-1.5 text-sm font-bold text-foreground">
+            <Wallet className="size-4 text-primary" aria-hidden /> Ngân sách mỗi đêm
           </span>
-          <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Ngân sách mỗi đêm">
+          <div className="flex flex-wrap gap-2" role="radiogroup" aria-labelledby="budget-title">
             {BUDGETS.map((item) => (
               <button
                 key={item.id || 'none'}
                 type="button"
                 role="radio"
                 aria-checked={form.budget === item.id}
-                onClick={() => setForm((prev) => ({ ...prev, budget: item.id }))}
+                onClick={() => edit((prev) => ({ ...prev, budget: item.id }))}
                 className={cn(
-                  'rounded-full border px-3 py-1.5 text-xs font-semibold transition-all',
+                  'min-h-10 rounded-full border px-3.5 text-sm font-semibold transition-all',
                   form.budget === item.id
                     ? 'border-primary bg-primary text-primary-foreground'
-                    : 'border-border bg-slate-50 text-muted-foreground hover:bg-slate-100',
+                    : 'border-border bg-muted/40 text-muted-foreground hover:bg-muted',
                 )}
               >
                 {item.label}
@@ -222,34 +253,33 @@ function PreferencesForm({ initial }: { initial: FormState }) {
 
       {update.error && (
         <Alert variant="destructive" className="bg-red-50">
-          <AlertDescription className="text-xs">{getApiErrorMessage(update.error)}</AlertDescription>
+          <AlertDescription className="text-sm">{getApiErrorMessage(update.error)}</AlertDescription>
         </Alert>
       )}
 
-      <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
-        {saved && (
-          <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700" role="status">
-            <CheckCircle2 className="size-4" /> Đã lưu sở thích
-          </span>
-        )}
-        <Button
-          type="button"
-          variant="outline"
-          disabled={!dirty || update.isPending}
-          onClick={() => setForm(initial)}
-          className="h-11 px-5 text-xs font-semibold sm:text-sm"
-        >
-          Huỷ thay đổi
-        </Button>
-        <Button
-          type="submit"
-          disabled={!dirty || update.isPending}
-          className="h-11 gap-2 bg-primary px-8 text-xs font-bold text-primary-foreground shadow-sm hover:bg-[#193b56] sm:text-sm"
-        >
-          {update.isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
-          Lưu sở thích
-        </Button>
-      </div>
+      {/* The save bar follows the page only while something changed, so it is always one tap away. */}
+      {dirty && (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 shadow-[0_-4px_16px_rgb(40_48_54/8%)] backdrop-blur">
+          <div className="mx-auto flex max-w-4xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
+            <p className="hidden text-sm text-muted-foreground sm:block">Bạn có thay đổi chưa lưu.</p>
+            <div className="flex w-full shrink-0 items-center gap-2 sm:w-auto">
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={update.isPending}
+                onClick={() => setForm(initial)}
+                className="h-10 px-4 whitespace-nowrap"
+              >
+                Huỷ thay đổi
+              </Button>
+              <Button type="submit" disabled={update.isPending} className="h-10 flex-1 gap-2 px-6 whitespace-nowrap sm:flex-none">
+                {update.isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+                Lưu sở thích
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </form>
   );
 }
@@ -258,51 +288,28 @@ export default function PreferencesPage() {
   const query = useMyPreferences();
 
   return (
-    <div className="flex min-h-screen flex-col bg-background font-sans text-foreground antialiased">
-      <Header />
+    <div className={cn(accountContainer.narrow, 'space-y-6')}>
+      <AppBreadcrumb
+        items={[
+          { label: 'Tài khoản', href: '/account/profile' },
+          { label: 'Sở thích du lịch', active: true },
+        ]}
+      />
 
-      <main className="w-full flex-1 bg-[#f7f9ff]">
-        <AccountSubNav activeTab="preferences" />
+      <AccountPageHeader
+        eyebrow="Cá nhân hoá gợi ý"
+        title="Sở thích du lịch"
+        description="StayReco dùng các lựa chọn này để gợi ý khách sạn và phòng nghỉ hợp gu của bạn. Bạn có thể đổi bất cứ lúc nào."
+      />
 
-        <div className="mx-auto max-w-4xl space-y-8 px-4 py-8 sm:px-6 lg:px-8">
-          <AppBreadcrumb
-            items={[
-              { label: 'Trang chủ', href: '/' },
-              { label: 'Tài khoản', href: '/account/profile' },
-              { label: 'Sở thích du lịch', active: true },
-            ]}
-          />
-
-          <div className="space-y-1">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-              <Sparkles className="size-3.5" /> Cá nhân hóa gợi ý
-            </span>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">Sở thích du lịch</h1>
-            <p className="max-w-2xl text-xs text-muted-foreground sm:text-sm">
-              StayReco dùng các lựa chọn này để gợi ý khách sạn và phòng nghỉ hợp gu của bạn.
-            </p>
-          </div>
-
-          {query.isLoading ? (
-            <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
-              <Loader2 className="size-5 animate-spin" /> Đang tải sở thích…
-            </div>
-          ) : query.error || !query.data ? (
-            <Card className="flex flex-col items-center gap-3 rounded-2xl border border-border bg-white p-8 text-center">
-              <AlertTriangle className="size-6 text-amber-500" />
-              <p className="text-sm text-muted-foreground">{getApiErrorMessage(query.error)}</p>
-              <Button variant="outline" size="sm" onClick={() => void query.refetch()} className="gap-1.5">
-                <RotateCcw className="size-3.5" /> Thử lại
-              </Button>
-            </Card>
-          ) : (
-            // A save writes the stored values back to the cache, so `initial` then equals the form and it is clean.
-            <PreferencesForm initial={toForm(query.data)} />
-          )}
-        </div>
-      </main>
-
-      <Footer />
+      {query.isLoading ? (
+        <LoadingState rows={3} label="Đang tải sở thích…" />
+      ) : query.error || !query.data ? (
+        <ErrorState title="Không tải được sở thích" error={query.error} onRetry={() => void query.refetch()} />
+      ) : (
+        // A save writes the stored values back to the cache, so `initial` then equals the form and it is clean.
+        <PreferencesForm initial={toForm(query.data)} />
+      )}
     </div>
   );
 }

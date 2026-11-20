@@ -28,6 +28,7 @@ import { useStaffHotel } from "@/features/staff/components/StaffHotelProvider";
 import {
   useContent,
   useDeleteContent,
+  useGenerateContentImage,
   useRemoveContentImage,
   useSubmitContent,
   useUpdateContent,
@@ -37,6 +38,7 @@ import { contentTypeLabels, EDITABLE_STATUSES } from "@/features/staff/lib/marke
 import { getMarketingErrorMessage } from "@/features/staff/lib/marketing-errors";
 import { ContentStatusPill, MarketingErrorPanel, MarketingHeader } from "@/features/staff/marketing/MarketingParts";
 import { SchedulePanel } from "@/features/staff/marketing/SchedulePanel";
+import { AiImagePanel } from "@/features/staff/marketing/AiImagePanel";
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
@@ -148,9 +150,15 @@ function ContentWorkspace({
   const fileRef = useRef<HTMLInputElement>(null);
   const submit = useSubmitContent();
   const remove = useDeleteContent();
+  const drawImage = useGenerateContentImage();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const editable = EDITABLE_STATUSES.includes(content.status);
-  const busy = editor.update.isPending || submit.isPending || editor.upload.isPending || editor.removeImage.isPending;
+  const busy =
+    editor.update.isPending ||
+    submit.isPending ||
+    editor.upload.isPending ||
+    editor.removeImage.isPending ||
+    drawImage.isPending;
 
   const sendForApproval = () => {
     // Unsaved words go first: what is submitted is what the owner reads.
@@ -293,6 +301,7 @@ function ContentWorkspace({
                   </Button>
                 )}
                 <span className="text-[11px] text-slate-400">JPG, PNG, WebP · tối đa 10 MB</span>
+                <AiImagePanel content={content} draw={drawImage} disabled={busy} />
               </div>
             )}
             {editor.imageError && <p className="text-xs text-red-600">{editor.imageError}</p>}

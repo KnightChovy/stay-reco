@@ -22,7 +22,7 @@ export default function RoomDetailPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-screen flex-col bg-[#fbfaf8]">
+        <div className="flex min-h-screen flex-col bg-background">
           <Header />
           <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
             Đang tải hạng phòng…

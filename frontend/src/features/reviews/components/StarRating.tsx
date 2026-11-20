@@ -19,7 +19,7 @@ export function StarDisplay({ value, className, size = "size-4" }: { value: numb
         const fill = Math.max(0, Math.min(1, value - (star - 1)));
         return (
           <span key={star} className="relative inline-flex">
-            <Star className={cn(size, "text-slate-300")} />
+            <Star className={cn(size, "text-muted-foreground/40")} />
             {fill > 0 && (
               <span className="absolute inset-0 overflow-hidden" style={{ width: `${fill * 100}%` }}>
                 <Star className={cn(size, "fill-amber-400 text-amber-400")} />
@@ -58,9 +58,9 @@ export function StarInput({
               aria-label={`${star} sao: ${SCORE_LABELS[star]}`}
               disabled={disabled}
               onClick={() => onChange(star)}
-              className="rounded p-0.5 transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-60"
+              className="flex size-10 items-center justify-center rounded-md transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <Star className={cn("size-6", active ? "fill-amber-400 text-amber-400" : "text-slate-300")} />
+              <Star className={cn("size-6", active ? "fill-amber-400 text-amber-400" : "text-muted-foreground/40")} />
             </button>
           );
         })}

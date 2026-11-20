@@ -2,7 +2,9 @@
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
+  CreateContentInput,
   GenerateContentInput,
+  GenerateImageInput,
   MarketingContent,
   ScheduleContentInput,
   UpdateContentInput,
@@ -117,6 +119,35 @@ export function useGenerateContent() {
   return useMutation({
     mutationFn: ({ hotelId, input }: { hotelId: string; input: GenerateContentInput }) =>
       marketingService.generateContent(hotelId, input),
+    onSuccess: changed,
+  });
+}
+
+/** Three unsaved versions; only the budget changes, so only it is read again. */
+export function useGenerateVariants() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ hotelId, input }: { hotelId: string; input: GenerateContentInput }) =>
+      marketingService.generateContentVariants(hotelId, input),
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: [...marketingKeys.all, "budget"] }),
+  });
+}
+
+/** Saves the picked version as a draft. */
+export function useCreateContent() {
+  const changed = useContentChanged();
+  return useMutation({
+    mutationFn: ({ hotelId, input }: { hotelId: string; input: CreateContentInput }) =>
+      marketingService.createContent(hotelId, input),
+    onSuccess: changed,
+  });
+}
+
+export function useGenerateContentImage() {
+  const changed = useContentChanged();
+  return useMutation({
+    mutationFn: ({ contentId, input }: { contentId: string; input: GenerateImageInput }) =>
+      marketingService.generateContentImage(contentId, input),
     onSuccess: changed,
   });
 }

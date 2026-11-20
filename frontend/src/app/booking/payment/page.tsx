@@ -4,136 +4,93 @@ import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
-import {
-  AlertTriangle,
-  ArrowLeft,
-  Building2,
-  CheckCircle2,
-  Clock,
-  Copy,
-  FlaskConical,
-  CreditCard,
-  Loader2,
-  Lock,
-  QrCode,
-  RefreshCw,
-  ShieldCheck,
-  Timer,
-  User,
-  Wallet,
-} from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { getApiErrorMessage } from '@/lib/api-error';
+import { CalendarClock, FlaskConical, Loader2, MapPin, ShieldCheck, TimerOff, Users } from 'lucide-react';
+import type { Booking } from '@stayreco/shared';
+import { Button, buttonVariants } from '@/components/ui/button';
+import { EmptyState, ErrorState, LoadingState } from '@/components/common/StateViews';
+import { cn } from '@/lib/utils';
+import { getApiErrorCode, getApiErrorMessage } from '@/lib/api-error';
 import { useBooking, useSimulatePayment } from '@/features/booking/api/booking-queries';
-import { useMyWallet, usePayWithWallet } from '@/features/account/api/rewards-queries';
+import { BookingInvoice } from '@/features/booking/components/BookingInvoice';
+import { FALLBACK_HOTEL_IMAGE, freeCancelState } from '@/features/booking/lib/booking-status';
+import { SupportCard } from '@/features/account/SupportCard';
+import { HoldCountdown } from '@/features/booking/payment/HoldCountdown';
+import { TransferPanel } from '@/features/booking/payment/TransferPanel';
+import { WalletPayPanel } from '@/features/booking/payment/WalletPayPanel';
 import { formatDate, formatDateTime, formatMoney } from '@/features/stays/lib/format';
 
-const FALLBACK_IMAGE =
-  'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=800&q=80';
+const PAID_STATUSES: Booking['status'][] = ['CONFIRMED', 'CHECKED_IN', 'COMPLETED'];
 
-const STATUS_LABELS: Record<string, string> = {
-  PENDING: 'Chờ thanh toán',
-  CONFIRMED: 'Đã xác nhận',
-  CHECKED_IN: 'Đang lưu trú',
-  COMPLETED: 'Đã hoàn tất',
-  CANCELLED: 'Đã hủy',
-  EXPIRED: 'Hết hạn giữ chỗ',
-  NO_SHOW: 'Không đến nhận phòng',
-};
-
-function formatCountdown(milliseconds: number) {
-  const total = Math.max(0, Math.floor(milliseconds / 1000));
-  const minutes = Math.floor(total / 60);
-  const seconds = total % 60;
-  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+/** Back to the same room and dates; the hotel page when the booking held several room types. */
+function rebookHref(booking: Booking) {
+  const stay = `checkIn=${booking.checkIn}&checkOut=${booking.checkOut}&guests=${booking.guests}&rooms=${booking.rooms}`;
+  return booking.items.length === 1
+    ? `/hotels/${booking.hotel.id}/rooms/${booking.items[0].roomType.id}?${stay}`
+    : `/hotels/${booking.hotel.id}?${stay}`;
 }
 
-/**
- * Pay the whole booking from the StayReco wallet (decision W1: all or nothing). Shown only when there is a balance;
- * a balance below the total explains the shortfall and leaves the transfer as the way to pay.
- */
-function WalletPayCard({ bookingId, total }: { bookingId: string; total: number }) {
-  const walletQuery = useMyWallet();
-  const payWithWallet = usePayWithWallet();
-  const [confirming, setConfirming] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const balance = walletQuery.data?.balanceAvailable ?? 0;
+const primaryLink = cn(buttonVariants(), 'h-10 px-5 whitespace-nowrap');
 
-  if (walletQuery.isLoading || walletQuery.error || balance <= 0) return null;
-  const enough = balance >= total;
+function Centered({ children }: { children: React.ReactNode }) {
+  return <div className="mx-auto w-full max-w-lg px-4 py-12 sm:py-16">{children}</div>;
+}
 
-  const pay = () => {
-    setError(null);
-    payWithWallet.mutate(bookingId, {
-      // The booking query then reads CONFIRMED and the page moves to the confirmation.
-      onError: (mutationError) => {
-        setConfirming(false);
-        setError(getApiErrorMessage(mutationError, 'Không thanh toán được bằng ví. Vui lòng chuyển khoản.'));
-        void walletQuery.refetch();
-      },
-    });
-  };
+/** The ticking clock lives here, in state set by an effect, so rendering stays pure. */
+function useNow(active: boolean) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!active) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 1_000);
+    return () => window.clearInterval(timer);
+  }, [active]);
+  return now;
+}
 
+function StaySummary({ booking, now }: { booking: Booking; now: number }) {
+  const cancel = freeCancelState(booking.cancellation, now);
   return (
-    <Card className="space-y-4 rounded-xl border border-slate-200/80 bg-white p-5 shadow-xs sm:p-7">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="flex items-center gap-2 text-lg font-bold text-[#202B36]">
-            <Wallet className="size-5 text-[#934a33]" /> Thanh toán bằng ví StayReco
-          </h2>
-          <p className="mt-1 text-xs text-slate-500">
-            Trừ toàn bộ số tiền từ ví, đơn được xác nhận ngay, không cần chuyển khoản.
-          </p>
+    <section aria-labelledby="summary-title" className="overflow-hidden rounded-xl border border-border bg-card shadow-xs">
+      <div className="flex items-start gap-3 border-b border-border p-4">
+        <div className="relative size-16 shrink-0 overflow-hidden rounded-lg bg-muted">
+          <Image src={booking.hotel.coverImageUrl ?? FALLBACK_HOTEL_IMAGE} alt="" fill sizes="64px" className="object-cover" />
         </div>
-        <div className="rounded-lg bg-[#f1f3f9] px-3 py-2 text-right">
-          <span className="block text-[10px] font-semibold uppercase text-slate-400">Số dư ví</span>
-          <span className="text-base font-bold text-[#013758]">{formatMoney(balance)}</span>
+        <div className="min-w-0">
+          <h2 id="summary-title" className="truncate text-base font-bold text-foreground">
+            {booking.hotel.name}
+          </h2>
+          <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+            <MapPin className="size-3.5" aria-hidden /> {booking.hotel.city}
+          </p>
+          <p className="mt-1 text-sm font-semibold text-primary">
+            {booking.items.map((item) => `${item.roomType.name} × ${item.rooms}`).join(', ')}
+          </p>
         </div>
       </div>
 
-      {!enough ? (
-        <p className="rounded-lg bg-[#FBF2E3] p-3 text-xs text-[#865D23]">
-          Số dư còn thiếu <strong>{formatMoney(total - balance)}</strong> để trả toàn bộ đơn. Ví chỉ thanh toán được
-          trọn đơn, vui lòng chuyển khoản bên dưới.
-        </p>
-      ) : confirming ? (
-        <div className="space-y-3 rounded-lg border border-[#ebd8cc] bg-[#F5EBE5] p-4">
-          <p className="text-xs text-[#783520] sm:text-sm">
-            Xác nhận trừ <strong>{formatMoney(total)}</strong> từ ví? Số dư còn lại sẽ là{' '}
-            <strong>{formatMoney(balance - total)}</strong>.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              onClick={pay}
-              disabled={payWithWallet.isPending}
-              className="h-10 gap-1.5 bg-[#934a33] px-5 text-xs font-bold text-white hover:bg-[#7a341e]"
-            >
-              {payWithWallet.isPending ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
-              Xác nhận thanh toán
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => setConfirming(false)}
-              disabled={payWithWallet.isPending}
-              className="h-10 px-5 text-xs font-semibold"
-            >
-              Huỷ
-            </Button>
+      <div className="space-y-3 p-4 text-sm">
+        <div className="grid grid-cols-2 gap-2 rounded-lg bg-muted/60 p-3">
+          <div>
+            <span className="block text-xs text-muted-foreground">Nhận phòng</span>
+            <span className="font-bold text-foreground">{formatDate(booking.checkIn)}</span>
           </div>
+          <div>
+            <span className="block text-xs text-muted-foreground">Trả phòng</span>
+            <span className="font-bold text-foreground">{formatDate(booking.checkOut)}</span>
+          </div>
+          <p className="col-span-2 flex items-center gap-1.5 border-t border-border pt-2 text-muted-foreground">
+            <Users className="size-4" aria-hidden /> {booking.nights} đêm · {booking.rooms} phòng · {booking.guests} khách ·{' '}
+            {booking.guestName}
+          </p>
         </div>
-      ) : (
-        <Button
-          onClick={() => setConfirming(true)}
-          className="h-11 w-full gap-2 bg-[#934a33] text-sm font-bold text-white hover:bg-[#7a341e] sm:w-auto sm:px-6"
-        >
-          <Wallet className="size-4" /> Thanh toán {formatMoney(total)} bằng ví
-        </Button>
-      )}
 
-      {error && <p className="text-xs font-semibold text-red-600">{error}</p>}
-    </Card>
+        <BookingInvoice booking={booking} />
+
+        <p className={cn('flex items-start gap-2 rounded-lg p-3', cancel.open ? 'bg-emerald-50 text-emerald-900' : 'bg-muted text-foreground')}>
+          <ShieldCheck className="mt-0.5 size-4 shrink-0" aria-hidden />
+          <span>{cancel.label}</span>
+        </p>
+      </div>
+    </section>
   );
 }
 
@@ -144,355 +101,180 @@ function PaymentContent() {
   const bookingQuery = useBooking(bookingId, { poll: true });
   const booking = bookingQuery.data;
   const simulatePayment = useSimulatePayment();
-
-  const [now, setNow] = useState(() => Date.now());
-  const [copied, setCopied] = useState<string | null>(null);
   const [devError, setDevError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 1_000);
-    return () => window.clearInterval(timer);
-  }, []);
-
-  const confirmed =
-    booking && ['CONFIRMED', 'CHECKED_IN', 'COMPLETED'].includes(booking.status);
+  const waiting = booking?.status === 'PENDING';
+  const now = useNow(waiting);
+  const paid = !!booking && PAID_STATUSES.includes(booking.status);
 
   useEffect(() => {
-    if (booking && confirmed) {
-      router.replace(`/booking/confirmation?id=${booking.id}`);
-    }
-  }, [booking, confirmed, router]);
-
-  const copy = (value: string, key: string) => {
-    void navigator.clipboard.writeText(value);
-    setCopied(key);
-    window.setTimeout(() => setCopied(null), 1_800);
-  };
+    if (booking && paid) router.replace(`/booking/confirmation?id=${booking.id}`);
+  }, [booking, paid, router]);
 
   if (!bookingId) {
     return (
-      <div className="mx-auto max-w-lg px-4 py-20 text-center">
-        <AlertTriangle className="mx-auto size-10 text-amber-500" />
-        <h1 className="mt-3 text-xl font-bold text-[#202B36]">Không tìm thấy đơn đặt phòng</h1>
-        <p className="mt-1 text-sm text-slate-500">Mở trang thanh toán từ đơn đặt phòng của bạn.</p>
-        <Link href="/account/bookings">
-          <Button className="mt-5 bg-[#013758] text-white">Chuyến đi của tôi</Button>
-        </Link>
-      </div>
+      <Centered>
+        <EmptyState
+          title="Không tìm thấy đơn đặt phòng"
+          description="Mở trang thanh toán từ đơn đặt phòng của bạn."
+          action={
+            <Link href="/account/bookings" className={primaryLink}>
+              Chuyến đi của tôi
+            </Link>
+          }
+        />
+      </Centered>
     );
   }
 
   if (bookingQuery.isLoading) {
     return (
-      <div className="flex items-center justify-center gap-2 py-24 text-sm text-slate-500">
-        <Loader2 className="size-5 animate-spin" /> Đang tải đơn đặt phòng…
+      <div className="mx-auto w-full max-w-marketplace px-4 py-8 sm:px-6">
+        <LoadingState rows={3} label="Đang tải đơn đặt phòng…" />
       </div>
     );
   }
 
   if (bookingQuery.error || !booking) {
+    const notFound = ['BOOKING_NOT_FOUND', 'NOT_FOUND'].includes(getApiErrorCode(bookingQuery.error) ?? '');
     return (
-      <div className="mx-auto max-w-lg px-4 py-20 text-center">
-        <AlertTriangle className="mx-auto size-10 text-amber-500" />
-        <h1 className="mt-3 text-xl font-bold text-[#202B36]">Không tải được đơn đặt phòng</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          {bookingQuery.error ? getApiErrorMessage(bookingQuery.error) : 'Đơn đặt phòng không tồn tại.'}
-        </p>
-        <Link href="/account/bookings">
-          <Button className="mt-5 bg-[#013758] text-white">Chuyến đi của tôi</Button>
-        </Link>
-      </div>
+      <Centered>
+        {notFound ? (
+          <EmptyState
+            title="Không tìm thấy đơn đặt phòng"
+            description="Đơn không tồn tại hoặc thuộc tài khoản khác."
+            action={
+              <Link href="/account/bookings" className={primaryLink}>
+                Chuyến đi của tôi
+              </Link>
+            }
+          />
+        ) : (
+          <ErrorState
+            title="Không tải được đơn đặt phòng"
+            error={bookingQuery.error}
+            onRetry={() => void bookingQuery.refetch()}
+          />
+        )}
+      </Centered>
     );
   }
 
-  const expired = booking.status === 'EXPIRED' || booking.status === 'CANCELLED';
+  if (paid) {
+    return (
+      <Centered>
+        <p className="flex items-center justify-center gap-2 text-sm text-muted-foreground" role="status">
+          <Loader2 className="size-5 animate-spin" aria-hidden /> Đã nhận thanh toán, đang mở voucher…
+        </p>
+      </Centered>
+    );
+  }
+
   const payment = booking.payment;
-  const remaining = payment ? new Date(payment.expiresAt).getTime() - now : 0;
-  const image = booking.hotel.coverImageUrl ?? FALLBACK_IMAGE;
+  const remaining = payment ? Date.parse(payment.expiresAt) - now : 0;
+  const holdOver = booking.status !== 'PENDING' || !payment || remaining <= 0;
 
-  if (expired) {
+  if (holdOver) {
+    const cancelled = booking.status === 'CANCELLED';
+    const stillChecking = booking.status === 'PENDING';
     return (
-      <div className="mx-auto max-w-lg px-4 py-20 text-center">
-        <AlertTriangle className="mx-auto size-10 text-amber-500" />
-        <h1 className="mt-3 text-xl font-bold text-[#202B36]">
-          {booking.status === 'EXPIRED' ? 'Đã hết thời gian giữ chỗ' : 'Đơn đặt phòng đã hủy'}
-        </h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Phòng đã được nhả về kho. Vui lòng đặt lại nếu bạn vẫn muốn lưu trú.
-        </p>
-        <div className="mt-5 flex justify-center gap-2">
-          <Link href={`/hotels/${booking.hotel.id}?checkIn=${booking.checkIn}&checkOut=${booking.checkOut}&guests=${booking.guests}&rooms=${booking.rooms}`}>
-            <Button className="bg-[#013758] text-white">Đặt lại</Button>
-          </Link>
-          <Link href="/account/bookings">
-            <Button variant="outline">Chuyến đi của tôi</Button>
-          </Link>
-        </div>
-      </div>
+      <Centered>
+        <EmptyState
+          icon={TimerOff}
+          title={cancelled ? 'Đơn đặt phòng đã huỷ' : 'Đã hết thời gian giữ phòng'}
+          description={
+            stillChecking
+              ? 'Nếu bạn vừa chuyển khoản, đợi vài giây để hệ thống kiểm tra. Tiền chuyển đến sau khi hết hạn sẽ được hoàn lại cho bạn.'
+              : 'Phòng đã được mở bán lại. Bạn có thể đặt lại cùng ngày nếu còn phòng.'
+          }
+          action={
+            <div className="flex flex-col items-center gap-2">
+              <Link href={rebookHref(booking)} className={primaryLink}>
+                Đặt lại {formatDate(booking.checkIn)} – {formatDate(booking.checkOut)}
+              </Link>
+              <Link href="/account/bookings" className="text-sm font-semibold text-primary hover:underline">
+                Chuyến đi của tôi
+              </Link>
+            </div>
+          }
+        />
+        {stillChecking && (
+          <p className="mt-3 flex items-center justify-center gap-2 text-xs text-muted-foreground" role="status">
+            <Loader2 className="size-3.5 animate-spin" aria-hidden /> Đang kiểm tra giao dịch cuối cùng…
+          </p>
+        )}
+      </Centered>
     );
   }
+
+  const total = payment.amount;
 
   return (
-    <div className="mx-auto w-full max-w-marketplace px-4 py-6 sm:px-6 sm:py-8">
-      <div className="mb-6 flex flex-col justify-between gap-2 rounded-xl border border-[#f3e3c8] bg-[#FBF2E3] px-4 py-2.5 text-[#865D23] sm:flex-row sm:items-center">
-        <div className="flex items-center gap-2 text-xs sm:text-sm">
-          <Timer className="size-4 shrink-0 animate-pulse" />
-          <p>
-            Đơn đang giữ chỗ trong{' '}
-            <span className="rounded bg-white/60 px-1.5 py-0.5 font-mono font-bold">
-              {formatCountdown(remaining)}
-            </span>
-            . Vui lòng chuyển khoản trước khi hết hạn.
+    <>
+      <HoldCountdown remaining={remaining} expiresAtLabel={formatDateTime(payment.expiresAt)} />
+
+      <div className="mx-auto w-full max-w-marketplace px-4 py-6 sm:px-6 sm:py-8">
+        <div className="mb-6 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">Thanh toán đơn {booking.code}</p>
+            <h1 className="mt-1 text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+              Chuyển {formatMoney(total)} để giữ chắc phòng
+            </h1>
+          </div>
+          <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+            <CalendarClock className="size-4" aria-hidden /> Giá đã chốt, không tăng trong lúc giữ phòng
           </p>
         </div>
-        <div className="flex items-center gap-1 text-xs font-semibold">
-          <Lock className="size-3.5" />
-          <span>Cam kết không tăng giá</span>
-        </div>
-      </div>
 
-      <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-12">
-        <div className="space-y-6 lg:col-span-7">
-          <Card className="flex flex-col justify-between gap-4 rounded-xl border border-slate-200/80 bg-white p-5 shadow-xs sm:flex-row sm:items-center">
-            <div>
-              <span className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                Mã đơn đặt phòng
-              </span>
-              <div className="mt-0.5 flex items-center gap-2">
-                <span className="text-xl font-bold tracking-tight text-[#202B36]">{booking.code}</span>
-                <button
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12 lg:gap-8">
+          <div className="space-y-5 lg:col-span-7">
+            <TransferPanel
+              payment={payment}
+              bookingCode={booking.code}
+              checking={bookingQuery.isFetching}
+              onCheckNow={() => void bookingQuery.refetch()}
+            />
+
+            {booking.paymentStatus === 'UNPAID' && <WalletPayPanel bookingId={booking.id} total={total} />}
+
+            {process.env.NODE_ENV !== 'production' && (
+              <div className="rounded-lg border border-dashed border-border bg-muted/40 p-3">
+                <p className="mb-2 text-xs font-semibold text-muted-foreground">
+                  Chế độ dev · mô phỏng SePay (không cần chuyển khoản thật)
+                </p>
+                <Button
                   type="button"
-                  onClick={() => copy(booking.code, 'code')}
-                  className="rounded p-1 text-slate-500 transition-colors hover:bg-slate-100 hover:text-[#013758]"
-                  title="Sao chép mã đơn"
+                  variant="outline"
+                  onClick={() =>
+                    simulatePayment.mutate(booking.id, {
+                      onError: (error) => setDevError(getApiErrorMessage(error, 'Chưa bật PAYMENT_SIMULATOR ở backend.')),
+                    })
+                  }
+                  disabled={simulatePayment.isPending}
+                  className="h-10 gap-1.5"
                 >
-                  {copied === 'code' ? <CheckCircle2 className="size-4 text-[#35624A]" /> : <Copy className="size-4" />}
-                </button>
-              </div>
-            </div>
-            <div className="flex flex-col gap-1 sm:items-end">
-              <Badge className="w-fit border-none bg-[#FBF2E3] text-xs font-semibold text-[#865D23]">
-                <span className="mr-1.5 inline-block size-2 animate-ping rounded-full bg-[#865D23]" />
-                {STATUS_LABELS[booking.status] ?? booking.status}
-              </Badge>
-              <span className="text-[11px] text-slate-400">Khởi tạo {formatDateTime(booking.createdAt)}</span>
-            </div>
-          </Card>
-
-          {booking.status === 'PENDING' && booking.paymentStatus === 'UNPAID' && (
-            <WalletPayCard bookingId={booking.id} total={payment?.amount ?? booking.totalAmount} />
-          )}
-
-          <Card className="space-y-6 rounded-xl border border-slate-200/80 bg-white p-5 shadow-xs sm:p-7">
-            <div>
-              <h2 className="flex items-center gap-2 text-xl font-bold text-[#202B36]">
-                <CreditCard className="size-5 text-[#013758]" /> Thanh toán bằng chuyển khoản VietQR
-              </h2>
-              <p className="mt-1 text-xs text-slate-500">
-                Quét mã bằng ứng dụng ngân hàng, giữ nguyên số tiền và nội dung chuyển khoản. Hệ thống tự xác nhận
-                trong vài giây.
-              </p>
-            </div>
-
-            {payment ? (
-              <>
-                <div className="flex flex-col items-center gap-4 rounded-xl border-2 border-[#234e70]/20 bg-[#f1f3f9] p-5 sm:flex-row">
-                  <div className="shrink-0 rounded-xl border border-slate-200 bg-white p-2">
-                    <Image
-                      src={payment.qrImageUrl}
-                      alt={`VietQR ${booking.code}`}
-                      width={190}
-                      height={190}
-                      unoptimized
-                      className="size-44 object-contain"
-                    />
-                  </div>
-                  <div className="w-full space-y-3 text-sm">
-                    <div className="flex items-start justify-between gap-3">
-                      <span className="text-xs text-slate-500">Ngân hàng</span>
-                      <span className="text-right font-semibold text-[#202B36]">{payment.bankName}</span>
-                    </div>
-                    <div className="flex items-start justify-between gap-3">
-                      <span className="text-xs text-slate-500">Số tài khoản</span>
-                      <button
-                        type="button"
-                        onClick={() => copy(payment.accountNumber, 'account')}
-                        className="inline-flex items-center gap-1 font-mono font-bold text-[#013758] hover:underline"
-                      >
-                        {payment.accountNumber}
-                        {copied === 'account' ? <CheckCircle2 className="size-3.5 text-[#35624A]" /> : <Copy className="size-3.5" />}
-                      </button>
-                    </div>
-                    <div className="flex items-start justify-between gap-3">
-                      <span className="text-xs text-slate-500">Chủ tài khoản</span>
-                      <span className="text-right font-semibold uppercase text-[#202B36]">{payment.accountName}</span>
-                    </div>
-                    <div className="flex items-start justify-between gap-3">
-                      <span className="text-xs text-slate-500">Số tiền</span>
-                      <button
-                        type="button"
-                        onClick={() => copy(String(payment.amount), 'amount')}
-                        className="inline-flex items-center gap-1 font-bold text-[#013758] hover:underline"
-                      >
-                        {formatMoney(payment.amount)}
-                        {copied === 'amount' ? <CheckCircle2 className="size-3.5 text-[#35624A]" /> : <Copy className="size-3.5" />}
-                      </button>
-                    </div>
-                    <div className="flex items-start justify-between gap-3 rounded-lg bg-amber-50 p-2">
-                      <span className="text-xs font-semibold text-amber-800">Nội dung CK</span>
-                      <button
-                        type="button"
-                        onClick={() => copy(payment.transferContent, 'content')}
-                        className="inline-flex items-center gap-1 font-mono font-bold text-[#934a33] hover:underline"
-                      >
-                        {payment.transferContent}
-                        {copied === 'content' ? <CheckCircle2 className="size-3.5 text-[#35624A]" /> : <Copy className="size-3.5" />}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-2 rounded-lg bg-[#EDF4EE] p-3 text-xs text-[#35624A]">
-                  <ShieldCheck className="mt-0.5 size-4 shrink-0" />
-                  <p>
-                    Chuyển đúng <strong>{formatMoney(payment.amount)}</strong> với nội dung{' '}
-                    <strong>{payment.transferContent}</strong>. Sai số tiền hoặc nội dung sẽ không được xác nhận tự
-                    động.
-                  </p>
-                </div>
-
-                {remaining <= 0 && (
-                  <div className="flex items-center gap-2 rounded-lg bg-amber-50 p-3 text-xs font-semibold text-amber-800">
-                    <RefreshCw className="size-4 animate-spin" /> Đang kiểm tra trạng thái thanh toán…
-                  </div>
-                )}
-
-                {process.env.NODE_ENV !== 'production' && booking.status === 'PENDING' && (
-                  <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-3">
-                    <p className="mb-2 text-[11px] font-semibold text-slate-500">
-                      Chế độ dev · mô phỏng SePay (không cần chuyển khoản thật)
-                    </p>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() =>
-                        simulatePayment.mutate(booking.id, {
-                          onError: (error) =>
-                            setDevError(getApiErrorMessage(error, 'Chưa bật PAYMENT_SIMULATOR ở backend.')),
-                        })
-                      }
-                      disabled={simulatePayment.isPending}
-                      className="h-9 gap-1.5 border-slate-300 text-xs font-semibold"
-                    >
-                      {simulatePayment.isPending ? (
-                        <Loader2 className="size-3.5 animate-spin" />
-                      ) : (
-                        <FlaskConical className="size-3.5" />
-                      )}
-                      Giả lập thanh toán
-                    </Button>
-                    {devError && <p className="mt-2 text-[11px] text-red-600">{devError}</p>}
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className="rounded-lg bg-slate-50 p-4 text-sm text-slate-600">
-                Đơn này không còn chờ thanh toán. Trạng thái hiện tại: {STATUS_LABELS[booking.status] ?? booking.status}.
+                  {simulatePayment.isPending ? (
+                    <Loader2 className="size-4 animate-spin" aria-hidden />
+                  ) : (
+                    <FlaskConical className="size-4" aria-hidden />
+                  )}
+                  Giả lập thanh toán
+                </Button>
+                {devError && <p className="mt-2 text-xs text-red-700">{devError}</p>}
               </div>
             )}
+          </div>
 
-            <div className="flex items-center justify-between border-t border-slate-100 pt-3 text-xs text-slate-500">
-              <span className="inline-flex items-center gap-1.5">
-                <Clock className="size-3.5" /> Tự động cập nhật mỗi 4 giây
-              </span>
-              <button
-                type="button"
-                onClick={() => void bookingQuery.refetch()}
-                className="inline-flex items-center gap-1 font-semibold text-[#013758] hover:underline"
-              >
-                <RefreshCw className={`size-3.5 ${bookingQuery.isFetching ? 'animate-spin' : ''}`} /> Kiểm tra ngay
-              </button>
-            </div>
-          </Card>
-
-          <Link
-            href={`/hotels/${booking.hotel.id}?checkIn=${booking.checkIn}&checkOut=${booking.checkOut}&guests=${booking.guests}&rooms=${booking.rooms}`}
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-[#013758]"
-          >
-            <ArrowLeft className="size-3.5" /> Quay lại chỗ nghỉ
-          </Link>
+          <aside className="space-y-4 lg:sticky lg:top-36 lg:col-span-5">
+            <StaySummary booking={booking} now={now} />
+            <SupportCard note="Chuyển khoản rồi mà trang chưa cập nhật sau vài phút? Gọi hoặc gửi email kèm mã đơn." />
+            <Link href={rebookHref(booking)} className="inline-flex min-h-10 items-center text-sm font-semibold text-muted-foreground hover:text-primary">
+              ‹ Quay lại chọn phòng
+            </Link>
+          </aside>
         </div>
-
-        <aside className="space-y-4 lg:sticky lg:top-24 lg:col-span-5">
-          <Card className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-md">
-            <div className="border-b border-slate-200/60 bg-[#f1f3f9] p-5">
-              <h3 className="text-base font-bold tracking-tight text-[#202B36]">Chi tiết đơn đặt phòng</h3>
-            </div>
-            <div className="space-y-4 p-5">
-              <div className="flex items-start gap-3">
-                <div className="relative size-20 shrink-0 overflow-hidden rounded-lg bg-slate-100">
-                  <Image src={image} alt={booking.hotel.name} fill className="object-cover" />
-                </div>
-                <div className="min-w-0">
-                  <h4 className="truncate text-sm font-bold text-[#202B36]">{booking.hotel.name}</h4>
-                  <p className="mt-0.5 text-xs text-slate-500">{booking.hotel.city}</p>
-                  <p className="mt-1 text-xs font-semibold text-[#013758]">{booking.roomType.name}</p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 rounded-lg bg-[#f1f3f9] p-3 text-xs">
-                <div>
-                  <span className="block text-[10px] font-semibold uppercase text-slate-400">Nhận phòng</span>
-                  <span className="font-bold text-[#202B36]">{formatDate(booking.checkIn)}</span>
-                </div>
-                <div>
-                  <span className="block text-[10px] font-semibold uppercase text-slate-400">Trả phòng</span>
-                  <span className="font-bold text-[#202B36]">{formatDate(booking.checkOut)}</span>
-                </div>
-                <div className="col-span-2 flex items-center gap-1.5 border-t border-slate-200/60 pt-2 text-slate-600">
-                  <User className="size-3.5 text-[#013758]" />
-                  <span>
-                    {booking.guests} khách · {booking.rooms} phòng · {booking.nights} đêm
-                  </span>
-                </div>
-                <div className="col-span-2 text-slate-600">
-                  <span className="text-[10px] font-semibold uppercase text-slate-400">Khách nhận phòng</span>
-                  <p className="font-semibold text-[#202B36]">{booking.guestName}</p>
-                  <p>{booking.contactPhone}</p>
-                </div>
-              </div>
-
-              <div className="space-y-1.5 border-t border-slate-200 pt-3 text-xs">
-                <div className="flex justify-between text-slate-600">
-                  <span>
-                    {booking.rooms} phòng × {booking.nights} đêm
-                  </span>
-                  <span>{formatMoney(booking.totalAmount)}</span>
-                </div>
-                <div className="my-2 h-px w-full bg-slate-200" />
-                <div className="flex items-baseline justify-between">
-                  <span className="text-xs font-bold text-[#202B36]">TỔNG THANH TOÁN</span>
-                  <span className="text-2xl font-bold text-[#013758]">{formatMoney(booking.totalAmount)}</span>
-                </div>
-              </div>
-
-              <div className="space-y-1 rounded-lg bg-[#EDF4EE] p-3 text-[11px] text-[#35624A]">
-                <p className="flex items-center gap-1.5 font-semibold">
-                  <Building2 className="size-3.5" /> Hệ thống tự xác nhận thanh toán
-                </p>
-                <p>Voucher điện tử sẽ xuất hiện ngay khi giao dịch khớp mã đơn và số tiền.</p>
-              </div>
-
-              {booking.status === 'PENDING' && remaining > 0 && (
-                <p className="flex items-center justify-center gap-1.5 text-center text-[11px] text-slate-500">
-                  <QrCode className="size-3.5" /> Giữ chỗ còn lại {formatCountdown(remaining)}
-                </p>
-              )}
-            </div>
-          </Card>
-        </aside>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -500,8 +282,8 @@ export default function PaymentPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex items-center justify-center gap-2 py-24 text-sm text-slate-500">
-          <Loader2 className="size-5 animate-spin" /> Đang tải…
+        <div className="mx-auto w-full max-w-marketplace px-4 py-8 sm:px-6">
+          <LoadingState rows={3} />
         </div>
       }
     >
