@@ -86,7 +86,8 @@ export default function CancelBookingPage() {
   const params = useParams<{ id: string }>();
   const bookingQuery = useBooking(params.id);
   const booking = bookingQuery.data;
-  const quoteQuery = useCancellationQuote(params.id, !!booking);
+  // Đơn không huỷ được (đang chờ hoàn tiền, đã huỷ…) thì không hỏi báo giá: backend trả 409.
+  const quoteQuery = useCancellationQuote(params.id, !!booking && bookingActions(booking).canCancel);
   const quote = quoteQuery.data;
   const cancelBooking = useCancelBooking();
 
