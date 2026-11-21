@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import Header from '@/components/layout/Header';
@@ -21,6 +21,8 @@ import {
   RefreshCw,
   SlidersHorizontal
 } from 'lucide-react';
+import { useSpeechInput } from '@/features/assistant/use-speech-input';
+import { QuickSuggestions, VoiceButton, useIdleSuggestions } from '@/features/assistant/AssistantChatParts';
 
 interface ChatMessage {
   id: string;
@@ -64,26 +66,38 @@ export default function AssistantPage() {
     },
   ]);
 
+  const voice = useSpeechInput(inputQuery, setInputQuery);
+  const idle = useIdleSuggestions(inputQuery, voice.listening, messages.length);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+  }, [messages.length, idle]);
+
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputQuery.trim()) return;
+    sendText(inputQuery);
+  };
 
-    const userMsg: ChatMessage = {
-      id: Date.now().toString(),
-      sender: 'user',
-      text: inputQuery,
-    };
+  const sendText = (raw: string) => {
+    const text = raw.trim();
+    if (!text) return;
+    voice.cancel();
 
-    setMessages((prev) => [...prev, userMsg]);
+    // Tin nhắn chỉ được thêm vào cuối nên số thứ tự là id duy nhất.
+    setMessages((prev) => [...prev, { id: String(prev.length + 1), sender: 'user', text }]);
     setInputQuery('');
 
     setTimeout(() => {
-      const aiReply: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        sender: 'ai',
-        text: 'Tôi đã ghi nhận yêu cầu của bạn! Đang phân tích thêm các tiện nghi phù hợp và tình trạng phòng trống...',
-      };
-      setMessages((prev) => [...prev, aiReply]);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: String(prev.length + 1),
+          sender: 'ai',
+          text: 'Tôi đã ghi nhận yêu cầu của bạn! Đang phân tích thêm các tiện nghi phù hợp và tình trạng phòng trống...',
+        },
+      ]);
     }, 1000);
   };
 
@@ -151,7 +165,7 @@ export default function AssistantPage() {
           {/* Chat Interface Container */}
           <Card className="p-4 sm:p-6 bg-white border border-border shadow-xs rounded-2xl flex flex-col h-137.5 justify-between">
             {/* Messages Scroll Area */}
-            <div className="flex-1 overflow-y-auto space-y-4 pr-2">
+            <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-4 pr-2">
               {messages.map((msg) => (
                 <div
                   key={msg.id}
@@ -225,20 +239,30 @@ export default function AssistantPage() {
                   </div>
                 </div>
               ))}
+
+              {/* Gợi ý câu hỏi nhanh như app: hiện sau một lúc người dùng không nhắn gì, bấm là gửi */}
+              {idle && <QuickSuggestions onPick={sendText} />}
             </div>
 
             {/* Input Form */}
-            <form onSubmit={handleSend} className="pt-4 border-t border-border flex gap-2">
+            <form onSubmit={handleSend} className="mt-3 pt-4 border-t border-border flex gap-2">
+              <VoiceButton voice={voice} className="h-11 w-11" />
               <Input
                 value={inputQuery}
                 onChange={(e) => setInputQuery(e.target.value)}
-                placeholder="Nhập câu hỏi hoặc mô tả chốn nghỉ bạn tìm kiếm..."
+                placeholder={voice.listening ? 'Đang nghe, bạn nói đi...' : 'Nhập câu hỏi hoặc mô tả chốn nghỉ bạn tìm kiếm...'}
+                aria-label="Câu hỏi cho Trợ lý AI"
                 className="h-11 text-sm focus-visible:ring-primary font-medium"
               />
               <Button type="submit" className="h-11 px-6 bg-primary text-primary-foreground font-bold shrink-0 gap-1.5">
                 <span>Gửi</span> <Send className="size-4" />
               </Button>
             </form>
+            {voice.error && (
+              <p role="status" className="pt-2 text-xs text-destructive">
+                {voice.error}
+              </p>
+            )}
           </Card>
 
         </div>
