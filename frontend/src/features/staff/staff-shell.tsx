@@ -20,6 +20,7 @@ import Navbar from '@/components/common/navbar/Navbar';
 import Sidebar, { SidebarProvider, type SidebarItem } from '@/components/common/sidebar/Sidebar';
 import { SidebarInset } from '@/components/ui/sidebar';
 import { useAuthStore } from '@/lib/auth-store';
+import { useUnreadNotificationCount } from '@/features/notifications/api/notification-queries';
 import { NotificationBell } from '@/features/notifications/components/NotificationBell';
 import { useActionItems } from './api/staff-queries';
 import { useStaffHotel } from './components/StaffHotelProvider';
@@ -33,9 +34,9 @@ const navigation: Omit<SidebarItem, 'isActive'>[] = [
   { href: '/staff/rooms', label: 'Tình trạng phòng', icon: BedDouble, section: 'TÁC VỤ VẬN HÀNH' },
   { href: '/staff/availability', label: 'Phòng trống & Giá', icon: CalendarRange, section: 'TÁC VỤ VẬN HÀNH' },
   { href: '/staff/refunds', label: 'Hoàn tiền & Chính sách', icon: BadgePercent, section: 'TÁC VỤ VẬN HÀNH' },
-  // Inbox and alerts are still sample screens (no API yet), so they carry no count.
-  { href: '/staff/inbox', label: 'Hộp thư & Khiếu nại', icon: Inbox, section: 'TÁC VỤ VẬN HÀNH' },
-  { href: '/staff/alerts', label: 'Cảnh báo nghiệp vụ', icon: AlertTriangle, section: 'TÁC VỤ VẬN HÀNH' },
+  // Alerts are real (action items + notifications). The inbox has no API yet and says so.
+  { href: '/staff/alerts', label: 'Thông báo & cảnh báo', icon: AlertTriangle, section: 'TÁC VỤ VẬN HÀNH' },
+  { href: '/staff/inbox', label: 'Hộp thư khách', icon: Inbox, section: 'TÁC VỤ VẬN HÀNH', badge: 'Sắp có' },
   { href: '/staff/marketing/content', label: 'Thư viện nội dung AI', icon: Sparkles, section: 'NỘI DUNG & MARKETING' },
   { href: '/staff/marketing/calendar', label: 'Lịch đăng & Kết nối kênh', icon: CalendarDays, section: 'NỘI DUNG & MARKETING' },
   { href: '/staff/marketing/analytics', label: 'Hiệu quả tiếp thị', icon: LineChart, section: 'NỘI DUNG & MARKETING' },
@@ -47,12 +48,14 @@ export function StaffShell({ children }: Readonly<{ children: ReactNode }>) {
   const user = useAuthStore((state) => state.user);
   const { hotel } = useStaffHotel();
   const actionItems = useActionItems(hotel?.summary.id);
+  const unread = useUnreadNotificationCount();
   const countOf = (type: string) => actionItems.data?.items.find((item) => item.type === type)?.count;
   // Real counts from GET /hotels/:id/action-items, refreshed with the dashboard.
   const badges: Record<string, number | undefined> = {
     '/staff/refunds': countOf('REFUND_REQUESTS_PENDING'),
     '/staff/check-out': countOf('OVERDUE_CHECKOUTS'),
     '/staff/bookings': countOf('CHANGE_REQUESTS_PENDING'),
+    '/staff/alerts': unread.data || undefined,
   };
   const items = navigation.map((item) => ({
     ...item,
@@ -61,7 +64,7 @@ export function StaffShell({ children }: Readonly<{ children: ReactNode }>) {
   }));
   const hotelName = hotel?.summary.name ?? 'Chưa có khách sạn';
   const hotelMeta = hotel
-    ? [hotel.summary.starRating ? `${hotel.summary.starRating}-Star` : null, hotel.summary.city]
+    ? [hotel.summary.starRating ? `${hotel.summary.starRating} sao` : null, hotel.summary.city]
         .filter(Boolean)
         .join(' · ')
     : undefined;
@@ -85,7 +88,7 @@ export function StaffShell({ children }: Readonly<{ children: ReactNode }>) {
             role: 'Nhân viên khách sạn',
             avatarUrl: user?.avatarUrl,
           }}
-          notifications={<NotificationBell allHref={null} />}
+          notifications={<NotificationBell allHref="/staff/alerts" />}
           // The bookings list is the searchable list (code or guest name), so the header search opens it.
           searchPlaceholder="Tìm mã booking hoặc tên khách"
           onSearch={(query) => {
@@ -95,7 +98,7 @@ export function StaffShell({ children }: Readonly<{ children: ReactNode }>) {
           profileHref="/staff/dashboard"
         />
         <main className="min-h-[calc(100dvh-5rem)] bg-background p-3 sm:p-4 lg:p-5">
-          <div className="sr-dense-ui mx-auto min-h-[calc(100dvh-8rem)] max-w-[1480px] rounded-[1.5rem] bg-card p-4 shadow-[0_1px_2px_rgb(32_43_54/4%),0_18px_48px_rgb(32_43_54/6%)] ring-1 ring-border/70 md:p-5 xl:p-6">
+          <div className="sr-dense-ui mx-auto min-h-[calc(100dvh-8rem)] max-w-[1480px] rounded-3xl bg-card p-4 shadow-sm ring-1 ring-border/70 md:p-5 xl:p-6">
             {children}
           </div>
         </main>

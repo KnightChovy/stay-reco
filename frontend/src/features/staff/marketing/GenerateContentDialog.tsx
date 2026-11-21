@@ -20,6 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { validateWith } from "@/lib/api-error";
 import { useCreateContent, useGenerateVariants } from "../api/marketing-queries";
+import { AiBudgetNote, useAiBudgetState } from "./MarketingParts";
 import { contentTypeLabels, platformLabels } from "../lib/marketing-labels";
 import { getMarketingErrorMessage } from "../lib/marketing-errors";
 
@@ -35,8 +36,8 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
       aria-checked={active}
       onClick={onClick}
       className={cn(
-        "rounded-lg border px-3 py-1.5 text-xs font-semibold transition",
-        active ? "border-[#934a33] bg-[#934a33] text-white" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50",
+        "h-10 rounded-lg border px-3 text-xs font-semibold transition",
+        active ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-muted-foreground hover:bg-muted",
       )}
     >
       {children}
@@ -74,6 +75,7 @@ export function GenerateContentDialog({
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
 
+  const { exhausted } = useAiBudgetState(hotelId);
   const busy = variants.isPending || create.isPending;
   const choosing = versions.length > 0;
 
@@ -143,7 +145,7 @@ export function GenerateContentDialog({
       <DialogContent className={cn("max-h-[90dvh] overflow-y-auto", choosing ? "sm:max-w-5xl" : "sm:max-w-lg")}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="size-4 text-[#934a33]" />
+            <Sparkles className="size-4 text-primary" />
             {choosing ? `Chọn 1 trong ${versions.length} phương án` : "Viết nội dung bằng AI"}
           </DialogTitle>
           <DialogDescription>
@@ -167,20 +169,20 @@ export function GenerateContentDialog({
                   className={cn(
                     "flex flex-col rounded-xl border p-3 text-left transition",
                     picked === index
-                      ? "border-[#934a33] bg-[#934a33]/5 ring-2 ring-[#934a33]/30"
-                      : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50",
+                      ? "border-primary bg-primary/5 ring-2 ring-primary/30"
+                      : "border-border bg-card hover:bg-muted/50",
                   )}
                 >
-                  <span className="mb-2 flex items-center justify-between text-[11px] font-bold uppercase tracking-wide text-slate-400">
+                  <span className="mb-2 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-muted-foreground">
                     Phương án {index + 1}
                     {picked === index && (
-                      <span className="flex items-center gap-1 rounded-full bg-[#934a33] px-2 py-0.5 text-[10px] text-white normal-case">
+                      <span className="flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-xs text-primary-foreground normal-case">
                         <Check className="size-3" /> Đã chọn
                       </span>
                     )}
                   </span>
-                  {version.title && <span className="mb-1 text-sm font-bold text-slate-800">{version.title}</span>}
-                  <span className="line-clamp-[12] whitespace-pre-line text-xs leading-relaxed text-slate-600">
+                  {version.title && <span className="mb-1 text-sm font-bold text-foreground">{version.title}</span>}
+                  <span className="line-clamp-[12] whitespace-pre-line text-xs leading-relaxed text-muted-foreground">
                     {version.body}
                   </span>
                 </button>
@@ -188,8 +190,8 @@ export function GenerateContentDialog({
             </div>
 
             {picked !== undefined && (
-              <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="text-xs font-semibold text-slate-700">Sửa phương án {picked + 1} trước khi lưu (không bắt buộc)</p>
+              <div className="space-y-3 rounded-xl border border-border bg-muted/50 p-3">
+                <p className="text-xs font-semibold text-foreground">Sửa phương án {picked + 1} trước khi lưu (không bắt buộc)</p>
                 <div className="space-y-1.5">
                   <Label htmlFor="variant-title" className="text-xs font-semibold">
                     Tiêu đề
@@ -202,13 +204,13 @@ export function GenerateContentDialog({
                     onChange={(event) => setTitle(event.target.value)}
                     placeholder="Không bắt buộc"
                     aria-invalid={!!errors.title}
-                    className="bg-white text-sm"
+                    className="bg-card text-sm"
                   />
-                  {errors.title && <p className="text-[11px] text-red-600">{errors.title}</p>}
+                  {errors.title && <p className="text-xs text-destructive">{errors.title}</p>}
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="variant-body" className="text-xs font-semibold">
-                    Nội dung <span className="text-red-500">*</span>
+                    Nội dung <span className="text-destructive">*</span>
                   </Label>
                   <Textarea
                     id="variant-body"
@@ -217,15 +219,15 @@ export function GenerateContentDialog({
                     disabled={busy}
                     onChange={(event) => setBody(event.target.value)}
                     aria-invalid={!!errors.body}
-                    className="bg-white text-sm"
+                    className="bg-card text-sm"
                   />
-                  {errors.body && <p className="text-[11px] text-red-600">{errors.body}</p>}
+                  {errors.body && <p className="text-xs text-destructive">{errors.body}</p>}
                 </div>
               </div>
             )}
 
             {(variants.error || create.error) && (
-              <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700" role="alert">
+              <p className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive" role="alert">
                 {getMarketingErrorMessage(
                   variants.error ?? create.error,
                   variants.error ? "Không viết lại được. Vui lòng thử lại." : "Không lưu được bản nháp. Vui lòng thử lại.",
@@ -233,17 +235,19 @@ export function GenerateContentDialog({
               </p>
             )}
 
+            <AiBudgetNote hotelId={hotelId} cost="$0.0015 (3 bản)" />
+
             <DialogFooter className="gap-2 sm:justify-between">
               <div className="flex gap-2">
-                <Button type="button" variant="outline" onClick={back} disabled={busy} className="gap-1.5">
+                <Button type="button" variant="outline" onClick={back} disabled={busy} className="h-10 gap-1.5">
                   <ArrowLeft className="size-4" /> Sửa yêu cầu
                 </Button>
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => request && write(request)}
-                  disabled={busy || !request}
-                  className="gap-1.5"
+                  disabled={busy || !request || exhausted}
+                  className="h-10 gap-1.5"
                 >
                   {variants.isPending ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
                   Viết lại {CONTENT_VARIANTS} bản
@@ -253,7 +257,7 @@ export function GenerateContentDialog({
                 type="button"
                 onClick={save}
                 disabled={busy || picked === undefined || !body.trim()}
-                className="gap-1.5 bg-[#934a33] text-white hover:bg-[#7a341e]"
+                className="h-10 gap-1.5"
               >
                 {create.isPending ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
                 {picked === undefined ? "Chọn một phương án" : "Lưu thành bản nháp"}
@@ -264,7 +268,7 @@ export function GenerateContentDialog({
           <form onSubmit={submit} className="space-y-4" noValidate>
             <div className="space-y-1.5">
               <Label htmlFor="brief" className="text-xs font-semibold">
-                Bài viết nói về điều gì? <span className="text-red-500">*</span>
+                Bài viết nói về điều gì? <span className="text-destructive">*</span>
               </Label>
               <Textarea
                 id="brief"
@@ -277,11 +281,11 @@ export function GenerateContentDialog({
                 aria-invalid={!!errors.brief}
                 className="text-sm"
               />
-              <div className="flex justify-between text-[11px]">
-                <span className={errors.brief ? "text-red-600" : "text-slate-400"}>
+              <div className="flex justify-between text-xs">
+                <span className={errors.brief ? "text-destructive" : "text-muted-foreground"}>
                   {errors.brief ?? "Một câu là đủ; tối thiểu 5 ký tự."}
                 </span>
-                <span className="text-slate-400">{brief.trim().length}/500</span>
+                <span className="text-muted-foreground">{brief.trim().length}/500</span>
               </div>
             </div>
 
@@ -305,20 +309,22 @@ export function GenerateContentDialog({
                   </Chip>
                 ))}
               </div>
-              <p className="text-[11px] text-slate-400">Nền tảng quyết định độ dài và giọng điệu của bài.</p>
+              <p className="text-xs text-muted-foreground">Nền tảng quyết định độ dài và giọng điệu của bài.</p>
             </div>
 
             {variants.error && (
-              <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700" role="alert">
+              <p className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive" role="alert">
                 {getMarketingErrorMessage(variants.error, "Không viết được nội dung. Vui lòng thử lại.")}
               </p>
             )}
 
+            <AiBudgetNote hotelId={hotelId} cost="$0.0015 (3 bản)" />
+
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
+              <Button type="button" variant="outline" className="h-10" onClick={() => onOpenChange(false)} disabled={busy}>
                 Huỷ
               </Button>
-              <Button type="submit" disabled={busy} className="gap-1.5 bg-[#934a33] text-white hover:bg-[#7a341e]">
+              <Button type="submit" disabled={busy || exhausted} className="h-10 gap-1.5">
                 {variants.isPending ? (
                   <>
                     <Loader2 className="size-4 animate-spin" /> AI đang viết {CONTENT_VARIANTS} phương án…

@@ -13,8 +13,8 @@ import {
   Send,
 } from "lucide-react";
 import { BOOKING_LIMITS, forwardRefundSchema, type BookingSummary, type PaymentStatus } from "@stayreco/shared";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
+import { EmptyState, ErrorState, LoadingState } from "@/components/common/StateViews";
+import { StatusPill } from "@/features/booking/components/StatusPill";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -25,7 +25,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useDebounce } from "@/hooks/use-debounce";
 import { getApiErrorMessage, validateWith } from "@/lib/api-error";
@@ -37,7 +36,6 @@ import {
   formatDateTime,
   formatMoney,
   paymentStatusLabels,
-  toneClasses,
 } from "@/features/staff/lib/labels";
 
 const PAGE_SIZE = 10;
@@ -72,24 +70,25 @@ export default function StaffRefundsPage() {
   const loading = hotelLoading || isLoading;
 
   return (
-    <div className="mx-auto w-full max-w-7xl space-y-6 p-4 font-sans text-foreground antialiased sm:p-8">
+    <div className="mx-auto w-full max-w-7xl space-y-5 pb-16 text-foreground">
       <div>
-        <div className="mb-1 flex items-center gap-2 text-xs text-slate-500">
-          <Link href="/staff/dashboard" className="hover:text-[#934a33]">Bàn làm việc</Link>
+        <div className="mb-1 flex items-center gap-2 text-xs text-muted-foreground">
+          <Link href="/staff/dashboard" className="hover:text-primary">Bàn làm việc</Link>
           <ChevronRight className="size-3" />
-          <span className="font-medium text-slate-800">Yêu cầu hoàn tiền</span>
+          <span className="font-medium text-foreground">Yêu cầu hoàn tiền</span>
         </div>
-        <h1 className="flex items-center gap-2 text-2xl font-bold text-slate-900">
-          <BadgePercent className="size-7 text-[#934a33]" /> Yêu cầu hoàn tiền
+        <h1 className="flex items-center gap-2 text-2xl font-bold text-foreground">
+          <BadgePercent className="size-7 text-primary" /> Yêu cầu hoàn tiền
         </h1>
-        <p className="mt-1 max-w-3xl text-xs text-slate-500">
-          Số tiền hoàn được tính tự động theo chính sách huỷ của khách sạn. Bạn kiểm tra yêu cầu rồi chuyển cho chủ
-          khách sạn kèm ghi chú; chủ khách sạn là người duyệt hoặc từ chối. Cần quyền <strong>REFUND</strong>.
+        <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+          Đây là hàng đợi cần chuyển cho chủ khách sạn. Số tiền hoàn được tính tự động theo chính sách huỷ. Bạn kiểm tra
+          yêu cầu, ghi chú (bắt buộc) rồi chuyển đi; chủ khách sạn là người duyệt hoặc từ chối, khách được hoàn tiền sau
+          khi chủ duyệt. Cần quyền <strong>REFUND</strong>.
         </p>
       </div>
 
-      <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
-        <div className="flex flex-col justify-between gap-3 border-b border-slate-100 pb-4 sm:flex-row sm:items-center">
+      <section className="space-y-4 rounded-xl border border-border bg-card p-4 shadow-2xs sm:p-6">
+        <div className="flex flex-col justify-between gap-3 border-b border-border pb-4 sm:flex-row sm:items-center">
           <div className="flex flex-wrap items-center gap-2" role="tablist">
             {TABS.map((item) => (
               <button
@@ -102,8 +101,8 @@ export default function StaffRefundsPage() {
                   setPage(1);
                 }}
                 className={cn(
-                  "rounded-lg px-3 py-1.5 text-xs font-bold transition",
-                  tab.key === item.key ? "bg-[#934a33] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200",
+                  "h-10 rounded-lg px-3.5 text-sm font-semibold transition",
+                  tab.key === item.key ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground",
                 )}
               >
                 {item.label}
@@ -112,7 +111,7 @@ export default function StaffRefundsPage() {
             ))}
           </div>
           <div className="relative w-full sm:w-64">
-            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={search}
               onChange={(event) => {
@@ -121,69 +120,64 @@ export default function StaffRefundsPage() {
               }}
               placeholder="Tìm mã đơn, tên khách…"
               aria-label="Tìm mã đơn hoặc tên khách"
-              className="h-9 bg-slate-50 pl-9 text-xs"
+              className="h-10 bg-card pl-9 text-sm"
             />
           </div>
         </div>
 
         {error ? (
-          <Alert variant="destructive">
-            <AlertTitle>Không tải được yêu cầu hoàn tiền</AlertTitle>
-            <AlertDescription className="mt-1 flex flex-col items-start gap-3">
-              <span>{getApiErrorMessage(error, "Vui lòng thử lại sau.")}</span>
-              <Button size="sm" variant="outline" onClick={() => void refetch()}>
-                Thử lại
-              </Button>
-            </AlertDescription>
-          </Alert>
+          <ErrorState title="Không tải được yêu cầu hoàn tiền" error={error} onRetry={() => void refetch()} />
+        ) : loading ? (
+          <LoadingState rows={3} label="Đang tải yêu cầu hoàn tiền…" />
+        ) : bookings.length === 0 ? (
+          <EmptyState
+            icon={CheckCircle2}
+            title={
+              debouncedSearch
+                ? "Không có yêu cầu khớp với từ khoá"
+                : tab.key === "pending"
+                  ? "Không còn yêu cầu nào cần chuyển"
+                  : "Chưa có đơn nào đã hoàn tiền"
+            }
+            description={
+              debouncedSearch
+                ? "Thử mã đơn hoặc tên khách khác."
+                : tab.key === "pending"
+                  ? "Khi khách huỷ đơn đã thanh toán, yêu cầu hoàn tiền sẽ hiện ở đây."
+                  : undefined
+            }
+          />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-left text-xs">
-              <thead className="border-b border-slate-200 bg-slate-50 font-semibold text-slate-700">
+            <table className="w-full border-collapse text-left text-sm">
+              <thead className="border-b border-border bg-muted/50 text-xs font-semibold text-muted-foreground">
                 <tr>
                   <th className="p-3">Mã đơn</th>
                   <th className="p-3">Hạng phòng / Kỳ nghỉ</th>
                   <th className="p-3 text-right">Tổng đơn</th>
-                  <th className="p-3 text-center">Thanh toán</th>
+                  <th className="p-3">Trạng thái</th>
                   <th className="p-3">Tạo lúc</th>
                   <th className="p-3 text-right">Thao tác</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
-                {loading &&
-                  [0, 1, 2].map((row) => (
-                    <tr key={row}>
-                      <td colSpan={6} className="p-3">
-                        <Skeleton className="h-8 w-full" />
-                      </td>
-                    </tr>
-                  ))}
-                {!loading &&
-                  bookings.map((booking) => (
-                    <RefundRow key={booking.id} booking={booking} onOpen={() => setSelectedId(booking.id)} />
-                  ))}
+              <tbody className="divide-y divide-border">
+                {bookings.map((booking) => (
+                  <RefundRow key={booking.id} booking={booking} onOpen={() => setSelectedId(booking.id)} />
+                ))}
               </tbody>
             </table>
-            {!loading && bookings.length === 0 && (
-              <div className="py-10 text-center">
-                <CheckCircle2 className="mx-auto mb-2 size-8 text-emerald-500" />
-                <p className="text-sm font-semibold text-slate-800">
-                  {debouncedSearch ? "Không có yêu cầu khớp với từ khoá" : `Không có đơn nào ở mục "${tab.label}"`}
-                </p>
-              </div>
-            )}
           </div>
         )}
 
         {meta && meta.totalPages > 1 && (
-          <div className="flex items-center justify-end gap-2 text-xs text-slate-500">
+          <div className="flex items-center justify-end gap-2 text-xs text-muted-foreground">
             <span>
               Trang {meta.page}/{meta.totalPages}
             </span>
             <Button
               variant="outline"
               size="icon"
-              className="size-8"
+              className="size-10"
               disabled={meta.page <= 1}
               onClick={() => setPage((value) => value - 1)}
               aria-label="Trang trước"
@@ -193,7 +187,7 @@ export default function StaffRefundsPage() {
             <Button
               variant="outline"
               size="icon"
-              className="size-8"
+              className="size-10"
               disabled={meta.page >= meta.totalPages}
               onClick={() => setPage((value) => value + 1)}
               aria-label="Trang sau"
@@ -202,7 +196,7 @@ export default function StaffRefundsPage() {
             </Button>
           </div>
         )}
-        {isFetching && !loading && <p className="text-center text-[11px] text-slate-400">Đang cập nhật…</p>}
+        {isFetching && !loading && <p className="text-center text-xs text-muted-foreground">Đang cập nhật…</p>}
       </section>
 
       <RefundDialog bookingId={selectedId} onClose={() => setSelectedId(null)} />
@@ -211,34 +205,35 @@ export default function StaffRefundsPage() {
 }
 
 function RefundRow({ booking, onOpen }: { booking: BookingSummary; onOpen: () => void }) {
-  const payment = paymentStatusLabels[booking.paymentStatus];
+  const pending = booking.paymentStatus === "REFUND_PENDING";
   return (
-    <tr className="transition hover:bg-slate-50">
+    <tr className="transition hover:bg-muted/40">
       <td className="p-3">
-        <Link
-          href={`/staff/bookings/${booking.id}`}
-          className="font-mono font-semibold text-[#934a33] hover:underline"
-        >
+        <Link href={`/staff/bookings/${booking.id}`} className="font-mono font-semibold text-primary hover:underline">
           {booking.code}
         </Link>
+        <div className="text-xs text-muted-foreground">{booking.guestName}</div>
       </td>
       <td className="p-3">
-        <div className="font-semibold text-slate-900">{booking.roomType.name}</div>
-        <div className="text-[11px] text-slate-500">
+        <div className="font-semibold text-foreground">{booking.roomType.name}</div>
+        <div className="text-xs text-muted-foreground">
           {formatCalendarDate(booking.checkIn)} – {formatCalendarDate(booking.checkOut)} · {booking.nights} đêm ·{" "}
           {booking.rooms} phòng
         </div>
       </td>
-      <td className="p-3 text-right font-semibold text-slate-900">{formatMoney(booking.totalAmount)}</td>
-      <td className="p-3 text-center">
-        <Badge variant="outline" className={cn("text-[10px] font-semibold", toneClasses[payment.tone])}>
-          {payment.label}
-        </Badge>
+      <td className="whitespace-nowrap p-3 text-right font-semibold text-foreground">{formatMoney(booking.totalAmount)}</td>
+      <td className="p-3">
+        <StatusPill booking={booking} />
       </td>
-      <td className="p-3 text-slate-500">{formatDateTime(booking.createdAt)}</td>
+      <td className="whitespace-nowrap p-3 text-muted-foreground">{formatDateTime(booking.createdAt)}</td>
       <td className="p-3 text-right">
-        <Button size="sm" className="h-8 bg-[#934a33] text-xs text-white hover:bg-[#7b3e2b]" onClick={onOpen}>
-          {booking.paymentStatus === "REFUND_PENDING" ? "Kiểm tra & chuyển" : "Xem"}
+        <Button
+          size="sm"
+          variant={pending ? "default" : "outline"}
+          className="h-10 whitespace-nowrap px-3 text-sm"
+          onClick={onOpen}
+        >
+          {pending ? "Kiểm tra & chuyển" : "Xem"}
         </Button>
       </td>
     </tr>
@@ -277,7 +272,7 @@ function RefundDetail({ bookingId, onClose }: { bookingId: string; onClose: () =
           <DialogDescription>{getApiErrorMessage(error, "Đơn không tồn tại hoặc bạn thiếu quyền.")}</DialogDescription>
         </DialogHeader>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Đóng</Button>
+          <Button variant="outline" className="h-10" onClick={onClose}>Đóng</Button>
         </DialogFooter>
       </>
     );
@@ -305,46 +300,46 @@ function RefundDetail({ bookingId, onClose }: { bookingId: string; onClose: () =
         </DialogDescription>
       </DialogHeader>
 
-      <dl className="grid grid-cols-2 gap-3 rounded-lg bg-slate-50 p-3 text-xs">
+      <dl className="grid grid-cols-2 gap-3 rounded-lg bg-muted/50 p-3 text-sm">
         <div>
-          <dt className="text-slate-500">Hạng phòng</dt>
-          <dd className="font-semibold text-slate-900">{booking.roomType.name}</dd>
+          <dt className="text-muted-foreground">Hạng phòng</dt>
+          <dd className="font-semibold text-foreground">{booking.roomType.name}</dd>
         </div>
         <div>
-          <dt className="text-slate-500">Kỳ nghỉ</dt>
-          <dd className="font-semibold text-slate-900">
+          <dt className="text-muted-foreground">Kỳ nghỉ</dt>
+          <dd className="font-semibold text-foreground">
             {formatCalendarDate(booking.checkIn)} – {formatCalendarDate(booking.checkOut)}
           </dd>
         </div>
         <div>
-          <dt className="text-slate-500">Khách đã trả</dt>
-          <dd className="font-semibold text-slate-900">{formatMoney(booking.totalAmount)}</dd>
+          <dt className="text-muted-foreground">Khách đã trả</dt>
+          <dd className="font-semibold text-foreground">{formatMoney(booking.totalAmount)}</dd>
         </div>
         <div>
-          <dt className="text-slate-500">Số tiền hoàn (theo chính sách)</dt>
+          <dt className="text-muted-foreground">Số tiền hoàn (theo chính sách)</dt>
           <dd className="text-sm font-bold text-emerald-700">{formatMoney(booking.refund?.amount)}</dd>
         </div>
         <div>
-          <dt className="text-slate-500">Miễn phí huỷ đến</dt>
-          <dd className="font-semibold text-slate-900">
+          <dt className="text-muted-foreground">Miễn phí huỷ đến</dt>
+          <dd className="font-semibold text-foreground">
             {booking.cancellation.freeUntil ? formatDateTime(booking.cancellation.freeUntil) : "Không có"}
           </dd>
         </div>
         <div>
-          <dt className="text-slate-500">Phí huỷ sau hạn</dt>
-          <dd className="font-semibold text-slate-900">{booking.cancellation.feePercent}%</dd>
+          <dt className="text-muted-foreground">Phí huỷ sau hạn</dt>
+          <dd className="font-semibold text-foreground">{booking.cancellation.feePercent}%</dd>
         </div>
         <div className="col-span-2">
-          <dt className="text-slate-500">Lý do huỷ của khách</dt>
-          <dd className="font-medium text-slate-900">{booking.cancelReason || "Khách không ghi lý do."}</dd>
+          <dt className="text-muted-foreground">Lý do huỷ của khách</dt>
+          <dd className="font-medium text-foreground">{booking.cancelReason || "Khách không ghi lý do."}</dd>
           {booking.cancelledAt && (
-            <dd className="text-[11px] text-slate-500">Gửi lúc {formatDateTime(booking.cancelledAt)}</dd>
+            <dd className="text-xs text-muted-foreground">Gửi lúc {formatDateTime(booking.cancelledAt)}</dd>
           )}
         </div>
       </dl>
 
       {forwardedAt && (
-        <p className="rounded-lg bg-sky-50 px-3 py-2 text-xs text-sky-800">
+        <p className="rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-800">
           Đã chuyển cho chủ khách sạn lúc {formatDateTime(forwardedAt)}.
           {pending && " Có thể chuyển lại với ghi chú mới."}
         </p>
@@ -352,13 +347,13 @@ function RefundDetail({ bookingId, onClose }: { bookingId: string; onClose: () =
 
       {pending ? (
         forward.isSuccess ? (
-          <p className="flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-800">
-            <CheckCircle2 className="size-4" /> Đã chuyển yêu cầu cho chủ khách sạn.
+          <p className="flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800">
+            <CheckCircle2 className="size-4" /> Đã chuyển yêu cầu cho chủ khách sạn. Chủ sẽ duyệt hoặc từ chối; khách được hoàn tiền sau khi chủ duyệt.
           </p>
         ) : (
           <div className="space-y-1.5">
-            <label htmlFor="refund-note" className="text-xs font-semibold text-slate-700">
-              Ghi chú cho chủ khách sạn
+            <label htmlFor="refund-note" className="text-sm font-semibold text-foreground">
+              Ghi chú cho chủ khách sạn (bắt buộc)
             </label>
             <Textarea
               id="refund-note"
@@ -367,36 +362,36 @@ function RefundDetail({ bookingId, onClose }: { bookingId: string; onClose: () =
               maxLength={BOOKING_LIMITS.refundNoteMax}
               placeholder="Ví dụ: Khách huỷ trước hạn miễn phí, đã gọi xác nhận qua điện thoại."
               aria-invalid={!!noteError}
-              className="min-h-24 text-xs"
+              className="min-h-24 text-sm"
             />
-            <div className="flex justify-between text-[11px]">
-              <span className="text-red-600">{noteError}</span>
-              <span className="text-slate-400">
+            <div className="flex justify-between text-xs">
+              <span className="text-destructive">{noteError}</span>
+              <span className="text-muted-foreground">
                 {note.length}/{BOOKING_LIMITS.refundNoteMax}
               </span>
             </div>
             {forward.error && (
-              <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700" role="alert">
+              <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-destructive" role="alert">
                 {getApiErrorMessage(forward.error, "Không chuyển được yêu cầu.")}
               </p>
             )}
           </div>
         )
       ) : (
-        <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+        <p className="rounded-lg bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
           Yêu cầu đã được xử lý: {paymentStatusLabels[booking.paymentStatus].label.toLowerCase()}.
         </p>
       )}
 
       <DialogFooter className="gap-2">
         <Link href={`/staff/bookings/${booking.id}`} className="sm:mr-auto">
-          <Button variant="outline" className="w-full gap-1.5 text-xs">
+          <Button variant="outline" className="h-10 w-full gap-1.5 text-sm">
             <ExternalLink className="size-3.5" /> Mở chi tiết đơn
           </Button>
         </Link>
         {pending && !forward.isSuccess && (
           <Button
-            className="gap-1.5 bg-[#934a33] text-xs text-white hover:bg-[#7b3e2b]"
+            className="h-10 gap-1.5 text-sm"
             onClick={submit}
             disabled={forward.isPending}
           >

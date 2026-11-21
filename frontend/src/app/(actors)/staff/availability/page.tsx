@@ -1,15 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
 import { CalendarRange, ChevronLeft, ChevronRight, Tags } from "lucide-react";
 import type { AvailabilityDay } from "@stayreco/shared";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { EmptyState, ErrorState, LoadingState } from "@/components/common/StateViews";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
-import { getApiErrorMessage } from "@/lib/api-error";
 import { cn } from "@/lib/utils";
 import { addDays, dateInput } from "@/features/stays/lib/params";
 import {
@@ -66,79 +63,71 @@ export default function StaffAvailabilityPage() {
     <div className="space-y-5">
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
         <div>
-          <div className="mb-1 flex items-center gap-2 text-xs text-slate-500">
-            <Link href="/staff/dashboard" className="hover:text-[#934a33]">Bàn làm việc</Link>
-            <ChevronRight className="size-3" />
-            <span className="font-medium text-slate-800">Phòng trống & Giá</span>
-          </div>
-          <h1 className="flex items-center gap-2 text-2xl font-bold text-slate-900">
-            <CalendarRange className="size-7 text-[#934a33]" /> Phòng trống & Giá
+          <h1 className="flex items-center gap-2 text-2xl font-bold text-foreground">
+            <CalendarRange className="size-6 text-primary" aria-hidden /> Phòng trống & giá
           </h1>
-          <p className="mt-1 text-xs text-slate-500">
+          <p className="mt-1 text-sm text-muted-foreground">
             Số phòng còn bán và giá mỗi đêm cho khách đặt hôm nay. Chỉ xem; giá và số phòng mở bán do chủ khách sạn
             thiết lập.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           <Button
             variant="outline"
             size="icon"
-            className="size-9"
+            className="size-10"
             onClick={() => setFrom((value) => (addDays(value, -7) < today ? today : addDays(value, -7)))}
             disabled={from <= today}
             aria-label="Tuần trước"
           >
             <ChevronLeft className="size-4" />
           </Button>
-          <span className="min-w-44 text-center text-xs font-semibold text-slate-700">
+          <span className="min-w-40 whitespace-nowrap text-center text-sm font-semibold text-foreground">
             {formatCalendarDate(from)} – {formatCalendarDate(to)}
           </span>
           <Button
             variant="outline"
             size="icon"
-            className="size-9"
+            className="size-10"
             onClick={() => setFrom((value) => addDays(value, 7))}
             aria-label="Tuần sau"
           >
             <ChevronRight className="size-4" />
           </Button>
           {from !== today && (
-            <Button variant="ghost" size="sm" className="text-xs" onClick={() => setFrom(today)}>
+            <Button variant="ghost" className="h-10 whitespace-nowrap" onClick={() => setFrom(today)}>
               Hôm nay
             </Button>
           )}
         </div>
       </div>
 
+      <ul className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground" aria-label="Chú thích">
+        <li className="flex items-center gap-1.5"><span className="size-3 rounded bg-emerald-100 ring-1 ring-emerald-300" aria-hidden /> Còn nhiều (từ 3 phòng)</li>
+        <li className="flex items-center gap-1.5"><span className="size-3 rounded bg-amber-100 ring-1 ring-amber-300" aria-hidden /> Sắp hết (1–2 phòng)</li>
+        <li className="flex items-center gap-1.5"><span className="size-3 rounded bg-red-100 ring-1 ring-red-300" aria-hidden /> Hết phòng</li>
+        <li>Dưới số phòng: giá một đêm và mức chênh so với giá gốc</li>
+      </ul>
+
       {error ? (
-        <Alert variant="destructive">
-          <AlertTitle>Không tải được lịch phòng</AlertTitle>
-          <AlertDescription className="mt-1 flex flex-col items-start gap-3">
-            <span>{getApiErrorMessage(error, "Vui lòng thử lại sau.")}</span>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                void roomTypes.refetch();
-                void availability.refetch();
-              }}
-            >
-              Thử lại
-            </Button>
-          </AlertDescription>
-        </Alert>
+        <ErrorState
+          title="Không tải được lịch phòng"
+          error={error}
+          onRetry={() => {
+            void roomTypes.refetch();
+            void availability.refetch();
+          }}
+        />
       ) : loading ? (
-        <Skeleton className="h-64 w-full rounded-xl" />
+        <LoadingState rows={3} label="Đang tải lịch phòng…" />
       ) : types.length === 0 ? (
-        <div className="rounded-xl border border-slate-200 bg-white py-10 text-center text-sm text-slate-500">
-          Khách sạn chưa có hạng phòng nào.
-        </div>
+        <EmptyState icon={CalendarRange} title="Khách sạn chưa có hạng phòng nào" />
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-2xs">
+        <div className="overflow-x-auto rounded-xl border border-border bg-card">
           {/* A CSS grid, not a <table>: the dense staff workspace forces tables to full width and a fixed layout. */}
-          <div role="table" aria-label="Phòng trống và giá theo đêm" className="grid w-max min-w-full text-xs" style={{ gridTemplateColumns: `10rem repeat(${DAYS}, 4.5rem)` }}>
+          <div role="table" aria-label="Phòng trống và giá theo đêm" className="grid w-max min-w-full text-xs" style={{ gridTemplateColumns: `11rem repeat(${DAYS}, 5rem)` }}>
             <div role="row" className="contents">
-              <div role="columnheader" className="sticky left-0 z-10 border-b border-slate-200 bg-slate-50 p-3 font-semibold text-slate-700">
+              <div role="columnheader" className="sticky left-0 z-10 border-b border-r border-border bg-muted p-3 font-semibold text-foreground">
                 Hạng phòng
               </div>
               {dates.map((date) => {
@@ -149,11 +138,11 @@ export default function StaffAvailabilityPage() {
                     key={date}
                     role="columnheader"
                     className={cn(
-                      "border-b border-slate-200 bg-slate-50 p-2 text-center font-semibold",
-                      weekend ? "text-[#934a33]" : "text-slate-600",
+                      "border-b border-border p-2 text-center font-semibold",
+                      weekend ? "bg-accent text-foreground" : "bg-muted text-muted-foreground",
                     )}
                   >
-                    <span className="block text-[10px] font-medium">
+                    <span className="block text-xs font-medium">
                       {format(new Date(`${date}T00:00:00`), "EEEEEE", { locale: vi })}
                     </span>
                     {formatCalendarDate(date).slice(0, 5)}
@@ -165,9 +154,9 @@ export default function StaffAvailabilityPage() {
               const nightly = prices[index]?.data ?? [];
               return (
                 <div key={type.id} role="row" className="contents">
-                  <div role="rowheader" className="sticky left-0 z-10 border-b border-slate-100 bg-white p-3">
-                    <span className="block font-semibold text-slate-900">{type.name}</span>
-                    <span className="text-[11px] text-slate-500">Giá gốc {formatMoney(type.basePrice)}</span>
+                  <div role="rowheader" className="sticky left-0 z-10 border-b border-r border-border bg-card p-3">
+                    <span className="block font-semibold text-foreground">{type.name}</span>
+                    <span className="text-xs text-muted-foreground">Giá gốc {formatMoney(type.basePrice)}</span>
                   </div>
                   {dates.map((date) => {
                     const day = cellOf(type.id, date);
@@ -176,7 +165,7 @@ export default function StaffAvailabilityPage() {
                     const change = price != null && base ? Math.round(((price - base) / base) * 100) : 0;
                     const onSale = day?.onSale ?? 0;
                     return (
-                      <div key={date} role="cell" className="border-b border-slate-100 p-1.5 text-center">
+                      <div key={date} role="cell" aria-label={day ? `${type.name}, ${formatCalendarDate(date)}: còn ${onSale} phòng` : undefined} className="border-b border-border p-1.5 text-center">
                         <div
                           className={cn(
                             "rounded-lg px-1 py-1.5",
@@ -196,16 +185,18 @@ export default function StaffAvailabilityPage() {
                           >
                             {day ? onSale : "—"}
                           </span>
-                          <span className="block text-[10px] text-slate-500">còn</span>
+                          <span className="block text-xs text-muted-foreground">
+                            {!day ? "" : onSale === 0 ? "hết" : onSale <= 2 ? "sắp hết" : "còn"}
+                          </span>
                         </div>
-                        <span className="mt-1 block whitespace-nowrap text-[11px] font-semibold text-slate-800">
+                        <span className="mt-1 block whitespace-nowrap text-xs font-semibold text-foreground">
                           {price != null ? compactMoney.format(price) : prices[index]?.isLoading ? "…" : "—"}
                         </span>
                         {change !== 0 && (
                           <span
                             className={cn(
-                              "block text-[10px] font-semibold",
-                              change < 0 ? "text-emerald-700" : "text-[#934a33]",
+                              "block text-xs font-semibold",
+                              change < 0 ? "text-emerald-700" : "text-amber-700",
                             )}
                           >
                             {change > 0 ? "+" : ""}
@@ -219,27 +210,26 @@ export default function StaffAvailabilityPage() {
               );
             })}
           </div>
-          <p className="border-t border-slate-100 px-3 py-2 text-[11px] text-slate-500">
-            Số lớn là số phòng còn bán mỗi đêm (rê chuột để xem chi tiết); dưới là giá một đêm cho một phòng và mức
-            chênh so với giá gốc.
+          <p className="border-t border-border px-3 py-2 text-xs text-muted-foreground">
+            Chạm vào ô để xem chi tiết đặt chỗ; kéo ngang để xem thêm ngày.
           </p>
         </div>
       )}
 
-      <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-2xs sm:p-5">
-        <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-          <Tags className="size-4 text-[#934a33]" /> Quy tắc giá đang áp dụng
+      <section className="space-y-3 rounded-xl border border-border bg-card p-4 sm:p-5">
+        <h2 className="flex items-center gap-2 text-sm font-bold text-foreground">
+          <Tags className="size-4 text-primary" /> Quy tắc giá đang áp dụng
         </h2>
         {rules.isLoading ? (
-          <Skeleton className="h-20 w-full" />
+          <LoadingState rows={1} />
         ) : rules.error ? (
-          <p className="text-xs text-red-700">{getApiErrorMessage(rules.error, "Không tải được quy tắc giá.")}</p>
+          <ErrorState title="Không tải được quy tắc giá" error={rules.error} onRetry={() => void rules.refetch()} />
         ) : activeRules.length === 0 ? (
-          <p className="text-xs text-slate-500">Không có quy tắc nào; mọi đêm tính theo giá gốc.</p>
+          <p className="text-xs text-muted-foreground">Không có quy tắc nào; mọi đêm tính theo giá gốc.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="border-b border-slate-200 text-slate-600">
+              <thead className="border-b border-border text-muted-foreground">
                 <tr>
                   <th className="p-2">Tên</th>
                   <th className="p-2">Hạng phòng</th>
@@ -248,23 +238,23 @@ export default function StaffAvailabilityPage() {
                   <th className="p-2">Áp dụng</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-border">
                 {activeRules.map((rule) => (
                   <tr key={rule.id}>
-                    <td className="p-2 font-semibold text-slate-900">{rule.name}</td>
-                    <td className="p-2 text-slate-600">{typeName(rule.roomTypeId)}</td>
-                    <td className="p-2 text-slate-600">{priceRuleTypeLabels[rule.ruleType]}</td>
+                    <td className="p-2 font-semibold text-foreground">{rule.name}</td>
+                    <td className="p-2 text-muted-foreground">{typeName(rule.roomTypeId)}</td>
+                    <td className="p-2 text-muted-foreground">{priceRuleTypeLabels[rule.ruleType]}</td>
                     <td
                       className={cn(
                         "p-2 text-right font-semibold",
                         rule.adjustmentValue < 0 && rule.adjustmentType !== "SET_PRICE"
                           ? "text-emerald-700"
-                          : "text-slate-900",
+                          : "text-foreground",
                       )}
                     >
                       {adjustmentLabel(rule)}
                     </td>
-                    <td className="p-2 text-slate-600">
+                    <td className="p-2 text-muted-foreground">
                       {[
                         rule.validFrom || rule.validTo
                           ? `${rule.validFrom ? formatCalendarDate(rule.validFrom) : "…"} – ${
