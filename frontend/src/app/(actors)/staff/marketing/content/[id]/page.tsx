@@ -1,22 +1,23 @@
 "use client";
 
-import { Suspense, useRef, useState } from "react";
-import Link from "next/link";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
-  ArrowLeft,
   CheckCircle2,
   Clock,
   ImageIcon,
   ImagePlus,
   Loader2,
+  Lock,
   Save,
   Send,
   Sparkles,
   Trash2,
+  Wand2,
   XCircle,
 } from "lucide-react";
 import { updateContentSchema, type MarketingContent } from "@stayreco/shared";
+import { ActionBar, ActionMenu, type ActionMenuItem } from "@/components/common/ActionBar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,7 +37,13 @@ import {
 } from "@/features/staff/api/marketing-queries";
 import { contentTypeLabels, EDITABLE_STATUSES } from "@/features/staff/lib/marketing-labels";
 import { getMarketingErrorMessage } from "@/features/staff/lib/marketing-errors";
-import { ContentStatusPill, MarketingErrorPanel, MarketingHeader } from "@/features/staff/marketing/MarketingParts";
+import {
+  ConfirmDialog,
+  ContentStatusPill,
+  MarketingErrorPanel,
+  MarketingHeader,
+  useAiBudgetState,
+} from "@/features/staff/marketing/MarketingParts";
 import { SchedulePanel } from "@/features/staff/marketing/SchedulePanel";
 import { AiImagePanel } from "@/features/staff/marketing/AiImagePanel";
 
@@ -152,6 +159,8 @@ function ContentWorkspace({
   const remove = useDeleteContent();
   const drawImage = useGenerateContentImage();
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
+  const { exhausted } = useAiBudgetState(hotelId);
   const editable = EDITABLE_STATUSES.includes(content.status);
   const busy =
     editor.update.isPending ||
@@ -160,6 +169,15 @@ function ContentWorkspace({
     editor.removeImage.isPending ||
     drawImage.isPending;
 
+  // Unsaved words are lost on reload or closing the tab: ask first.
+  const dirty = editable && editor.dirty;
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
+
   const sendForApproval = () => {
     // Unsaved words go first: what is submitted is what the owner reads.
     if (editor.dirty) editor.save(() => submit.mutate(content.id));
@@ -167,45 +185,100 @@ function ContentWorkspace({
   };
 
   const actionError = submit.error ?? editor.update.error ?? remove.error;
+  const lockedReason =
+    content.status === "PENDING_APPROVAL"
+      ? "Đang chờ chủ khách sạn duyệt nên chữ và ảnh tạm khoá, để chủ đọc đúng bản đã gửi."
+      : content.status === "PUBLISHED"
+        ? "Bài đã đăng nên chữ và ảnh không sửa được nữa."
+        : "Bài đã được duyệt nên chữ và ảnh giữ nguyên như lúc duyệt. Muốn sửa, hãy tạo bài mới.";
+
+  const imageMenu: ActionMenuItem[] = [
+    {
+      label: content.mediaUrl ? "Đổi ảnh bằng ảnh tải lên" : "Tải ảnh lên",
+      description: "JPG, PNG hoặc WebP, tối đa 10 MB.",
+      icon: ImagePlus,
+      onSelect: () => fileRef.current?.click(),
+      disabled: busy,
+    },
+    {
+      label: "AI vẽ ảnh",
+      description: exhausted ? "Đã hết ngân sách AI tháng này." : "Khoảng $0.07 mỗi ảnh, trừ vào ngân sách AI.",
+      icon: Wand2,
+      onSelect: () => setAiOpen(true),
+      disabled: busy || exhausted,
+    },
+    ...(content.mediaUrl
+      ? [
+          {
+            label: "Gỡ ảnh",
+            description: "Bài sẽ không còn ảnh; Instagram bắt buộc có ảnh.",
+            icon: Trash2,
+            destructive: true,
+            onSelect: () => editor.removeImage.mutate(content.id),
+            disabled: busy,
+          },
+        ]
+      : []),
+  ];
+
+  const submitMenu: ActionMenuItem[] = [
+    {
+      label: "Lưu nháp",
+      description: "Giữ lại chỉnh sửa, chưa gửi duyệt.",
+      icon: Save,
+      onSelect: () => editor.save(),
+      disabled: !editor.dirty || busy,
+    },
+    {
+      label: "Xoá nội dung",
+      description: "Xoá hẳn bài này, không khôi phục được.",
+      icon: Trash2,
+      destructive: true,
+      onSelect: () => setConfirmDelete(true),
+      disabled: busy,
+    },
+  ];
 
   return (
     <div className="space-y-5">
       <MarketingHeader
         title={content.title || "Nội dung chưa có tiêu đề"}
-        icon={<Sparkles className="size-7 shrink-0 text-[#934a33]" />}
+        icon={<Sparkles className="size-7 shrink-0 text-primary" aria-hidden />}
         crumbs={[{ label: "Thư viện nội dung", href: "/staff/marketing/content" }, { label: "Chi tiết" }]}
         description={STATUS_HINT[content.status]}
-        actions={
-          <Link href="/staff/marketing/content">
-            <Button variant="outline" size="sm" className="gap-1.5 text-xs">
-              <ArrowLeft className="size-3.5" /> Thư viện
-            </Button>
-          </Link>
-        }
       />
 
       {generated && content.status === "DRAFT" && (
         <p className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-semibold text-emerald-800">
-          <CheckCircle2 className="size-4" /> AI đã viết xong bản nháp. Đọc lại, chỉnh sửa và thêm ảnh trước khi gửi duyệt.
+          <CheckCircle2 className="size-4 shrink-0" aria-hidden /> AI đã viết xong bản nháp. Đọc lại, chỉnh sửa và thêm ảnh
+          trước khi gửi duyệt.
         </p>
       )}
-      {content.status === "REJECTED" && content.rejectedReason && (
-        <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-800">
-          <XCircle className="mt-0.5 size-4 shrink-0" />
-          <div>
-            <p className="font-semibold">Chủ khách sạn góp ý:</p>
-            <p>{content.rejectedReason}</p>
+      {content.status === "REJECTED" && (
+        <div role="alert" className="flex items-start gap-3 rounded-xl border-2 border-destructive/40 bg-destructive/5 px-4 py-4">
+          <XCircle className="mt-0.5 size-5 shrink-0 text-destructive" aria-hidden />
+          <div className="min-w-0 space-y-1">
+            <p className="text-sm font-bold text-destructive">Chủ khách sạn đã từ chối bài này</p>
+            <p className="whitespace-pre-line text-sm text-foreground">
+              {content.rejectedReason || "Chủ khách sạn không ghi lý do. Hãy đọc lại bài và liên hệ chủ nếu cần."}
+            </p>
+            <p className="text-xs text-muted-foreground">Sửa theo góp ý rồi gửi duyệt lại.</p>
           </div>
         </div>
       )}
+      {!editable && (
+        <p className="flex items-start gap-2 rounded-xl border border-border bg-muted/50 px-4 py-3 text-xs text-muted-foreground">
+          <Lock className="mt-0.5 size-4 shrink-0" aria-hidden /> {lockedReason}
+        </p>
+      )}
 
       <div className="grid items-start gap-5 lg:grid-cols-3">
-        <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-2xs sm:p-5 lg:col-span-2">
+        <section className="space-y-4 rounded-xl border border-border bg-card p-4 shadow-2xs sm:p-5 lg:col-span-2">
           <div className="flex flex-wrap items-center gap-2">
             <ContentStatusPill status={content.status} />
-            <span className="text-[11px] font-semibold uppercase text-[#934a33]">{contentTypeLabels[content.contentType]}</span>
-            <span className="ml-auto flex items-center gap-1 text-[11px] text-slate-400">
-              <Clock className="size-3" /> {content.authorName ?? "Chủ khách sạn"} · {formatDateTime(content.createdAt)}
+            <span className="text-xs font-semibold uppercase text-primary">{contentTypeLabels[content.contentType]}</span>
+            <span className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
+              <Clock className="size-3" aria-hidden /> {content.authorName ?? "Chủ khách sạn"} · {formatDateTime(content.createdAt)}
             </span>
           </div>
 
@@ -222,12 +295,13 @@ function ContentWorkspace({
                   disabled={busy}
                   onChange={(event) => editor.setTitle(event.target.value)}
                   aria-invalid={!!editor.errors.title}
+                  className="h-10"
                 />
-                {editor.errors.title && <p className="text-xs text-red-600">{editor.errors.title}</p>}
+                {editor.errors.title && <p className="text-xs text-destructive">{editor.errors.title}</p>}
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="body" className="text-xs font-semibold">
-                  Nội dung bài đăng <span className="text-red-500">*</span>
+                  Nội dung bài đăng <span className="text-destructive">*</span>
                 </Label>
                 <Textarea
                   id="body"
@@ -239,145 +313,97 @@ function ContentWorkspace({
                   aria-invalid={!!editor.errors.body}
                   className="min-h-64 text-sm leading-relaxed"
                 />
-                <div className="flex justify-between text-[11px]">
-                  <span className={editor.errors.body ? "text-red-600" : "text-slate-400"}>
+                <div className="flex justify-between gap-3 text-xs">
+                  <span className={editor.errors.body ? "text-destructive" : "text-muted-foreground"}>
                     {editor.errors.body ?? "AI không tự thêm giá, ngày hay ưu đãi. Kiểm tra lại mọi con số trước khi gửi."}
                   </span>
-                  <span className="text-slate-400">{editor.body.trim().length}/10.000</span>
+                  <span className="shrink-0 text-muted-foreground">{editor.body.trim().length}/10.000</span>
                 </div>
               </div>
             </>
           ) : (
             <article className="space-y-2">
-              {content.title && <h2 className="text-lg font-bold text-slate-900">{content.title}</h2>}
-              <p className="whitespace-pre-line text-sm leading-relaxed text-slate-700">{content.body}</p>
+              {content.title && <h2 className="text-lg font-bold text-foreground">{content.title}</h2>}
+              <p className="whitespace-pre-line text-sm leading-relaxed text-foreground">{content.body}</p>
             </article>
           )}
 
-          <div className="space-y-2 border-t border-slate-100 pt-4">
-            <p className="text-xs font-semibold text-slate-700">Ảnh minh hoạ</p>
+          <div className="space-y-2 border-t border-border pt-4">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold text-foreground">Ảnh minh hoạ</p>
+              {editable && <ActionMenu items={imageMenu} label="Ảnh" />}
+            </div>
+            <input
+              ref={fileRef}
+              type="file"
+              accept={IMAGE_TYPES.join(",")}
+              className="sr-only"
+              aria-label="Chọn ảnh minh hoạ"
+              tabIndex={-1}
+              onChange={(event) => {
+                editor.pickImage(event.target.files?.[0]);
+                event.target.value = "";
+              }}
+            />
             {content.mediaUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={content.mediaUrl} alt="Ảnh minh hoạ bài đăng" className="max-h-72 w-full rounded-lg object-cover" />
             ) : (
-              <div className="flex h-32 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-slate-300 bg-slate-50 text-xs text-slate-400">
-                <ImageIcon className="size-6" /> Chưa có ảnh. Instagram bắt buộc phải có ảnh.
+              <div className="flex h-32 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-border bg-muted/40 text-xs text-muted-foreground">
+                <ImageIcon className="size-6" aria-hidden /> Chưa có ảnh. Instagram bắt buộc phải có ảnh.
               </div>
             )}
-            {editable && (
-              <div className="flex flex-wrap items-center gap-2">
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept={IMAGE_TYPES.join(",")}
-                  className="sr-only"
-                  aria-label="Chọn ảnh minh hoạ"
-                  onChange={(event) => {
-                    editor.pickImage(event.target.files?.[0]);
-                    event.target.value = "";
-                  }}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="gap-1.5 text-xs"
-                  disabled={busy}
-                  onClick={() => fileRef.current?.click()}
-                >
-                  {editor.upload.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <ImagePlus className="size-3.5" />}
-                  {content.mediaUrl ? "Đổi ảnh" : "Tải ảnh lên"}
-                </Button>
-                {content.mediaUrl && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="gap-1.5 text-xs text-red-600"
-                    disabled={busy}
-                    onClick={() => editor.removeImage.mutate(content.id)}
-                  >
-                    <Trash2 className="size-3.5" /> Gỡ ảnh
-                  </Button>
-                )}
-                <span className="text-[11px] text-slate-400">JPG, PNG, WebP · tối đa 10 MB</span>
-                <AiImagePanel content={content} draw={drawImage} disabled={busy} />
-              </div>
+            {(editor.upload.isPending || editor.removeImage.isPending || drawImage.isPending) && (
+              <p className="flex items-center gap-1.5 text-xs text-muted-foreground" role="status">
+                <Loader2 className="size-3.5 animate-spin" aria-hidden /> Đang xử lý ảnh…
+              </p>
             )}
-            {editor.imageError && <p className="text-xs text-red-600">{editor.imageError}</p>}
+            {editor.imageError && <p className="text-xs text-destructive">{editor.imageError}</p>}
           </div>
 
           {actionError && (
-            <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700" role="alert">
+            <p className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive" role="alert">
               {getMarketingErrorMessage(actionError)}
             </p>
           )}
 
-          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 pt-4">
-            {editor.saved && !editor.dirty && (
-              <span className="mr-auto flex items-center gap-1 text-xs font-semibold text-emerald-700" role="status">
-                <CheckCircle2 className="size-3.5" /> Đã lưu
-              </span>
-            )}
-            {/* The backend deletes only what may still be edited (DRAFT, REJECTED). */}
-            {editable &&
-              (confirmDelete ? (
-                <span className="flex items-center gap-2 text-xs">
-                  Xoá nội dung này?
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    className="text-xs"
-                    disabled={remove.isPending}
-                    onClick={() => remove.mutate(content.id, { onSuccess: onDeleted })}
-                  >
-                    {remove.isPending ? <Loader2 className="size-3.5 animate-spin" /> : "Xoá"}
+          {/* The backend deletes only what may still be edited (DRAFT, REJECTED). */}
+          {editable && (
+            <div className="flex items-center gap-2 border-t border-border pt-4">
+              <p className="mr-auto min-w-0 text-xs" role="status">
+                {dirty ? (
+                  <span className="font-semibold text-amber-700">Có thay đổi chưa lưu. Gửi duyệt sẽ lưu luôn.</span>
+                ) : editor.saved ? (
+                  <span className="flex items-center gap-1 font-semibold text-emerald-700">
+                    <CheckCircle2 className="size-3.5" aria-hidden /> Đã lưu
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground">Gửi duyệt xong, chữ và ảnh sẽ khoá đến khi chủ quyết định.</span>
+                )}
+              </p>
+              <ActionBar
+                primary={
+                  <Button className="h-10 gap-1.5 whitespace-nowrap" disabled={busy || !editor.body.trim()} onClick={sendForApproval}>
+                    {submit.isPending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" aria-hidden />}
+                    Gửi chủ duyệt
                   </Button>
-                  <Button size="sm" variant="ghost" className="text-xs" onClick={() => setConfirmDelete(false)}>
-                    Không
-                  </Button>
-                </span>
-              ) : (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="gap-1.5 text-xs text-red-600"
-                  disabled={busy}
-                  onClick={() => setConfirmDelete(true)}
-                >
-                  <Trash2 className="size-3.5" /> Xoá
-                </Button>
-              ))}
-            {editable && (
-              <>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="gap-1.5 text-xs"
-                  disabled={!editor.dirty || busy}
-                  onClick={() => editor.save()}
-                >
-                  {editor.update.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
-                  Lưu nháp
-                </Button>
-                <Button
-                  size="sm"
-                  className="gap-1.5 bg-[#934a33] text-xs text-white hover:bg-[#7a341e]"
-                  disabled={busy || !editor.body.trim()}
-                  onClick={sendForApproval}
-                >
-                  {submit.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
-                  Gửi chủ khách sạn duyệt
-                </Button>
-              </>
-            )}
-          </div>
+                }
+                menu={submitMenu}
+              />
+            </div>
+          )}
+          {content.status === "PENDING_APPROVAL" && (
+            <p className="flex items-center gap-2 border-t border-border pt-4 text-xs text-muted-foreground">
+              <Clock className="size-4 shrink-0" aria-hidden /> Không cần làm gì thêm: bạn sẽ thấy trạng thái đổi khi chủ khách
+              sạn duyệt hoặc từ chối.
+            </p>
+          )}
         </section>
 
         <aside className="space-y-4">
           {hotelId && <SchedulePanel hotelId={hotelId} content={content} />}
-          <div className="rounded-xl border border-slate-200 bg-white p-4 text-xs text-slate-500 shadow-2xs">
-            <p className="mb-1 font-semibold text-slate-700">Quy trình</p>
+          <div className="rounded-xl border border-border bg-card p-4 text-xs text-muted-foreground shadow-2xs">
+            <p className="mb-1 font-semibold text-foreground">Quy trình</p>
             <ol className="list-decimal space-y-0.5 pl-4">
               <li>AI viết bản nháp, nhân viên chỉnh sửa và thêm ảnh</li>
               <li>Gửi chủ khách sạn duyệt (chủ có thể từ chối kèm góp ý)</li>
@@ -387,6 +413,17 @@ function ContentWorkspace({
           </div>
         </aside>
       </div>
+
+      {editable && <AiImagePanel content={content} draw={drawImage} hotelId={hotelId} open={aiOpen} onOpenChange={setAiOpen} />}
+      <ConfirmDialog
+        open={confirmDelete}
+        onOpenChange={setConfirmDelete}
+        title="Xoá nội dung này?"
+        description="Bài viết và ảnh sẽ bị xoá hẳn, không khôi phục được."
+        confirmLabel="Xoá nội dung"
+        pending={remove.isPending}
+        onConfirm={() => remove.mutate(content.id, { onSuccess: onDeleted, onSettled: () => setConfirmDelete(false) })}
+      />
     </div>
   );
 }
