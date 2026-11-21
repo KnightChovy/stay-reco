@@ -1,5 +1,6 @@
 import { api } from "@/lib/axios";
 import type {
+  ContentReport,
   CreateReviewInput,
   CustomerWallet,
   DiscountQuote,
@@ -11,6 +12,7 @@ import type {
   Review,
   ReviewEligibility,
   ReviewListQuery,
+  ReportReviewInput,
   UpdateReviewInput,
   Voucher,
   WalletTransaction,
@@ -124,5 +126,28 @@ export async function getMyReviews(params: Partial<ReviewListQuery> = {}) {
 
 export async function updateReview(reviewId: string, input: UpdateReviewInput) {
   const { data } = await api.patch<APIResponse<Review>>(`/reviews/${reviewId}`, input);
+  return data.data;
+}
+
+/** One photo (field `file`, JPEG/PNG/WebP up to 10 MB, 1:1 to 4:3 either way up); answers the whole review. */
+export async function uploadReviewImage(reviewId: string, file: File) {
+  const form = new FormData();
+  form.append("file", file);
+  const { data } = await api.post<APIResponse<Review>>(`/reviews/${reviewId}/images`, form, {
+    headers: { "Content-Type": "multipart/form-data" },
+    timeout: 60_000,
+  });
+  return data.data;
+}
+
+/** Removes the photo and its file; refused while the photo is under an open report (REVIEW_IMAGE_REPORTED). */
+export async function deleteReviewImage(imageId: string) {
+  const { data } = await api.delete<APIResponse<Review>>(`/review-images/${imageId}`);
+  return data.data;
+}
+
+/** Flags a review, or one photo with `reviewImageId`, for a platform manager; nothing changes until one decides. */
+export async function reportReview(reviewId: string, input: ReportReviewInput) {
+  const { data } = await api.post<APIResponse<ContentReport>>(`/reviews/${reviewId}/reports`, input);
   return data.data;
 }
