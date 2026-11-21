@@ -1,0 +1,86 @@
+{
+  "timestamp": "2026-10-14T08:57:19+07:00",
+  "command": "run_experiment.py 42 1 2 3 4 5 6 7 8 9 --cold-item=0.2 --tag=fullcat",
+  "seeds": [
+    42,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+  ],
+  "git": {
+    "commit": "95de61198b6eef9469198bffb7edc8b0159d43cd",
+    "branch": "main",
+    "dirty": true
+  },
+  "config": {
+    "dataset": "movielens-100k",
+    "test_ratio": 0.2,
+    "val_ratio": 0.5,
+    "cold_user_ratio": 0.3,
+    "max_cold_n": 19,
+    "cold_item_ratio": 0.2,
+    "warm_min_n": 20,
+    "cold_max_n": 5,
+    "svdpp": {
+      "factors": 50,
+      "epochs": 30,
+      "lr": 0.005,
+      "reg": 0.02
+    },
+    "lightgcn": {
+      "factors": 32,
+      "layers": 3,
+      "epochs": 300,
+      "lr": 0.01
+    },
+    "content_k": 30,
+    "demo_cols": [
+      "age_group",
+      "gender",
+      "occupation"
+    ],
+    "demo_shrinkage": 5,
+    "alpha_manual": {
+      "alpha_max": 0.7,
+      "n_threshold": 30,
+      "gamma_base": 0.15
+    },
+    "fixed_alphas": [
+      0.0,
+      0.3,
+      0.5,
+      0.7,
+      1.0
+    ],
+    "top_k": [
+      5,
+      10,
+      20
+    ],
+    "relevance_threshold": 4.0
+  },
+  "environment": {
+    "python": "3.11.16",
+    "platform": "Windows-10-10.0.26200-SP0",
+    "packages": {
+      "numpy": "1.26.4",
+      "pandas": "2.2.2",
+      "scipy": "1.17.1",
+      "scikit-learn": "1.5.2",
+      "scikit-surprise": "1.1.4",
+      "matplotlib": "3.9.2",
+      "torch": "2.14.0+cpu"
+    },
+    "blas": {
+      "error": "module 'numpy.__config__' has no attribute 'get_info'"
+    }
+  },
+  "ranking_protocol": "Precision/Recall/NDCG/Coverage@K xếp hạng trên TOÀN CATALOG: rổ ứng viên = mọi item user chưa rating trong train+validation; liên quan = item trong test với rating >= ngưỡng. Xem evaluation/ranking.py.",
+  "tuning_objective": "Mọi phương pháp được grid search trên validation theo RMSE (không theo metric xếp hạng) — như nhau cho tất cả, nhưng phải ghi rõ trong báo cáo."
+}

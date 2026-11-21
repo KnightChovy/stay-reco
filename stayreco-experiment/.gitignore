@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.ipynb_checkpoints/
+
+# Log chạy thí nghiệm (dung lượng lớn, sinh lại được)
+results/*.log
+
+# Bảng điểm đầy đủ (~11k dòng, sinh lại được; bản sample vẫn giữ)
+results/score_table_seed*.csv
+
+# Thư mục rác do lệnh mkdir lỗi
+{data,models,evaluation,utils,notebooks}/
+
+# IDE / OS
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+.pytest_cache/
+
+# Dữ liệu: không phân phối lại. Tải bản gốc theo README, rồi chạy data/prep_*.py
+data/tripadvisor_raw/
+data/tripadvisor/
+data/tripadvisor_m12/
+
+# Code + dữ liệu của bài GNN (Mrázová & Behún) dùng để chạy lại — không phải của repo này
+external/
+
+# Log chạy thí nghiệm ở thư mục gốc
+/*.log
+
+# Kịch bản thuyết trình cá nhân
+HUONG_DAN.md
+SCRIPT_*.md
+TRINH_BAY_THAY.md
