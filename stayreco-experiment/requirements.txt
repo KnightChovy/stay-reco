@@ -1,0 +1,23 @@
+# Dùng environment.yml nếu có conda (khuyến nghị — scikit-surprise cần compile C).
+# File này chỉ để tham chiếu phiên bản chính xác đã sinh ra số trong báo cáo.
+# Phiên bản dưới đây khớp với results/run_meta_<tag>.json của lần chạy đó.
+
+# Core ML
+scikit-surprise==1.1.4    # SVD, SVD++ — cần numpy < 2
+scikit-learn==1.5.2       # cosine_similarity, TF-IDF
+numpy==1.26.4             # KHÔNG nâng 2.x: scikit-surprise 1.1.4 không tương thích
+pandas==2.2.2
+scipy==1.17.1
+
+# LightGCN (tầng 2 của SL-ARec 2026)
+torch==2.14.0
+
+# Biểu đồ — matplotlib phải <= 3.9.x, bản 3.11.x build cho numpy 2 ABI
+matplotlib==3.9.2
+seaborn==0.13.2
+
+# Test
+pytest>=8,<9
+
+# Notebooks (không cần cho run_experiment.py)
+jupyter==1.0.0
