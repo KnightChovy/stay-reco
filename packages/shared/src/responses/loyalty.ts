@@ -75,7 +75,9 @@ export const hotelLoyaltyProgramResponseSchema = z
       .describe('The platform programme the hotel rules sit on.'),
     limits: z.object({
       minPointsPerCurrency: z.number().describe('The platform rate: a hotel never earns less.'),
-      maxPointsPerCurrency: z.number().describe('Three times the platform rate.'),
+      maxPointsPerCurrency: z
+        .number()
+        .describe('The platform rate times `LOYALTY_LIMITS.maxEarnMultiplier`: equal to the minimum while that is 1.'),
       minRedeemPercent: z.number(),
       maxRedeemPercent: z.number(),
     }),

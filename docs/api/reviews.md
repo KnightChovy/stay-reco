@@ -88,7 +88,7 @@ The format list is the repo's existing one rather than Tripadvisor's `jpg/png/gi
 
 The type is read from the **file's first bytes**, not its name or `Content-Type`, so renaming a file to `.png` does not get it through.
 
-Photos may be added and removed for exactly as long as the review text can be edited, so a guest can come back and add one. `DELETE /review-images/:id` removes the row **and the file**, except while the photo is under an open report (`OPEN` or `INVESTIGATING`): it is the evidence a platform manager decides on, so removing it answers `409 REVIEW_IMAGE_REPORTED` until the report is decided. At most 5 photos holds even when several are sent at once: the count is checked again with the review locked before a photo is stored, and a refused upload is deleted from storage.
+Photos may be added and removed for exactly as long as the review text can be edited, so a guest can come back and add one. `DELETE /review-images/:id` removes the row **and the file**. A guest may always remove their own photo, even one that has been reported: the report is kept, open or decided, with `reviewImageId` set to null and `imageUrl` still showing the photo as it was reported, and the file then stays in storage as the evidence of that report. A manager deciding such a report with `hide: true` has nothing left to hide; the review itself is never hidden in the photo's place. At most 5 photos holds even when several are sent at once: the count is checked again with the review locked before a photo is stored, and a refused upload is deleted from storage.
 
 A photo a manager hides stays in the table as the evidence behind that decision, but never reaches a reader.
 
@@ -117,11 +117,12 @@ Reporting the same thing twice answers `409 REPORT_ALREADY_RAISED`. Reporting **
   "resolution": "Không có lưu trú." }
 ```
 
-`hide` acts on **the flagged photo** if the report named one, otherwise on **the whole review**. Dismissing leaves everything alone. A report already resolved or dismissed answers `409 REPORT_STATUS_CONFLICT`, including when two managers decide it at the same moment: only the first decision is kept.
+`hide` acts on **the flagged photo** if the report named one (nothing, if its author has removed it since), otherwise on **the whole review**. A photo report is the one with `imageUrl` set. Dismissing leaves everything alone. A report already resolved or dismissed answers `409 REPORT_STATUS_CONFLICT`, including when two managers decide it at the same moment: only the first decision is kept.
 
 ```jsonc
 // ContentReport
 { "id": "…", "reviewId": "…", "reviewImageId": null,
+  "imageUrl": null,                 // the photo as reported; set for a photo report even once removed
   "hotelId": "…", "hotelName": "An Nhiên Riverside Hotel",
   "reason": "NOT_A_STAY", "note": "…",
   "status": "OPEN",
@@ -187,7 +188,6 @@ An overall rating of 4.4 counts as **4** in `distribution`; only 5.0 lands in th
 | `REPORT_ALREADY_RAISED` | 409 | You already flagged this review or photo |
 | `REPORT_NOT_FOUND` | 404 | The report doesn't exist |
 | `REPORT_STATUS_CONFLICT` | 409 | The report is already resolved or dismissed |
-| `REVIEW_IMAGE_REPORTED` | 409 | Removing a photo under an open report |
 | `BOOKING_NOT_FOUND` | 404 | The booking doesn't exist or belongs to someone else |
 
 The full list is in [../api-guide.md §4.3](../api-guide.md#43-error-codes).

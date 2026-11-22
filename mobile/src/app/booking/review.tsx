@@ -74,9 +74,9 @@ export default function WriteReviewScreen() {
   const { id, reviewId } = useLocalSearchParams<{ id: string; reviewId?: string }>();
   const editing = !!reviewId;
   const queryClient = useQueryClient();
-  const booking = useQuery({ queryKey: ['bookings', id], queryFn: () => getBooking(id) });
+  const booking = useQuery({ queryKey: ['bookings', id], queryFn: () => getBooking(id), enabled: !!id });
   const criteria = useQuery({ queryKey: ['rating-criteria'], queryFn: getRatingCriteria, staleTime: Infinity });
-  const eligibility = useQuery({ queryKey: ['bookings', id, 'review-eligibility'], queryFn: () => getReviewEligibility(id) });
+  const eligibility = useQuery({ queryKey: ['bookings', id, 'review-eligibility'], queryFn: () => getReviewEligibility(id), enabled: !!id });
   const existing = useQuery({
     queryKey: ['reviews', 'mine', reviewId],
     queryFn: () => findMyReview(reviewId!),
@@ -174,13 +174,15 @@ export default function WriteReviewScreen() {
         <ScreenHeader title={editing ? 'Sửa Đánh Giá' : 'Viết Đánh Giá'} />
         <View className="flex-1 items-center justify-center gap-3 p-6">
           <Text variant="small" color={colors.onSurfaceVariant} center>
-            {blocked
-              ? editing
-                ? reasonText.REVIEW_WINDOW_CLOSED
-                : (reasonText[elig.reason ?? ''] ?? 'Chuyến đi này chưa thể đánh giá.')
-              : failed
-                ? 'Không tải được thông tin. Vui lòng kiểm tra kết nối.'
-                : 'Đang tải...'}
+            {!id
+              ? 'Không tìm thấy chuyến đi cần đánh giá.'
+              : blocked
+                ? editing
+                  ? reasonText.REVIEW_WINDOW_CLOSED
+                  : (reasonText[elig.reason ?? ''] ?? 'Chuyến đi này chưa thể đánh giá.')
+                : failed
+                  ? 'Không tải được thông tin. Vui lòng kiểm tra kết nối.'
+                  : 'Đang tải...'}
           </Text>
           {failed && (
             <Button

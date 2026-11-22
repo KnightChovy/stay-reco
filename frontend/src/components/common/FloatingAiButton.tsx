@@ -6,6 +6,8 @@ import Link from 'next/link';
 import { Send, Sparkles, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { QuickSuggestions, VoiceButton, useIdleSuggestions } from '@/features/assistant/AssistantChatParts';
+import { useSpeechInput } from '@/features/assistant/use-speech-input';
 
 type ChatMessage = {
   id: number;
@@ -27,6 +29,9 @@ export default function FloatingAiButton() {
   const [messages, setMessages] = useState(initialMessages);
   const [isThinking, setIsThinking] = useState(false);
   const replyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const voice = useSpeechInput(input, setInput);
+  const idle = useIdleSuggestions(input, voice.listening || isThinking, messages.length);
 
   useEffect(() => {
     return () => {
@@ -34,11 +39,20 @@ export default function FloatingAiButton() {
     };
   }, []);
 
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+  }, [messages.length, isThinking, idle]);
+
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    sendText(input);
+  };
 
-    const question = input.trim();
+  const sendText = (raw: string) => {
+    const question = raw.trim();
     if (!question || isThinking) return;
+    voice.cancel();
 
     const messageId = Date.now();
     setMessages((previous) => [
@@ -82,7 +96,7 @@ export default function FloatingAiButton() {
 
       {isChatOpen && (
         <section
-          className="flex h-105 w-[min(22rem,calc(100vw-3rem))] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
+          className="flex h-[min(38rem,calc(100dvh-7.5rem))] w-[min(28rem,calc(100vw-3rem))] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
           role="dialog"
           aria-label="Chat với Trợ lý AI StayReco"
         >
@@ -99,14 +113,14 @@ export default function FloatingAiButton() {
             </Button>
           </header>
 
-          <div className="flex-1 space-y-3 overflow-y-auto bg-muted/20 p-3">
+          <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto bg-muted/20 p-4">
             {messages.map((message) => (
               <div key={message.id} className={message.sender === 'user' ? 'flex justify-end' : 'flex justify-start'}>
                 <p
                   className={
                     message.sender === 'user'
-                      ? 'max-w-[85%] rounded-2xl rounded-br-sm bg-primary px-3 py-2 text-xs leading-relaxed text-primary-foreground'
-                      : 'max-w-[85%] rounded-2xl rounded-bl-sm border border-primary/15 bg-white px-3 py-2 text-xs leading-relaxed text-foreground'
+                      ? 'max-w-[85%] rounded-2xl rounded-br-sm bg-primary px-3.5 py-2.5 text-sm leading-relaxed text-primary-foreground'
+                      : 'max-w-[85%] rounded-2xl rounded-bl-sm border border-primary/15 bg-white px-3.5 py-2.5 text-sm leading-relaxed text-foreground'
                   }
                 >
                   {message.text}
@@ -125,15 +139,29 @@ export default function FloatingAiButton() {
                 </div>
               </div>
             )}
+            {idle && <QuickSuggestions onPick={sendText} />}
           </div>
 
           <form onSubmit={handleSubmit} className="border-t border-border bg-card p-3">
             <div className="flex gap-2">
-              <Input value={input} onChange={(event) => setInput(event.target.value)} placeholder="Nhập câu hỏi..." aria-label="Nội dung tin nhắn" className="h-9 text-xs" disabled={isThinking} />
-              <Button type="submit" size="icon-sm" aria-label="Gửi tin nhắn" className="size-9" disabled={isThinking}>
+              <VoiceButton voice={voice} className="size-10" />
+              <Input
+                value={input}
+                onChange={(event) => setInput(event.target.value)}
+                placeholder={voice.listening ? 'Đang nghe, bạn nói đi...' : 'Nhập câu hỏi...'}
+                aria-label="Nội dung tin nhắn"
+                className="h-10 text-sm"
+                disabled={isThinking}
+              />
+              <Button type="submit" size="icon-sm" aria-label="Gửi tin nhắn" className="size-10" disabled={isThinking}>
                 <Send className="size-4" aria-hidden="true" />
               </Button>
             </div>
+            {voice.error && (
+              <p role="status" className="mt-2 text-xs text-destructive">
+                {voice.error}
+              </p>
+            )}
             <Link href="/assistant" className="mt-2 block text-center text-[11px] font-semibold text-primary hover:underline">
               Mở Trợ lý AI đầy đủ
             </Link>

@@ -523,7 +523,8 @@ describe('Loyalty points (e2e)', () => {
         },
         limits: {
           minPointsPerCurrency: 0.001,
-          maxPointsPerCurrency: 0.003,
+          // 1x until the hotel giving bonus points also pays for them (money-rules §9).
+          maxPointsPerCurrency: 0.001,
           minRedeemPercent: 1,
           maxRedeemPercent: 100,
         },
@@ -533,14 +534,15 @@ describe('Loyalty points (e2e)', () => {
     it('saves the rules, reads them back and writes the change to the audit log', async () => {
       const h = await hotel();
       const saved = await saveRules(h.token, h.hotelId, {
-        pointsPerCurrency: 0.0015,
+        acceptsPoints: false,
         maxRedeemPercent: 30,
       }).expect(200);
       expect(saved.body.data).toMatchObject({
         custom: true,
         appliesNow: true,
-        pointsPerCurrency: 0.0015,
-        earnMultiplier: 1.5,
+        pointsPerCurrency: 0.001,
+        earnMultiplier: 1,
+        acceptsPoints: false,
         maxRedeemPercent: 30,
       });
 
@@ -565,23 +567,67 @@ describe('Loyalty points (e2e)', () => {
       expect(JSON.parse(logs[0].newValue ?? '{}')).toMatchObject({
         hotelId: h.hotelId,
         before: null,
-        after: { pointsPerCurrency: 0.0015, maxRedeemPercent: 30 },
+        after: { acceptsPoints: false, maxRedeemPercent: 30 },
       });
       expect(JSON.parse(logs[1].newValue ?? '{}')).toMatchObject({
-        before: { isActive: true },
-        after: { isActive: false, pointsPerCurrency: 0.001 },
+        before: { isActive: true, acceptsPoints: false },
+        after: { isActive: false, acceptsPoints: true },
       });
     });
 
-    it('refuses an earning rate below the platform one or above three times it', async () => {
+    it('keeps a single platform programme', async () => {
+      // The partial unique index of migration 20261118090000: hotel_id NULL is not covered by the unique key.
+      await expect(
+        t.prisma.loyaltyProgram.create({
+          data: { name: 'Second', pointsPerCurrency: 0.001, pointValue: 100 },
+        }),
+      ).rejects.toThrow();
+      expect(
+        await t.prisma.loyaltyProgram.count({ where: { hotelId: null } }),
+      ).toBe(1);
+    });
+
+    it('logs what each of two saves sent at once really replaced', async () => {
       const h = await hotel();
-      for (const pointsPerCurrency of [0.0005, 0.0031]) {
+      await Promise.all([
+        saveRules(h.token, h.hotelId, { maxRedeemPercent: 20 }).expect(200),
+        saveRules(h.token, h.hotelId, { maxRedeemPercent: 40 }).expect(200),
+      ]);
+
+      // One of them created the row; the other replaced exactly that, never `null` a second time.
+      const logs = (
+        await t.prisma.auditLog.findMany({
+          where: { action: 'LOYALTY_PROGRAM_UPDATED' },
+          orderBy: { createdAt: 'asc' },
+        })
+      ).map(
+        (l) =>
+          JSON.parse(l.newValue ?? '{}') as {
+            before: { maxRedeemPercent: number } | null;
+            after: { maxRedeemPercent: number };
+          },
+      );
+      expect(logs).toHaveLength(2);
+      const first = logs.find((l) => l.before === null);
+      const second = logs.find((l) => l.before !== null);
+      expect(first).toBeDefined();
+      expect(second?.before?.maxRedeemPercent).toBe(
+        first?.after.maxRedeemPercent,
+      );
+    });
+
+    it('refuses any earning rate but the platform one while the limit is 1x', async () => {
+      const h = await hotel();
+      for (const pointsPerCurrency of [0.0005, 0.0011, 0.003]) {
         const res = await saveRules(h.token, h.hotelId, {
           pointsPerCurrency,
         }).expect(400);
         expect(res.body.code).toBe('VALIDATION_ERROR');
         expect(res.body.details).toEqual([
-          { field: 'pointsPerCurrency', message: 'from 0.001 to 0.003' },
+          {
+            field: 'pointsPerCurrency',
+            message: 'must be 0.001, the platform rate',
+          },
         ]);
       }
       for (const maxRedeemPercent of [0, 100.5, 33.333]) {
@@ -607,17 +653,20 @@ describe('Loyalty points (e2e)', () => {
       await saveRules(guest.token, h.hotelId).expect(404);
     });
 
-    it('earns at the hotel rate at check-out', async () => {
+    it('never pays out a bonus rate at check-out while the limit is 1x', async () => {
       const h = await hotel();
-      await saveRules(h.token, h.hotelId, { pointsPerCurrency: 0.002 }).expect(
-        200,
-      );
+      await saveRules(h.token, h.hotelId).expect(200);
+      // A rate saved before the limit came down, or written straight to the table.
+      await t.prisma.loyaltyProgram.update({
+        where: { hotelId: h.hotelId },
+        data: { pointsPerCurrency: 0.003 },
+      });
       const guest = await t.signIn('CUSTOMER', 'guest@mail.test');
       await completedStay(guest.token, h);
 
-      // 2,000,000 paid at 2 points per 1,000 d.
+      // 2,000,000 paid at the platform's 1 point per 1,000 d, not 3.
       const res = await account(guest.token).expect(200);
-      expect(res.body.data.pointsBalance).toBe(4000);
+      expect(res.body.data.pointsBalance).toBe(2000);
     });
 
     it('caps the points at the share of the stay the hotel allows', async () => {
@@ -676,8 +725,8 @@ describe('Loyalty points (e2e)', () => {
       const h = await hotel();
       await saveRules(h.token, h.hotelId, {
         isActive: false,
-        pointsPerCurrency: 0.003,
         acceptsPoints: false,
+        maxRedeemPercent: 10,
       }).expect(200);
       const guest = await t.signIn('CUSTOMER', 'guest@mail.test');
       await givePoints(guest.id, 5000);
