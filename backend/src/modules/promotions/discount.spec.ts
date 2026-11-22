@@ -1,6 +1,7 @@
 import { Prisma } from '../../generated/prisma/client';
 import {
   bestDiscount,
+  campaignDiscount,
   campaignUsable,
   discountAmount,
   meetsMinimum,
@@ -157,5 +158,45 @@ describe('bestDiscount', () => {
 
   it('answers nothing when there is nothing to apply', () => {
     expect(bestDiscount([], null)).toBeNull();
+  });
+});
+
+describe('campaignDiscount', () => {
+  const pct = (v: number, maxDiscount?: number) => ({
+    discountType: 'PERCENTAGE' as const,
+    discountValue: d(v),
+    maxDiscount: maxDiscount === undefined ? null : d(maxDiscount),
+  });
+
+  it('caps a platform campaign at 8 % of the rooms, the lowest commission', () => {
+    expect(campaignDiscount(d(2_000_000), pct(20), true).toNumber()).toBe(
+      160_000,
+    );
+    const fixed = {
+      discountType: 'FIXED_AMOUNT' as const,
+      discountValue: d(500_000),
+    };
+    expect(campaignDiscount(d(2_000_000), fixed, true).toNumber()).toBe(
+      160_000,
+    );
+  });
+
+  it('keeps a smaller cap of the code itself', () => {
+    expect(
+      campaignDiscount(d(2_000_000), pct(5, 50_000), true).toNumber(),
+    ).toBe(50_000);
+  });
+
+  it('rounds the cap down, so it never exceeds 8 %', () => {
+    // 8 % of 1,234,567 is 98,765.36.
+    expect(campaignDiscount(d(1_234_567), pct(20), true).toNumber()).toBe(
+      98_765,
+    );
+  });
+
+  it("leaves a hotel's own campaign uncapped", () => {
+    expect(campaignDiscount(d(2_000_000), pct(20), false).toNumber()).toBe(
+      400_000,
+    );
   });
 });

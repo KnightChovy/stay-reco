@@ -157,6 +157,10 @@ export const ErrorCode = {
   /** The campaign is switched off, outside its dates, or has run out of uses. */
   PROMOTION_NOT_ACTIVE: 'PROMOTION_NOT_ACTIVE',
 
+  // First-login preferences and the welcome voucher
+  /** Onboarding was already completed; change the picks with PUT /me/preferences instead. */
+  ONBOARDING_ALREADY_COMPLETED: 'ONBOARDING_ALREADY_COMPLETED',
+
   // Loyalty (BR-11)
   /** No loyalty programme is running, so points cannot be earned or spent. */
   LOYALTY_PROGRAM_NOT_FOUND: 'LOYALTY_PROGRAM_NOT_FOUND',

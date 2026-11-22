@@ -339,9 +339,9 @@ export class PromotionsService {
 
 /**
  * A code a person can read out over the phone: no lowercase, and no 0/O or 1/I to mistype. 32^10 is far beyond what
- * a hotel will ever issue, and the unique column catches a clash anyway.
+ * a hotel will ever issue, and the unique column catches a clash anyway. Exported for the platform's welcome code.
  */
-function voucherCode(): string {
+export function voucherCode(): string {
   const bytes = randomBytes(CODE_LENGTH);
   let code = '';
   for (const byte of bytes) code += CODE_ALPHABET[byte % CODE_ALPHABET.length];

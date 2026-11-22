@@ -34,6 +34,14 @@ const AMENITIES = [
   { category: 'Phòng', name: 'Ban công', icon: 'door-open' },
   { category: 'Phòng', name: 'Bồn tắm', icon: 'bath' },
   { category: 'Phòng', name: 'Máy sấy tóc', icon: 'wind' },
+  // The views a customer picks from on their first sign-in (docs/design/onboarding-welcome-voucher.md, W8); a partner
+  // attaches them to a room type like any other amenity.
+  { category: 'Tầm nhìn', name: 'Hướng biển', icon: 'waves' },
+  { category: 'Tầm nhìn', name: 'Hướng sông', icon: 'sailboat' },
+  { category: 'Tầm nhìn', name: 'Hướng núi', icon: 'mountain' },
+  { category: 'Tầm nhìn', name: 'Hướng phố', icon: 'building-2' },
+  { category: 'Tầm nhìn', name: 'Hướng vườn', icon: 'trees' },
+  { category: 'Tầm nhìn', name: 'Hướng hồ bơi', icon: 'droplets' },
 ];
 
 const BED_TYPES = [

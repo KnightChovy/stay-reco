@@ -46,6 +46,41 @@ export function discountAmount(
   return whole.greaterThan(subtotal) ? subtotal : whole;
 }
 
+/**
+ * The most a **platform** campaign (`hotel_id` null) may take off, as a percent of the room subtotal: the lowest
+ * commission rate a partner can have (BR-13, money-rules §2.1). The platform pays for its own discounts out of its
+ * commission, so capping them at the lowest rate means that commission can never go below 0 on a booking.
+ */
+export const PLATFORM_DISCOUNT_CAP_PERCENT = 8;
+
+/** The cap of a platform campaign on `subtotal`, rounded down to whole dong so it never exceeds the percent. */
+export const platformDiscountCap = (subtotal: Prisma.Decimal) =>
+  subtotal
+    .times(PLATFORM_DISCOUNT_CAP_PERCENT)
+    .dividedBy(100)
+    .toDecimalPlaces(0, Prisma.Decimal.ROUND_DOWN);
+
+/**
+ * What a campaign takes off a room subtotal, with the platform cap applied when the campaign is the platform's.
+ * The one place the cap lives: the quote, the booking and the commission all call this, so the amount a guest was
+ * given and the amount the platform pays back are the same number.
+ */
+export function campaignDiscount(
+  subtotal: Prisma.Decimal,
+  terms: DiscountTerms,
+  platformWide: boolean,
+): Prisma.Decimal {
+  if (!platformWide) return discountAmount(subtotal, terms);
+  const cap = platformDiscountCap(subtotal);
+  return discountAmount(subtotal, {
+    ...terms,
+    maxDiscount:
+      terms.maxDiscount && terms.maxDiscount.lessThan(cap)
+        ? terms.maxDiscount
+        : cap,
+  });
+}
+
 /** Whether the stay is large enough for the campaign; a campaign without a minimum always clears it. */
 export const meetsMinimum = (
   subtotal: Prisma.Decimal,

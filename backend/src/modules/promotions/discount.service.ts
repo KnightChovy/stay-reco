@@ -11,8 +11,8 @@ import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   bestDiscount,
+  campaignDiscount,
   campaignUsable,
-  discountAmount,
   meetsMinimum,
 } from './discount';
 
@@ -109,7 +109,8 @@ export class DiscountService {
         voucherId: null,
         name: p.name,
         code: null,
-        amount: discountAmount(subtotal, p),
+        // A platform campaign is capped at the lowest commission rate (money-rules §2.1).
+        amount: campaignDiscount(subtotal, p, p.hotelId === null),
       }))
       .filter((c) => c.amount.greaterThan(0));
   }
@@ -173,7 +174,11 @@ export class DiscountService {
       voucherId: voucher.voucherId,
       name: voucher.promotion.name,
       code: voucher.code,
-      amount: discountAmount(subtotal, voucher),
+      amount: campaignDiscount(
+        subtotal,
+        voucher,
+        voucher.promotion.hotelId === null,
+      ),
     };
   }
 
