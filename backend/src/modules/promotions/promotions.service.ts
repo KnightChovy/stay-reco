@@ -114,6 +114,7 @@ export class PromotionsService {
         validFrom: input.validFrom ? fromCalendarDate(input.validFrom) : null,
         validTo: input.validTo ? fromCalendarDate(input.validTo) : null,
         isActive: input.isActive ?? true,
+        requiresCode: input.requiresCode ?? false,
       },
     });
     await this.audit.log(AuditAction.PROMOTION_CREATED, actorId, meta, {
@@ -178,6 +179,9 @@ export class PromotionsService {
           validTo: fromCalendarDate(input.validTo),
         }),
         ...(input.isActive !== undefined && { isActive: input.isActive }),
+        ...(input.requiresCode !== undefined && {
+          requiresCode: input.requiresCode,
+        }),
       },
     });
     await this.audit.log(AuditAction.PROMOTION_UPDATED, user.accountId, meta, {
@@ -248,8 +252,14 @@ export class PromotionsService {
           vietnamDateTime(addDays(input.expiresAt, 1), '00:00').getTime() - 1,
         )
       : null;
-    const vouchers = (
-      await this.prisma.voucher.createManyAndReturn({
+    // Handing out codes means the campaign is for chosen customers, so it stops applying to everyone, in the same
+    // transaction as the codes: a booking can never see the codes issued and the campaign still automatic.
+    const [, created] = await this.prisma.$transaction([
+      this.prisma.promotion.update({
+        where: { promotionId },
+        data: { requiresCode: true },
+      }),
+      this.prisma.voucher.createManyAndReturn({
         data: customers.map(({ customerId }) => ({
           promotionId,
           customerId,
@@ -259,8 +269,12 @@ export class PromotionsService {
           maxDiscount,
           expiresAt,
         })),
-      })
-    ).map((voucher) => ({ ...voucher, promotion }));
+      }),
+    ]);
+    const vouchers = created.map((voucher) => ({
+      ...voucher,
+      promotion: { ...promotion, requiresCode: true },
+    }));
     await this.audit.log(AuditAction.VOUCHERS_ISSUED, user.accountId, meta, {
       promotionId,
       count: vouchers.length,

@@ -23,6 +23,7 @@ export const toPromotion = (p: PromotionRow, today: string): Promotion => ({
   validFrom: p.validFrom && toCalendarDate(p.validFrom),
   validTo: p.validTo && toCalendarDate(p.validTo),
   isActive: p.isActive,
+  requiresCode: p.requiresCode,
   usable: campaignUsable(p, today),
   createdAt: p.createdAt.toISOString(),
 });

@@ -81,9 +81,9 @@ export class DiscountService {
    * Campaigns that apply by themselves: the hotel's own, plus the platform-wide ones (`hotel_id` null), that are
    * usable today and that the stay is large enough for.
    *
-   * A campaign that has handed out personal codes is **not** one of them. Once a hotel issues vouchers under a
-   * campaign it is addressing chosen customers, so applying it to everyone as well would make those codes
-   * pointless. Until the schema has a column saying so, "has vouchers" is what marks a campaign as code-only.
+   * A code-only campaign (`requiresCode`) is **not** one of them: it is addressed to chosen customers, and applying
+   * it to everyone as well would make their codes pointless. Issuing a voucher sets the flag, and a hotel may set it
+   * from the start, so a campaign meant for codes no longer applies to everyone until its first code goes out.
    */
   private async automaticCandidates(
     hotelId: string,
@@ -93,7 +93,7 @@ export class DiscountService {
     const campaigns = await this.prisma.promotion.findMany({
       where: {
         isActive: true,
-        vouchers: { none: {} },
+        requiresCode: false,
         OR: [{ hotelId }, { hotelId: null }],
       },
     });

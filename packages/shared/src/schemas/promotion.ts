@@ -22,6 +22,11 @@ const campaignFields = {
   validFrom: dateSchema.optional(),
   validTo: dateSchema.optional(),
   isActive: z.boolean().optional(),
+  /**
+   * Only through personal codes (vouchers), never applied to a stay by itself; left out, false. Issuing a voucher
+   * sets it: handing out codes means the campaign is for chosen customers.
+   */
+  requiresCode: z.boolean().optional(),
 };
 
 /** The terms a campaign is checked on: what a request sends, or the stored campaign with a change applied. */

@@ -98,7 +98,7 @@ export class ContentIdeasService {
     const campaigns = await this.prisma.promotion.findMany({
       where: {
         isActive: true,
-        vouchers: { none: {} },
+        requiresCode: false,
         OR: [{ hotelId }, { hotelId: null }],
       },
       orderBy: [{ createdAt: 'desc' }, { promotionId: 'asc' }],
