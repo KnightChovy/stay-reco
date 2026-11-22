@@ -1017,6 +1017,8 @@ model Promotion {
   validFrom        DateTime?    @map("valid_from") @db.Date
   validTo          DateTime?    @map("valid_to") @db.Date
   isActive         Boolean      @default(true) @map("is_active")
+  /// Only through a personal code (a voucher); never applied to a stay by itself. Issuing a voucher turns it on.
+  requiresCode     Boolean      @default(false) @map("requires_code")
   createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
   hotel            Hotel?       @relation(fields: [hotelId], references: [hotelId])
   bookings         Booking[]

@@ -99,6 +99,7 @@ entity "promotion" as promotion {
   valid_from : date
   valid_to : date
   * is_active : boolean
+  * requires_code : boolean
   * created_at : datetime
 }
 entity "voucher" as voucher {

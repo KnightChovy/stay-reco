@@ -178,6 +178,48 @@ describe('Promotions, vouchers and discounts (e2e)', () => {
       });
     });
 
+    it('never applies a code-only campaign by itself, even before its first code goes out', async () => {
+      const h = await hotel();
+      const guest = await t.signIn('CUSTOMER', 'guest@mail.test');
+      const promo = await campaign(h.token, h.hotelId, {
+        name: 'Khách thân 30%',
+        discountType: 'PERCENTAGE',
+        discountValue: 30,
+        requiresCode: true,
+      }).expect(201);
+      expect(promo.body.data.requiresCode).toBe(true);
+
+      // No voucher yet: the old rule ("has issued a code") would have applied it to everyone at this point.
+      const before = await quote(guest.token, h.roomTypeId).expect(200);
+      expect(before.body.data.discount).toBeNull();
+
+      const code = await issue(h.token, idOf(promo), guest.id);
+      const withCode = await quote(guest.token, h.roomTypeId, code).expect(200);
+      expect(withCode.body.data.discount).toMatchObject({
+        kind: 'VOUCHER',
+        amount: 600000,
+      });
+    });
+
+    it('makes a campaign code-only when a code is issued under it', async () => {
+      const h = await hotel();
+      const guest = await t.signIn('CUSTOMER', 'guest@mail.test');
+      const promo = await campaign(h.token, h.hotelId, {
+        name: 'Tự động rồi phát mã',
+        discountType: 'FIXED_AMOUNT',
+        discountValue: 200000,
+      }).expect(201);
+      expect(promo.body.data.requiresCode).toBe(false);
+      await issue(h.token, idOf(promo), guest.id);
+
+      const stored = await t.prisma.promotion.findUniqueOrThrow({
+        where: { promotionId: idOf(promo) },
+      });
+      expect(stored.requiresCode).toBe(true);
+      const res = await quote(guest.token, h.roomTypeId).expect(200);
+      expect(res.body.data.discount).toBeNull();
+    });
+
     it('skips a campaign the stay is too small for, and one switched off', async () => {
       const h = await hotel();
       const guest = await t.signIn('CUSTOMER', 'guest@mail.test');
