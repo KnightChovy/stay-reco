@@ -5,6 +5,7 @@ import type {
   CreateReviewInput,
   DiscountQuote,
   DiscountQuoteInput,
+  ReportReviewInput,
   ReviewListQuery,
   UpdateReviewInput,
   Voucher,
@@ -256,5 +257,30 @@ export function useUpdateReview() {
     mutationFn: ({ reviewId, input }: { reviewId: string; input: UpdateReviewInput }) =>
       rewardsService.updateReview(reviewId, input),
     onSuccess: (review) => invalidate(review.bookingId, review.hotelId),
+  });
+}
+
+/** A photo added or removed changes the review the author is editing and the hotel page that shows it. */
+export function useUploadReviewImage() {
+  const invalidate = useInvalidateReviews();
+  return useMutation({
+    mutationFn: ({ reviewId, file }: { reviewId: string; file: File }) => rewardsService.uploadReviewImage(reviewId, file),
+    onSuccess: (review) => invalidate(review.bookingId, review.hotelId),
+  });
+}
+
+export function useDeleteReviewImage() {
+  const invalidate = useInvalidateReviews();
+  return useMutation({
+    mutationFn: (imageId: string) => rewardsService.deleteReviewImage(imageId),
+    onSuccess: (review) => invalidate(review.bookingId, review.hotelId),
+  });
+}
+
+/** Reporting changes nothing a reader sees, so no query is invalidated. */
+export function useReportReview() {
+  return useMutation({
+    mutationFn: ({ reviewId, input }: { reviewId: string; input: ReportReviewInput }) =>
+      rewardsService.reportReview(reviewId, input),
   });
 }
