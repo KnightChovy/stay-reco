@@ -1,36 +1,21 @@
 'use client';
 
-import { useState } from 'react';
-import Link from 'next/link';
-import {
-  AlertTriangle,
-  BedDouble,
-  Calendar,
-  CheckCircle2,
-  ChevronRight,
-  Clock,
-  CreditCard,
-  Loader2,
-  LogOut,
-  QrCode,
-  Search,
-  Sparkles,
-  Wallet,
-  ScanLine,
-} from 'lucide-react';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
+import { Suspense, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { CheckCircle2, Loader2, LogOut, Sparkles } from 'lucide-react';
+import { ActionBar } from '@/components/common/ActionBar';
+import { ErrorState, LoadingState } from '@/components/common/StateViews';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { getApiErrorMessage, getApiFieldErrors } from '@/lib/api-error';
-import { QrScannerDialog } from '@/features/staff/components/QrScannerDialog';
 import { useStaffHotel } from '@/features/staff/components/StaffHotelProvider';
 import {
   useBookingLookup,
   useCheckOut,
   useCheckOutQuote,
   useCleanRoom,
+  useHotelBookings,
 } from '@/features/staff/api/staff-queries';
 import {
   bookingStatusLabels,
@@ -38,23 +23,36 @@ import {
   formatDateTime,
   formatMoney,
   paymentStatusLabels,
-  toneClasses,
 } from '@/features/staff/lib/labels';
+import {
+  DeskHeader,
+  DeskListShell,
+  Field,
+  LookupBar,
+  StickyActionBar,
+  TonePillText,
+  daysBetween,
+  todayDate,
+} from '@/features/staff/front-desk/DeskParts';
 
-export default function StaffCheckOutPage() {
+function StaffCheckOutPageContent({ initialCode }: { initialCode: string }) {
   const { hotel } = useStaffHotel();
   const hotelId = hotel?.summary.id;
+  const today = todayDate();
 
-  const [input, setInput] = useState('');
-  const [scannerOpen, setScannerOpen] = useState(false);
-  const [lookupQuery, setLookupQuery] = useState<{ code?: string; qrToken?: string } | null>(null);
+  const [input, setInput] = useState(initialCode);
+  const [lookupQuery, setLookupQuery] = useState<{ code?: string; qrToken?: string } | null>(
+    initialCode ? { code: initialCode } : null,
+  );
+  const [adjusting, setAdjusting] = useState(false);
   const [lateFeeAmount, setLateFeeAmount] = useState('');
   const [lateFeeReason, setLateFeeReason] = useState('');
-  const [localError, setLocalError] = useState<string | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [cleanedRooms, setCleanedRooms] = useState<string[]>([]);
 
   const lookup = useBookingLookup(hotelId, lookupQuery ?? {}, !!lookupQuery);
   const booking = lookup.data;
+  const stays = useHotelBookings(hotelId, { status: ['CHECKED_IN'], pageSize: 100, sort: 'check-in-asc' });
   const canCheckOut = booking?.status === 'CHECKED_IN';
   const checkOut = useCheckOut();
   // After a successful check-out the quote endpoint only accepts CHECKED_IN; stop refetching it (409).
@@ -63,439 +61,424 @@ export default function StaffCheckOutPage() {
 
   const computedFee = quote.data?.lateFee?.amount ?? 0;
   const enteredFee = Number(lateFeeAmount);
-  const hasAdjustment = lateFeeAmount.trim() !== '' || lateFeeReason.trim() !== '';
-  const adjustmentValid =
-    !hasAdjustment ||
-    (lateFeeAmount.trim() !== '' &&
-      lateFeeReason.trim() !== '' &&
-      Number.isFinite(enteredFee) &&
-      enteredFee >= 0 &&
-      enteredFee <= computedFee);
+  const reasonMissing = adjusting && lateFeeAmount.trim() !== '' && lateFeeReason.trim() === '';
+  const amountInvalid =
+    adjusting &&
+    lateFeeAmount.trim() !== '' &&
+    !(Number.isFinite(enteredFee) && enteredFee >= 0 && enteredFee <= computedFee);
+  // An adjustment is sent only when an amount is typed; it then needs a reason.
+  const hasAdjustment = adjusting && lateFeeAmount.trim() !== '';
+  const adjustmentValid = !hasAdjustment || (!reasonMissing && !amountInvalid);
 
   const submitLookup = (raw: string = input) => {
     const value = raw.trim();
     if (!value) return;
     setLookupQuery(value.includes('.') ? { qrToken: value } : { code: value });
+    clearForm();
+    checkOut.reset();
+  };
+  const clearForm = () => {
+    setAdjusting(false);
     setLateFeeAmount('');
     setLateFeeReason('');
-    setLocalError(null);
     setCleanedRooms([]);
+    setConfirmOpen(false);
+  };
+  const reset = () => {
+    setInput('');
+    setLookupQuery(null);
+    clearForm();
     checkOut.reset();
   };
 
   const doCheckOut = () => {
-    if (!booking || !canCheckOut) return;
-    setLocalError(null);
-
-    if (hasAdjustment && !adjustmentValid) {
-      setLocalError(
-        computedFee > 0
-          ? `Phí trả muộn đã nhập không hợp lệ: phải từ 0 đến ${formatMoney(computedFee)} và có lý do.`
-          : 'Đơn này không có phí trả muộn để điều chỉnh.',
-      );
-      return;
-    }
-
-    checkOut.mutate({
-      bookingId: booking.id,
-      lateFee: hasAdjustment
-        ? { amount: Math.round(enteredFee), reason: lateFeeReason.trim() }
-        : undefined,
-    });
+    if (!booking || !canCheckOut || !adjustmentValid) return;
+    checkOut.mutate(
+      {
+        bookingId: booking.id,
+        lateFee: hasAdjustment ? { amount: Math.round(enteredFee), reason: lateFeeReason.trim() } : undefined,
+      },
+      { onSettled: () => setConfirmOpen(false) },
+    );
   };
 
   const fieldErrors = checkOut.error ? getApiFieldErrors(checkOut.error) : {};
+  const done = booking?.status === 'COMPLETED';
+
+  // Overdue first, then those leaving today.
+  const departing = (stays.data?.bookings ?? []).slice().sort((a, b) => a.checkOut.localeCompare(b.checkOut));
+  const overdue = departing.filter((row) => row.checkOut < today);
+  const leavingToday = departing.filter((row) => row.checkOut === today);
+  const staying = departing.length - overdue.length - leavingToday.length;
+
+  const owes = !!quote.data && (computedFee > 0 || quote.data.addOnsDue > 0);
 
   return (
-    <div className="mx-auto w-full max-w-7xl space-y-6 p-6">
-      <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
-        <div>
-          <div className="mb-1 flex items-center gap-2 text-xs text-slate-500">
-            <Link href="/staff/dashboard" className="hover:text-[#934a33]">
-              Bàn làm việc
-            </Link>
-            <ChevronRight className="size-3" />
-            <Link href="/staff/bookings" className="hover:text-[#934a33]">
-              Đặt phòng
-            </Link>
-            <ChevronRight className="size-3" />
-            <span className="font-medium text-slate-800">Check-out</span>
-          </div>
-          <h1 className="flex items-center gap-2 text-2xl font-bold text-slate-900">
-            <LogOut className="size-7 text-[#934a33]" /> Check-out &amp; quyết toán
-          </h1>
-          <p className="mt-1 text-xs text-slate-500">
-            Tìm đơn đang lưu trú, xem phí trả muộn (nếu có) rồi xác nhận trả phòng.
-          </p>
-        </div>
-        <Badge className="w-fit border-none bg-[#EAF0F5] px-3 py-1 text-xs font-semibold text-[#013758]">
-          {hotel?.summary.name ?? 'Khách sạn của bạn'}
-        </Badge>
-      </div>
+    <div className="space-y-5">
+      <DeskHeader
+        icon={LogOut}
+        title="Trả phòng"
+        description="Chọn khách đang lưu trú, thu các khoản tại quầy rồi xác nhận trả phòng."
+        hotelName={hotel?.summary.name}
+      />
 
-      <Card className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-xs">
-        <div className="flex flex-col gap-3 sm:flex-row">
-          <div className="relative flex-1">
-            <Search className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
-            <Input
-              value={input}
-              onChange={(event) => setInput(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') submitLookup();
-              }}
-              placeholder="Nhập mã đơn đang lưu trú (SR-261031-1234) hoặc quét QR voucher…"
-              className="h-11 pl-10 text-sm"
-            />
-          </div>
-          <Button
-            onClick={() => submitLookup()}
-            disabled={!input.trim() || lookup.isLoading}
-            className="h-11 gap-1.5 bg-[#934a33] px-5 text-sm font-semibold text-white hover:bg-[#7b3e2b]"
-          >
-            {lookup.isLoading ? <Loader2 className="size-4 animate-spin" /> : <QrCode className="size-4" />}
-            Tìm đơn
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => setScannerOpen(true)}
-            className="h-11 gap-1.5 border-[#934a33]/40 px-5 text-sm font-semibold text-[#934a33] hover:bg-[#934a33]/5"
-          >
-            <ScanLine className="size-4" /> Quét QR
-          </Button>
-        </div>
-        <QrScannerDialog
-          open={scannerOpen}
-          onOpenChange={setScannerOpen}
-          onResult={(token) => {
-            setInput(token);
-            submitLookup(token);
-          }}
-        />
-      </Card>
+      <LookupBar
+        value={input}
+        onChange={setInput}
+        onSubmit={submitLookup}
+        loading={lookup.isFetching}
+        placeholder="Mã đơn đang lưu trú (SR-261031-1234) hoặc token QR"
+      />
 
       {lookup.error && (
-        <Alert variant="destructive" className="bg-red-50 p-4">
-          <AlertTitle>Không tìm thấy đơn</AlertTitle>
-          <AlertDescription className="mt-1 text-xs">
-            {getApiErrorMessage(lookup.error, 'Mã đơn hoặc token QR không hợp lệ.')}
-          </AlertDescription>
-        </Alert>
+        <ErrorState
+          title="Không tìm thấy đơn"
+          error={lookup.error}
+          fallback="Mã đơn hoặc token QR không hợp lệ."
+          onRetry={() => void lookup.refetch()}
+          action={
+            <Button variant="ghost" className="h-10" onClick={reset}>
+              Chọn từ danh sách
+            </Button>
+          }
+        />
       )}
 
       {!lookupQuery && (
-        <Card className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center shadow-none">
-          <LogOut className="mx-auto size-10 text-slate-300" />
-          <p className="mt-3 text-sm font-semibold text-slate-700">Nhập mã đơn để bắt đầu check-out</p>
-          <p className="mt-1 text-xs text-slate-500">Chỉ đơn đang ở trạng thái “Đang lưu trú” mới check-out được.</p>
-        </Card>
+        <DeskListShell
+          title="Khách sắp trả phòng"
+          loading={stays.isLoading || !hotelId}
+          error={stays.error}
+          onRetry={() => void stays.refetch()}
+          empty={{ title: 'Không có khách nào cần trả phòng hôm nay', description: 'Khách quá hạn và khách trả phòng hôm nay sẽ hiện ở đây.' }}
+          groups={[
+            { title: 'Quá hạn trả phòng', rows: overdue, tone: 'danger' },
+            { title: 'Trả phòng hôm nay', rows: leavingToday, tone: 'info' },
+          ]}
+          renderPill={(row, group) => (
+            <TonePillText tone={group.tone}>
+              {row.checkOut < today ? `Quá ${daysBetween(row.checkOut, today)} ngày` : 'Hôm nay'}
+            </TonePillText>
+          )}
+          onPick={(row) => {
+            setInput(row.code);
+            submitLookup(row.code);
+          }}
+          footer={
+            staying > 0 ? (
+              <p className="text-xs text-muted-foreground">
+                Còn {staying} đơn đang lưu trú chưa đến ngày trả phòng; nhập mã đơn nếu khách trả sớm.
+              </p>
+            ) : undefined
+          }
+        />
       )}
 
       {booking && (
-        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
-          <div className="space-y-6 lg:col-span-7">
-            <Card className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-xs">
-              <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-3">
-                <div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Đơn đặt phòng</span>
-                  <p className="font-mono text-lg font-bold text-[#013758]">{booking.code}</p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Badge className={`border text-[11px] font-semibold ${toneClasses[bookingStatusLabels[booking.status].tone]}`}>
-                    {bookingStatusLabels[booking.status].label}
-                  </Badge>
-                  <Badge className={`border text-[11px] font-semibold ${toneClasses[paymentStatusLabels[booking.paymentStatus].tone]}`}>
-                    {paymentStatusLabels[booking.paymentStatus].label}
-                  </Badge>
-                </div>
+        <div className="mx-auto max-w-3xl space-y-4">
+          <section className="rounded-xl border border-border bg-card p-4 sm:p-5" aria-label="Thông tin đơn">
+            <div className="flex items-start justify-between gap-3 border-b border-border pb-3">
+              <div className="min-w-0">
+                <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Khách lưu trú</span>
+                <p className="truncate text-xl font-bold text-foreground">{booking.guestName}</p>
+                <p className="text-sm text-muted-foreground">
+                  <span className="font-mono">{booking.code}</span> · {booking.contactPhone}
+                </p>
               </div>
+              <TonePillText tone={bookingStatusLabels[booking.status].tone}>
+                {bookingStatusLabels[booking.status].label}
+              </TonePillText>
+            </div>
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <Field label="Phòng" hint={booking.items.map((item) => item.roomType.name).join(', ')}>
+                {booking.assignedRooms.length > 0
+                  ? booking.assignedRooms.map((room) => room.roomNumber).join(', ')
+                  : `${booking.rooms} phòng`}
+              </Field>
+              <Field label="Lưu trú" hint={`${booking.nights} đêm`}>
+                {formatCalendarDate(booking.checkIn)} → {formatCalendarDate(booking.checkOut)}
+              </Field>
+              <Field label="Đã thanh toán" hint={paymentStatusLabels[booking.paymentStatus].label}>
+                {formatMoney(booking.totalAmount)}
+              </Field>
+            </div>
+          </section>
 
-              <div className="mt-4 grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
-                <div>
-                  <span className="text-[10px] font-semibold uppercase text-slate-400">Khách lưu trú</span>
-                  <p className="font-bold text-slate-800">{booking.guestName}</p>
-                  <p className="text-xs text-slate-500">{booking.contactPhone}</p>
-                </div>
-                <div>
-                  <span className="text-[10px] font-semibold uppercase text-slate-400">Phòng</span>
-                  <p className="flex items-center gap-1.5 font-semibold text-slate-800">
-                    <BedDouble className="size-4 text-[#934a33]" /> {booking.roomType.name}
+          {done ? (
+            <section className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 sm:p-5" role="status">
+              <div className="flex items-start gap-3">
+                <CheckCircle2 className="mt-0.5 size-6 shrink-0 text-emerald-700" aria-hidden />
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-base font-bold text-emerald-900">Đã trả phòng</h2>
+                  <p className="mt-1 text-sm text-emerald-900">
+                    Đơn đã hoàn tất, phòng chuyển sang “Đang dọn”. Bước tiếp theo: báo buồng phòng dọn, rồi đánh dấu đã dọn.
                   </p>
-                  <p className="text-xs text-slate-500">
-                    {booking.assignedRooms.length > 0
-                      ? `Phòng ${booking.assignedRooms.map((room) => room.roomNumber).join(', ')}`
-                      : `${booking.rooms} phòng`}
-                  </p>
-                </div>
-                <div>
-                  <span className="text-[10px] font-semibold uppercase text-slate-400">Lưu trú</span>
-                  <p className="flex items-center gap-1.5 font-semibold text-slate-800">
-                    <Calendar className="size-4 text-[#934a33]" /> {formatCalendarDate(booking.checkIn)} →{' '}
-                    {formatCalendarDate(booking.checkOut)}
-                  </p>
-                  <p className="text-xs text-slate-500">{booking.nights} đêm</p>
-                </div>
-                <div>
-                  <span className="text-[10px] font-semibold uppercase text-slate-400">Đã thanh toán</span>
-                  <p className="flex items-center gap-1.5 font-semibold text-slate-800">
-                    <CreditCard className="size-4 text-[#934a33]" /> {formatMoney(booking.totalAmount)}
-                  </p>
-                  {booking.paidAt && <p className="text-xs text-slate-500">Lúc {formatDateTime(booking.paidAt)}</p>}
-                </div>
-              </div>
-            </Card>
-
-            {booking.status === 'COMPLETED' ? (
-              <Card className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-5 shadow-none">
-                <div className="flex items-start gap-3">
-                  <CheckCircle2 className="mt-0.5 size-6 shrink-0 text-emerald-600" />
-                  <div className="flex-1">
-                    <h2 className="text-base font-bold text-emerald-900">Đã check-out</h2>
-                    <p className="mt-1 text-xs text-emerald-800">
-                      Đơn đã hoàn tất. Phòng đang ở trạng thái <strong>Đang dọn</strong>.
+                  {booking.lateCheckout && (
+                    <p className="mt-3 rounded-lg bg-card p-3 text-sm text-foreground">
+                      Trả muộn {booking.lateCheckout.minutesLate} phút · phí đã thu tại quầy{' '}
+                      <strong>{formatMoney(booking.lateCheckout.fee)}</strong>
+                      {booking.lateCheckout.computedFee !== booking.lateCheckout.fee &&
+                        ` (phí gốc ${formatMoney(booking.lateCheckout.computedFee)}${
+                          booking.lateCheckout.reason ? `, lý do giảm: ${booking.lateCheckout.reason}` : ''
+                        })`}
                     </p>
-
-                    {booking.lateCheckout && (
-                      <div className="mt-3 rounded-lg bg-white/70 p-3 text-xs text-emerald-900">
-                        <p className="font-semibold">
-                          Trả muộn {booking.lateCheckout.minutesLate} phút · phí {formatMoney(booking.lateCheckout.fee)}
-                        </p>
-                        {booking.lateCheckout.computedFee !== booking.lateCheckout.fee && (
-                          <p className="text-[11px]">
-                            Phí gốc {formatMoney(booking.lateCheckout.computedFee)}
-                            {booking.lateCheckout.reason ? ` · lý do giảm: ${booking.lateCheckout.reason}` : ''}
-                          </p>
-                        )}
-                      </div>
-                    )}
-
-                    {booking.assignedRooms.length > 0 && (
-                      <div className="mt-4 space-y-2">
-                        <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-800">
-                          Đánh dấu phòng đã dọn
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          {booking.assignedRooms.map((room) => {
-                            const cleaned = cleanedRooms.includes(room.id);
-                            return (
+                  )}
+                  {booking.assignedRooms.length > 0 && (
+                    <ul className="mt-3 space-y-2">
+                      {booking.assignedRooms.map((room) => {
+                        const cleaned = cleanedRooms.includes(room.id);
+                        return (
+                          <li key={room.id} className="flex items-center justify-between gap-3 rounded-lg bg-card p-2 pl-3">
+                            <span className="text-sm font-semibold text-foreground">Phòng {room.roomNumber}</span>
+                            {cleaned ? (
+                              <span className="flex items-center gap-1.5 pr-2 text-sm font-semibold text-emerald-700">
+                                <CheckCircle2 className="size-4" aria-hidden /> Đã dọn
+                              </span>
+                            ) : (
                               <Button
-                                key={room.id}
-                                size="sm"
                                 variant="outline"
-                                disabled={cleaned || cleanRoom.isPending}
+                                className="h-10 gap-1.5"
+                                disabled={cleanRoom.isPending}
                                 onClick={() =>
                                   cleanRoom.mutate(room.id, {
                                     onSuccess: () => setCleanedRooms((ids) => [...ids, room.id]),
                                   })
                                 }
-                                className="h-8 gap-1.5 border-emerald-300 bg-white text-xs font-semibold text-emerald-800"
                               >
-                                <Sparkles className="size-3.5" />
-                                Phòng {room.roomNumber} {cleaned ? 'đã dọn' : 'đã dọn xong?'}
+                                <Sparkles className="size-4" /> Đã dọn xong
                               </Button>
-                            );
-                          })}
-                        </div>
-                        {cleanRoom.error && (
-                          <p className="text-[11px] text-red-600">
-                            {getApiErrorMessage(cleanRoom.error, 'Không cập nhật được trạng thái phòng.')}
-                          </p>
-                        )}
-                      </div>
-                    )}
-
-                    <Link href={`/staff/bookings/${booking.id}`} className="mt-4 inline-block">
-                      <Button variant="outline" className="h-9 border-emerald-300 text-xs font-semibold text-emerald-800">
-                        Xem chi tiết đơn
-                      </Button>
-                    </Link>
-                  </div>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                  {cleanRoom.error && (
+                    <p className="mt-2 text-sm text-destructive" role="alert">
+                      {getApiErrorMessage(cleanRoom.error, 'Không cập nhật được trạng thái phòng.')}
+                    </p>
+                  )}
                 </div>
-              </Card>
-            ) : canCheckOut ? (
-              <Card className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-xs">
-                <h2 className="flex items-center gap-2 border-b border-slate-100 pb-3 text-sm font-bold text-slate-800">
-                  <Wallet className="size-4 text-[#934a33]" /> Quyết toán khi trả phòng
-                </h2>
-
-                {quote.isLoading ? (
-                  <div className="flex items-center gap-2 py-8 text-xs text-slate-500">
-                    <Loader2 className="size-4 animate-spin" /> Đang tính phí check-out…
-                  </div>
-                ) : quote.error ? (
-                  <Alert variant="destructive" className="mt-3 bg-red-50 p-3">
-                    <AlertDescription className="text-xs">
-                      {getApiErrorMessage(quote.error, 'Không tải được thông tin check-out.')}
-                    </AlertDescription>
-                  </Alert>
-                ) : quote.data ? (
-                  <div className="mt-3 space-y-3 text-xs">
-                    <div className="grid grid-cols-2 gap-3 rounded-lg bg-slate-50 p-3">
-                      <div>
-                        <span className="block text-[10px] font-semibold uppercase text-slate-400">Giờ trả phòng</span>
-                        <span className="font-semibold text-slate-800">{formatDateTime(quote.data.scheduledAt)}</span>
-                      </div>
-                      <div>
-                        <span className="block text-[10px] font-semibold uppercase text-slate-400">Đã thanh toán</span>
-                        <span className="font-semibold text-slate-800">{formatMoney(quote.data.amountPaid)}</span>
-                      </div>
-                      {quote.data.minutesLate > 0 && (
-                        <div>
-                          <span className="block text-[10px] font-semibold uppercase text-slate-400">Trả muộn</span>
-                          <span className="font-semibold text-amber-700">{quote.data.minutesLate} phút</span>
-                        </div>
-                      )}
-                      {quote.data.early && (
-                        <div>
-                          <span className="block text-[10px] font-semibold uppercase text-slate-400">Trả sớm</span>
-                          <span className="font-semibold text-amber-700">
-                            Giải phóng {quote.data.releasedNights.length} đêm
-                          </span>
-                        </div>
-                      )}
-                    </div>
-
-                    {quote.data.lateFee ? (
-                      <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-900">
-                        <p className="font-semibold">
-                          Phí trả muộn: {formatMoney(quote.data.lateFee.amount)} ({quote.data.lateFee.percent}% ×{' '}
-                          {formatMoney(quote.data.lateFee.nightPrice)})
-                        </p>
-                        <p className="mt-1 text-[11px]">Thu tại quầy lễ tân, không trừ vào ví StayReco.</p>
-                      </div>
+              </div>
+            </section>
+          ) : canCheckOut ? (
+            <section className="rounded-xl border border-border bg-card p-4 sm:p-5" aria-label="Thu tại quầy">
+              {quote.isLoading ? (
+                <LoadingState rows={2} label="Đang tính phí trả phòng…" />
+              ) : quote.error ? (
+                <ErrorState
+                  title="Không tải được thông tin trả phòng"
+                  error={quote.error}
+                  onRetry={() => void quote.refetch()}
+                />
+              ) : quote.data ? (
+                <div className="space-y-4">
+                  <div>
+                    <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Thu tại quầy</h2>
+                    {owes ? (
+                      <dl className="mt-2 space-y-2">
+                        {quote.data.lateFee && (
+                          <div className="flex items-baseline justify-between gap-3">
+                            <dt className="text-sm text-foreground">
+                              Phí trả muộn ({quote.data.minutesLate} phút, {quote.data.lateFee.percent}% giá đêm)
+                            </dt>
+                            <dd className="text-2xl font-bold text-foreground">{formatMoney(quote.data.lateFee.amount)}</dd>
+                          </div>
+                        )}
+                        {quote.data.addOnsDue > 0 && (
+                          <div className="flex items-baseline justify-between gap-3">
+                            <dt className="text-sm text-foreground">Dịch vụ phát sinh</dt>
+                            <dd className="text-2xl font-bold text-foreground">{formatMoney(quote.data.addOnsDue)}</dd>
+                          </div>
+                        )}
+                      </dl>
                     ) : (
-                      <p className="rounded-lg bg-emerald-50 p-3 text-emerald-800">
-                        Không có phí trả muộn cho lần check-out này.
+                      <p className="mt-1 text-base font-semibold text-emerald-700">Không phải thu thêm khoản nào.</p>
+                    )}
+                    {owes && (
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        Thu trực tiếp tại quầy lễ tân, không trừ vào ví StayReco.
                       </p>
                     )}
+                  </div>
 
-                    {quote.data.addOnsDue > 0 && (
-                      <div className="rounded-lg border border-sky-200 bg-sky-50 p-3 text-sky-900">
-                        <p className="font-semibold">Dịch vụ phát sinh: {formatMoney(quote.data.addOnsDue)}</p>
-                        <p className="mt-1 text-[11px]">
-                          Các dịch vụ lễ tân đã ghi trong kỳ lưu trú, thu tại quầy cùng lúc trả phòng.
-                        </p>
-                      </div>
-                    )}
+                  <dl className="grid grid-cols-2 gap-3 rounded-lg bg-muted p-3 text-sm">
+                    <div>
+                      <dt className="text-xs text-muted-foreground">Giờ trả phòng</dt>
+                      <dd className="font-semibold text-foreground">{formatDateTime(quote.data.scheduledAt)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-muted-foreground">Khách đã thanh toán</dt>
+                      <dd className="font-semibold text-foreground">{formatMoney(quote.data.amountPaid)}</dd>
+                    </div>
+                  </dl>
 
-                    {quote.data.early && (
-                      <p className="rounded-lg bg-slate-50 p-3 text-slate-600">
-                        Trả phòng trước ngày dự kiến: các đêm còn lại được giải phóng và không hoàn tiền.
-                      </p>
-                    )}
+                  {quote.data.early && (
+                    <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
+                      Trả phòng sớm: {quote.data.releasedNights.length} đêm còn lại được giải phóng và không hoàn tiền.
+                    </p>
+                  )}
 
-                    {quote.data.lateFee && (
-                      <div className="space-y-2 rounded-lg border border-slate-200 p-3">
-                        <p className="text-[11px] font-semibold text-slate-600">
-                          Giảm phí trả muộn (không bắt buộc, tối đa {formatMoney(computedFee)})
-                        </p>
-                        <div className="grid gap-2 sm:grid-cols-2">
+                  {quote.data.lateFee && adjusting && (
+                    <div className="space-y-3 rounded-lg border border-border p-3">
+                      <p className="text-sm font-semibold text-foreground">Giảm phí trả muộn</p>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <label className="space-y-1">
+                          <span className="text-xs font-semibold text-muted-foreground">
+                            Phí thu sau khi giảm (tối đa {formatMoney(computedFee)})
+                          </span>
                           <Input
                             type="number"
+                            inputMode="numeric"
                             min={0}
                             max={computedFee}
                             value={lateFeeAmount}
                             onChange={(event) => setLateFeeAmount(event.target.value)}
-                            placeholder={`0 – ${computedFee}`}
-                            className="h-9 text-xs"
+                            aria-invalid={amountInvalid}
+                            className="h-10 text-sm"
                           />
+                        </label>
+                        <label className="space-y-1">
+                          <span className="text-xs font-semibold text-muted-foreground">Lý do (bắt buộc)</span>
                           <Input
                             value={lateFeeReason}
                             onChange={(event) => setLateFeeReason(event.target.value)}
-                            placeholder="Lý do giảm phí…"
-                            className="h-9 text-xs"
+                            aria-invalid={reasonMissing}
+                            className="h-10 text-sm"
                           />
-                        </div>
-                        {hasAdjustment && !adjustmentValid && (
-                          <p className="text-[11px] text-red-600">
-                            Nhập số tiền từ 0 đến {formatMoney(computedFee)} và lý do.
-                          </p>
-                        )}
-                        {fieldErrors['lateFee.amount'] && (
-                          <p className="text-[11px] text-red-600">{fieldErrors['lateFee.amount']}</p>
-                        )}
+                        </label>
                       </div>
-                    )}
-                  </div>
-                ) : null}
-              </Card>
-            ) : null}
-          </div>
-
-          <aside className="space-y-4 lg:sticky lg:top-4 lg:col-span-5">
-            <Card className="space-y-3 rounded-xl border border-slate-200/80 bg-white p-5 shadow-md">
-              <h2 className="flex items-center gap-2 text-sm font-bold text-slate-800">
-                <LogOut className="size-4 text-[#934a33]" /> Xác nhận trả phòng
-              </h2>
-
-              {booking.status !== 'CHECKED_IN' && booking.status !== 'COMPLETED' && (
-                <p className="rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
-                  Đơn đang ở trạng thái <strong>{bookingStatusLabels[booking.status].label}</strong>. Chỉ đơn “Đang
-                  lưu trú” mới check-out được.
-                </p>
-              )}
-
-              {canCheckOut && (
-                <>
-                  <p className="text-xs text-slate-600">
-                    Sau khi xác nhận, đơn chuyển sang <strong>Đã trả phòng</strong>, phòng chuyển sang{' '}
-                    <strong>Đang dọn</strong> và hoa hồng được ghi nhận.
-                  </p>
-
-                  {(checkOut.error || localError) && (
-                    <Alert variant="destructive" className="bg-red-50 p-3">
-                      <AlertTitle className="text-xs">Check-out thất bại</AlertTitle>
-                      <AlertDescription className="mt-1 text-xs">
-                        {localError ??
-                          getApiErrorMessage(checkOut.error, 'Không thể check-out. Vui lòng thử lại.')}
-                      </AlertDescription>
-                    </Alert>
+                      {amountInvalid && (
+                        <p className="text-xs text-destructive">Nhập số từ 0 đến {formatMoney(computedFee)}.</p>
+                      )}
+                      {reasonMissing && <p className="text-xs text-destructive">Cần nhập lý do khi giảm phí.</p>}
+                      {fieldErrors['lateFee.amount'] && (
+                        <p className="text-xs text-destructive">{fieldErrors['lateFee.amount']}</p>
+                      )}
+                    </div>
                   )}
+                </div>
+              ) : null}
+            </section>
+          ) : (
+            <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900" role="status">
+              Đơn đang ở trạng thái “{bookingStatusLabels[booking.status].label}”. Chỉ đơn “Đang lưu trú” mới trả phòng được.
+            </p>
+          )}
 
-                  <Button
-                    onClick={doCheckOut}
-                    disabled={checkOut.isPending || quote.isLoading || !!quote.error}
-                    className="h-11 w-full gap-2 bg-[#934a33] text-sm font-bold text-white hover:bg-[#7b3e2b]"
-                  >
-                    {checkOut.isPending ? <Loader2 className="size-4 animate-spin" /> : <LogOut className="size-4" />}
-                    Xác nhận check-out
+          {checkOut.error && !confirmOpen && (
+            <ErrorState
+              title="Trả phòng thất bại"
+              error={checkOut.error}
+              fallback="Không thể trả phòng. Vui lòng thử lại."
+              className="py-5"
+            />
+          )}
+
+          <StickyActionBar info={canCheckOut && quote.data && owes ? 'Nhớ thu tiền tại quầy trước khi trả phòng' : undefined}>
+            <ActionBar
+              primary={
+                done || !canCheckOut ? (
+                  <Button onClick={reset} className="h-11 px-6">
+                    Khách tiếp theo
                   </Button>
-                </>
+                ) : (
+                  <Button
+                    className="h-11 gap-2 px-6"
+                    disabled={checkOut.isPending || quote.isLoading || !!quote.error || !adjustmentValid}
+                    onClick={() => setConfirmOpen(true)}
+                  >
+                    <LogOut className="size-4" /> Trả phòng
+                  </Button>
+                )
+              }
+              menu={[
+                ...(canCheckOut && quote.data?.lateFee && !adjusting
+                  ? [
+                      {
+                        label: 'Giảm phí trả muộn',
+                        description: 'Nhập số tiền mới và lý do.',
+                        onSelect: () => setAdjusting(true),
+                      },
+                    ]
+                  : []),
+                ...(canCheckOut && adjusting
+                  ? [
+                      {
+                        label: 'Bỏ giảm phí',
+                        description: 'Thu đủ phí trả muộn theo hệ thống.',
+                        onSelect: () => {
+                          setAdjusting(false);
+                          setLateFeeAmount('');
+                          setLateFeeReason('');
+                        },
+                      },
+                    ]
+                  : []),
+                { label: 'Xem chi tiết đơn', href: `/staff/bookings/${booking.id}` },
+                ...(done || !canCheckOut ? [] : [{ label: 'Tìm đơn khác', onSelect: reset }]),
+              ]}
+            />
+          </StickyActionBar>
+
+          <Dialog open={confirmOpen} onOpenChange={(open) => !checkOut.isPending && setConfirmOpen(open)}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Trả phòng cho {booking.guestName}?</DialogTitle>
+                <DialogDescription>
+                  Đơn {booking.code} chuyển sang “Đã trả phòng”, phòng{' '}
+                  {booking.assignedRooms.map((room) => room.roomNumber).join(', ')} chuyển sang “Đang dọn” và hoa hồng
+                  được ghi nhận. Không hoàn tác được.
+                </DialogDescription>
+              </DialogHeader>
+              {owes && quote.data && (
+                <div className="space-y-1 rounded-lg bg-muted p-3 text-sm">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Đã thu tại quầy?</p>
+                  {quote.data.lateFee && (
+                    <p>
+                      Phí trả muộn:{' '}
+                      <strong>{hasAdjustment ? formatMoney(Math.round(enteredFee)) : formatMoney(quote.data.lateFee.amount)}</strong>
+                    </p>
+                  )}
+                  {quote.data.addOnsDue > 0 && (
+                    <p>
+                      Dịch vụ phát sinh: <strong>{formatMoney(quote.data.addOnsDue)}</strong>
+                    </p>
+                  )}
+                </div>
               )}
-
-              <div className="flex items-start gap-2 rounded-lg bg-slate-50 p-3 text-[11px] text-slate-500">
-                <Clock className="mt-0.5 size-3.5 shrink-0" />
-                Phí trả muộn được tính theo chính sách khách sạn và thu trực tiếp tại quầy.
-              </div>
-
-              <Link href="/staff/bookings" className="block">
-                <Button variant="outline" className="h-9 w-full text-xs font-semibold">
-                  Về danh sách đặt phòng
+              {checkOut.error && (
+                <p className="text-sm text-destructive" role="alert">
+                  {getApiErrorMessage(checkOut.error, 'Không thể trả phòng. Vui lòng thử lại.')}
+                </p>
+              )}
+              <DialogFooter>
+                <Button variant="outline" className="h-10" disabled={checkOut.isPending} onClick={() => setConfirmOpen(false)}>
+                  Huỷ
                 </Button>
-              </Link>
-            </Card>
-
-            {booking.status === 'CHECKED_IN' && !quote.isLoading && !quote.data?.lateFee && (
-              <Card className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-xs text-emerald-800 shadow-none">
-                <p className="flex items-center gap-1.5 font-semibold">
-                  <CheckCircle2 className="size-4" /> Không phát sinh phí trả muộn
-                </p>
-                <p className="mt-1">Khách trả phòng đúng hạn hoặc trong thời gian ân hạn.</p>
-              </Card>
-            )}
-
-            {booking.status === 'CHECKED_IN' && quote.data?.early && (
-              <Card className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-800 shadow-none">
-                <p className="flex items-center gap-1.5 font-semibold">
-                  <AlertTriangle className="size-4" /> Trả phòng sớm
-                </p>
-                <p className="mt-1">
-                  {quote.data.releasedNights.length} đêm còn lại sẽ được giải phóng, không hoàn tiền theo chính sách.
-                </p>
-              </Card>
-            )}
-          </aside>
+                <Button className="h-10 gap-2" disabled={checkOut.isPending} onClick={doCheckOut}>
+                  {checkOut.isPending && <Loader2 className="size-4 animate-spin" />}
+                  Trả phòng
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
       )}
     </div>
+  );
+}
+
+/** `?code=SR-…` (from the booking list and detail) opens the booking straight away; a new code remounts the form. */
+function CodeParamPage() {
+  const code = useSearchParams().get('code')?.trim() ?? '';
+  return <StaffCheckOutPageContent key={code} initialCode={code} />;
+}
+
+export default function StaffCheckOutPage() {
+  return (
+    <Suspense fallback={null}>
+      <CodeParamPage />
+    </Suspense>
   );
 }

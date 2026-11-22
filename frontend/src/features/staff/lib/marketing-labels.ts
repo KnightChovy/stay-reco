@@ -36,7 +36,7 @@ export const platformLabels: Record<SocialPlatform, string> = {
 export const platformClasses: Record<SocialPlatform, string> = {
   FACEBOOK: "bg-blue-50 text-blue-700 border-blue-200",
   INSTAGRAM: "bg-pink-50 text-pink-700 border-pink-200",
-  TIKTOK: "bg-slate-900 text-white border-slate-900",
+  TIKTOK: "bg-foreground text-background border-foreground",
 };
 
 export const ideaKindLabels: Record<ContentIdea["kind"], { label: string; tone: StatusTone }> = {
