@@ -21,6 +21,7 @@ import { pageArgs } from '../../common/http/pagination';
 import { Prisma, StaffPermission } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditAction, AuditService } from '../audit/audit.service';
+import { settleContent } from './content-status';
 import { GRAPH_TIMEOUT_MS } from './publishers/graph-api';
 import { PublisherRegistry } from './publishers/publisher.registry';
 import { SocialAccountsService } from './social-accounts.service';
@@ -389,23 +390,9 @@ export class ScheduleService {
     this.logger.warn(`Publishing ${row.contentScheduleId} failed: ${reason}`);
   }
 
-  /**
-   * A piece stays SCHEDULED only while one of its posts is waiting, going out or out. Once every one was cancelled or
-   * failed it is back to APPROVED, so the screens and the "approved" filter tell the truth and it can be scheduled
-   * again. Conditional on SCHEDULED, so a piece that has been PUBLISHED meanwhile is left alone.
-   */
-  private async settleContent(contentId: string) {
-    const live = await this.prisma.contentSchedule.count({
-      where: {
-        marketingContentId: contentId,
-        status: { in: ['SCHEDULED', 'PUBLISHING', 'PUBLISHED'] },
-      },
-    });
-    if (live > 0) return;
-    await this.prisma.marketingContent.updateMany({
-      where: { marketingContentId: contentId, status: 'SCHEDULED' },
-      data: { status: 'APPROVED' },
-    });
+  /** See `settleContent` in `content-status.ts`. */
+  private settleContent(contentId: string) {
+    return settleContent(this.prisma, contentId);
   }
 
   /** The schedule row, checked to belong to a hotel the caller may act on. */

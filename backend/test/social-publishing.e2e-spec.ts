@@ -523,6 +523,13 @@ describe('Social accounts, scheduling and publishing (e2e)', () => {
       expect(res.body.data.status).toBe('CANCELLED');
       expect(res.body.data.failureReason).toContain('disconnected');
       expect(await runJob()).toEqual({ published: 0, failed: 0 });
+      // Nothing is waiting any more, so the piece is approved again and can go to another page.
+      const content = await t.prisma.marketingContent.findFirstOrThrow({
+        where: {
+          contentSchedules: { some: { contentScheduleId: h.scheduleId } },
+        },
+      });
+      expect(content.status).toBe('APPROVED');
     });
 
     it('refuses to cancel a post that already went out', async () => {

@@ -1,15 +1,17 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type {
-  CreatePromotionInput,
-  IssueVouchersInput,
-  Promotion,
-  PromotionListQuery,
-  UpdatePromotionInput,
-  Voucher,
+import {
+  campaignProblems,
+  type CreatePromotionInput,
+  type IssueVouchersInput,
+  type Promotion,
+  type PromotionListQuery,
+  type UpdatePromotionInput,
+  type Voucher,
 } from '@stayreco/shared';
 import { randomBytes } from 'crypto';
 import type { AuthUser } from '../../common/decorators/current-user.decorator';
@@ -21,9 +23,13 @@ import {
 } from '../../common/hotel-access/hotel-access.service';
 import { Paginated } from '../../common/http/api-response';
 import {
+  addDays,
   fromCalendarDate,
+  toCalendarDate,
   todayInVietnam,
+  vietnamDateTime,
 } from '../../common/http/calendar-date';
+import { toNumber } from '../../common/http/decimal';
 import { pageArgs } from '../../common/http/pagination';
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -121,6 +127,9 @@ export class PromotionsService {
   /**
    * Changes a campaign. `currentUses` is never touched here: the bookings that already took the discount keep it,
    * and lowering `maxUses` below them simply stops the campaign rather than rewriting history.
+   *
+   * The terms are checked again on the campaign as it will be, not only on what was sent: `{ discountValue: 500 }`
+   * passes the schema alone, and on a `PERCENTAGE` campaign it would take every stay down to 0.
    */
   async update(
     user: AuthUser,
@@ -128,7 +137,23 @@ export class PromotionsService {
     input: UpdatePromotionInput,
     meta: RequestMeta = {},
   ): Promise<Promotion> {
-    await this.ownedPromotion(user, promotionId);
+    const current = await this.ownedPromotion(user, promotionId);
+    const problems = campaignProblems({
+      discountType: input.discountType ?? current.discountType,
+      discountValue: input.discountValue ?? toNumber(current.discountValue),
+      validFrom:
+        input.validFrom ??
+        (current.validFrom && toCalendarDate(current.validFrom)),
+      validTo:
+        input.validTo ?? (current.validTo && toCalendarDate(current.validTo)),
+    });
+    if (problems.length) {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'Validation failed',
+        details: problems,
+      });
+    }
     const promotion = await this.prisma.promotion.update({
       where: { promotionId },
       data: {
@@ -215,8 +240,13 @@ export class PromotionsService {
       input.maxDiscount === undefined
         ? null
         : new Prisma.Decimal(input.maxDiscount);
+    // Good for the whole of its last day in Vietnam, as a campaign's `validTo` is: the last instant of that day, not
+    // the UTC midnight that starts it (07:00 in Vietnam). One millisecond short of the next midnight, so a screen
+    // showing it in Vietnam time still shows the date that was set.
     const expiresAt = input.expiresAt
-      ? fromCalendarDate(input.expiresAt)
+      ? new Date(
+          vietnamDateTime(addDays(input.expiresAt, 1), '00:00').getTime() - 1,
+        )
       : null;
     const vouchers = (
       await this.prisma.voucher.createManyAndReturn({

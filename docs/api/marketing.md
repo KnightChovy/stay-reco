@@ -130,13 +130,19 @@ A hotel's own `forbiddenWords` are added on top. Both are tested, so the rules c
 // GET /hotels/:hotelId/marketing-content/ideas
 [ { "kind": "FREE_ROOMS",   "brief": "Còn 6 phòng trống trong 7 ngày tới…",
     "detail": "6/20 phòng chưa có khách từ 2026-11-12 trong 7 đêm" },
-  { "kind": "PROMOTION",    "brief": "Giới thiệu chương trình \"Giảm 10% cuối năm\"…",
+  { "kind": "PROMOTION",    "brief": "Giới thiệu chương trình \"Giảm 10% cuối năm\", giảm 10%, cho đơn từ 1.500.000 ₫, đến hết ngày 2026-12-31",
     "detail": "Chạy tới 2026-12-31" },
-  { "kind": "GREAT_REVIEW", "brief": "Cảm ơn khách vừa để lại đánh giá tốt…",
+  { "kind": "GREAT_REVIEW", "brief": "Cảm ơn khách vừa để lại đánh giá 5★ và nhắc lại điều họ khen, chỉ dựa trên lời khách: \"Phòng sạch, nhân viên thân thiện…\"",
     "detail": "5★ — \"Phòng sạch, nhân viên thân thiện…\"" } ]
 ```
 
 Each `brief` can be sent straight back to the generate endpoint. An idea whose figure is not there is simply absent: a hotel with every room booked gets no `FREE_ROOMS` idea.
+
+The writer may not invent prices, dates, terms or praise (M10), so **each brief carries the facts the post may state**, and only facts a guest can act on:
+
+- `FREE_ROOMS` counts rooms as the search sells them: a room under maintenance, or a night the partner closed (`BLOCKED`), is not free.
+- `PROMOTION` is a discount **any** guest would get today, as the booking applies it: not one out of uses, and not one that has issued personal codes. Its minimum stay and last day are in the brief.
+- `GREAT_REVIEW` quotes the guest's own words (up to 300 characters, no name), so the thanks repeats what they actually said.
 
 ## Connecting a page
 
@@ -193,7 +199,7 @@ Pasting is kept beside the owner-facing flow because it needs no Meta app at all
 
 `usable` turns false once `expiresAt` has passed. The publisher then **skips** the page and writes the reason on the post, rather than calling a platform with a token it knows is dead.
 
-Disconnecting clears the token and **cancels everything still waiting** on that page. The account row is kept, not deleted: a published post points at it, and that record of what went out should outlive the connection.
+Disconnecting clears the token and **cancels everything still waiting** on that page; a piece left with nothing waiting or out is back to `APPROVED`, as after a cancel by hand. The account row is kept, not deleted: a published post points at it, and that record of what went out should outlive the connection.
 
 ## The picture (M18)
 
@@ -250,7 +256,7 @@ When a platform refuses, the post becomes `FAILED` and `failureReason` carries *
 | Platform | Built | Note |
 |---|---|---|
 | Facebook | ✅ | One call. A photo is attached by URL; Meta fetches it |
-| Instagram | ✅ | Two calls: a media container, then publish. **Needs a `mediaUrl`** — Instagram has no text-only post |
+| Instagram | ✅ | A media container, then publish once its `status_code` is `FINISHED` (checked every 2 s, up to 20 s; `ERROR` or `EXPIRED` fails at once). **Needs a `mediaUrl`** — Instagram has no text-only post. Views are its `views` insight; `impressions` was retired by Meta |
 | TikTok | ❌ by decision | Its API takes a video, and the writer produces text (M12). Answers `501 SOCIAL_PLATFORM_UNSUPPORTED` with that reason |
 
 ## How a post did

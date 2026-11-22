@@ -17,6 +17,10 @@ Status: `BE Done` — merged into `develop`, FE can integrate.
 
 **A campaign that has issued vouchers stops applying automatically.** Once a hotel hands out personal codes under a campaign it is addressing chosen customers; applying it to everyone as well would make those codes pointless.
 
+**A change is checked against the campaign it changes.** `PATCH` sends only the fields it changes, so `{ "discountValue": 500 }` on a `PERCENTAGE` campaign, or a `validTo` before the stored `validFrom`, is `400 VALIDATION_ERROR` even though each field is fine on its own.
+
+**A voucher's `expiresAt` is its last day, inclusive, in Vietnam**, the same as a campaign's `validTo`. Sending `"2026-12-31"` stores `2026-12-31T16:59:59.999Z` (23:59:59.999 in Vietnam), so the code works all day on the 31st and a screen showing it in Vietnam time still shows the 31st.
+
 Loyalty points are a third, separate subtraction and come with their own branch.
 
 ## Endpoints
