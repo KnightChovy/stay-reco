@@ -247,7 +247,9 @@ The job **claims** a row before calling the platform (`SCHEDULED → PUBLISHING`
   "publishedAt": null, "externalPostId": null, "failureReason": null }
 ```
 
-Only content the owner **approved** can be scheduled, or content already `SCHEDULED` — one approved piece can go to several pages, and the first scheduling is what moved it off `APPROVED`.
+Only content the owner **approved** can be scheduled, or content already `SCHEDULED` or `PUBLISHED` — one approved piece can go to several pages, at once or later: the first scheduling moved it off `APPROVED` and the first post going out moved it to `PUBLISHED`, where it stays. The words were frozen on approval, so a second page later is still what the owner approved.
+
+**Once per page.** While a piece is waiting for a page, being sent to it or already out on it, scheduling it there again is `409 SCHEDULE_STATUS_CONFLICT`: it would be a duplicate post. A post that was cancelled or failed there does not count, so sending it again is how a failure is retried.
 
 A job picks up due posts every minute and is the **only** thing that publishes. That is what makes a double post impossible: a request and a timer firing in the same second would both see a `SCHEDULED` row, and the hotel's followers would see the post twice (M14).
 
@@ -321,7 +323,7 @@ Leaving `GEMINI_API_KEY` empty does **not** stop the server starting — the mar
 | `CONTENT_NOT_APPROVED` | 409 | Scheduling content the owner has not approved |
 | `SOCIAL_ACCOUNT_NOT_FOUND` | 404 | No such page, or it belongs to another hotel |
 | `SCHEDULE_NOT_FOUND` | 404 | No such scheduled post, or it belongs to another hotel |
-| `SCHEDULE_STATUS_CONFLICT` | 409 | Cancelling a post that went out, or reading figures for one that did not |
+| `SCHEDULE_STATUS_CONFLICT` | 409 | Cancelling a post that went out, reading figures for one that did not, or scheduling a piece on a page it is already waiting for or out on |
 | `SOCIAL_PUBLISH_FAILED` | 502 | The platform refused or could not be reached; its own message is passed through |
 | `SOCIAL_PLATFORM_UNSUPPORTED` | 501 | TikTok, or Instagram without a photo |
 | `SOCIAL_OAUTH_DISABLED` | 503 | No Meta app configured on this server; pasting a token still works |

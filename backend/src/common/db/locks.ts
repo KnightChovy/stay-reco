@@ -41,3 +41,10 @@ export async function lockRoomTypes(
     await lockRoomType(tx, id);
   }
 }
+
+/** A marketing piece: one live or published post per page stays true when two schedulings arrive at once. */
+export const lockMarketingContent = (
+  tx: Prisma.TransactionClient,
+  contentId: string,
+) =>
+  tx.$executeRaw`SELECT 1 FROM marketing_content WHERE marketing_content_id = ${contentId}::uuid FOR UPDATE`;
