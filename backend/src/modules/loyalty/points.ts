@@ -83,15 +83,17 @@ export function redeemCap(
 }
 
 /**
- * The earning rate at a hotel (decision L9): its own rate kept between the platform rate and three times it. Clamped
- * here as well as when it is saved, so lowering or raising the platform rate later never leaves a hotel outside.
+ * The earning rate at a hotel (decision L9): its own rate kept between the platform rate and `maxMultiplier` times
+ * it (1x for now, see `LOYALTY_LIMITS`). Clamped here as well as when it is saved, so changing the platform rate or
+ * the limit later never leaves a hotel outside, and a rate saved under a wider limit is never paid out.
  */
 export function earnRate(
   platformRate: Prisma.Decimal,
   hotelRate: Prisma.Decimal | null,
+  maxMultiplier: number = LOYALTY_LIMITS.maxEarnMultiplier,
 ): Prisma.Decimal {
   if (!hotelRate) return platformRate;
-  const max = platformRate.times(LOYALTY_LIMITS.maxEarnMultiplier);
+  const max = platformRate.times(maxMultiplier);
   if (hotelRate.lessThan(platformRate)) return platformRate;
   return hotelRate.greaterThan(max) ? max : hotelRate;
 }

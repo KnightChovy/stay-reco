@@ -1,8 +1,4 @@
-import {
-  ConflictException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import type { Review } from '@stayreco/shared';
 import { lockReview } from '../../common/db/locks';
 import { ErrorCode } from '../../common/errors/error-code';
@@ -74,7 +70,7 @@ export class ReviewImagesService {
     return this.load(reviewId);
   }
 
-  /** Removes a photo from the caller's own review, and the file behind it. */
+  /** Removes a photo from the caller's own review, and the file behind it unless a report keeps it as evidence. */
   async remove(customerId: string, reviewImageId: string): Promise<Review> {
     const image = isUuid(reviewImageId)
       ? await this.prisma.reviewImage.findUnique({
@@ -85,23 +81,20 @@ export class ReviewImagesService {
     if (!image) throw imageNotFound();
     await this.reviews.assertEditable(image.reviewId, customerId);
 
-    // A photo under an open report is the evidence a platform manager decides on, and deleting the row would also
-    // cascade the report away. Checked with the review locked, as a new report on it takes the same lock.
-    await this.prisma.$transaction(async (tx) => {
+    // The author may always remove their photo. A report on it survives (the link is set to null) and keeps a copy of
+    // where the photo is, so the file stays in storage as the evidence: while open, what a platform manager decides
+    // on; once decided, the record of that decision. Counted with the review locked, as a new report takes the same
+    // lock, so a report raised at the same moment either sees no photo or is counted here.
+    const reported = await this.prisma.$transaction(async (tx) => {
       await lockReview(tx, image.reviewId);
-      const open = await tx.contentReport.count({
-        where: { reviewImageId, status: { in: ['OPEN', 'INVESTIGATING'] } },
+      const reports = await tx.contentReport.count({
+        where: { reviewImageId },
       });
-      if (open) {
-        throw new ConflictException({
-          code: ErrorCode.REVIEW_IMAGE_REPORTED,
-          message: 'This photo is being looked at and cannot be removed yet',
-        });
-      }
       await tx.reviewImage.delete({ where: { reviewImageId } });
+      return reports > 0;
     });
     // Best effort: a file left behind must not fail the request.
-    await this.storage.deleteImage(image.storageKey);
+    if (!reported) await this.storage.deleteImage(image.storageKey);
     return this.load(image.reviewId);
   }
 

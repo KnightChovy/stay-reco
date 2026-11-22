@@ -142,8 +142,6 @@ export const ErrorCode = {
   REPORT_NOT_FOUND: 'REPORT_NOT_FOUND',
   /** Deciding a report that is already resolved or dismissed. */
   REPORT_STATUS_CONFLICT: 'REPORT_STATUS_CONFLICT',
-  /** Removing a photo a platform manager has still to decide on: it is the evidence of an open report. */
-  REVIEW_IMAGE_REPORTED: 'REVIEW_IMAGE_REPORTED',
 
   // Promotions and vouchers (BR-06)
   /** The discount code does not exist, or belongs to another customer. */

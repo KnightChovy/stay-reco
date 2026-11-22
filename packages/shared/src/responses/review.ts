@@ -73,7 +73,9 @@ export const reviewEligibilityResponseSchema = z
     reason: z
       .string()
       .nullable()
-      .describe('Why not, as an error code (REVIEW_NOT_ALLOWED, REVIEW_ALREADY_EXISTS, REVIEW_WINDOW_CLOSED); null when it can.'),
+      .describe(
+        'Why not, as an error code (REVIEW_NOT_ALLOWED, REVIEW_ALREADY_EXISTS, REVIEW_WINDOW_CLOSED); null when it can.',
+      ),
     reviewId: z.uuid().nullable().describe('The review already written for this stay, when there is one.'),
     closesAt: isoDateTime().nullable().describe('When the review window closes; null when the stay is not completed.'),
   })
@@ -85,7 +87,18 @@ export const contentReportResponseSchema = z
   .object({
     id: z.uuid(),
     reviewId: z.uuid(),
-    reviewImageId: z.uuid().nullable().describe('Set when one photo was flagged rather than the whole review.'),
+    reviewImageId: z
+      .uuid()
+      .nullable()
+      .describe(
+        'The flagged photo while it is still on the review; null for the whole review, or once the author removed it.',
+      ),
+    imageUrl: z
+      .string()
+      .nullable()
+      .describe(
+        'The flagged photo as it was reported, kept after its author removes it. Set for every photo report, null for a report of the whole review.',
+      ),
     hotelId: z.uuid(),
     hotelName: z.string(),
     reason: z.enum(ReportReason),
