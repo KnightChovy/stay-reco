@@ -29,6 +29,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { ReviewsModule } from './modules/reviews/reviews.module';
 import { LoyaltyModule } from './modules/loyalty/loyalty.module';
 import { MarketingModule } from './modules/marketing/marketing.module';
+import { OnboardingModule } from './modules/onboarding/onboarding.module';
 import { PreferencesModule } from './modules/preferences/preferences.module';
 import { PromotionsModule } from './modules/promotions/promotions.module';
 import { StorageModule } from './modules/storage/storage.module';
@@ -81,6 +82,7 @@ import { PrismaModule } from './prisma/prisma.module';
     PromotionsModule,
     LoyaltyModule,
     PreferencesModule,
+    OnboardingModule,
     MarketingModule,
   ],
   controllers: [AppController],

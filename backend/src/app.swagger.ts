@@ -79,6 +79,10 @@ const TAGS: [name: string, description: string][] = [
     'Saved customer preferences, free-form keys the backend does not interpret. Guide: docs/api/customer-wallet.md#preferences',
   ],
   [
+    'onboarding',
+    "First-login preferences (destinations, hotels, views, styles, budget) saved as the customer's preferences, and the platform's welcome voucher for finishing. Guide: docs/api/onboarding.md, rules: docs/money-rules.md",
+  ],
+  [
     'payouts',
     'Hotel withdrawals: a partner asks to be paid out of the available balance and a platform manager marks it paid or rejects it. Guide: docs/api/partner.md#withdrawals, docs/api/manager.md',
   ],

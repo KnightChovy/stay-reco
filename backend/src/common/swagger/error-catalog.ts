@@ -305,6 +305,11 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorInfo> = {
     description:
       'The campaign is switched off, outside its dates, or has run out of uses',
   },
+  ONBOARDING_ALREADY_COMPLETED: {
+    status: 409,
+    description:
+      'Onboarding was already completed; the picks are changed with PUT /me/preferences',
+  },
   LOYALTY_PROGRAM_NOT_FOUND: {
     status: 404,
     description: 'No loyalty programme is running, so points cannot be used',
