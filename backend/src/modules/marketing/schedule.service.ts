@@ -11,6 +11,7 @@ import type {
 } from '@stayreco/shared';
 import type { AuthUser } from '../../common/decorators/current-user.decorator';
 import type { RequestMeta } from '../../common/decorators/request-meta.decorator';
+import { lockMarketingContent } from '../../common/db/locks';
 import { ErrorCode } from '../../common/errors/error-code';
 import {
   HotelAccessService,
@@ -18,9 +19,14 @@ import {
 } from '../../common/hotel-access/hotel-access.service';
 import { Paginated } from '../../common/http/api-response';
 import { pageArgs } from '../../common/http/pagination';
-import { Prisma, StaffPermission } from '../../generated/prisma/client';
+import {
+  type ContentStatus,
+  Prisma,
+  StaffPermission,
+} from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditAction, AuditService } from '../audit/audit.service';
+import { settleContent } from './content-status';
 import { GRAPH_TIMEOUT_MS } from './publishers/graph-api';
 import { PublisherRegistry } from './publishers/publisher.registry';
 import { SocialAccountsService } from './social-accounts.service';
@@ -36,6 +42,13 @@ const wrongStatus = (message: string) =>
     code: ErrorCode.SCHEDULE_STATUS_CONFLICT,
     message,
   });
+
+/** The statuses a piece can be put on a page from: approved, already on its way to one, or already out on one. */
+const SCHEDULABLE: readonly ContentStatus[] = [
+  'APPROVED',
+  'SCHEDULED',
+  'PUBLISHED',
+];
 
 const scheduleInclude = {
   marketingContent: true,
@@ -129,9 +142,10 @@ export class ScheduleService {
       // Posting on the hotel's page is a marketing action, not something any staff member may do by id.
       StaffPermission.MARKETING,
     );
-    // SCHEDULED is allowed as well as APPROVED: one approved piece may go to several pages, and the first
-    // scheduling is what moved it off APPROVED.
-    if (content!.status !== 'APPROVED' && content!.status !== 'SCHEDULED') {
+    // One approved piece may go to several pages (M9). SCHEDULED is allowed because the first scheduling moved it
+    // off APPROVED, and PUBLISHED because the first post going out moved it on again: the words were frozen when
+    // the owner approved them, so posting them on a second page later is still exactly what was approved.
+    if (!SCHEDULABLE.includes(content!.status)) {
       throw new ConflictException({
         code: ErrorCode.CONTENT_NOT_APPROVED,
         message: 'Only content the owner has approved can be scheduled',
@@ -151,6 +165,22 @@ export class ScheduleService {
     }
 
     const row = await this.prisma.$transaction(async (tx) => {
+      // Locked so two requests for the same page at once cannot both pass the check below.
+      await lockMarketingContent(tx, contentId);
+      // The same piece twice on one page is a duplicate post the hotel's followers would see. A post that was
+      // cancelled or failed there does not count: sending it again is the way to retry.
+      const onPage = await tx.contentSchedule.count({
+        where: {
+          marketingContentId: contentId,
+          socialAccountId: input.socialAccountId,
+          status: { in: ['SCHEDULED', 'PUBLISHING', 'PUBLISHED'] },
+        },
+      });
+      if (onPage) {
+        throw wrongStatus(
+          'This piece is already waiting for that page or has gone out on it',
+        );
+      }
       const created = await tx.contentSchedule.create({
         data: {
           marketingContentId: contentId,
@@ -160,8 +190,9 @@ export class ScheduleService {
         },
         include: scheduleInclude,
       });
-      await tx.marketingContent.update({
-        where: { marketingContentId: contentId },
+      // A piece already PUBLISHED stays so: it has gone out, and that is what its status records.
+      await tx.marketingContent.updateMany({
+        where: { marketingContentId: contentId, status: 'APPROVED' },
         data: { status: 'SCHEDULED' },
       });
       return created;
@@ -389,23 +420,9 @@ export class ScheduleService {
     this.logger.warn(`Publishing ${row.contentScheduleId} failed: ${reason}`);
   }
 
-  /**
-   * A piece stays SCHEDULED only while one of its posts is waiting, going out or out. Once every one was cancelled or
-   * failed it is back to APPROVED, so the screens and the "approved" filter tell the truth and it can be scheduled
-   * again. Conditional on SCHEDULED, so a piece that has been PUBLISHED meanwhile is left alone.
-   */
-  private async settleContent(contentId: string) {
-    const live = await this.prisma.contentSchedule.count({
-      where: {
-        marketingContentId: contentId,
-        status: { in: ['SCHEDULED', 'PUBLISHING', 'PUBLISHED'] },
-      },
-    });
-    if (live > 0) return;
-    await this.prisma.marketingContent.updateMany({
-      where: { marketingContentId: contentId, status: 'SCHEDULED' },
-      data: { status: 'APPROVED' },
-    });
+  /** See `settleContent` in `content-status.ts`. */
+  private settleContent(contentId: string) {
+    return settleContent(this.prisma, contentId);
   }
 
   /** The schedule row, checked to belong to a hotel the caller may act on. */

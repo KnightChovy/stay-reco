@@ -6,10 +6,15 @@ import { graphCall } from './graph-api';
 import {
   type PostMetrics,
   platformUnsupported,
+  publishFailed,
   type PublishablePost,
   type PublishTarget,
   type SocialPublisher,
 } from './social-publisher';
+
+/** How many times, and how often, to ask whether Instagram has finished preparing a picture: 20 seconds at most. */
+const CONTAINER_CHECKS = 10;
+const CONTAINER_CHECK_MS = 2_000;
 
 /**
  * An Instagram post (M11).
@@ -46,6 +51,7 @@ export class InstagramPublisher implements SocialPublisher {
         caption,
       },
     );
+    await this.untilReady(target, creationId);
     const { id } = await graphCall<{ id: string }>(
       'Instagram',
       this.version,
@@ -55,7 +61,50 @@ export class InstagramPublisher implements SocialPublisher {
     return id;
   }
 
-  /** Instagram reports impressions on the media's own insights edge, alongside the engagement counts. */
+  /**
+   * Waits for Instagram to finish preparing the container before it is published.
+   *
+   * Instagram fetches the picture and processes it after the container is created; publishing before that answers
+   * "Media ID is not available" and the post fails for nothing but timing. Meta's own guide asks for `status_code` to
+   * be `FINISHED` first. A container that comes back `ERROR` or `EXPIRED` will never finish, so it fails at once with
+   * that reason rather than after the last attempt.
+   */
+  private async untilReady(target: PublishTarget, creationId: string) {
+    for (let attempt = 0; attempt < CONTAINER_CHECKS; attempt++) {
+      const { status_code: status } = await graphCall<{
+        status_code?: string;
+      }>(
+        'Instagram',
+        this.version,
+        creationId,
+        { access_token: target.accessToken, fields: 'status_code' },
+        'GET',
+      );
+      if (status === 'FINISHED') return;
+      if (status === 'ERROR' || status === 'EXPIRED') {
+        throw publishFailed(
+          'Instagram',
+          `it could not prepare the picture (${status}); check that the image link opens`,
+        );
+      }
+      await this.pause(CONTAINER_CHECK_MS);
+    }
+    throw publishFailed(
+      'Instagram',
+      `the picture was still being prepared after ${(CONTAINER_CHECKS * CONTAINER_CHECK_MS) / 1000} seconds`,
+    );
+  }
+
+  /** Overridden by the tests, which have no reason to wait. */
+  protected pause(ms: number) {
+    return new Promise<void>((resolve) => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Instagram reports views on the media's own insights edge, alongside the engagement counts. The metric is
+   * `views`: Meta retired `impressions` for Instagram media, and asking for it answers an error that the `catch`
+   * below would turn into a silent, permanent zero - the same trap as `post_impressions` on Facebook (M17).
+   */
   async metrics(
     target: PublishTarget,
     externalPostId: string,
@@ -79,7 +128,7 @@ export class InstagramPublisher implements SocialPublisher {
         'Instagram',
         this.version,
         `${externalPostId}/insights`,
-        { access_token: target.accessToken, metric: 'impressions' },
+        { access_token: target.accessToken, metric: 'views' },
         'GET',
       );
       views = insights.data?.[0]?.values?.[0]?.value ?? 0;

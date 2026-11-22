@@ -565,6 +565,67 @@ describe('Promotions, vouchers and discounts (e2e)', () => {
       expect(res.status).toBe(400);
       expect(res.body.code).toBe('VALIDATION_ERROR');
     });
+
+    it('checks a change against the campaign it changes, not only against itself', async () => {
+      const h = await hotel();
+      const promo = await campaign(h.token, h.hotelId, {
+        name: 'Giảm 10%',
+        discountType: 'PERCENTAGE',
+        discountValue: 10,
+        validFrom: day(5),
+      }).expect(201);
+
+      // 500 is a fine amount on its own; on a percentage campaign it would price every stay at 0.
+      const tooMuch = await t
+        .api()
+        .patch(`/api/v1/promotions/${idOf(promo)}`)
+        .set(auth(h.token))
+        .send({ discountValue: 500 });
+      expect(tooMuch.status).toBe(400);
+      expect(tooMuch.body.code).toBe('VALIDATION_ERROR');
+
+      const endsFirst = await t
+        .api()
+        .patch(`/api/v1/promotions/${idOf(promo)}`)
+        .set(auth(h.token))
+        .send({ validTo: day(1) });
+      expect(endsFirst.status).toBe(400);
+
+      const stored = await t.prisma.promotion.findUniqueOrThrow({
+        where: { promotionId: idOf(promo) },
+      });
+      expect(stored.discountValue.toNumber()).toBe(10);
+      expect(stored.validTo).toBeNull();
+
+      // Switching to a fixed amount in the same request is a different campaign, and a valid one.
+      await t
+        .api()
+        .patch(`/api/v1/promotions/${idOf(promo)}`)
+        .set(auth(h.token))
+        .send({ discountType: 'FIXED_AMOUNT', discountValue: 500000 })
+        .expect(200);
+    });
+
+    it('keeps a code good for the whole of its last day in Vietnam', async () => {
+      const h = await hotel();
+      const guest = await t.signIn('CUSTOMER', 'guest@mail.test');
+      const promo = await campaign(h.token, h.hotelId, {
+        name: 'Giảm 300k',
+        discountType: 'FIXED_AMOUNT',
+        discountValue: 300000,
+      }).expect(201);
+      const code = await issue(h.token, idOf(promo), guest.id, {
+        expiresAt: day(0),
+      });
+
+      // 23:59:59.999 in Vietnam on that date, whatever the time the test runs at.
+      const voucher = await t.prisma.voucher.findUniqueOrThrow({
+        where: { code },
+      });
+      expect(voucher.expiresAt?.toISOString()).toBe(`${day(0)}T16:59:59.999Z`);
+      const res = await quote(guest.token, h.roomTypeId, code).expect(200);
+      expect(res.body.data.discount).toMatchObject({ kind: 'VOUCHER', code });
+    });
   });
 
   describe('GET /me/vouchers', () => {
