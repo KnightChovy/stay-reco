@@ -9,6 +9,7 @@ import { Chip } from '@/components/ui/chip';
 import { Icon, type IconName } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
 import { colors } from '@/constants/theme';
+import { useVoiceInput } from '@/features/assistant/use-voice-input';
 import { images } from '@/lib/mock-data';
 
 const context: { label: string; icon: IconName }[] = [
@@ -41,9 +42,11 @@ export default function AssistantScreen() {
   const [draft, setDraft] = useState('');
   // shortcut: chỉ lưu tin nhắn người dùng cục bộ, chưa gọi API trợ lý AI.
   const [sent, setSent] = useState<string[]>([]);
+  const voice = useVoiceInput(draft, setDraft);
   const send = (text: string) => {
     const t = text.trim();
     if (!t) return;
+    voice.cancel();
     setSent((prev) => [...prev, t]);
     setDraft('');
   };
@@ -213,14 +216,19 @@ export default function AssistantScreen() {
       </ScrollView>
 
       <View className="mx-4 flex-row items-center gap-1.5 rounded-xl bg-surface-container-lowest p-1.5 shadow-floating" style={{ marginBottom: Math.max(insets.bottom, 12) + 84 }}>
-        <Pressable accessibilityLabel="Ghi âm" className="h-10 w-10 items-center justify-center">
-          <Icon name="mic" size={22} color={colors.onSurfaceVariant} />
+        <Pressable
+          accessibilityLabel={voice.listening ? 'Dừng nghe' : 'Nói câu hỏi'}
+          accessibilityState={{ selected: voice.listening }}
+          onPress={voice.toggle}
+          className={`h-10 w-10 items-center justify-center rounded-md ${voice.listening ? 'bg-error-container' : ''}`}
+        >
+          <Icon name="mic" size={22} color={voice.listening ? colors.error : colors.onSurfaceVariant} />
         </Pressable>
         <TextInput
           value={draft}
           onChangeText={setDraft}
           onSubmitEditing={() => send(draft)}
-          placeholder="Nhập câu hỏi về chỗ nghỉ, dịch vụ..."
+          placeholder={voice.listening ? 'Đang nghe, bạn nói đi...' : 'Nhập câu hỏi về chỗ nghỉ, dịch vụ...'}
           placeholderTextColor={colors.outline}
           accessibilityLabel="Nhập câu hỏi"
           className="flex-1 py-2.5 font-be-regular text-[15px] text-on-surface"

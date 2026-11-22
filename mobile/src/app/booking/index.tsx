@@ -52,7 +52,8 @@ export default function BookingInfoScreen() {
   const account = useAuthStore((s) => s.account);
   const hydrating = useAuthStore((s) => s.hydrating);
   const queryClient = useQueryClient();
-  const { data, isError, refetch } = useQuery(hotelListingQuery(params.hotelId, stay));
+  const missing = !params.hotelId || !params.roomTypeId;
+  const { data, isError, refetch } = useQuery({ ...hotelListingQuery(params.hotelId, stay), enabled: !missing });
   const room = data?.roomTypes.find((r) => r.roomType.id === params.roomTypeId);
   const offer = room?.offer;
 
@@ -205,11 +206,13 @@ export default function BookingInfoScreen() {
         <ScreenHeader title="Thông Tin Đặt Phòng" />
         <View className="flex-1 items-center justify-center gap-3 p-6">
           <Text variant="small" color={colors.onSurfaceVariant} center>
-            {data
-              ? 'Hạng phòng này không còn mở bán cho ngày bạn chọn.'
-              : isError
-                ? 'Không tải được giá phòng. Vui lòng kiểm tra kết nối.'
-                : 'Đang tải...'}
+            {missing
+              ? 'Thiếu thông tin phòng cần đặt, bạn hãy chọn phòng từ trang khách sạn.'
+              : data
+                ? 'Hạng phòng này không còn mở bán cho ngày bạn chọn.'
+                : isError
+                  ? 'Không tải được giá phòng. Vui lòng kiểm tra kết nối.'
+                  : 'Đang tải...'}
           </Text>
           {!data && isError && (
             <Button label="Thử lại" leadingIcon="refresh" variant="secondary" size="sm" onPress={() => refetch()} />
