@@ -15,7 +15,11 @@ Status: `BE Done` — merged into `develop`, FE can integrate.
 
 **A booking takes one or the other, never both** ([money-rules.md §2.1](../money-rules.md): "promotion **or** voucher discount"). When both could apply, the backend uses whichever saves more, so typing a code can never leave a customer worse off. A tie goes to the code, so a personal voucher is the one spent.
 
-**A campaign that has issued vouchers stops applying automatically.** Once a hotel hands out personal codes under a campaign it is addressing chosen customers; applying it to everyone as well would make those codes pointless.
+**A code-only campaign never applies by itself** (`requiresCode: true`). Once a hotel hands out personal codes under a campaign it is addressing chosen customers; applying it to everyone as well would make those codes pointless. Issuing a voucher sets `requiresCode`, and the owner may set it when the campaign is created, so a campaign meant for codes is never automatic, not even before its first code goes out. Setting it back to `false` makes the campaign apply to everyone again; the codes already issued still work.
+
+**A change is checked against the campaign it changes.** `PATCH` sends only the fields it changes, so `{ "discountValue": 500 }` on a `PERCENTAGE` campaign, or a `validTo` before the stored `validFrom`, is `400 VALIDATION_ERROR` even though each field is fine on its own.
+
+**A voucher's `expiresAt` is its last day, inclusive, in Vietnam**, the same as a campaign's `validTo`. Sending `"2026-12-31"` stores `2026-12-31T16:59:59.999Z` (23:59:59.999 in Vietnam), so the code works all day on the 31st and a screen showing it in Vietnam time still shows the 31st.
 
 Loyalty points are a third, separate subtraction and come with their own branch.
 
@@ -119,5 +123,4 @@ Someone else's code answers `VOUCHER_NOT_FOUND`, not `FORBIDDEN`, so codes canno
 ## Still open
 
 - **Loyalty points** as a third subtraction (BR-11) — its own branch.
-- A campaign has no column saying "code only"; having vouchers is what marks it today. A `requiresCode` boolean would be clearer and needs a migration.
 - Platform-wide campaigns (`hotelId: null`) are read and applied, but no endpoint creates one yet; that belongs with the admin screens of [phase 6](../phases/phase-6-reporting-admin.md).

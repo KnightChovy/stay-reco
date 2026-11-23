@@ -142,8 +142,6 @@ export const ErrorCode = {
   REPORT_NOT_FOUND: 'REPORT_NOT_FOUND',
   /** Deciding a report that is already resolved or dismissed. */
   REPORT_STATUS_CONFLICT: 'REPORT_STATUS_CONFLICT',
-  /** Removing a photo a platform manager has still to decide on: it is the evidence of an open report. */
-  REVIEW_IMAGE_REPORTED: 'REVIEW_IMAGE_REPORTED',
 
   // Promotions and vouchers (BR-06)
   /** The discount code does not exist, or belongs to another customer. */
@@ -158,6 +156,10 @@ export const ErrorCode = {
   PROMOTION_NOT_FOUND: 'PROMOTION_NOT_FOUND',
   /** The campaign is switched off, outside its dates, or has run out of uses. */
   PROMOTION_NOT_ACTIVE: 'PROMOTION_NOT_ACTIVE',
+
+  // First-login preferences and the welcome voucher
+  /** Onboarding was already completed; change the picks with PUT /me/preferences instead. */
+  ONBOARDING_ALREADY_COMPLETED: 'ONBOARDING_ALREADY_COMPLETED',
 
   // Loyalty (BR-11)
   /** No loyalty programme is running, so points cannot be earned or spent. */

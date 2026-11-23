@@ -363,6 +363,57 @@ describe('Social accounts, scheduling and publishing (e2e)', () => {
       expect(res.body.data.status).toBe('PUBLISHED');
     });
 
+    it('sends a piece that already went out to another page later, and it stays PUBLISHED', async () => {
+      const h = await readyToPublish();
+      await runJob();
+      const second = idOf(
+        await connect(h.token, h.hotelId, { accountName: '9876543210' }).expect(
+          201,
+        ),
+      );
+
+      // The words were frozen on approval, so a second page later is still exactly what the owner approved.
+      await schedule(h.token, h.contentId, { socialAccountId: second }).expect(
+        201,
+      );
+      const content = await t.prisma.marketingContent.findUniqueOrThrow({
+        where: { marketingContentId: h.contentId },
+      });
+      expect(content.status).toBe('PUBLISHED');
+
+      expect(await runJob()).toEqual({ published: 1, failed: 0 });
+      expect(t.publisher.posts.map((p) => p.accountName)).toEqual([
+        '1234567890',
+        '9876543210',
+      ]);
+    });
+
+    it('refuses the same piece twice on one page, but lets a failed post be sent again', async () => {
+      const h = await readyToPublish();
+
+      // Still waiting there: a second one would be a duplicate post.
+      const waiting = await schedule(h.token, h.contentId, {
+        socialAccountId: h.accountId,
+      });
+      expect(waiting.status).toBe(409);
+      expect(waiting.body.code).toBe('SCHEDULE_STATUS_CONFLICT');
+
+      t.publisher.failWith = 'Session expired';
+      await runJob();
+      t.publisher.failWith = null;
+
+      // A failure there is not a post the followers saw; sending it again is how it is retried.
+      await schedule(h.token, h.contentId, {
+        socialAccountId: h.accountId,
+      }).expect(201);
+      expect(await runJob()).toEqual({ published: 1, failed: 0 });
+
+      const out = await schedule(h.token, h.contentId, {
+        socialAccountId: h.accountId,
+      });
+      expect(out.status).toBe(409);
+    });
+
     it('leaves a post scheduled for later alone', async () => {
       const h = await hotel();
       const accountId = idOf(await connect(h.token, h.hotelId).expect(201));
@@ -523,6 +574,13 @@ describe('Social accounts, scheduling and publishing (e2e)', () => {
       expect(res.body.data.status).toBe('CANCELLED');
       expect(res.body.data.failureReason).toContain('disconnected');
       expect(await runJob()).toEqual({ published: 0, failed: 0 });
+      // Nothing is waiting any more, so the piece is approved again and can go to another page.
+      const content = await t.prisma.marketingContent.findFirstOrThrow({
+        where: {
+          contentSchedules: { some: { contentScheduleId: h.scheduleId } },
+        },
+      });
+      expect(content.status).toBe('APPROVED');
     });
 
     it('refuses to cancel a post that already went out', async () => {
@@ -779,6 +837,12 @@ describe('Social accounts, scheduling and publishing (e2e)', () => {
     it('lists a "post now" row before a timed one', async () => {
       const h = await hotel();
       const accountId = idOf(await connect(h.token, h.hotelId).expect(201));
+      // A second page: the same piece twice on one page is refused as a duplicate post.
+      const other = idOf(
+        await connect(h.token, h.hotelId, { accountName: '9876543210' }).expect(
+          201,
+        ),
+      );
       const contentId = await approvedContent(h.token, h.hotelId);
       const timed = idOf(
         await schedule(h.token, contentId, {
@@ -788,7 +852,7 @@ describe('Social accounts, scheduling and publishing (e2e)', () => {
       );
       const now = idOf(
         await schedule(h.token, contentId, {
-          socialAccountId: accountId,
+          socialAccountId: other,
         }).expect(201),
       );
       const res = await t

@@ -15,6 +15,7 @@ Each endpoint is described **once**, on the page of the role that uses it most; 
 | [promotions.md](./promotions.md) | Customer, partner, hotel staff | Discount campaigns, personal voucher codes, the discount quote and what a booking is charged |
 | [loyalty.md](./loyalty.md) | Customer | Loyalty points: the balance and tier, earning at check-out, spending on a booking, the points history |
 | [customer-wallet.md](./customer-wallet.md) | Customer | The customer wallet: balance, movements, paying a whole booking from it, and saved preferences |
+| [onboarding.md](./onboarding.md) | Customer | First-login preferences (destinations, hotels, views, styles, budget) and the platform's welcome voucher |
 | [add-ons.md](./add-ons.md) | Partner, hotel staff, customer | Services sold on top of the room: the catalogue, booking them with the stay, front-desk add-ons collected at check-out |
 | [marketing.md](./marketing.md) | Partner, hotel staff | AI marketing: the brand voice, drafts the owner approves, the posting calendar, publishing to Facebook and Instagram, and what it all cost |
 | [assistant.md](./assistant.md) | Customer, public | Personal hotel recommendations from the trained model, and the chat assistant that searches, recommends and proposes bookings the customer confirms |

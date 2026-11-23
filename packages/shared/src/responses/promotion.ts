@@ -19,6 +19,9 @@ export const promotionResponseSchema = z
     validFrom: z.string().nullable().describe('"YYYY-MM-DD"; null means no start date.'),
     validTo: z.string().nullable(),
     isActive: z.boolean().describe('Switched on by the hotel; it still has to be inside its dates and have uses left.'),
+    requiresCode: z
+      .boolean()
+      .describe('Applies only through a personal code, never to a stay by itself. Issuing a voucher sets it.'),
     usable: z.boolean().describe('Computed: active, inside its dates and not out of uses, so a booking today could use it.'),
     createdAt: isoDateTime(),
   })

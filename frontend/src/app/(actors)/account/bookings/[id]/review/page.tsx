@@ -15,7 +15,7 @@ import {
   Send,
   ShieldCheck,
 } from 'lucide-react';
-import { createReviewSchema, type RatingCriterion, type Review } from '@stayreco/shared';
+import { createReviewSchema, type RatingCriterion, type Review, type ReviewImage } from '@stayreco/shared';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -23,7 +23,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { EmptyState, ErrorState } from '@/components/common/StateViews';
-import { getApiErrorMessage, getApiFieldErrors, validateWith } from '@/lib/api-error';
+import { getApiErrorCode, getApiErrorMessage, getApiFieldErrors, validateWith } from '@/lib/api-error';
 import { cn } from '@/lib/utils';
 import { FALLBACK_HOTEL_IMAGE } from '@/features/booking/lib/booking-status';
 import {
@@ -34,11 +34,19 @@ import {
 import { useBooking } from '@/features/booking/api/booking-queries';
 import {
   useCreateReview,
+  useDeleteReviewImage,
   useMyReviews,
   useRatingCriteria,
   useReviewEligibility,
   useUpdateReview,
+  useUploadReviewImage,
 } from '@/features/account/api/rewards-queries';
+import { notify } from '@/features/account/AccountShell';
+import {
+  checkReviewPhoto,
+  ReviewPhotoPicker,
+  type PendingPhoto,
+} from '@/features/reviews/components/ReviewPhotoPicker';
 import { StarDisplay, StarInput } from '@/features/reviews/components/StarRating';
 import { formatDate, formatDateTime } from '@/features/stays/lib/format';
 
@@ -74,7 +82,41 @@ function ReviewForm({
   const router = useRouter();
   const createReview = useCreateReview();
   const updateReview = useUpdateReview();
-  const pending = createReview.isPending || updateReview.isPending;
+  const uploadImage = useUploadReviewImage();
+  const deleteImage = useDeleteReviewImage();
+  // Photos picked here are uploaded once the review exists; `uploading` counts them for the button.
+  const [photos, setPhotos] = useState<PendingPhoto[]>([]);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [uploading, setUploading] = useState<{ done: number; total: number } | null>(null);
+  const pending = createReview.isPending || updateReview.isPending || uploading !== null;
+  const savedImages: ReviewImage[] = existing?.images ?? [];
+
+  const addPhotos = async (files: File[]) => {
+    setPhotoError(null);
+    const problems: string[] = [];
+    const accepted: PendingPhoto[] = [];
+    for (const file of files) {
+      const problem = await checkReviewPhoto(file);
+      if (problem) problems.push(problem);
+      else accepted.push({ id: `${file.name}-${file.lastModified}-${Math.random()}`, file, url: URL.createObjectURL(file) });
+    }
+    if (accepted.length > 0) setPhotos((current) => [...current, ...accepted]);
+    if (problems.length > 0) setPhotoError(problems.join(' '));
+  };
+
+  const removeSaved = (image: ReviewImage) => {
+    if (!window.confirm('Xoá ảnh này khỏi đánh giá? Không thể hoàn tác.')) return;
+    setPhotoError(null);
+    deleteImage.mutate(image.id, {
+      onSuccess: () => notify.success('Đã xoá ảnh'),
+      onError: (error) =>
+        setPhotoError(
+          getApiErrorCode(error) === 'REVIEW_IMAGE_REPORTED'
+            ? 'Ảnh này đang bị báo cáo nên chưa xoá được; bạn xoá được sau khi quản lý StayReco xử lý xong.'
+            : getApiErrorMessage(error, 'Không xoá được ảnh.'),
+        ),
+    });
+  };
 
   const [title, setTitle] = useState(existing?.title ?? '');
   const [content, setContent] = useState(existing?.content ?? '');
@@ -96,7 +138,10 @@ function ReviewForm({
     [existing],
   );
   const dirty =
-    title !== (existing?.title ?? '') || content !== (existing?.content ?? '') || JSON.stringify(scores) !== initialScores;
+    title !== (existing?.title ?? '') ||
+    content !== (existing?.content ?? '') ||
+    JSON.stringify(scores) !== initialScores ||
+    photos.length > 0;
   useEffect(() => {
     if (!dirty) return;
     const warn = (event: BeforeUnloadEvent) => {
@@ -134,8 +179,25 @@ function ReviewForm({
       setErrors(getApiFieldErrors(error));
       setFormError(getApiErrorMessage(error, 'Không gửi được đánh giá. Vui lòng thử lại.'));
     };
-    const onSuccess = (review: Review) => {
+    // The words are saved first; then each picked photo is sent one by one, so a refused photo does not lose the
+    // review. Whatever could not be uploaded is reported, and the guest can add it again while editing is open.
+    const onSuccess = async (review: Review) => {
       submitted.current = true;
+      const failed: string[] = [];
+      if (photos.length > 0) {
+        setUploading({ done: 0, total: photos.length });
+        for (const [index, photo] of photos.entries()) {
+          try {
+            await uploadImage.mutateAsync({ reviewId: review.id, file: photo.file });
+          } catch (error) {
+            failed.push(`${photo.file.name}: ${getApiErrorMessage(error, 'không tải lên được')}`);
+          }
+          setUploading({ done: index + 1, total: photos.length });
+        }
+      }
+      if (failed.length > 0) {
+        notify.error(`${failed.length} ảnh chưa tải lên được`, failed.join(' · '));
+      }
       router.replace(`/account/bookings/${bookingId}?reviewed=${review.isVisible ? 'visible' : 'hidden'}`);
     };
 
@@ -235,6 +297,17 @@ function ReviewForm({
           </div>
         </div>
 
+        <ReviewPhotoPicker
+          saved={savedImages}
+          pending={photos}
+          onAdd={(files) => void addPhotos(files)}
+          onRemovePending={(id) => setPhotos((current) => current.filter((photo) => photo.id !== id))}
+          onRemoveSaved={existing ? removeSaved : undefined}
+          removingId={deleteImage.isPending ? deleteImage.variables : null}
+          disabled={pending}
+          error={photoError}
+        />
+
         <div className="flex items-start gap-2 rounded-lg bg-muted p-3 text-xs text-muted-foreground">
           <Info className="mt-0.5 size-4 shrink-0 text-primary" />
           <p className="leading-relaxed">
@@ -256,7 +329,11 @@ function ReviewForm({
       <div className="flex justify-end">
         <Button type="submit" disabled={pending} className="h-11 w-full gap-2 px-8 sm:w-auto">
           {pending ? <Loader2 className="size-4 animate-spin" /> : existing ? <Edit2 className="size-4" /> : <Send className="size-4" />}
-          {existing ? 'Lưu chỉnh sửa' : 'Gửi đánh giá'}
+          {uploading
+            ? `Đang tải ảnh ${Math.min(uploading.done + 1, uploading.total)}/${uploading.total}…`
+            : existing
+              ? 'Lưu chỉnh sửa'
+              : 'Gửi đánh giá'}
         </Button>
       </div>
     </form>
@@ -277,6 +354,16 @@ function ReviewSummary({ review }: { review: Review }) {
       </div>
       {review.title && <h3 className="text-base font-bold text-foreground">{review.title}</h3>}
       <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">{review.content}</p>
+      {review.images.length > 0 && (
+        <ul className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+          {review.images.map((image) => (
+            <li key={image.id} className="aspect-square overflow-hidden rounded-lg bg-muted">
+              {/* eslint-disable-next-line @next/next/no-img-element -- review photos come from storage at their own size */}
+              <img src={image.url} alt="Ảnh trong đánh giá của bạn" className="size-full object-cover" />
+            </li>
+          ))}
+        </ul>
+      )}
       <ul className="grid grid-cols-1 gap-2 border-t border-border pt-3 sm:grid-cols-2">
         {review.subRatings.map((rating) => (
           <li key={rating.criterionId} className="flex items-center justify-between gap-2 text-xs">

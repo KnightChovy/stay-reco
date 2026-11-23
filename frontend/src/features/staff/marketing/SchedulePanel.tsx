@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { AlertTriangle, CalendarClock, CheckCircle2, Loader2, Send, XCircle } from "lucide-react";
 import type { ContentSchedule, MarketingContent, SocialAccount } from "@stayreco/shared";
+import { ActionMenu } from "@/components/common/ActionBar";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { DateInput, TimeSelect } from "@/features/partner/components/DateTimeInputs";
@@ -19,7 +20,7 @@ import {
 } from "../api/marketing-queries";
 import { platformLabels, SCHEDULABLE_STATUSES } from "../lib/marketing-labels";
 import { getMarketingErrorMessage } from "../lib/marketing-errors";
-import { PlatformPill, ScheduleStatusPill } from "./MarketingParts";
+import { ConfirmDialog, PlatformPill, ScheduleStatusPill } from "./MarketingParts";
 
 /** "YYYY-MM-DD" + "HH:mm" picked in Vietnam time → the ISO instant the API takes. */
 function toInstant(date: string, time: string) {
@@ -45,17 +46,17 @@ function AccountOption({
       disabled={!!disabledReason}
       onClick={onSelect}
       className={cn(
-        "flex w-full items-center justify-between gap-2 rounded-lg border p-3 text-left transition",
-        selected ? "border-[#934a33] bg-[#F5EBE5]/60" : "border-slate-200 bg-white hover:border-[#934a33]/40",
-        disabledReason && "cursor-not-allowed opacity-60 hover:border-slate-200",
+        "flex min-h-12 w-full items-center justify-between gap-2 rounded-lg border p-3 text-left transition",
+        selected ? "border-primary bg-primary/5" : "border-border bg-card hover:border-primary/40",
+        disabledReason && "cursor-not-allowed opacity-60 hover:border-border",
       )}
     >
       <span className="min-w-0 space-y-0.5">
         <span className="flex items-center gap-2">
           <PlatformPill platform={account.platform} />
-          <span className="truncate font-mono text-xs text-slate-700">{account.accountName}</span>
+          <span className="truncate font-mono text-xs text-foreground">{account.accountName}</span>
         </span>
-        <span className="block text-[11px] text-slate-500">
+        <span className="block text-xs text-muted-foreground">
           {disabledReason ?? (account.expiresAt ? `Token hết hạn ${formatDateTime(account.expiresAt)}` : "Đang kết nối")}
         </span>
       </span>
@@ -63,7 +64,7 @@ function AccountOption({
         aria-hidden
         className={cn(
           "size-4 shrink-0 rounded-full border-2",
-          selected ? "border-[#934a33] bg-[#934a33]" : "border-slate-300",
+          selected ? "border-primary bg-primary" : "border-border",
         )}
       />
     </button>
@@ -72,26 +73,31 @@ function AccountOption({
 
 function ScheduleRow({ schedule }: { schedule: ContentSchedule }) {
   const cancel = useCancelSchedule();
+  const [confirm, setConfirm] = useState(false);
   return (
-    <li className="space-y-1.5 rounded-lg border border-slate-200 p-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="flex items-center gap-2">
+    <li className="space-y-1.5 rounded-lg border border-border p-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="flex min-w-0 items-center gap-2">
           <PlatformPill platform={schedule.platform} />
           <ScheduleStatusPill status={schedule.status} />
         </span>
         {schedule.status === "SCHEDULED" && (
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 gap-1 text-xs text-red-600 hover:text-red-700"
-            disabled={cancel.isPending}
-            onClick={() => cancel.mutate(schedule.id)}
-          >
-            {cancel.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <XCircle className="size-3.5" />} Huỷ lịch
-          </Button>
+          <ActionMenu
+            variant="icon"
+            label="Thao tác với lịch đăng"
+            items={[
+              {
+                label: "Huỷ lịch",
+                description: "Bài sẽ không được đăng lên trang này nữa.",
+                icon: XCircle,
+                destructive: true,
+                onSelect: () => setConfirm(true),
+              },
+            ]}
+          />
         )}
       </div>
-      <p className="text-[11px] text-slate-500">
+      <p className="text-xs text-muted-foreground">
         {schedule.publishedAt
           ? `Đã đăng lúc ${formatDateTime(schedule.publishedAt)}`
           : schedule.scheduledAt
@@ -101,14 +107,23 @@ function ScheduleRow({ schedule }: { schedule: ContentSchedule }) {
               : "Đăng ngay (không hẹn giờ)"}
       </p>
       {schedule.failureReason && (
-        <p className="rounded bg-red-50 px-2 py-1 text-[11px] text-red-700">Lý do: {schedule.failureReason}</p>
+        <p className="rounded bg-destructive/10 px-2 py-1 text-xs text-destructive">Lý do: {schedule.failureReason}</p>
       )}
       {schedule.status === "PUBLISHED" && (
-        <Link href={`/staff/marketing/analytics?schedule=${schedule.id}`} className="text-[11px] font-semibold text-[#934a33] hover:underline">
+        <Link href={`/staff/marketing/analytics?schedule=${schedule.id}`} className="inline-flex h-10 items-center text-xs font-semibold text-primary hover:underline">
           Xem hiệu quả bài đăng
         </Link>
       )}
-      {cancel.error && <p className="text-[11px] text-red-600">{getMarketingErrorMessage(cancel.error)}</p>}
+      {cancel.error && <p className="text-xs text-destructive">{getMarketingErrorMessage(cancel.error)}</p>}
+      <ConfirmDialog
+        open={confirm}
+        onOpenChange={setConfirm}
+        title="Huỷ lịch đăng này?"
+        description={`Bài sẽ không được đăng lên ${platformLabels[schedule.platform]} (${schedule.accountName}). Bạn có thể lên lịch lại sau.`}
+        confirmLabel="Huỷ lịch"
+        pending={cancel.isPending}
+        onConfirm={() => cancel.mutate(schedule.id, { onSettled: () => setConfirm(false) })}
+      />
     </li>
   );
 }
@@ -184,23 +199,23 @@ export function SchedulePanel({ hotelId, content }: { hotelId: string; content: 
   };
 
   return (
-    <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-2xs">
-      <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-        <CalendarClock className="size-4 text-[#934a33]" /> Lên lịch đăng
+    <section className="space-y-4 rounded-xl border border-border bg-white p-4 shadow-2xs">
+      <h2 className="flex items-center gap-2 text-sm font-bold text-foreground">
+        <CalendarClock className="size-4 text-primary" aria-hidden /> Lên lịch đăng
       </h2>
 
       {!canSchedule ? (
-        <p className="rounded-lg bg-slate-50 p-3 text-xs text-slate-500">
+        <p className="rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground">
           {content.status === "PUBLISHED"
             ? "Bài đã được đăng."
             : "Chỉ bài đã được chủ khách sạn duyệt mới lên lịch được. Gửi duyệt sau khi chỉnh sửa xong."}
         </p>
       ) : accountsQuery.isLoading ? (
-        <p className="flex items-center gap-2 text-xs text-slate-500">
+        <p className="flex items-center gap-2 text-xs text-muted-foreground">
           <Loader2 className="size-3.5 animate-spin" /> Đang tải các trang đã kết nối…
         </p>
       ) : accountsQuery.error ? (
-        <p className="text-xs text-red-600">{getMarketingErrorMessage(accountsQuery.error)}</p>
+        <p className="text-xs text-destructive">{getMarketingErrorMessage(accountsQuery.error)}</p>
       ) : accounts.length === 0 ? (
         <p className="flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-xs text-amber-800">
           <AlertTriangle className="mt-0.5 size-4 shrink-0" />
@@ -220,7 +235,7 @@ export function SchedulePanel({ hotelId, content }: { hotelId: string; content: 
             ))}
           </div>
 
-          <div className="flex gap-1 rounded-lg bg-slate-100 p-1 text-xs font-semibold" role="radiogroup" aria-label="Thời điểm đăng">
+          <div className="flex gap-1 rounded-lg bg-muted p-1 text-xs font-semibold" role="radiogroup" aria-label="Thời điểm đăng">
             {(
               [
                 ["later", "Hẹn giờ"],
@@ -234,8 +249,8 @@ export function SchedulePanel({ hotelId, content }: { hotelId: string; content: 
                 aria-checked={mode === value}
                 onClick={() => setMode(value)}
                 className={cn(
-                  "flex-1 rounded-md px-3 py-1.5 transition",
-                  mode === value ? "bg-white text-slate-900 shadow-xs" : "text-slate-500",
+                  "h-10 flex-1 rounded-md px-3 transition",
+                  mode === value ? "bg-card text-foreground shadow-xs" : "text-muted-foreground",
                 )}
               >
                 {label}
@@ -249,11 +264,11 @@ export function SchedulePanel({ hotelId, content }: { hotelId: string; content: 
               <TimeSelect value={time} onChange={(event) => setTime(event.target.value)} aria-label="Giờ đăng" />
             </div>
           ) : (
-            <p className="text-[11px] text-slate-500">Bài sẽ được đăng ở lượt chạy kế tiếp, trong vòng khoảng 1 phút.</p>
+            <p className="text-xs text-muted-foreground">Bài sẽ được đăng ở lượt chạy kế tiếp, trong vòng khoảng 1 phút.</p>
           )}
 
           {formError && (
-            <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700" role="alert">
+            <p className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive" role="alert">
               {formError}
             </p>
           )}
@@ -266,7 +281,7 @@ export function SchedulePanel({ hotelId, content }: { hotelId: string; content: 
           <Button
             onClick={submit}
             disabled={scheduleContent.isPending}
-            className="w-full gap-1.5 bg-[#934a33] text-xs text-white hover:bg-[#7a341e]"
+            className="h-10 w-full gap-1.5"
           >
             {scheduleContent.isPending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
             {mode === "now" ? "Đăng ngay" : "Lên lịch đăng"}
@@ -275,8 +290,8 @@ export function SchedulePanel({ hotelId, content }: { hotelId: string; content: 
       )}
 
       {schedules.length > 0 && (
-        <div className="space-y-2 border-t border-slate-100 pt-3">
-          <p className="text-[11px] font-semibold uppercase text-slate-500">Lịch đăng của bài này</p>
+        <div className="space-y-2 border-t border-border pt-3">
+          <p className="text-xs font-semibold uppercase text-muted-foreground">Lịch đăng của bài này</p>
           <ul className="space-y-2">
             {schedules.map((schedule) => (
               <ScheduleRow key={schedule.id} schedule={schedule} />
@@ -284,7 +299,7 @@ export function SchedulePanel({ hotelId, content }: { hotelId: string; content: 
           </ul>
         </div>
       )}
-      <p className="text-[11px] text-slate-400">
+      <p className="text-xs text-muted-foreground">
         Đăng lên: {Object.values(platformLabels).slice(0, 2).join(", ")}. TikTok chỉ nhận video nên chưa hỗ trợ.
       </p>
     </section>

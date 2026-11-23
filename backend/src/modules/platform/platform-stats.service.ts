@@ -26,8 +26,12 @@ import { Paginated } from '../../common/http/api-response';
 import { toNumber } from '../../common/http/decimal';
 import { escapeLike } from '../../common/db/like';
 import { isUuid } from '../../common/hotel-access/hotel-access.service';
-import { Prisma } from '../../generated/prisma/client';
+import { type DiscountType, Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import {
+  commissionAfterPlatformDiscount,
+  platformDiscountOf,
+} from '../bookings/commission';
 import { latestEventSql } from '../payouts/payout-events';
 import {
   bucketsOf,
@@ -339,6 +343,8 @@ export class PlatformStatsService {
       JOIN invoice i ON i.booking_id = b.booking_id
       JOIN hotel h ON h.hotel_id = b.hotel_id
       LEFT JOIN wallet_transaction c ON c.idempotency_key = 'commission:' || b.booking_id || ':platform'
+      LEFT JOIN promotion pp ON pp.promotion_id = b.promotion_id
+      LEFT JOIN voucher v ON v.voucher_id = b.voucher_id
       WHERE ${where}`;
     const [rows, [{ total }]] = await Promise.all([
       this.prisma.$queryRaw<CommissionSqlRow[]>`
@@ -364,6 +370,8 @@ export class PlatformStatsService {
       JOIN invoice i ON i.booking_id = b.booking_id
       JOIN hotel h ON h.hotel_id = b.hotel_id
       LEFT JOIN wallet_transaction c ON c.idempotency_key = 'commission:' || b.booking_id || ':platform'
+      LEFT JOIN promotion pp ON pp.promotion_id = b.promotion_id
+      LEFT JOIN voucher v ON v.voucher_id = b.voucher_id
       WHERE ${where}
       ORDER BY b.check_out_date DESC, i.invoice_number`;
     return rows.map(toCommissionRow);
@@ -657,12 +665,23 @@ interface CommissionSqlRow {
   rate: Prisma.Decimal;
   charged: Prisma.Decimal | null;
   chargedAt: Date | null;
+  /** What the platform discount, if any, is worked out from (`platformDiscountOf`). */
+  roomSubtotal: Prisma.Decimal;
+  platformWide: boolean;
+  discountType: DiscountType | null;
+  discountValue: Prisma.Decimal | null;
+  maxDiscount: Prisma.Decimal | null;
 }
 
 const commissionColumns = Prisma.sql`
   SELECT b.booking_id AS "bookingId", i.invoice_number AS code, h.hotel_id AS "hotelId", h.name AS "hotelName",
     b.check_out_date::text AS "checkOutDate", i.total_amount AS total, b.commission_rate AS rate,
-    c.amount AS charged, c.created_at AS "chargedAt"`;
+    c.amount AS charged, c.created_at AS "chargedAt",
+    (SELECT coalesce(sum(bi.subtotal), 0) FROM booking_item bi WHERE bi.booking_id = b.booking_id) AS "roomSubtotal",
+    (pp.promotion_id IS NOT NULL AND pp.hotel_id IS NULL) AS "platformWide",
+    coalesce(v.discount_type, pp.discount_type) AS "discountType",
+    coalesce(v.discount_value, pp.discount_value) AS "discountValue",
+    v.max_discount AS "maxDiscount"`;
 
 const toCommissionRow = (r: CommissionSqlRow): CommissionRow => ({
   booking: { id: r.bookingId, code: r.code },
@@ -670,14 +689,26 @@ const toCommissionRow = (r: CommissionSqlRow): CommissionRow => ({
   checkOutDate: r.checkOutDate,
   total: money(r.total),
   rate: money(r.rate),
-  amount: r.charged
-    ? money(r.charged)
-    : money(
-        r.total
-          .times(r.rate)
-          .dividedBy(100)
-          .toDecimalPlaces(0, Prisma.Decimal.ROUND_HALF_UP),
+  // What check-out will charge, by the same function: a booking that took a platform discount shows the commission
+  // net of it (money-rules §5.4), so the forecast and the charged figure cannot disagree.
+  amount: money(
+    r.charged ??
+      commissionAfterPlatformDiscount(
+        r.total,
+        r.rate,
+        platformDiscountOf({
+          roomSubtotal: r.roomSubtotal,
+          terms:
+            r.platformWide && r.discountType && r.discountValue
+              ? {
+                  discountType: r.discountType,
+                  discountValue: r.discountValue,
+                  maxDiscount: r.maxDiscount,
+                }
+              : null,
+        }),
       ),
+  ),
   status: r.charged ? 'CHARGED' : 'EXPECTED',
   chargedAt: r.chargedAt?.toISOString() ?? null,
 });

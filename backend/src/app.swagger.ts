@@ -87,6 +87,10 @@ const TAGS: [name: string, description: string][] = [
     'The customer chat assistant: searches, recommends and proposes bookings the customer confirms with one click. Guide: docs/api/assistant.md',
   ],
   [
+    'onboarding',
+    "First-login preferences (destinations, hotels, views, styles, budget) saved as the customer's preferences, and the platform's welcome voucher for finishing. Guide: docs/api/onboarding.md, rules: docs/money-rules.md",
+  ],
+  [
     'payouts',
     'Hotel withdrawals: a partner asks to be paid out of the available balance and a platform manager marks it paid or rejects it. Guide: docs/api/partner.md#withdrawals, docs/api/manager.md',
   ],

@@ -7,6 +7,7 @@ import { useQueries } from "@tanstack/react-query";
 import { Eye, Heart, Info, LineChart, Loader2, MessageCircle, RefreshCw, Share2 } from "lucide-react";
 import type { ContentMetric, ContentSchedule } from "@stayreco/shared";
 import Pagination from "@/components/common/pagination/Pagination";
+import { EmptyState } from "@/components/common/StateViews";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -33,7 +34,7 @@ function Delta({ now, before }: { now: number; before: number | undefined }) {
   if (before === undefined || now === before) return null;
   const up = now > before;
   return (
-    <span className={cn("text-[10px] font-semibold", up ? "text-emerald-600" : "text-red-600")}>
+    <span className={cn("text-xs font-semibold", up ? "text-emerald-600" : "text-destructive")}>
       {up ? "+" : ""}
       {formatCount(now - before)}
     </span>
@@ -63,32 +64,30 @@ function PostRow({
     <li
       ref={ref}
       className={cn(
-        "space-y-3 rounded-xl border bg-white p-4 shadow-2xs",
-        highlighted ? "border-[#934a33] ring-2 ring-[#934a33]/20" : "border-slate-200",
+        "space-y-3 rounded-xl border bg-card p-4 shadow-2xs",
+        highlighted ? "border-primary ring-2 ring-primary/20" : "border-border",
       )}
     >
-      <div className="flex flex-wrap items-start justify-between gap-2">
+      <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
             <PlatformPill platform={schedule.platform} />
-            <span className="text-[11px] text-slate-400">Đăng {formatDateTime(schedule.publishedAt)}</span>
+            <span className="text-xs text-muted-foreground">Đăng {formatDateTime(schedule.publishedAt)}</span>
           </div>
           <Link
             href={`/staff/marketing/content/${schedule.contentId}`}
-            className="block text-sm font-semibold text-slate-900 hover:text-[#934a33]"
+            className="block text-sm font-semibold text-foreground hover:text-primary"
           >
             {schedule.title || "(Chưa có tiêu đề)"}
           </Link>
         </div>
         <Button
-          size="sm"
           variant="outline"
-          className="gap-1.5 text-xs"
+          className="h-10 shrink-0 gap-1.5 whitespace-nowrap"
           disabled={refresh.isPending}
           onClick={() => refresh.mutate(schedule.id)}
         >
-          {refresh.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />} Cập nhật số
-          liệu
+          {refresh.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />} Cập nhật số liệu
         </Button>
       </div>
 
@@ -98,28 +97,28 @@ function PostRow({
         <>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {FIGURES.map(({ key, label, icon: Icon }) => (
-              <div key={key} className="rounded-lg bg-slate-50 px-3 py-2">
-                <span className="flex items-center gap-1 text-[11px] text-slate-500">
+              <div key={key} className="rounded-lg bg-muted/50 px-3 py-2">
+                <span className="flex items-center gap-1 text-xs text-muted-foreground">
                   <Icon className="size-3" /> {label}
                 </span>
                 <span className="flex items-baseline gap-1.5">
-                  <span className="text-base font-bold text-slate-900">{formatCount(latest[key])}</span>
+                  <span className="text-base font-bold text-foreground">{formatCount(latest[key])}</span>
                   <Delta now={latest[key]} before={previous?.[key]} />
                 </span>
               </div>
             ))}
           </div>
-          <p className="text-[11px] text-slate-400">
+          <p className="text-xs text-muted-foreground">
             Cập nhật lúc {formatDateTime(latest.recordedAt)} · {readings!.length} lần đo
             {previous && ` · so với lần đo ${formatDateTime(previous.recordedAt)}`}
           </p>
         </>
       ) : (
-        <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500">
+        <p className="rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
           Chưa có số liệu. Bấm “Cập nhật số liệu” để lấy số mới nhất từ {schedule.platform === "INSTAGRAM" ? "Instagram" : "Facebook"}.
         </p>
       )}
-      {refresh.error && <p className="text-xs text-red-600">{getMarketingErrorMessage(refresh.error)}</p>}
+      {refresh.error && <p className="text-xs text-destructive">{getMarketingErrorMessage(refresh.error)}</p>}
     </li>
   );
 }
@@ -162,7 +161,7 @@ function AnalyticsContent() {
     <div className="space-y-5">
       <MarketingHeader
         title="Hiệu quả tiếp thị"
-        icon={<LineChart className="size-7 text-[#934a33]" />}
+        icon={<LineChart className="size-7 shrink-0 text-primary" aria-hidden />}
         crumbs={[{ label: "Hiệu quả" }]}
         description="Số liệu của các bài đã đăng. Mỗi lần bấm cập nhật lưu thêm một lần đo, nên có thể so bài tăng tương tác theo thời gian."
       />
@@ -172,26 +171,28 @@ function AnalyticsContent() {
       ) : (
         <>
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-2xs">
-              <span className="text-[11px] font-semibold uppercase text-slate-500">Bài đã đăng</span>
-              <span className="mt-1 block text-2xl font-bold text-slate-900">{meta?.total ?? "…"}</span>
-              <span className="text-[11px] text-slate-400">{measured} bài trang này có số liệu</span>
+            <div className="rounded-xl border border-border bg-card p-4 shadow-2xs">
+              <span className="text-xs font-semibold uppercase text-muted-foreground">Bài đã đăng</span>
+              <span className="mt-1 block text-2xl font-bold text-foreground">{meta?.total ?? "…"}</span>
+              <span className="text-xs text-muted-foreground">{measured} bài trang này có số liệu</span>
             </div>
             {FIGURES.map(({ key, label, icon: Icon }) => (
-              <div key={key} className="rounded-xl border border-slate-200 bg-white p-4 shadow-2xs">
-                <span className="flex items-center gap-1 text-[11px] font-semibold uppercase text-slate-500">
-                  <Icon className="size-3.5 text-[#934a33]" /> {label}
+              <div key={key} className="rounded-xl border border-border bg-card p-4 shadow-2xs">
+                <span className="flex items-center gap-1 text-xs font-semibold uppercase text-muted-foreground">
+                  <Icon className="size-3.5 text-primary" /> {label}
                 </span>
-                <span className="mt-1 block text-2xl font-bold text-slate-900">{formatCount(totals[key])}</span>
+                <span className="mt-1 block text-2xl font-bold text-foreground">{formatCount(totals[key])}</span>
               </div>
             ))}
           </div>
 
-          <p className="flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-[11px] text-slate-500">
-            <Info className="mt-0.5 size-3.5 shrink-0" />
-            Số bình luận thường là 0 vì Meta không còn cấp quyền đọc bình luận cho trang kết nối mới. Một số liệu bị nền
-            tảng từ chối cũng được ghi là 0.
-          </p>
+          <div role="note" className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
+            <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
+            <p>
+              <strong>Đọc số liệu cho đúng:</strong> số bình luận thường là 0 vì Meta không còn cấp quyền đọc bình luận cho
+              trang kết nối mới. Một số liệu bị nền tảng từ chối cũng được ghi là 0, nên 0 chưa chắc là không có ai tương tác.
+            </p>
+          </div>
 
           {hotelLoading || schedulesQuery.isLoading ? (
             <div className="space-y-3">
@@ -202,17 +203,19 @@ function AnalyticsContent() {
           ) : schedulesQuery.error ? (
             <MarketingErrorPanel error={schedulesQuery.error} onRetry={() => void schedulesQuery.refetch()} />
           ) : schedules.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center">
-              <LineChart className="mx-auto size-8 text-slate-300" />
-              <p className="mt-2 text-sm font-semibold text-slate-700">Chưa có bài nào được đăng</p>
-              <p className="mt-1 text-xs text-slate-500">
-                Bài được lên lịch ở{" "}
-                <Link href="/staff/marketing/calendar" className="font-semibold text-[#934a33] underline">
-                  Lịch đăng
-                </Link>{" "}
-                sẽ xuất hiện tại đây sau khi đăng thành công.
-              </p>
-            </div>
+            <EmptyState
+              icon={LineChart}
+              title="Chưa có bài nào được đăng"
+              description={
+                <>
+                  Bài được lên lịch ở{" "}
+                  <Link href="/staff/marketing/calendar" className="font-semibold text-primary underline">
+                    Lịch đăng
+                  </Link>{" "}
+                  sẽ xuất hiện tại đây sau khi đăng thành công.
+                </>
+              }
+            />
           ) : (
             <ul className="space-y-3">
               {schedules.map((schedule, index) => (

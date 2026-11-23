@@ -75,7 +75,7 @@ export class LoyaltyController {
   @ApiOperation({
     summary: "Save the hotel's own loyalty rules",
     description:
-      'Replaces the rules as a whole. `pointsPerCurrency` runs from the platform rate to three times it (a hotel can add points, never take them away); `maxRedeemPercent` is 1-100 of the stay after the discount; `acceptsPoints: false` refuses points at this hotel. `isActive: false` goes back to the platform rules and keeps the saved values. Applies to quotes and bookings made afterwards, and to every check-out from now on.',
+      'Replaces the rules as a whole. `pointsPerCurrency` must be the platform rate for now (`limits` gives the range; a higher rate opens once the hotel giving the extra points also pays for them); `maxRedeemPercent` is 1-100 of the stay after the discount; `acceptsPoints: false` refuses points at this hotel. `isActive: false` goes back to the platform rules and keeps the saved values. Applies to quotes and bookings made afterwards, and to every check-out from now on.',
   })
   @HotelAccessRequired('owner')
   @ApiData(hotelLoyaltyProgramResponseSchema)

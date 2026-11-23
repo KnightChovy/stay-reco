@@ -1,15 +1,17 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type {
-  CreatePromotionInput,
-  IssueVouchersInput,
-  Promotion,
-  PromotionListQuery,
-  UpdatePromotionInput,
-  Voucher,
+import {
+  campaignProblems,
+  type CreatePromotionInput,
+  type IssueVouchersInput,
+  type Promotion,
+  type PromotionListQuery,
+  type UpdatePromotionInput,
+  type Voucher,
 } from '@stayreco/shared';
 import { randomBytes } from 'crypto';
 import type { AuthUser } from '../../common/decorators/current-user.decorator';
@@ -21,9 +23,13 @@ import {
 } from '../../common/hotel-access/hotel-access.service';
 import { Paginated } from '../../common/http/api-response';
 import {
+  addDays,
   fromCalendarDate,
+  toCalendarDate,
   todayInVietnam,
+  vietnamDateTime,
 } from '../../common/http/calendar-date';
+import { toNumber } from '../../common/http/decimal';
 import { pageArgs } from '../../common/http/pagination';
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -108,6 +114,7 @@ export class PromotionsService {
         validFrom: input.validFrom ? fromCalendarDate(input.validFrom) : null,
         validTo: input.validTo ? fromCalendarDate(input.validTo) : null,
         isActive: input.isActive ?? true,
+        requiresCode: input.requiresCode ?? false,
       },
     });
     await this.audit.log(AuditAction.PROMOTION_CREATED, actorId, meta, {
@@ -121,6 +128,9 @@ export class PromotionsService {
   /**
    * Changes a campaign. `currentUses` is never touched here: the bookings that already took the discount keep it,
    * and lowering `maxUses` below them simply stops the campaign rather than rewriting history.
+   *
+   * The terms are checked again on the campaign as it will be, not only on what was sent: `{ discountValue: 500 }`
+   * passes the schema alone, and on a `PERCENTAGE` campaign it would take every stay down to 0.
    */
   async update(
     user: AuthUser,
@@ -128,7 +138,23 @@ export class PromotionsService {
     input: UpdatePromotionInput,
     meta: RequestMeta = {},
   ): Promise<Promotion> {
-    await this.ownedPromotion(user, promotionId);
+    const current = await this.ownedPromotion(user, promotionId);
+    const problems = campaignProblems({
+      discountType: input.discountType ?? current.discountType,
+      discountValue: input.discountValue ?? toNumber(current.discountValue),
+      validFrom:
+        input.validFrom ??
+        (current.validFrom && toCalendarDate(current.validFrom)),
+      validTo:
+        input.validTo ?? (current.validTo && toCalendarDate(current.validTo)),
+    });
+    if (problems.length) {
+      throw new BadRequestException({
+        code: ErrorCode.VALIDATION_ERROR,
+        message: 'Validation failed',
+        details: problems,
+      });
+    }
     const promotion = await this.prisma.promotion.update({
       where: { promotionId },
       data: {
@@ -153,6 +179,9 @@ export class PromotionsService {
           validTo: fromCalendarDate(input.validTo),
         }),
         ...(input.isActive !== undefined && { isActive: input.isActive }),
+        ...(input.requiresCode !== undefined && {
+          requiresCode: input.requiresCode,
+        }),
       },
     });
     await this.audit.log(AuditAction.PROMOTION_UPDATED, user.accountId, meta, {
@@ -209,35 +238,43 @@ export class PromotionsService {
       });
     }
 
-    // One after another: a transaction runs on one connection, and queries sent to it at once are what `pg` warns
-    // about ("client is already executing a query") and will refuse from pg@9.
-    const vouchers = await this.prisma.$transaction(async (tx) => {
-      const created: Prisma.VoucherGetPayload<{
-        include: { promotion: true };
-      }>[] = [];
-      for (const { customerId } of customers) {
-        created.push(
-          await tx.voucher.create({
-            data: {
-              promotionId,
-              customerId,
-              code: voucherCode(),
-              discountType: promotion.discountType,
-              discountValue: promotion.discountValue,
-              maxDiscount:
-                input.maxDiscount === undefined
-                  ? null
-                  : new Prisma.Decimal(input.maxDiscount),
-              expiresAt: input.expiresAt
-                ? fromCalendarDate(input.expiresAt)
-                : null,
-            },
-            include: { promotion: true },
-          }),
-        );
-      }
-      return created;
-    });
+    // One INSERT for every code: all or none, and a single round trip however many customers (up to 100) there are,
+    // so it neither holds a transaction open nor sends queries to one connection at once. The campaign was just read.
+    const maxDiscount =
+      input.maxDiscount === undefined
+        ? null
+        : new Prisma.Decimal(input.maxDiscount);
+    // Good for the whole of its last day in Vietnam, as a campaign's `validTo` is: the last instant of that day, not
+    // the UTC midnight that starts it (07:00 in Vietnam). One millisecond short of the next midnight, so a screen
+    // showing it in Vietnam time still shows the date that was set.
+    const expiresAt = input.expiresAt
+      ? new Date(
+          vietnamDateTime(addDays(input.expiresAt, 1), '00:00').getTime() - 1,
+        )
+      : null;
+    // Handing out codes means the campaign is for chosen customers, so it stops applying to everyone, in the same
+    // transaction as the codes: a booking can never see the codes issued and the campaign still automatic.
+    const [, created] = await this.prisma.$transaction([
+      this.prisma.promotion.update({
+        where: { promotionId },
+        data: { requiresCode: true },
+      }),
+      this.prisma.voucher.createManyAndReturn({
+        data: customers.map(({ customerId }) => ({
+          promotionId,
+          customerId,
+          code: voucherCode(),
+          discountType: promotion.discountType,
+          discountValue: promotion.discountValue,
+          maxDiscount,
+          expiresAt,
+        })),
+      }),
+    ]);
+    const vouchers = created.map((voucher) => ({
+      ...voucher,
+      promotion: { ...promotion, requiresCode: true },
+    }));
     await this.audit.log(AuditAction.VOUCHERS_ISSUED, user.accountId, meta, {
       promotionId,
       count: vouchers.length,
@@ -302,9 +339,9 @@ export class PromotionsService {
 
 /**
  * A code a person can read out over the phone: no lowercase, and no 0/O or 1/I to mistype. 32^10 is far beyond what
- * a hotel will ever issue, and the unique column catches a clash anyway.
+ * a hotel will ever issue, and the unique column catches a clash anyway. Exported for the platform's welcome code.
  */
-function voucherCode(): string {
+export function voucherCode(): string {
   const bytes = randomBytes(CODE_LENGTH);
   let code = '';
   for (const byte of bytes) code += CODE_ALPHABET[byte % CODE_ALPHABET.length];

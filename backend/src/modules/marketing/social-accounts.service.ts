@@ -19,6 +19,7 @@ import type {
 } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditAction, AuditService } from '../audit/audit.service';
+import { settleContent } from './content-status';
 import type { PublishTarget } from './publishers/social-publisher';
 
 const notFound = () =>
@@ -155,19 +156,29 @@ export class SocialAccountsService {
     meta: RequestMeta = {},
   ): Promise<void> {
     const account = await this.owned(user, accountId);
-    await this.prisma.$transaction([
-      this.prisma.contentSchedule.updateMany({
+    await this.prisma.$transaction(async (tx) => {
+      const waiting = await tx.contentSchedule.findMany({
+        where: { socialAccountId: accountId, status: 'SCHEDULED' },
+        select: { marketingContentId: true },
+      });
+      await tx.contentSchedule.updateMany({
         where: { socialAccountId: accountId, status: 'SCHEDULED' },
         data: {
           status: 'CANCELLED',
           failureReason: 'The page was disconnected',
         },
-      }),
-      this.prisma.socialAccount.update({
+      });
+      await tx.socialAccount.update({
         where: { socialAccountId: accountId },
         data: { accessToken: null, refreshToken: null, expiresAt: new Date(0) },
-      }),
-    ]);
+      });
+      // The pieces whose only post was on this page are back to APPROVED, as a cancel by hand leaves them.
+      for (const contentId of new Set(
+        waiting.map((s) => s.marketingContentId),
+      )) {
+        await settleContent(tx, contentId);
+      }
+    });
     await this.audit.log(
       AuditAction.SOCIAL_ACCOUNT_DISCONNECTED,
       user.accountId,

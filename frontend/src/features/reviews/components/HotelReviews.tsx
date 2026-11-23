@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, MessageSquareText, RotateCcw, Star } from "lucide-react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Flag, Loader2, MessageSquareText, RotateCcw, Star } from "lucide-react";
 import type { ReviewListQuery } from "@stayreco/shared";
 import Pagination from "@/components/common/pagination/Pagination";
 import { Button } from "@/components/ui/button";
@@ -9,7 +10,11 @@ import { cn } from "@/lib/utils";
 import { getApiErrorMessage } from "@/lib/api-error";
 import { formatDate } from "@/features/stays/lib/format";
 import { useHotelRatingSummary, useHotelReviews } from "@/features/account/api/rewards-queries";
+import { ActionMenu } from "@/components/common/ActionBar";
+import { useAuthStore } from "@/lib/auth-store";
 import { StarDisplay } from "./StarRating";
+import { ReviewPhotos } from "./ReviewPhotos";
+import { ReviewReportDialog, type ReportTarget } from "./ReviewReportDialog";
 
 const PAGE_SIZE = 5;
 
@@ -37,6 +42,22 @@ export function HotelReviews({ hotelId }: { hotelId: string }) {
   const summary = summaryQuery.data;
   const reviews = reviewsQuery.data?.reviews ?? [];
   const meta = reviewsQuery.data?.meta;
+  const user = useAuthStore((state) => state.user);
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [reporting, setReporting] = useState<ReportTarget | null>(null);
+
+  /** Reporting needs an account; a guest is sent to sign in and comes back to this hotel's reviews. */
+  const startReport = (target: ReportTarget) => {
+    if (!user) {
+      const query = searchParams.toString();
+      const back = `${pathname}${query ? `?${query}` : ""}#reviews`;
+      router.push(`/login?next=${encodeURIComponent(back)}`);
+      return;
+    }
+    setReporting(target);
+  };
 
   const changeFilter = (next: { sort?: ReviewListQuery["sort"]; minRating?: number | undefined }) => {
     if (next.sort !== undefined) setSort(next.sort);
@@ -180,12 +201,36 @@ export function HotelReviews({ hotelId }: { hotelId: string }) {
                         <p className="text-xs text-muted-foreground">Lưu trú đến {formatDate(review.stayedAt)}</p>
                       </div>
                     </div>
-                    <span className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-2 py-1 text-xs font-bold text-primary-foreground">
-                      {review.overallRating.toFixed(1)} <Star className="size-3 fill-current" />
-                    </span>
+                    <div className="flex items-center gap-1">
+                      <span className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-2 py-1 text-xs font-bold text-primary-foreground">
+                        {review.overallRating.toFixed(1)} <Star className="size-3 fill-current" />
+                      </span>
+                      <ActionMenu
+                        variant="icon"
+                        label={`Thao tác với đánh giá của ${review.authorName}`}
+                        items={[
+                          {
+                            label: "Báo cáo đánh giá",
+                            description: user
+                              ? "Gửi cho quản lý StayReco xem xét"
+                              : "Cần đăng nhập để báo cáo",
+                            icon: Flag,
+                            destructive: true,
+                            onSelect: () => startReport({ reviewId: review.id, authorName: review.authorName }),
+                          },
+                        ]}
+                      />
+                    </div>
                   </div>
                   {review.title && <h3 className="text-sm font-bold text-foreground">{review.title}</h3>}
                   <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">{review.content}</p>
+                  <ReviewPhotos
+                    images={review.images}
+                    authorName={review.authorName}
+                    onReport={(image) =>
+                      startReport({ reviewId: review.id, reviewImageId: image.id, authorName: review.authorName })
+                    }
+                  />
                 </li>
               ))}
             </ul>
@@ -196,6 +241,7 @@ export function HotelReviews({ hotelId }: { hotelId: string }) {
           )}
         </>
       )}
+      <ReviewReportDialog target={reporting} onClose={() => setReporting(null)} />
     </section>
   );
 }

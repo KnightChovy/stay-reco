@@ -18,14 +18,14 @@ The registration form has the hotel partner manage *"the hotel's loyalty points 
 
 | Rule | What the owner sets | Bounds |
 |---|---|---|
-| Earning (L9) | `pointsPerCurrency`: the rate for stays at this hotel | From the platform rate to **3×** it: a hotel can add points, never take them away |
+| Earning (L9) | `pointsPerCurrency`: the rate for stays at this hotel | The platform rate, **1×** for now. A higher rate (up to 3× was decided) opens once the hotel giving the extra points also pays for them ([money-rules.md §9](../money-rules.md)); until then the hotel where they are spent would carry the cost |
 | Taking points (L10) | `acceptsPoints` | `false` refuses points at this hotel |
 | Share of a stay (L10) | `maxRedeemPercent`: the most points may pay, as a share of the stay **after the discount** | 1–100, at most 2 decimals |
 | Switch | `isActive` | `false` goes back to the platform rules and keeps the saved values |
 
 - The **value of a point** stays the platform's (100 ₫ seeded) at every hotel: the points are one currency.
 - A hotel that never saved anything, or switched its rules off, uses the platform rules: platform rate, points taken, up to 100 %.
-- Earning uses the hotel's rate **at check-out**. The rate is kept between 1× and 3× the platform rate there too, so a later change of the platform rate never leaves a hotel outside the bounds.
+- Earning uses the hotel's rate **at check-out**. The rate is kept inside the bounds there too, so a later change of the platform rate, or a rate saved under wider bounds, is never paid out above them.
 - Who pays for the points is [money-rules.md §9](../money-rules.md) (decision M4, L11).
 
 | Method | Path | Access | Body | Response |
@@ -35,22 +35,22 @@ The registration form has the hotel partner manage *"the hotel's loyalty points 
 
 ```jsonc
 // PUT /hotels/:hotelId/loyalty-program
-{ "isActive": true, "pointsPerCurrency": 0.0015, "acceptsPoints": true, "maxRedeemPercent": 30 }
+{ "isActive": true, "pointsPerCurrency": 0.001, "acceptsPoints": true, "maxRedeemPercent": 30 }
 
 // → HotelLoyaltyProgram
 { "custom": true,              // false until the hotel saves its rules
   "appliesNow": true,          // switched on, and StayMiles is running
   "isActive": true,
-  "pointsPerCurrency": 0.0015, // 1.5 points per 1,000 ₫
-  "earnMultiplier": 1.5,       // pointsPerCurrency / the platform rate
+  "pointsPerCurrency": 0.001,  // 1 point per 1,000 ₫
+  "earnMultiplier": 1,         // pointsPerCurrency / the platform rate
   "acceptsPoints": true,
   "maxRedeemPercent": 30,
   "platform": { "name": "StayMiles", "isActive": true, "pointsPerCurrency": 0.001, "pointValue": 100 },
-  "limits": { "minPointsPerCurrency": 0.001, "maxPointsPerCurrency": 0.003,
+  "limits": { "minPointsPerCurrency": 0.001, "maxPointsPerCurrency": 0.001, // 1× for now
               "minRedeemPercent": 1, "maxRedeemPercent": 100 } }
 ```
 
-A rate outside the bounds is `400 VALIDATION_ERROR` with the detail `{ "field": "pointsPerCurrency", "message": "from 0.001 to 0.003" }`. Every save is written to the audit log as `LOYALTY_PROGRAM_UPDATED`, with the rules before and after. Staff get `403`; anyone outside the hotel gets `404 HOTEL_NOT_FOUND`.
+A rate outside the bounds is `400 VALIDATION_ERROR` with the detail `{ "field": "pointsPerCurrency", "message": "must be 0.001, the platform rate" }` (`"from … to …"` once the range opens). Every save is written to the audit log as `LOYALTY_PROGRAM_UPDATED`, with the rules before and after. Staff get `403`; anyone outside the hotel gets `404 HOTEL_NOT_FOUND`.
 
 ## Where points sit in the price
 

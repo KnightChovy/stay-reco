@@ -36,6 +36,7 @@ export default function PaymentScreen() {
   const { data: booking, refetch } = useQuery({
     queryKey: ['bookings', id],
     queryFn: () => getBooking(id),
+    enabled: !!id,
     refetchInterval: (q) => (q.state.data?.status === 'PENDING' ? 4000 : false),
   });
   const secondsLeft = useSecondsLeft(booking?.payment?.expiresAt);
@@ -87,7 +88,7 @@ export default function PaymentScreen() {
         <ScreenHeader title="Thanh Toán" />
         <View className="flex-1 items-center justify-center gap-3 p-6">
           <Text variant="small" color={colors.onSurfaceVariant}>
-            Đang tải đơn đặt phòng...
+            {id ? 'Đang tải đơn đặt phòng...' : 'Không tìm thấy đơn đặt phòng cần thanh toán.'}
           </Text>
         </View>
       </View>

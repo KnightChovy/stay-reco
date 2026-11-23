@@ -43,6 +43,29 @@ const envSchema = z
       (v) => (v === '' ? undefined : v),
       z.coerce.number().int().min(1).default(30),
     ),
+    /**
+     * The welcome voucher a customer earns by finishing onboarding (docs/design/onboarding-welcome-voucher.md, W5):
+     * percent of the rooms, at most 8 (the platform cap, money-rules §2.1), so start-up refuses more.
+     */
+    WELCOME_VOUCHER_PERCENT: z.preprocess(
+      (v) => (v === '' ? undefined : v),
+      z.coerce.number().positive().max(8).default(5),
+    ),
+    /** The most the welcome voucher takes off, in whole dong. */
+    WELCOME_VOUCHER_MAX_DISCOUNT: z.preprocess(
+      (v) => (v === '' ? undefined : v),
+      z.coerce.number().int().positive().default(200_000),
+    ),
+    /** The smallest room subtotal the welcome voucher applies to, in whole dong; 0 for none. */
+    WELCOME_VOUCHER_MIN_BOOKING: z.preprocess(
+      (v) => (v === '' ? undefined : v),
+      z.coerce.number().int().min(0).default(500_000),
+    ),
+    /** Days the welcome voucher is valid for, counting the day it is issued. */
+    WELCOME_VOUCHER_DAYS: z.preprocess(
+      (v) => (v === '' ? undefined : v),
+      z.coerce.number().int().min(1).default(30),
+    ),
     /** Gemini API key for the marketing writer. Leave empty to disable it: the endpoints answer 503. */
     GEMINI_API_KEY: z.string().optional(),
     /** Model the marketing writer calls. Flash is the default: a draft costs a fraction of a cent. */

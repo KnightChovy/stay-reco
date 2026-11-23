@@ -279,11 +279,6 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorInfo> = {
     status: 409,
     description: 'The report is already resolved or dismissed',
   },
-  REVIEW_IMAGE_REPORTED: {
-    status: 409,
-    description:
-      'The photo is under an open report and cannot be removed until a platform manager decides',
-  },
   VOUCHER_NOT_FOUND: {
     status: 404,
     description: "Discount code doesn't exist or belongs to another customer",
@@ -309,6 +304,11 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorInfo> = {
     status: 409,
     description:
       'The campaign is switched off, outside its dates, or has run out of uses',
+  },
+  ONBOARDING_ALREADY_COMPLETED: {
+    status: 409,
+    description:
+      'Onboarding was already completed; the picks are changed with PUT /me/preferences',
   },
   LOYALTY_PROGRAM_NOT_FOUND: {
     status: 404,

@@ -459,5 +459,116 @@ describe('Marketing content and approval (e2e)', () => {
       const kinds = (res.body.data as { kind: string }[]).map((i) => i.kind);
       expect(kinds).not.toContain('FREE_ROOMS');
     });
+
+    const ideasOf = async (h: { token: string; hotelId: string }) =>
+      (
+        await t
+          .api()
+          .get(`/api/v1/hotels/${h.hotelId}/marketing-content/ideas`)
+          .set(auth(h.token))
+          .expect(200)
+      ).body.data as { kind: string; brief: string }[];
+
+    it('does not count rooms under maintenance or nights the partner closed', async () => {
+      const h = await hotel();
+      const rooms = await t.prisma.room.findMany({
+        where: { roomType: { hotelId: h.hotelId } },
+        select: { roomId: true },
+      });
+      await t.prisma.room.update({
+        where: { roomId: rooms[0].roomId },
+        data: { status: 'MAINTENANCE' },
+      });
+      await t.prisma.roomCalendars.create({
+        data: {
+          roomId: rooms[1].roomId,
+          date: new Date(`${day(3)}T00:00:00Z`),
+          status: 'BLOCKED',
+        },
+      });
+
+      expect((await ideasOf(h)).map((i) => i.kind)).not.toContain('FREE_ROOMS');
+    });
+
+    it('suggests only a discount any guest can have, with its terms in the brief', async () => {
+      const h = await hotel();
+      const create = (body: object) =>
+        t
+          .api()
+          .post(`/api/v1/hotels/${h.hotelId}/promotions`)
+          .set(auth(h.token))
+          .send(body)
+          .expect(201);
+      await create({
+        name: 'Giảm 15% cuối tuần',
+        discountType: 'PERCENTAGE',
+        discountValue: 15,
+        minBookingAmount: 1500000,
+        validTo: day(10),
+      });
+      const usedUp = await create({
+        name: 'Đã hết lượt',
+        discountType: 'PERCENTAGE',
+        discountValue: 30,
+        maxUses: 1,
+      });
+      await t.prisma.promotion.update({
+        where: { promotionId: idOf(usedUp) },
+        data: { currentUses: 1 },
+      });
+      // A campaign that handed out a personal code applies to that code only.
+      const codeOnly = await create({
+        name: 'Chỉ cho khách thân',
+        discountType: 'PERCENTAGE',
+        discountValue: 40,
+      });
+      const guest = await t.signIn('CUSTOMER', 'guest@mail.test');
+      await t
+        .api()
+        .post(`/api/v1/promotions/${idOf(codeOnly)}/vouchers`)
+        .set(auth(h.token))
+        .send({ customerIds: [guest.id] })
+        .expect(201);
+
+      const promotion = (await ideasOf(h)).find((i) => i.kind === 'PROMOTION');
+      expect(promotion?.brief).toContain('Giảm 15% cuối tuần');
+      expect(promotion?.brief).toContain('1.500.000');
+      expect(promotion?.brief).toContain(day(10));
+    });
+
+    it("puts the guest's own words in the brief, so the writer has praise to repeat", async () => {
+      const h = await hotel();
+      const guest = await t.signIn('CUSTOMER', 'guest@mail.test');
+      const booking = await t
+        .api()
+        .post('/api/v1/bookings')
+        .set(auth(guest.token))
+        .send({
+          roomTypeId: h.roomTypeId,
+          checkIn: day(0),
+          checkOut: day(2),
+          rooms: 1,
+          guests: 1,
+          guestName: 'Nguyễn Văn A',
+          contactPhone: '0905123456',
+          expectedTotal: 2000000,
+        })
+        .expect(201);
+      await t.prisma.review.create({
+        data: {
+          customerId: guest.id,
+          hotelId: h.hotelId,
+          bookingId: idOf(booking),
+          overallRating: 4.8,
+          content: 'Bữa sáng ngon, nhân viên lễ tân rất chu đáo',
+        },
+      });
+
+      const review = (await ideasOf(h)).find((i) => i.kind === 'GREAT_REVIEW');
+      expect(review?.brief).toContain(
+        'Bữa sáng ngon, nhân viên lễ tân rất chu đáo',
+      );
+      expect(review?.brief.length).toBeLessThanOrEqual(500);
+    });
   });
 });

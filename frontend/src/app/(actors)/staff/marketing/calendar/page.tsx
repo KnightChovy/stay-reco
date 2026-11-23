@@ -2,17 +2,21 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { BarChart3, CalendarDays, Link2, Loader2, RefreshCw, XCircle } from "lucide-react";
+import { BarChart3, CalendarDays, Link2, RefreshCw, XCircle } from "lucide-react";
 import type { ContentSchedule, ScheduleStatus } from "@stayreco/shared";
 import Pagination from "@/components/common/pagination/Pagination";
-import { Button } from "@/components/ui/button";
+import { ActionMenu } from "@/components/common/ActionBar";
+import { EmptyState } from "@/components/common/StateViews";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { formatDateTime } from "@/features/stays/lib/format";
 import { useStaffHotel } from "@/features/staff/components/StaffHotelProvider";
 import { useCancelSchedule, useSchedules, useSocialAccounts } from "@/features/staff/api/marketing-queries";
 import { getMarketingErrorMessage, isMissingMarketingPermission } from "@/features/staff/lib/marketing-errors";
+import { platformLabels } from "@/features/staff/lib/marketing-labels";
 import {
+  ConfirmDialog,
   MarketingErrorPanel,
   MarketingHeader,
   PlatformPill,
@@ -58,48 +62,71 @@ function groupByDay(schedules: ContentSchedule[]) {
 
 function ScheduleItem({ schedule }: { schedule: ContentSchedule }) {
   const cancel = useCancelSchedule();
+  const [confirm, setConfirm] = useState(false);
   const at = instantOf(schedule);
+  const failed = schedule.status === "FAILED";
   return (
-    <li className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-2xs sm:flex-row sm:items-start">
-      <div className="w-16 shrink-0 text-sm font-bold text-slate-900">{at ? timeFormat.format(new Date(at)) : "—"}</div>
+    <li
+      className={cn(
+        "flex items-start gap-3 rounded-xl border bg-card p-4 shadow-2xs",
+        failed ? "border-destructive/40" : "border-border",
+      )}
+    >
+      <div className="w-14 shrink-0 text-sm font-bold tabular-nums text-foreground">{at ? timeFormat.format(new Date(at)) : "—"}</div>
       <div className="min-w-0 flex-1 space-y-1.5">
         <div className="flex flex-wrap items-center gap-2">
           <PlatformPill platform={schedule.platform} />
           <ScheduleStatusPill status={schedule.status} />
-          <span className="font-mono text-[11px] text-slate-400">{schedule.accountName}</span>
+          <span className="truncate font-mono text-xs text-muted-foreground">{schedule.accountName}</span>
         </div>
         <Link
           href={`/staff/marketing/content/${schedule.contentId}`}
-          className="block text-sm font-semibold text-slate-900 hover:text-[#934a33]"
+          className="block text-sm font-semibold text-foreground hover:text-primary"
         >
           {schedule.title || "(Chưa có tiêu đề)"}
         </Link>
-        <p className="line-clamp-2 text-xs text-slate-500">{schedule.body}</p>
+        <p className="line-clamp-2 text-xs text-muted-foreground">{schedule.body}</p>
         {schedule.failureReason && (
-          <p className="rounded bg-red-50 px-2 py-1 text-[11px] text-red-700">Lý do: {schedule.failureReason}</p>
+          <p className="rounded bg-destructive/10 px-2 py-1.5 text-xs font-medium text-destructive" role="alert">
+            Đăng lỗi, lý do: {schedule.failureReason}
+          </p>
         )}
-        {cancel.error && <p className="text-[11px] text-red-600">{getMarketingErrorMessage(cancel.error)}</p>}
-      </div>
-      <div className="flex shrink-0 gap-2">
-        {schedule.status === "SCHEDULED" && (
-          <Button
-            size="sm"
-            variant="outline"
-            className="gap-1.5 text-xs text-red-600"
-            disabled={cancel.isPending}
-            onClick={() => cancel.mutate(schedule.id)}
-          >
-            {cancel.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <XCircle className="size-3.5" />} Huỷ lịch
-          </Button>
-        )}
+        {cancel.error && <p className="text-xs text-destructive">{getMarketingErrorMessage(cancel.error)}</p>}
         {schedule.status === "PUBLISHED" && (
-          <Link href={`/staff/marketing/analytics?schedule=${schedule.id}`}>
-            <Button size="sm" variant="outline" className="gap-1.5 text-xs">
-              <BarChart3 className="size-3.5" /> Hiệu quả
-            </Button>
+          <Link
+            href={`/staff/marketing/analytics?schedule=${schedule.id}`}
+            className={cn(buttonVariants({ variant: "outline" }), "h-10 gap-1.5 whitespace-nowrap")}
+          >
+            <BarChart3 className="size-4" aria-hidden /> Xem hiệu quả
           </Link>
         )}
       </div>
+      {schedule.status === "SCHEDULED" && (
+        <>
+          <ActionMenu
+            variant="icon"
+            label="Thao tác với lịch đăng"
+            items={[
+              {
+                label: "Huỷ lịch",
+                description: "Bài sẽ không được đăng lên trang này nữa.",
+                icon: XCircle,
+                destructive: true,
+                onSelect: () => setConfirm(true),
+              },
+            ]}
+          />
+          <ConfirmDialog
+            open={confirm}
+            onOpenChange={setConfirm}
+            title="Huỷ lịch đăng này?"
+            description={`Bài "${schedule.title || "chưa có tiêu đề"}" sẽ không được đăng lên ${platformLabels[schedule.platform]}. Bạn có thể lên lịch lại sau.`}
+            confirmLabel="Huỷ lịch"
+            pending={cancel.isPending}
+            onConfirm={() => cancel.mutate(schedule.id, { onSettled: () => setConfirm(false) })}
+          />
+        </>
+      )}
     </li>
   );
 }
@@ -124,15 +151,14 @@ export default function StaffMarketingCalendarPage() {
     <div className="space-y-5">
       <MarketingHeader
         title="Lịch đăng & kênh"
-        icon={<CalendarDays className="size-7 text-[#934a33]" />}
+        icon={<CalendarDays className="size-7 shrink-0 text-primary" aria-hidden />}
         crumbs={[{ label: "Lịch đăng" }]}
         description="Các bài đã lên lịch đăng lên trang Facebook / Instagram của khách sạn. Hệ thống tự đăng mỗi phút; bài lỗi ghi rõ lý do từ nền tảng và không tự thử lại."
         actions={
           !forbidden && (
             <Button
               variant="outline"
-              size="sm"
-              className="gap-1.5 text-xs"
+              className="h-10 gap-1.5"
               onClick={() => {
                 void schedulesQuery.refetch();
                 void accountsQuery.refetch();
@@ -150,26 +176,28 @@ export default function StaffMarketingCalendarPage() {
       ) : (
         <div className="grid items-start gap-5 lg:grid-cols-3">
           <section className="space-y-4 lg:col-span-2">
-            <div className="flex flex-wrap items-center gap-1.5" role="tablist" aria-label="Lọc lịch đăng">
-              {TABS.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={tab === item.id}
-                  onClick={() => {
-                    setTab(item.id);
-                    setPage(1);
-                  }}
-                  className={cn(
-                    "rounded-lg px-3 py-1.5 text-xs font-semibold transition",
-                    tab === item.id ? "bg-[#934a33] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200",
-                  )}
-                >
-                  {item.label}
-                </button>
-              ))}
-              {meta && <span className="ml-auto text-xs text-slate-500">{meta.total} bài</span>}
+            <div className="flex items-center gap-2">
+              <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1" role="tablist" aria-label="Lọc lịch đăng">
+                {TABS.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={tab === item.id}
+                    onClick={() => {
+                      setTab(item.id);
+                      setPage(1);
+                    }}
+                    className={cn(
+                      "h-10 shrink-0 whitespace-nowrap rounded-lg px-3 text-xs font-semibold transition",
+                      tab === item.id ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/70",
+                    )}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+              {meta && <span className="ml-auto shrink-0 text-xs text-muted-foreground">{meta.total} bài</span>}
             </div>
 
             {hotelLoading || schedulesQuery.isLoading ? (
@@ -181,22 +209,24 @@ export default function StaffMarketingCalendarPage() {
             ) : schedulesQuery.error ? (
               <MarketingErrorPanel error={schedulesQuery.error} onRetry={() => void schedulesQuery.refetch()} />
             ) : schedules.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center">
-                <CalendarDays className="mx-auto size-8 text-slate-300" />
-                <p className="mt-2 text-sm font-semibold text-slate-700">Chưa có bài nào ở mục này</p>
-                <p className="mt-1 text-xs text-slate-500">
-                  Mở một bài đã được duyệt trong{" "}
-                  <Link href="/staff/marketing/content" className="font-semibold text-[#934a33] underline">
-                    Thư viện nội dung
-                  </Link>{" "}
-                  để lên lịch đăng.
-                </p>
-              </div>
+              <EmptyState
+                icon={CalendarDays}
+                title="Chưa có bài nào ở mục này"
+                description={
+                  <>
+                    Mở một bài đã được duyệt trong{" "}
+                    <Link href="/staff/marketing/content" className="font-semibold text-primary underline">
+                      Thư viện nội dung
+                    </Link>{" "}
+                    để lên lịch đăng.
+                  </>
+                }
+              />
             ) : (
               <div className={cn("space-y-5", schedulesQuery.isPlaceholderData && "opacity-60")}>
                 {groupByDay(schedules).map(([day, items]) => (
                   <div key={day} className="space-y-2">
-                    <h2 className="text-xs font-bold uppercase text-slate-500">{day}</h2>
+                    <h2 className="text-xs font-bold capitalize text-muted-foreground">{day}</h2>
                     <ul className="space-y-2">
                       {items.map((schedule) => (
                         <ScheduleItem key={schedule.id} schedule={schedule} />
@@ -212,40 +242,40 @@ export default function StaffMarketingCalendarPage() {
             )}
           </section>
 
-          <aside className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-2xs">
-            <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-              <Link2 className="size-4 text-[#934a33]" /> Kênh đã kết nối
+          <aside className="space-y-3 rounded-xl border border-border bg-card p-4 shadow-2xs">
+            <h2 className="flex items-center gap-2 text-sm font-bold text-foreground">
+              <Link2 className="size-4 text-primary" aria-hidden /> Kênh đã kết nối
             </h2>
             {accountsQuery.isLoading ? (
               <Skeleton className="h-16 rounded-lg" />
             ) : accountsQuery.error ? (
-              <p className="text-xs text-red-600">{getMarketingErrorMessage(accountsQuery.error)}</p>
+              <p className="text-xs text-destructive">{getMarketingErrorMessage(accountsQuery.error)}</p>
             ) : (accountsQuery.data ?? []).length === 0 ? (
-              <p className="text-xs text-slate-500">Chưa có trang nào được kết nối.</p>
+              <p className="text-xs text-muted-foreground">Chưa có trang nào được kết nối.</p>
             ) : (
               <ul className="space-y-2">
                 {accountsQuery.data!.map((account) => (
-                  <li key={account.id} className="space-y-1 rounded-lg border border-slate-200 p-3">
+                  <li key={account.id} className="space-y-1 rounded-lg border border-border p-3">
                     <div className="flex items-center justify-between gap-2">
                       <PlatformPill platform={account.platform} />
                       <span
                         className={cn(
-                          "text-[11px] font-semibold",
-                          account.usable ? "text-emerald-700" : "text-red-600",
+                          "text-xs font-semibold",
+                          account.usable ? "text-emerald-700" : "text-destructive",
                         )}
                       >
                         {account.usable ? "Đang hoạt động" : "Token hết hạn"}
                       </span>
                     </div>
-                    <p className="font-mono text-xs text-slate-700">{account.accountName}</p>
-                    <p className="text-[11px] text-slate-400">
+                    <p className="font-mono text-xs text-foreground">{account.accountName}</p>
+                    <p className="text-xs text-muted-foreground">
                       {account.expiresAt ? `Hết hạn ${formatDateTime(account.expiresAt)}` : "Không có hạn token"}
                     </p>
                   </li>
                 ))}
               </ul>
             )}
-            <p className="text-[11px] text-slate-500">
+            <p className="text-xs text-muted-foreground">
               Chỉ chủ khách sạn mới kết nối hoặc ngắt kết nối trang. TikTok chỉ nhận video nên chưa hỗ trợ đăng bài.
             </p>
           </aside>

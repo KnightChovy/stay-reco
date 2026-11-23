@@ -22,18 +22,43 @@ const campaignFields = {
   validFrom: dateSchema.optional(),
   validTo: dateSchema.optional(),
   isActive: z.boolean().optional(),
+  /**
+   * Only through personal codes (vouchers), never applied to a stay by itself; left out, false. Issuing a voucher
+   * sets it: handing out codes means the campaign is for chosen customers.
+   */
+  requiresCode: z.boolean().optional(),
 };
 
-/** A percentage over 100 would make the discount larger than the stay, so it is refused when the campaign is saved. */
-const checkCampaign = (
-  v: { discountType?: string; discountValue?: number; validFrom?: string; validTo?: string },
-  ctx: z.RefinementCtx,
-) => {
+/** The terms a campaign is checked on: what a request sends, or the stored campaign with a change applied. */
+export interface CampaignTerms {
+  discountType?: string;
+  discountValue?: number;
+  validFrom?: string | null;
+  validTo?: string | null;
+}
+
+/**
+ * What is wrong with a campaign's terms; empty when nothing is. A percentage over 100 would make the discount larger
+ * than the stay, and a campaign that ends before it starts can never apply.
+ *
+ * Exported because a `PATCH` sends only the fields it changes: `{ discountValue: 500 }` is a fine amount on its own
+ * and a 500 % discount on a `PERCENTAGE` campaign, so the backend runs this again on the stored campaign merged with
+ * the change.
+ */
+export function campaignProblems(v: CampaignTerms): { field: string; message: string }[] {
+  const problems: { field: string; message: string }[] = [];
   if (v.discountType === 'PERCENTAGE' && v.discountValue !== undefined && v.discountValue > 100) {
-    ctx.addIssue({ code: 'custom', path: ['discountValue'], message: 'a percentage is at most 100' });
+    problems.push({ field: 'discountValue', message: 'a percentage is at most 100' });
   }
   if (v.validFrom && v.validTo && v.validFrom > v.validTo) {
-    ctx.addIssue({ code: 'custom', path: ['validTo'], message: 'validTo must not be before validFrom' });
+    problems.push({ field: 'validTo', message: 'validTo must not be before validFrom' });
+  }
+  return problems;
+}
+
+const checkCampaign = (v: CampaignTerms, ctx: z.RefinementCtx) => {
+  for (const p of campaignProblems(v)) {
+    ctx.addIssue({ code: 'custom', path: [p.field], message: p.message });
   }
 };
 
