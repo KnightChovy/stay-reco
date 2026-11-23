@@ -15,6 +15,7 @@ import {
   LogOut,
   ReceiptText,
   Sparkles,
+  Tag,
 } from 'lucide-react';
 import Navbar from '@/components/common/navbar/Navbar';
 import Sidebar, { SidebarProvider, type SidebarItem } from '@/components/common/sidebar/Sidebar';
@@ -33,6 +34,7 @@ const navigation: Omit<SidebarItem, 'isActive'>[] = [
   { href: '/staff/check-out', label: 'Check-out', icon: LogOut, section: 'TÁC VỤ VẬN HÀNH' },
   { href: '/staff/rooms', label: 'Tình trạng phòng', icon: BedDouble, section: 'TÁC VỤ VẬN HÀNH' },
   { href: '/staff/availability', label: 'Phòng trống & Giá', icon: CalendarRange, section: 'TÁC VỤ VẬN HÀNH' },
+  { href: '/staff/promotions', label: 'Ưu đãi của khách sạn', icon: Tag, section: 'TÁC VỤ VẬN HÀNH' },
   { href: '/staff/refunds', label: 'Hoàn tiền & Chính sách', icon: BadgePercent, section: 'TÁC VỤ VẬN HÀNH' },
   // Alerts are real (action items + notifications). The inbox has no API yet and says so.
   { href: '/staff/alerts', label: 'Thông báo & cảnh báo', icon: AlertTriangle, section: 'TÁC VỤ VẬN HÀNH' },

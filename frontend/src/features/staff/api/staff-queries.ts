@@ -22,6 +22,8 @@ export const staffKeys = {
   roomOptions: (bookingId: string) => [...staffKeys.all, "room-options", bookingId] as const,
   checkOutQuote: (bookingId: string) => [...staffKeys.all, "check-out-quote", bookingId] as const,
   pricingRules: (hotelId: string) => [...staffKeys.all, "pricing-rules", hotelId] as const,
+  promotions: (hotelId: string, params: { active?: boolean; page?: number; pageSize?: number }) =>
+    [...staffKeys.all, "promotions", hotelId, params] as const,
   nightlyPrices: (roomTypeId: string, checkIn: string, checkOut: string) =>
     [...staffKeys.all, "nightly-prices", roomTypeId, checkIn, checkOut] as const,
   actionItems: (hotelId: string) => [...staffKeys.all, "action-items", hotelId] as const,
@@ -85,6 +87,18 @@ export function usePricingRules(hotelId: string | undefined) {
     queryKey: staffKeys.pricingRules(hotelId ?? ""),
     queryFn: () => staffService.getPricingRules(hotelId!),
     enabled: !!hotelId,
+  });
+}
+
+export function useHotelPromotions(
+  hotelId: string | undefined,
+  params: { active?: boolean; page?: number; pageSize?: number },
+) {
+  return useQuery({
+    queryKey: staffKeys.promotions(hotelId ?? "", params),
+    queryFn: () => staffService.getHotelPromotions(hotelId!, params),
+    enabled: !!hotelId,
+    placeholderData: keepPreviousData,
   });
 }
 

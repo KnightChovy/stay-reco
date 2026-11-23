@@ -5,6 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import FloatingAiButton from '@/components/common/FloatingAiButton';
+import { OnboardingGate } from '@/features/recommendations/components/OnboardingGate';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu,
@@ -519,6 +520,7 @@ export default function Header() {
 
       {/* Global Floating AI Assistant Circular Button */}
       <FloatingAiButton />
+      <OnboardingGate />
     </header>
   );
 }
