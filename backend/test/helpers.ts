@@ -135,10 +135,83 @@ export class FakeAi {
     return Promise.resolve(FILES.png);
   }
 
+  /**
+   * The assistant's turns, scripted. Each entry answers one `chat` call: either tools to run (`calls`) or the final
+   * text. `chats` keeps what each call was sent, so a test can read the tool results the model would have seen.
+   */
+  script: (
+    | { calls: { name: string; args: Record<string, unknown> }[] }
+    | { text: string }
+  )[] = [];
+  chats: {
+    system: string;
+    contents: { role?: string; parts?: Record<string, unknown>[] }[];
+  }[] = [];
+
+  chat(
+    _context: unknown,
+    request: {
+      system: string;
+      contents: { role?: string; parts?: Record<string, unknown>[] }[];
+    },
+  ) {
+    if (this.budgetLeft <= 0) {
+      return Promise.reject(
+        new ForbiddenException({
+          code: 'AI_BUDGET_EXCEEDED',
+          message: "You have used this month's $0.5 of assistant chat",
+        }),
+      );
+    }
+    // A copy: the service keeps appending to the same array.
+    this.chats.push({
+      system: request.system,
+      contents: structuredClone(request.contents),
+    });
+    const step = this.script.shift() ?? { text: '(no script left)' };
+    if ('calls' in step) {
+      const functionCalls = step.calls.map((c, i) => ({
+        id: `call-${i}`,
+        ...c,
+      }));
+      return Promise.resolve({
+        functionCalls,
+        text: undefined,
+        candidates: [
+          {
+            content: {
+              role: 'model',
+              parts: functionCalls.map((f) => ({ functionCall: f })),
+            },
+          },
+        ],
+      });
+    }
+    return Promise.resolve({
+      functionCalls: undefined,
+      text: step.text,
+      candidates: [
+        { content: { role: 'model', parts: [{ text: step.text }] } },
+      ],
+    });
+  }
+
+  /** What the tools answered in the last `chat` call: the function responses the model was sent. */
+  lastToolResults() {
+    const last = this.chats.at(-1)?.contents.at(-1)?.parts ?? [];
+    return last.map(
+      (p) =>
+        (p as { functionResponse: { name: string; response: unknown } })
+          .functionResponse,
+    );
+  }
+
   clear() {
     this.calls = [];
     this.images = [];
     this.budgetLeft = 5;
+    this.script = [];
+    this.chats = [];
   }
 }
 

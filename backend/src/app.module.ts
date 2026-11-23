@@ -31,6 +31,8 @@ import { LoyaltyModule } from './modules/loyalty/loyalty.module';
 import { MarketingModule } from './modules/marketing/marketing.module';
 import { PreferencesModule } from './modules/preferences/preferences.module';
 import { PromotionsModule } from './modules/promotions/promotions.module';
+import { RecommendationsModule } from './modules/recommendations/recommendations.module';
+import { AssistantModule } from './modules/assistant/assistant.module';
 import { StorageModule } from './modules/storage/storage.module';
 import { VerificationModule } from './modules/verification/verification.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -81,6 +83,8 @@ import { PrismaModule } from './prisma/prisma.module';
     PromotionsModule,
     LoyaltyModule,
     PreferencesModule,
+    RecommendationsModule,
+    AssistantModule,
     MarketingModule,
   ],
   controllers: [AppController],

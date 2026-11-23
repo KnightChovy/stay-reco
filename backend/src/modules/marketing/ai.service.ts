@@ -1,5 +1,7 @@
 import {
+  type Content,
   FinishReason,
+  type FunctionDeclaration,
   type GenerateContentResponse,
   GoogleGenAI,
   Modality,
@@ -24,12 +26,24 @@ import {
 } from './model-pricing';
 import { geminiResponseSchema } from './response-schema';
 
-/** Who the call is for and what it is for, so the spend can be attributed and capped. */
-export interface CallContext {
-  hotelId: string;
+/**
+ * Who the call is for and what it is for, so the spend can be attributed and capped. A call is billed either to a
+ * hotel (marketing, capped per hotel) or to a customer (the assistant chat, capped per customer), never to both.
+ */
+export type CallContext = (
+  | { hotelId: string; customerId?: undefined }
+  | { customerId: string; hotelId?: undefined }
+) & {
   hotelStaffId?: string | null;
   /** Short label stored on the usage row, e.g. "brand-voice". */
   purpose: string;
+};
+
+/** One turn of a tool-using conversation: the model either answers in text or asks for tools to be run. */
+export interface ChatRequest {
+  system: string;
+  contents: Content[];
+  tools: FunctionDeclaration[];
 }
 
 /** Longest answer we will pay for. A social post is a few hundred tokens; a blog article the top of this. */
@@ -76,6 +90,7 @@ export class AiService {
   private readonly model: string;
   private readonly imageModel: string;
   private readonly monthlyBudget: number;
+  private readonly assistantBudget: number;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -87,6 +102,9 @@ export class AiService {
     this.model = config.get('GEMINI_MODEL', { infer: true });
     this.imageModel = config.get('GEMINI_IMAGE_MODEL', { infer: true });
     this.monthlyBudget = config.get('AI_MONTHLY_BUDGET_USD', { infer: true });
+    this.assistantBudget = config.get('AI_ASSISTANT_MONTHLY_BUDGET_USD', {
+      infer: true,
+    });
     if (!this.client) {
       this.logger.warn('GEMINI_API_KEY is not set: the AI writer is off');
     }
@@ -97,13 +115,26 @@ export class AiService {
   }
 
   /** What the hotel has spent this calendar month, and what is left of its cap. */
-  async budget(hotelId: string, now = new Date()) {
+  budget(hotelId: string, now = new Date()) {
+    return this.spend({ hotelId }, this.monthlyBudget, now);
+  }
+
+  /** What a customer's assistant chat has spent this calendar month, and what is left of its cap. */
+  customerBudget(customerId: string, now = new Date()) {
+    return this.spend({ customerId }, this.assistantBudget, now);
+  }
+
+  private async spend(
+    owner: { hotelId: string } | { customerId: string },
+    limitUsd: number,
+    now: Date,
+  ) {
     const { _sum } = await this.prisma.aiUsage.aggregate({
-      where: { hotelId, createdAt: { gte: startOfMonth(now) } },
+      where: { ...owner, createdAt: { gte: startOfMonth(now) } },
       _sum: { costUsd: true },
     });
     const spent = _sum.costUsd ?? new Prisma.Decimal(0);
-    const limit = new Prisma.Decimal(this.monthlyBudget);
+    const limit = new Prisma.Decimal(limitUsd);
     return {
       spentUsd: spent.toNumber(),
       limitUsd: limit.toNumber(),
@@ -129,7 +160,7 @@ export class AiService {
     prompt: string,
   ): Promise<T['_zod']['output']> {
     if (!this.client) throw disabled();
-    await this.assertBudget(context.hotelId);
+    await this.assertBudget(context);
 
     const response = await this.client.models.generateContent({
       model: this.model,
@@ -180,7 +211,7 @@ export class AiService {
    */
   async image(context: CallContext, prompt: string): Promise<Buffer> {
     if (!this.client) throw disabled();
-    await this.assertBudget(context.hotelId);
+    await this.assertBudget(context);
 
     const response = await this.client.models.generateContent({
       model: this.imageModel,
@@ -201,13 +232,57 @@ export class AiService {
     return Buffer.from(data, 'base64');
   }
 
-  /** Refuses a hotel over its monthly cap before anything is spent. */
-  private async assertBudget(hotelId: string) {
-    const { remainingUsd, limitUsd } = await this.budget(hotelId);
+  /**
+   * One turn of a conversation that may call tools (the customer assistant).
+   *
+   * Same door as `ask`: the budget is checked first and the call recorded whatever comes back. The caller runs the
+   * tools the model asks for (`response.functionCalls`) and calls again with their results appended to `contents`;
+   * keeping that loop outside this file keeps the tools, which read customer data, out of the model plumbing.
+   */
+  async chat(
+    context: CallContext,
+    request: ChatRequest,
+  ): Promise<GenerateContentResponse> {
+    if (!this.client) throw disabled();
+    await this.assertBudget(context);
+
+    const response = await this.client.models.generateContent({
+      model: this.model,
+      contents: request.contents,
+      config: {
+        systemInstruction: request.system,
+        // No tools on the last round of a loop: the model has to answer with what it has.
+        ...(request.tools.length && {
+          tools: [{ functionDeclarations: request.tools }],
+        }),
+        maxOutputTokens: MAX_OUTPUT_TOKENS,
+        // Choosing a tool and reading its result is shallow reasoning; thinking would bill every turn at the output
+        // rate for little gain.
+        thinkingConfig: { thinkingBudget: 0 },
+      },
+    });
+    await this.record(context, this.model, response.usageMetadata);
+
+    const finish = this.assertAnswered(response);
+    if (finish === FinishReason.MAX_TOKENS) {
+      throw unusable('The model ran out of room before finishing');
+    }
+    return response;
+  }
+
+  /** Refuses a hotel or a customer over its monthly cap before anything is spent. */
+  private async assertBudget(context: CallContext) {
+    const { remainingUsd, limitUsd } =
+      context.customerId !== undefined
+        ? await this.customerBudget(context.customerId)
+        : await this.budget(context.hotelId);
     if (remainingUsd <= 0) {
       throw new ForbiddenException({
         code: ErrorCode.AI_BUDGET_EXCEEDED,
-        message: `This hotel has used its $${limitUsd} of AI for this month`,
+        message:
+          context.customerId !== undefined
+            ? `You have used this month's $${limitUsd} of assistant chat`
+            : `This hotel has used its $${limitUsd} of AI for this month`,
       });
     }
   }
@@ -238,16 +313,16 @@ export class AiService {
   ) {
     const tokens = tokensOf(usage);
     try {
-      await this.prisma.aiUsage.create({
-        data: {
-          hotelId: context.hotelId,
-          hotelStaffId: context.hotelStaffId ?? null,
-          purpose: context.purpose,
-          model,
-          ...tokens,
-          costUsd: costOf(model, tokens),
-        },
-      });
+      const data: Prisma.AiUsageUncheckedCreateInput = {
+        hotelId: context.hotelId ?? null,
+        customerId: context.customerId ?? null,
+        hotelStaffId: context.hotelStaffId ?? null,
+        purpose: context.purpose,
+        model,
+        ...tokens,
+        costUsd: costOf(model, tokens),
+      };
+      await this.prisma.aiUsage.create({ data });
     } catch (err) {
       this.logger.error('Failed to record AI usage', err);
     }

@@ -334,11 +334,26 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorInfo> = {
   },
   AI_BUDGET_EXCEEDED: {
     status: 403,
-    description: 'The hotel has used its AI budget for this calendar month',
+    description:
+      "The hotel, or the customer's assistant chat, has used its AI budget for this calendar month",
   },
   AI_REFUSED: {
     status: 403,
     description: 'The model declined to write what was asked for',
+  },
+  CONVERSATION_NOT_FOUND: {
+    status: 404,
+    description:
+      "The conversation doesn't exist or belongs to another customer",
+  },
+  BOOKING_PROPOSAL_NOT_FOUND: {
+    status: 404,
+    description: 'No booking proposal with this id in the conversation',
+  },
+  BOOKING_PROPOSAL_INVALID: {
+    status: 409,
+    description:
+      'The proposal was already confirmed or has expired; ask the assistant again',
   },
   SOCIAL_ACCOUNT_NOT_FOUND: {
     status: 404,

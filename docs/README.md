@@ -26,7 +26,7 @@ Where BE, FE web and mobile agree on **which phase we are in** and **what the AP
 
 ## Where we are
 
-> **Phases 0-4**: BE done, FE web and mobile integrating. **Phase 5**: marketing is BE done end to end (a real post has gone out on a real Facebook page); recommendations and the assistant are not started.
+> **Phases 0-4**: BE done, FE web and mobile integrating. **Phase 5**: marketing is BE done end to end (a real post has gone out on a real Facebook page); recommendations (trained offline in `recommender/` with the paper's method) and the assistant chat are BE done, waiting on the FE.
 > Update this line and the table below in the same PR when a status changes.
 
 | Phase | Content | Status | API |
@@ -36,7 +36,7 @@ Where BE, FE web and mobile agree on **which phase we are in** and **what the AP
 | [2](./phases/phase-2-search-booking.md) | Search, booking, payment | 🟡 BE done, FE integrating | [customer](./api/customer.md), [partner](./api/partner.md#pricing-rules-phase-2), [staff](./api/staff.md#coming-in-phase-2) |
 | [3](./phases/phase-3-operations.md) | Operations: check-in/out, no-show, commission, change requests, notifications | 🟡 API Draft | [staff](./api/staff.md#front-desk-phase-3), [customer](./api/customer.md#change-requests-phase-3) |
 | [4](./phases/phase-4-loyalty-promotions.md) | Loyalty, promotions, reviews, wallet | 🟡 BE done, FE integrating | [reviews](./api/reviews.md), [promotions](./api/promotions.md), [loyalty](./api/loyalty.md), [customer-wallet](./api/customer-wallet.md) |
-| [5](./phases/phase-5-ai-marketing.md) | AI marketing (done) · recommendations, assistant (not started) | 🟡 Marketing BE done, FE integrating | [marketing](./api/marketing.md) |
+| [5](./phases/phase-5-ai-marketing.md) | AI marketing · recommendations · assistant | 🟡 BE done, FE integrating | [marketing](./api/marketing.md), [assistant](./api/assistant.md) |
 | [6](./phases/phase-6-reporting-admin.md) | Reporting, administration | ⬜ Not started; partner dashboard API `Draft`, built early | [partner-dashboard](./api/partner-dashboard.md) |
 
 Phase status: ⬜ Not started · 🟡 In progress · ✅ Done.

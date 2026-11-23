@@ -79,6 +79,14 @@ const TAGS: [name: string, description: string][] = [
     'Saved customer preferences, free-form keys the backend does not interpret. Guide: docs/api/customer-wallet.md#preferences',
   ],
   [
+    'recommendations',
+    'Hotels picked for a customer by the trained recommender (recommender/, the two-sided rule of stayreco-experiment). Guide: docs/api/assistant.md#recommendations',
+  ],
+  [
+    'assistant',
+    'The customer chat assistant: searches, recommends and proposes bookings the customer confirms with one click. Guide: docs/api/assistant.md',
+  ],
+  [
     'payouts',
     'Hotel withdrawals: a partner asks to be paid out of the available balance and a platform manager marks it paid or rejects it. Guide: docs/api/partner.md#withdrawals, docs/api/manager.md',
   ],

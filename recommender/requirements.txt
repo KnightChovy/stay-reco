@@ -1,0 +1,3 @@
+# Postgres driver for reco_db.py. Everything else comes from the paper environment:
+#   conda env create -f stayreco-experiment/environment.yml
+psycopg2-binary==2.9.10

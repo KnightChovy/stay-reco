@@ -208,10 +208,18 @@ export const ErrorCode = {
   // AI marketing (phase 5)
   /** The AI writer is not configured, or answered in a shape we cannot use. */
   AI_UNAVAILABLE: 'AI_UNAVAILABLE',
-  /** The hotel has used its AI budget for this calendar month. */
+  /** The hotel, or the customer's assistant chat, has used its AI budget for this calendar month. */
   AI_BUDGET_EXCEEDED: 'AI_BUDGET_EXCEEDED',
   /** The model declined to write what was asked for. */
   AI_REFUSED: 'AI_REFUSED',
+
+  // Assistant (phase 5)
+  /** The conversation doesn't exist, or belongs to another customer. */
+  CONVERSATION_NOT_FOUND: 'CONVERSATION_NOT_FOUND',
+  /** No booking proposal with this id in the conversation. */
+  BOOKING_PROPOSAL_NOT_FOUND: 'BOOKING_PROPOSAL_NOT_FOUND',
+  /** The proposal was already confirmed, or has expired; ask the assistant for a new one. */
+  BOOKING_PROPOSAL_INVALID: 'BOOKING_PROPOSAL_INVALID',
   /** The content does not exist, or belongs to another hotel. */
   CONTENT_NOT_FOUND: 'CONTENT_NOT_FOUND',
   /** Editing, submitting, approving or deleting content whose status does not allow it. */

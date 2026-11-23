@@ -8,5 +8,6 @@ import { StaysService } from './stays.service';
   imports: [PricingModule, AvailabilityModule],
   controllers: [StaysController],
   providers: [StaysService],
+  exports: [StaysService],
 })
 export class StaysModule {}

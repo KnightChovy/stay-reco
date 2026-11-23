@@ -594,6 +594,7 @@ model Customer {
   ratingPredictions   RatingPrediction[]
   recommendations     Recommendation[]
   conversations       Conversation[]
+  aiUsages            AiUsage[]
 
   @@map("customer")
 }
@@ -1096,7 +1097,10 @@ model Review {
 /// Phase 5 requires every call to be logged and the spend per hotel to be capped.
 model AiUsage {
   aiUsageId       String      @id @default(dbgenerated("gen_random_uuid()")) @map("ai_usage_id") @db.Uuid
-  hotelId         String      @map("hotel_id") @db.Uuid
+  /// The hotel the call was for (marketing); null for a customer's assistant chat.
+  hotelId         String?     @map("hotel_id") @db.Uuid
+  /// The customer whose assistant chat made the call; null for hotel work.
+  customerId      String?     @map("customer_id") @db.Uuid
   /// Who asked for it; null when a job did.
   hotelStaffId    String?     @map("hotel_staff_id") @db.Uuid
   /// What it was for, e.g. "brand-voice" or "marketing-content".
@@ -1108,11 +1112,14 @@ model AiUsage {
   /// US dollars, at the model's published rate when the call was made.
   costUsd         Decimal     @map("cost_usd") @db.Decimal(12, 6)
   createdAt       DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
-  hotel           Hotel       @relation(fields: [hotelId], references: [hotelId], onDelete: Cascade)
+  hotel           Hotel?      @relation(fields: [hotelId], references: [hotelId], onDelete: Cascade)
+  customer        Customer?   @relation(fields: [customerId], references: [customerId], onDelete: Cascade)
   hotelStaff      HotelStaff? @relation(fields: [hotelStaffId], references: [hotelStaffId])
 
   /// The monthly spend of one hotel is read off this index.
   @@index([hotelId, createdAt])
+  /// The monthly spend of one customer's assistant is read off this index.
+  @@index([customerId, createdAt])
   @@map("ai_usage")
 }
 

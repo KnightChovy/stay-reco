@@ -2,12 +2,12 @@
 
 | | |
 |---|---|
-| Phase status | 🟡 Marketing done (TikTok excluded by decision); recommendations not started |
-| API status | Marketing, all 27 endpoints: `BE Done` · recommendations: none yet |
-| Agreed on | Marketing: 2026-11-12 (M1–M15), 2026-11-13 (M16). Recommendations: not agreed yet |
+| Phase status | 🟡 Marketing done (TikTok excluded by decision); recommendations and the assistant BE done, waiting on the FE |
+| API status | Marketing, all 27 endpoints: `BE Done` · recommendations and assistant, 7 endpoints: `BE Done` |
+| Agreed on | Marketing: 2026-11-12 (M1–M15), 2026-11-13 (M16). Recommendations and assistant: 2026-11-23 (R1–R8), proposed, to confirm with the team |
 | BE owners | Phúc |
 | FE owners | Web staff marketing screens: branch `feat/phase-5-frontend` |
-| API | [api/marketing.md](../api/marketing.md). As the other parts start: write their endpoints in [api/](../api/README.md) |
+| API | [api/marketing.md](../api/marketing.md), [api/assistant.md](../api/assistant.md) |
 
 > Rules for every API: [api-guide.md](../api-guide.md).
 
@@ -119,9 +119,18 @@ Three things the swap needed beyond the SDK, each now covered by a test:
 
 Thinking is off: the hard part of a caption is the voice, not the reasoning, and thinking bills at the output rate. A draft costs about **$0.0005**, so the $5 cap is roughly 9,000 drafts a month.
 
-### Recommendations
+### Recommendations and the assistant (R1–R8)
 
-Not agreed yet.
+| # | Decision |
+|---|---|
+| R1 | **The recommender is the paper's method, run offline in Python** ([`recommender/`](../../recommender/README.md)). It imports the model code of `stayreco-experiment/` (SVD++, TF-IDF content, demographic, `compute_two_stage_alpha`) instead of re-implementing it in TypeScript, so what is served is what was measured. A batch run writes `model_run` (with the evaluation metrics) and `recommendation` (top-K per customer, with a reason); the API only reads the newest completed run, which matches the architecture diagram's "offline batch training". |
+| R2 | **Every run evaluates before it publishes**, with the paper's protocol (cold-start split, grid search on validation, full-catalogue ranking). The comparison against the baselines is stored on the run, so a regression is visible in the data, not only in a notebook. |
+| R3 | **The preferences screen feeds the model.** `travelStyles`, `roomAmenities`, `favouriteCity` become a query in the content model's text space, and `has_preferences` switches the weight rule's π to 1, as the scheduler already allowed. How strongly is tuned on validation; the grid can switch it off. `budgetPerNight` is a pre-filter on the stored list. |
+| R4 | **Until there are real guests, training data is generated** (`npm run db:seed:reco`): hotels with a style, guests with a hidden taste, ratings from their match plus quality and noise, a fifth of hotels and guests cold. Generated, not imported: TripAdvisor is U.S. hotels under an academic licence. |
+| R5 | **The assistant answers only from tools**, each going through the same service and zod schema as the public endpoint it mirrors. Search results are ordered by the customer's recommendations, then guest rating; that is where the recommender meets the chat. |
+| R6 | **The assistant never books.** It can only propose, after pricing and checking the stay with the booking's own schema; the booking is made by the customer's click (`confirm-booking`), through `BookingsService.create`. A proposal is claimed with a conditional update, so a double click books once, and it expires after 30 minutes. |
+| R7 | **Assistant spend is capped per customer** (`AI_ASSISTANT_MONTHLY_BUDGET_USD`, default $0.50), through the same `AiService` door as marketing (M3): `ai_usage.hotel_id` became nullable and `customer_id` was added. A turn that fails stores nothing, so the customer can resend. |
+| R8 | **Conversions are recorded**: a booking confirmed from the chat for a hotel in the customer's list gets `booking.recommendation_id`. That is the online measure of the recommender, next to the offline ones on `model_run`. |
 
 ## States
 
@@ -265,12 +274,16 @@ Still open:
 - [x] Marketing: drafts generated in the hotel's voice, approved by the owner, scheduled, published, measured
 - [x] [api/marketing.md](../api/marketing.md) matches the code; credentials documented in [../social-setup.md](../social-setup.md)
 - [ ] API status `Integrated` (waiting on the frontend)
-- [ ] Recommendations: not started
+- [x] Recommendations: trained offline with the paper's method, served by `GET /me/recommendations`, used by the assistant
+- [x] Assistant: chat with search, recommendations, room details and booking proposals the customer confirms
+- [ ] Recommendations and assistant `Integrated` (FE pages `(landing-page)/recommendations`, `(landing-page)/assistant`)
+- [ ] The recommender runs on a schedule in the deployment
 
 ## Changelog
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-11-23 | Phúc | Recommendations and assistant (R1–R8): `recommender/` trains the two-sided rule of `stayreco-experiment/` on the app's reviews and writes `model_run` + `recommendation`; `GET /me/recommendations`, `GET /recommendations`; assistant chat (`/me/conversations`, `/conversations/:id/messages`, `/conversations/:id/confirm-booking`) on Gemini function calling; `ai_usage` per customer (migration); `npm run db:seed:reco` generates training data. 8 e2e |
 | 2026-11-18 | Phúc | FE requests A4 and A5: the AI draws the picture of a draft on request (`image/generate`, `GEMINI_IMAGE_MODEL`, priced at about $0.07 a picture against the same monthly cap), and writes 3 unsaved versions to choose from (`variants`, one model call) with `POST /hotels/:hotelId/marketing-content` saving the pick. 10 e2e |
 | 2026-11-14 | FE | Review of #127 on `feat/phase-5-frontend`: every staff route by id now needs `MARKETING`; the job claims a row (`PUBLISHING`, migration) before calling Meta so a post cannot go out twice; "post now" rows sort first (`nulls: first`); content back to `APPROVED` when no post is waiting or out; `contentId` and `sort` on the calendar list; Swagger descriptions for the develop tags `payouts`, `platform`, `compliance`, `admin`. e2e tests for each |
 | 2026-11-13 | FE | Web staff marketing on `feat/phase-5-frontend`: `/staff/marketing/content` (ideas, AI writer, list), `/staff/marketing/content/[id]` (edit, picture, submit, schedule), `/staff/marketing/calendar`, `/staff/marketing/analytics`. Owner screens (approve, connect a page, brand voice) not connected yet |

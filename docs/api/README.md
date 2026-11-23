@@ -17,6 +17,7 @@ Each endpoint is described **once**, on the page of the role that uses it most; 
 | [customer-wallet.md](./customer-wallet.md) | Customer | The customer wallet: balance, movements, paying a whole booking from it, and saved preferences |
 | [add-ons.md](./add-ons.md) | Partner, hotel staff, customer | Services sold on top of the room: the catalogue, booking them with the stay, front-desk add-ons collected at check-out |
 | [marketing.md](./marketing.md) | Partner, hotel staff | AI marketing: the brand voice, drafts the owner approves, the posting calendar, publishing to Facebook and Instagram, and what it all cost |
+| [assistant.md](./assistant.md) | Customer, public | Personal hotel recommendations from the trained model, and the chat assistant that searches, recommends and proposes bookings the customer confirms |
 
 How to read each endpoint table:
 
