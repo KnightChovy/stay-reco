@@ -29,6 +29,23 @@ export type ScheduleListParams = Partial<ScheduleListQuery>;
 
 const repeated = { paramsSerializer: { indexes: null } };
 
+/**
+ * The AI writer sometimes returns its line breaks escaped: the two characters `\` `n` instead of a new line, which
+ * then show in the text. Turn them back into real breaks on everything read from the API, so the screens show the
+ * paragraphs and the next save stores them properly.
+ */
+export function cleanAiText(text: string) {
+  return text.replace(/\\r\\n|\\n|\\r/g, "\n").replace(/\\t/g, " ");
+}
+
+function clean<T extends { body?: string; title?: string | null }>(item: T): T {
+  return {
+    ...item,
+    ...(typeof item.body === "string" ? { body: cleanAiText(item.body) } : {}),
+    ...(typeof item.title === "string" ? { title: cleanAiText(item.title) } : {}),
+  };
+}
+
 // ── Voice and budget (read only for staff) ─────────────────
 
 export async function getBrandVoice(hotelId: string) {
@@ -57,7 +74,7 @@ export async function generateContent(hotelId: string, input: GenerateContentInp
     // A model call takes longer than the default 15 s.
     { timeout: 60_000 },
   );
-  return data.data;
+  return clean(data.data);
 }
 
 /**
@@ -70,13 +87,13 @@ export async function generateContentVariants(hotelId: string, input: GenerateCo
     input,
     { timeout: 90_000 },
   );
-  return data.data;
+  return data.data.map(clean);
 }
 
 /** Saves the version staff picked (or wrote) as a DRAFT. No model call. */
 export async function createContent(hotelId: string, input: CreateContentInput) {
   const { data } = await api.post<APIResponse<MarketingContent>>(`/hotels/${hotelId}/marketing-content`, input);
-  return data.data;
+  return clean(data.data);
 }
 
 export async function getContents(hotelId: string, params: ContentListParams = {}) {
@@ -84,18 +101,18 @@ export async function getContents(hotelId: string, params: ContentListParams = {
     params,
     ...repeated,
   });
-  return { contents: data.data, meta: data.meta as PageMeta };
+  return { contents: data.data.map(clean), meta: data.meta as PageMeta };
 }
 
 export async function getContent(contentId: string) {
   const { data } = await api.get<APIResponse<MarketingContent>>(`/marketing-content/${contentId}`);
-  return data.data;
+  return clean(data.data);
 }
 
 /** Only while the piece is a DRAFT or REJECTED. */
 export async function updateContent(contentId: string, input: UpdateContentInput) {
   const { data } = await api.patch<APIResponse<MarketingContent>>(`/marketing-content/${contentId}`, input);
-  return data.data;
+  return clean(data.data);
 }
 
 /** JPEG, PNG or WebP up to 10 MB; replaces the current picture. */
@@ -106,7 +123,7 @@ export async function uploadContentImage(contentId: string, file: File) {
     headers: { "Content-Type": "multipart/form-data" },
     timeout: 60_000,
   });
-  return data.data;
+  return clean(data.data);
 }
 
 /**
@@ -119,18 +136,18 @@ export async function generateContentImage(contentId: string, input: GenerateIma
     input,
     { timeout: 120_000 },
   );
-  return data.data;
+  return clean(data.data);
 }
 
 export async function removeContentImage(contentId: string) {
   const { data } = await api.delete<APIResponse<MarketingContent>>(`/marketing-content/${contentId}/image`);
-  return data.data;
+  return clean(data.data);
 }
 
 /** DRAFT or REJECTED → PENDING_APPROVAL; the owner decides. */
 export async function submitContent(contentId: string) {
   const { data } = await api.post<APIResponse<MarketingContent>>(`/marketing-content/${contentId}/submit`);
-  return data.data;
+  return clean(data.data);
 }
 
 export async function deleteContent(contentId: string) {
@@ -147,7 +164,7 @@ export async function getSocialAccounts(hotelId: string) {
 /** Approved content only. No `scheduledAt` means the next run of the publisher, within a minute (M14). */
 export async function scheduleContent(contentId: string, input: ScheduleContentInput) {
   const { data } = await api.post<APIResponse<ContentSchedule>>(`/marketing-content/${contentId}/schedule`, input);
-  return data.data;
+  return clean(data.data);
 }
 
 export async function getSchedules(hotelId: string, params: ScheduleListParams = {}) {
@@ -155,12 +172,12 @@ export async function getSchedules(hotelId: string, params: ScheduleListParams =
     params,
     ...repeated,
   });
-  return { schedules: data.data, meta: data.meta as PageMeta };
+  return { schedules: data.data.map(clean), meta: data.meta as PageMeta };
 }
 
 export async function cancelSchedule(scheduleId: string) {
   const { data } = await api.delete<APIResponse<ContentSchedule>>(`/content-schedules/${scheduleId}`);
-  return data.data;
+  return clean(data.data);
 }
 
 /** Every reading, newest first; each refresh appends one (M15). */

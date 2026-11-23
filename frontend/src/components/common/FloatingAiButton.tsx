@@ -1,184 +1,51 @@
 'use client';
 
-import { type FormEvent, useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import Image from 'next/image';
-import Link from 'next/link';
-import { Send, Sparkles, X } from 'lucide-react';
+import { usePathname } from 'next/navigation';
+import { Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { QuickSuggestions, VoiceButton, useIdleSuggestions } from '@/features/assistant/AssistantChatParts';
-import { useSpeechInput } from '@/features/assistant/use-speech-input';
+import { AssistantChat } from '@/features/assistant/chat/AssistantChat';
 
-type ChatMessage = {
-  id: number;
-  sender: 'ai' | 'user';
-  text: string;
-};
-
-const initialMessages: ChatMessage[] = [
-  {
-    id: 1,
-    sender: 'ai',
-    text: 'Chào bạn! Tôi có thể giúp bạn tìm chỗ nghỉ phù hợp.',
-  },
-];
-
+/**
+ * The chat bubble on every customer page: opens the booking assistant over the page, keeps the last conversation
+ * and can expand to /assistant. Hidden on /assistant itself, where the chat is the page.
+ */
 export default function FloatingAiButton() {
-  const [isChatOpen, setIsChatOpen] = useState(false);
-  const [input, setInput] = useState('');
-  const [messages, setMessages] = useState(initialMessages);
-  const [isThinking, setIsThinking] = useState(false);
-  const replyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const voice = useSpeechInput(input, setInput);
-  const idle = useIdleSuggestions(input, voice.listening || isThinking, messages.length);
-
-  useEffect(() => {
-    return () => {
-      if (replyTimerRef.current) clearTimeout(replyTimerRef.current);
-    };
-  }, []);
-
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
-  }, [messages.length, isThinking, idle]);
-
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    sendText(input);
-  };
-
-  const sendText = (raw: string) => {
-    const question = raw.trim();
-    if (!question || isThinking) return;
-    voice.cancel();
-
-    const messageId = Date.now();
-    setMessages((previous) => [
-      ...previous,
-      { id: messageId, sender: 'user', text: question },
-    ]);
-    setInput('');
-    setIsThinking(true);
-
-    replyTimerRef.current = setTimeout(() => {
-      setMessages((previous) => [
-        ...previous,
-        {
-          id: messageId + 1,
-          sender: 'ai',
-          text: 'Tôi đã nhận được yêu cầu của bạn. Hãy mở Trợ lý AI để nhận gợi ý chi tiết nhé.',
-        },
-      ]);
-      setIsThinking(false);
-      replyTimerRef.current = null;
-    }, 900);
-  };
+  const [open, setOpen] = useState(false);
+  const pathname = usePathname();
+  if (pathname === '/assistant') return null;
 
   return (
-    <div className="group fixed right-6 bottom-6 z-50 flex flex-col items-end gap-3 font-sans antialiased">
-      {!isChatOpen && (
-        <div className="pointer-events-none invisible absolute right-0 bottom-17 hidden w-72 translate-y-2 items-start gap-2.5 rounded-2xl border border-border bg-white/95 p-3 text-xs opacity-0 shadow-lg backdrop-blur-md transition-all duration-200 sm:flex group-hover:visible group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:visible group-focus-within:translate-y-0 group-focus-within:opacity-100">
-          <div className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-white shadow-sm ring-1 ring-primary/15">
+    <div className="group fixed right-4 bottom-4 z-50 flex flex-col items-end gap-3 font-sans antialiased sm:right-6 sm:bottom-6 print:hidden">
+      {!open && (
+        <div className="pointer-events-none invisible absolute right-0 bottom-17 hidden w-72 translate-y-2 items-start gap-2.5 rounded-2xl border border-border bg-card/95 p-3 text-xs opacity-0 shadow-lg backdrop-blur-md transition-all duration-200 sm:flex group-hover:visible group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:visible group-focus-within:translate-y-0 group-focus-within:opacity-100">
+          <div className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-card shadow-sm ring-1 ring-primary/15">
             <Image src="/images/logo_chatbot.png" alt="" width={28} height={28} className="size-5 object-contain" />
           </div>
           <div className="space-y-1 pr-1">
             <span className="flex items-center gap-1 font-bold text-foreground">
               Trợ lý AI StayReco <Sparkles className="size-3 text-amber-500" />
             </span>
-            <p className="text-[11px] leading-relaxed text-muted-foreground">
-              Tìm phòng hợp gu hoặc lên lịch trình chỉ trong vài phút.
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              Hỏi phòng trống, so giá và chuẩn bị đơn đặt ngay trong khung chat.
             </p>
           </div>
         </div>
       )}
 
-      {isChatOpen && (
-        <section
-          className="flex h-[min(38rem,calc(100dvh-7.5rem))] w-[min(28rem,calc(100vw-3rem))] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
-          role="dialog"
-          aria-label="Chat với Trợ lý AI StayReco"
-        >
-          <header className="flex items-center gap-3 border-b border-border bg-primary/5 px-4 py-3">
-            <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-white ring-1 ring-primary/15">
-              <Image src="/images/logo_chatbot.png" alt="" width={36} height={36} className="size-7 object-contain" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <h2 className="text-sm font-bold text-foreground">Trợ lý AI StayReco</h2>
-              <p className="text-[11px] text-success">Đang trực tuyến</p>
-            </div>
-            <Button type="button" variant="ghost" size="icon-sm" onClick={() => setIsChatOpen(false)} aria-label="Đóng khung chat">
-              <X className="size-4" aria-hidden="true" />
-            </Button>
-          </header>
-
-          <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto bg-muted/20 p-4">
-            {messages.map((message) => (
-              <div key={message.id} className={message.sender === 'user' ? 'flex justify-end' : 'flex justify-start'}>
-                <p
-                  className={
-                    message.sender === 'user'
-                      ? 'max-w-[85%] rounded-2xl rounded-br-sm bg-primary px-3.5 py-2.5 text-sm leading-relaxed text-primary-foreground'
-                      : 'max-w-[85%] rounded-2xl rounded-bl-sm border border-primary/15 bg-white px-3.5 py-2.5 text-sm leading-relaxed text-foreground'
-                  }
-                >
-                  {message.text}
-                </p>
-              </div>
-            ))}
-            {isThinking && (
-              <div className="flex justify-start">
-                <div className="flex items-center gap-2 rounded-2xl rounded-bl-sm border border-primary/15 bg-white px-3 py-2">
-                  <span className="flex gap-1" aria-hidden="true">
-                    <span className="size-1.5 animate-bounce rounded-full bg-primary [animation-delay:-0.3s]" />
-                    <span className="size-1.5 animate-bounce rounded-full bg-primary [animation-delay:-0.15s]" />
-                    <span className="size-1.5 animate-bounce rounded-full bg-primary" />
-                  </span>
-                  <span className="text-[11px] font-medium text-muted-foreground">Đang suy nghĩ...</span>
-                </div>
-              </div>
-            )}
-            {idle && <QuickSuggestions onPick={sendText} />}
-          </div>
-
-          <form onSubmit={handleSubmit} className="border-t border-border bg-card p-3">
-            <div className="flex gap-2">
-              <VoiceButton voice={voice} className="size-10" />
-              <Input
-                value={input}
-                onChange={(event) => setInput(event.target.value)}
-                placeholder={voice.listening ? 'Đang nghe, bạn nói đi...' : 'Nhập câu hỏi...'}
-                aria-label="Nội dung tin nhắn"
-                className="h-10 text-sm"
-                disabled={isThinking}
-              />
-              <Button type="submit" size="icon-sm" aria-label="Gửi tin nhắn" className="size-10" disabled={isThinking}>
-                <Send className="size-4" aria-hidden="true" />
-              </Button>
-            </div>
-            {voice.error && (
-              <p role="status" className="mt-2 text-xs text-destructive">
-                {voice.error}
-              </p>
-            )}
-            <Link href="/assistant" className="mt-2 block text-center text-[11px] font-semibold text-primary hover:underline">
-              Mở Trợ lý AI đầy đủ
-            </Link>
-          </form>
-        </section>
-      )}
+      {open && <AssistantChat layout="panel" onClose={() => setOpen(false)} />}
 
       <Button
         type="button"
         variant="outline"
         size="icon"
-        onClick={() => setIsChatOpen((open) => !open)}
-        aria-label={isChatOpen ? 'Đóng chat với Trợ lý AI' : 'Mở chat với Trợ lý AI'}
-        aria-expanded={isChatOpen}
-        className="group/button relative size-14 rounded-full bg-white shadow-xl ring-4 ring-primary/20 transition-all duration-300 hover:scale-105 hover:bg-primary/5 hover:shadow-2xl cursor-pointer"
+        onClick={() => setOpen((value) => !value)}
+        aria-label={open ? 'Đóng chat với Trợ lý AI' : 'Mở chat với Trợ lý AI'}
+        aria-expanded={open}
+        className="group/button relative size-14 cursor-pointer rounded-full bg-card shadow-xl ring-4 ring-primary/20 transition-all duration-300 hover:scale-105 hover:bg-primary/5 hover:shadow-2xl"
       >
-        <span className={`absolute -inset-1 rounded-full bg-primary/30 ${isChatOpen ? 'opacity-0' : 'animate-ping opacity-75'}`} />
+        <span className={`absolute -inset-1 rounded-full bg-primary/30 ${open ? 'opacity-0' : 'animate-ping opacity-75'}`} />
         <Image
           src="/images/logo_chatbot.png"
           alt=""
@@ -186,7 +53,7 @@ export default function FloatingAiButton() {
           height={56}
           className="relative z-10 size-10 object-contain transition-transform duration-300 group-hover/button:rotate-12"
         />
-        <span className="absolute -top-1 -right-1 z-20 flex size-5 items-center justify-center rounded-full border border-white bg-amber-400 text-[10px] font-bold text-amber-950 shadow-sm">
+        <span className="absolute -top-1 -right-1 z-20 flex size-5 items-center justify-center rounded-full border border-card bg-amber-400 text-xs font-bold text-amber-950 shadow-sm">
           AI
         </span>
       </Button>
