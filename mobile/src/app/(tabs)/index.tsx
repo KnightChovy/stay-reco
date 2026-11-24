@@ -15,7 +15,10 @@ import { Text } from '@/components/ui/text';
 import { colors } from '@/constants/theme';
 import { destinations, images } from '@/lib/mock-data';
 import { addDays, dateInput, defaultStay, formatDate, nightsBetween, type Stay } from '@/lib/stay';
+import { RecommendedHotelCard } from '@/features/recommendations/RecommendedHotelCard';
+import { recommendationsQuery } from '@/services/recommendations.service';
 import { searchHotels } from '@/services/stays.service';
+import { useAuthStore } from '@/stores/auth.store';
 
 const quickFilters: { label: string; icon: IconName }[] = [
   { label: 'Gần biển', icon: 'waves' },
@@ -80,6 +83,9 @@ const featuredStay = defaultStay();
 export default function HomeScreen() {
   const [stay, setStay] = useState<Stay>(defaultStay);
   const nights = nightsBetween(stay.checkIn, stay.checkOut);
+  const personal = useAuthStore((st) => st.account?.role === 'CUSTOMER');
+  // Ẩn hẳn khi chưa có gợi ý (recommender chưa chạy).
+  const recommended = useQuery(recommendationsQuery({ limit: 4 }, personal)).data?.items ?? [];
   const featured = useQuery({
     queryKey: ['stays', 'search', 'featured', featuredStay],
     queryFn: () => searchHotels({ ...featuredStay, sort: 'recommended', page: 1, pageSize: 3 }),
@@ -175,6 +181,30 @@ export default function HomeScreen() {
             onPress={() => router.push('/assistant')}
           />
         </View>
+
+        {recommended.length > 0 && (
+          <View className="mx-4 mt-7">
+            <View className="mb-3.5 flex-row items-end gap-2">
+              <View className="flex-1">
+                <Text variant="h2">Gợi ý cho bạn</Text>
+                <Text variant="small" color={colors.onSurfaceVariant}>
+                  Chọn theo sở thích và đánh giá của khách giống bạn
+                </Text>
+              </View>
+              <Pressable accessibilityRole="link" onPress={() => router.push('/recommendations')} className="flex-row items-center gap-2">
+                <Text variant="label" weight="semibold" color={colors.primaryContainer}>
+                  Tất cả
+                </Text>
+                <Icon name="chevron_right" size={18} color={colors.primaryContainer} />
+              </Pressable>
+            </View>
+            <View className="gap-4">
+              {recommended.map((h) => (
+                <RecommendedHotelCard key={h.id} hotel={h} />
+              ))}
+            </View>
+          </View>
+        )}
 
         <View className="mx-4 mt-7">
           <SectionTitle title="Điểm đến yêu thích" subtitle="Khám phá các miền di sản boutique trứ danh" action="Tất cả" />

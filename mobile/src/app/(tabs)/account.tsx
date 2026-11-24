@@ -13,18 +13,13 @@ import { colors } from '@/constants/theme';
 import { tierLabel, tierThreshold } from '@/features/rewards/tier';
 import { images } from '@/lib/mock-data';
 import { formatVnd } from '@/lib/stay';
+import { AMENITIES, BUDGETS, PREF_KEYS, STYLES, splitList } from '@/features/recommendations/preference-options';
+import { getMyPreferences } from '@/services/recommendations.service';
 import { getMyLoyalty, getMyVouchers, getMyWallet } from '@/services/rewards.service';
 import { useAuthStore } from '@/stores/auth.store';
 
 const tiers = Object.values(LoyaltyTier);
 
-
-const tastes: { label: string; icon: IconName }[] = [
-  { label: 'Gu yên tĩnh & cách âm', icon: 'volume_off' },
-  { label: 'View sông / hoàng hôn', icon: 'water' },
-  { label: 'Bữa sáng hữu cơ', icon: 'restaurant' },
-  { label: '1.5tr - 3.0tr / đêm', icon: 'payments' },
-];
 
 type MenuItem = {
   title: string;
@@ -75,6 +70,16 @@ export default function AccountScreen() {
     enabled: !!account,
   });
   const wallet = useQuery({ queryKey: ['wallet'], queryFn: getMyWallet, enabled: !!account });
+  const preferences = useQuery({ queryKey: ['preferences'], queryFn: getMyPreferences, enabled: !!account }).data;
+  // Sở thích đã lưu, hiện bằng nhãn của cùng danh sách màn /account/preferences dùng.
+  const tastes: { label: string; icon: IconName }[] = preferences
+    ? [
+        ...STYLES.filter((st) => splitList(preferences[PREF_KEYS.styles]).includes(st.id)).map((st) => ({ label: st.title, icon: st.icon })),
+        ...AMENITIES.filter((a) => splitList(preferences[PREF_KEYS.amenities]).includes(a.id)).map((a) => ({ label: a.label, icon: 'check' as IconName })),
+        ...(preferences[PREF_KEYS.city] ? [{ label: preferences[PREF_KEYS.city], icon: 'location_on' as IconName }] : []),
+        ...BUDGETS.filter((b) => b.id && b.id === preferences[PREF_KEYS.budget]).map((b) => ({ label: b.label + ' / đêm', icon: 'payments' as IconName })),
+      ]
+    : [];
   const l = loyalty.data;
   const voucherCount = vouchers.data?.meta.total;
   const tierIndex = l ? tiers.indexOf(l.tier) : 0;
@@ -324,16 +329,20 @@ export default function AccountScreen() {
             Hệ thống cá nhân hóa phòng nghỉ theo sở thích lưu trú của riêng bạn:
           </Text>
           <View className="flex-row flex-wrap items-center gap-2">
-            {tastes.map((t) => (
-              <Chip key={t.label} label={t.label} icon={t.icon} tone="neutral" />
-            ))}
+            {tastes.length === 0 ? (
+              <Text variant="caption" color={colors.onSurfaceVariant}>
+                Bạn chưa lưu sở thích nào.
+              </Text>
+            ) : (
+              tastes.map((t) => <Chip key={t.label} label={t.label} icon={t.icon} tone="neutral" />)
+            )}
           </View>
           <Button
             label="Tùy chỉnh gợi ý du lịch"
             leadingIcon="auto_awesome"
             variant="ghost"
             style={{ backgroundColor: colors.surfaceContainerLow }}
-            onPress={() => router.push('/assistant')}
+            onPress={() => router.push('/account/preferences')}
           />
         </View>
 
