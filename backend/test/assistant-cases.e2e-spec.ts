@@ -623,6 +623,28 @@ describe('Assistant edge cases (e2e)', () => {
       expect(res.body.code).toBe('VALIDATION_ERROR');
     });
 
+    it('searches signed out without a token, but answers 401 to a revoked one so the app refreshes it', async () => {
+      const me = await t.signIn('CUSTOMER', 'me@guest.test');
+      const search = () =>
+        t
+          .api()
+          .get('/api/v1/hotels')
+          .query({
+            destination: 'Đà Nẵng',
+            checkIn: day(10),
+            checkOut: day(12),
+            guests: 2,
+          });
+      await search().expect(200);
+      await search().set(auth(me.token)).expect(200);
+      await t.prisma.authSession.updateMany({
+        where: { userAccountId: me.id },
+        data: { revokedAt: new Date() },
+      });
+      const res = await search().set(auth(me.token)).expect(401);
+      expect(res.body.code).toBe('UNAUTHENTICATED');
+    });
+
     it('serves the signed-out list without an account, and /me only to a signed-in customer', async () => {
       await t.api().get('/api/v1/recommendations').expect(200);
       await t.api().get('/api/v1/me/recommendations').expect(401);
