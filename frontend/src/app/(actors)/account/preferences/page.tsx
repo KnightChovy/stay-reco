@@ -3,18 +3,12 @@
 import { useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import {
-  Briefcase,
   Check,
-  Coffee,
   Compass,
   Loader2,
   MapPin,
-  Palmtree,
   Save,
   Sparkles,
-  Trees,
-  Users,
-  Utensils,
   Wallet,
 } from 'lucide-react';
 import AppBreadcrumb from '@/components/common/breadcrumb/AppBreadcrumb';
@@ -29,6 +23,8 @@ import { getApiErrorMessage } from '@/lib/api-error';
 import { AccountPageHeader, accountContainer, notify } from '@/features/account/AccountShell';
 import { useMyPreferences, useUpdatePreferences } from '@/features/account/api/rewards-queries';
 import type { Preferences } from '@/services/rewards.service';
+import { AMENITIES, BUDGETS, STYLES } from '@/features/account/lib/preference-options';
+import { OnboardingOffer } from '@/features/recommendations/components/OnboardingGate';
 
 /**
  * Keys this screen owns in `customer_preference` (docs/api/customer-wallet.md "Preferences"). The backend does not
@@ -40,34 +36,6 @@ const KEYS = {
   city: 'favouriteCity',
   budget: 'budgetPerNight',
 } as const;
-
-const STYLES = [
-  { id: 'resort', title: 'Nghỉ dưỡng & thư giãn', icon: Palmtree, desc: 'Khu nghỉ dưỡng yên tĩnh, view biển hoặc sông' },
-  { id: 'nature', title: 'Thiên nhiên & sinh thái', icon: Trees, desc: 'Nhà gỗ trong rừng thông, khu du lịch sinh thái' },
-  { id: 'foodie', title: 'Ẩm thực & văn hoá', icon: Utensils, desc: 'Khách sạn nhỏ gần phố cổ và quán ăn ngon' },
-  { id: 'business', title: 'Công tác', icon: Briefcase, desc: 'Khách sạn trung tâm, có bàn làm việc' },
-  { id: 'family', title: 'Gia đình & trẻ nhỏ', icon: Users, desc: 'Phòng rộng, hồ bơi và khu vui chơi' },
-  { id: 'chill', title: 'Cà phê & chụp ảnh', icon: Coffee, desc: 'Homestay (nhà dân) thiết kế đẹp, nhiều góc chụp' },
-];
-
-const AMENITIES = [
-  { id: 'pool', label: 'Hồ bơi' },
-  { id: 'view', label: 'View sông / view biển' },
-  { id: 'breakfast', label: 'Bữa sáng bao gồm' },
-  { id: 'spa', label: 'Spa & massage' },
-  { id: 'quiet', label: 'Phòng yên tĩnh, tầng cao' },
-  { id: 'tub', label: 'Bồn tắm' },
-  { id: 'shuttle', label: 'Đưa đón sân bay' },
-  { id: 'parking', label: 'Chỗ đậu xe' },
-];
-
-const BUDGETS = [
-  { id: '', label: 'Không giới hạn' },
-  { id: '1000000', label: 'Dưới 1 triệu' },
-  { id: '2000000', label: 'Dưới 2 triệu' },
-  { id: '4000000', label: 'Dưới 4 triệu' },
-  { id: '8000000', label: 'Dưới 8 triệu' },
-];
 
 type FormState = { styles: string[]; amenities: string[]; city: string; budget: string };
 
@@ -302,13 +270,16 @@ export default function PreferencesPage() {
         description="StayReco dùng các lựa chọn này để gợi ý khách sạn và phòng nghỉ hợp gu của bạn. Bạn có thể đổi bất cứ lúc nào."
       />
 
+      <OnboardingOffer />
+
       {query.isLoading ? (
         <LoadingState rows={3} label="Đang tải sở thích…" />
       ) : query.error || !query.data ? (
         <ErrorState title="Không tải được sở thích" error={query.error} onRetry={() => void query.refetch()} />
       ) : (
         // A save writes the stored values back to the cache, so `initial` then equals the form and it is clean.
-        <PreferencesForm initial={toForm(query.data)} />
+        // Keyed by the stored values: finishing onboarding here rewrites them, and the form starts again from those.
+        <PreferencesForm key={JSON.stringify(query.data)} initial={toForm(query.data)} />
       )}
     </div>
   );

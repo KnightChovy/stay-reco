@@ -14,6 +14,8 @@ import type {
   HotelTodayStats,
   OccupancyForecast,
   PricingRule,
+  Promotion,
+  PromotionListQuery,
   RoomTypeListing,
   Room,
   RoomListQuery,
@@ -177,4 +179,10 @@ export async function getOccupancyForecast(hotelId: string, days?: number) {
     { params: days ? { days } : undefined },
   );
   return data.data;
+}
+
+/** The hotel's discount campaigns, read only for staff (docs/api/promotions.md); the owner creates and edits them. */
+export async function getHotelPromotions(hotelId: string, params: Partial<PromotionListQuery> = {}) {
+  const { data } = await api.get<APIResponse<Promotion[]>>(`/hotels/${hotelId}/promotions`, { params });
+  return { promotions: data.data, meta: data.meta as PageMeta };
 }

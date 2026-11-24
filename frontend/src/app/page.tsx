@@ -10,6 +10,7 @@ import { StaySearchBar } from '@/features/stays/components/StaySearchBar';
 import { useHotelSearch } from '@/features/stays/api/stays-queries';
 import { formatDate, formatMoney } from '@/features/stays/lib/format';
 import { defaultStay, nightsBetween } from '@/features/stays/lib/params';
+import { HomeRecommendations } from '@/features/recommendations/components/HomeRecommendations';
 
 const FEATURED_STAYS = {
   destination: 'Đà Nẵng',
@@ -178,6 +179,9 @@ export default function HomePage() {
             </div>
           </div>
         </section>
+
+        {/* PERSONAL RECOMMENDATIONS (hidden until the recommender has a list) */}
+        <HomeRecommendations />
 
         {/* CURATED STAYS SECTION */}
         <section className="py-12 bg-white">
