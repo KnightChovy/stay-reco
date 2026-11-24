@@ -162,6 +162,8 @@ const IOS: Partial<Record<IconName, SFSymbol>> = {
   meeting_room: 'door.left.hand.open',
   cleaning_services: 'sparkles',
   contact_phone: 'phone.circle',
+  history: 'clock.arrow.circlepath',
+  add_comment: 'square.and.pencil',
 };
 
 type Props = {

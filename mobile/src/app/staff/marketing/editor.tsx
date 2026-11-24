@@ -30,6 +30,7 @@ import {
   getContent,
   getSchedules,
   getSocialAccounts,
+  generateContentImage,
   removeContentImage,
   scheduleContent,
   submitContent,
@@ -210,6 +211,15 @@ function Workspace({ content, hotelId, generated }: { content: MarketingContent;
   });
   const upload = useMutation({ mutationFn: (form: FormData) => uploadContentImage(content.id, form), onSuccess: changed });
   const removeImage = useMutation({ mutationFn: () => removeContentImage(content.id), onSuccess: changed });
+  // AI vẽ ảnh theo mô tả (để trống thì vẽ theo nội dung bài), thay ảnh hiện có; trừ vào ngân sách AI tháng.
+  const [imagePrompt, setImagePrompt] = useState('');
+  const drawImage = useMutation({
+    mutationFn: () => generateContentImage(content.id, imagePrompt.trim() ? { prompt: imagePrompt.trim() } : {}),
+    onSuccess: () => {
+      setImagePrompt('');
+      changed();
+    },
+  });
   const remove = useMutation({
     mutationFn: () => deleteContent(content.id),
     onSuccess: () => {
@@ -217,8 +227,8 @@ function Workspace({ content, hotelId, generated }: { content: MarketingContent;
       changed();
     },
   });
-  const busy = save.isPending || submit.isPending || upload.isPending || removeImage.isPending || remove.isPending;
-  const error = submit.error ?? save.error ?? upload.error ?? removeImage.error ?? remove.error;
+  const busy = save.isPending || submit.isPending || upload.isPending || removeImage.isPending || remove.isPending || drawImage.isPending;
+  const error = submit.error ?? save.error ?? upload.error ?? removeImage.error ?? remove.error ?? drawImage.error;
 
   const pickImage = async () => {
     const form = await pickImageForm();
@@ -310,6 +320,32 @@ function Workspace({ content, hotelId, generated }: { content: MarketingContent;
             <Text variant="caption" color={colors.onSurfaceVariant}>
               JPG, PNG, WebP · tối đa 10 MB
             </Text>
+            <View className="gap-2 rounded-md bg-surface-container-low p-3">
+              <Text variant="label" weight="semibold">
+                Nhờ AI vẽ ảnh
+              </Text>
+              <TextInput
+                value={imagePrompt}
+                onChangeText={setImagePrompt}
+                editable={!busy}
+                maxLength={500}
+                placeholder="Mô tả ảnh (để trống: vẽ theo nội dung bài)"
+                placeholderTextColor={colors.outline}
+                accessibilityLabel="Mô tả ảnh cho AI"
+                className="rounded-md border border-surface-container-high bg-surface-container-lowest p-3 font-be-regular text-sm text-on-surface"
+              />
+              <Button
+                label={drawImage.isPending ? 'AI đang vẽ… (tới 1 phút)' : content.mediaUrl ? 'Vẽ ảnh mới thay ảnh này' : 'Vẽ ảnh bằng AI'}
+                leadingIcon="auto_awesome"
+                variant="secondary"
+                size="sm"
+                disabled={busy || (imagePrompt.trim().length > 0 && imagePrompt.trim().length < 5)}
+                onPress={() => drawImage.mutate()}
+              />
+              <Text variant="caption" color={colors.onSurfaceVariant}>
+                Khoảng $0.07 mỗi ảnh, trừ vào ngân sách AI tháng. Mô tả tối thiểu 5 ký tự.
+              </Text>
+            </View>
           </>
         )}
 
