@@ -9,13 +9,12 @@ import json
 import os
 import re
 import unicodedata
-from datetime import date, datetime, timezone
+from datetime import date
 from pathlib import Path
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-import numpy as np
 import pandas as pd
-import psycopg2
-import psycopg2.extras
+import psycopg
 
 REPO = Path(__file__).resolve().parent.parent
 
@@ -31,11 +30,14 @@ def database_url():
                 url = m.group(1).strip()
     if not url:
         raise SystemExit("DATABASE_URL is not set (environment or backend/.env)")
-    return re.sub(r"[?&]schema=[^&]*", "", url)
+    parts = urlsplit(url)
+    query = urlencode([(key, value) for key, value in parse_qsl(parts.query, keep_blank_values=True)
+                       if key != "schema"])
+    return urlunsplit(parts._replace(query=query))
 
 
 def connect():
-    return psycopg2.connect(database_url())
+    return psycopg.connect(database_url())
 
 
 def fold(text):
@@ -54,8 +56,8 @@ def _frame(conn, sql, params=None):
 def load_ratings(conn):
     """One rating per (guest, hotel): the average overall rating of their visible reviews, as in the paper.
 
-    The overall rating is the weighted average of the five criteria (BR-12). A guest who stayed several times is
-    represented by the mean of those reviews; the timestamp is that of the latest one (used by the time-based split).
+    The overall rating is the weighted average of the five criteria (BR-12). The timestamp is that of the latest review;
+    the paper's cold-start split keeps each simulated new guest's earliest stays.
     """
     df = _frame(conn, """
         SELECT r.customer_id::text AS user_id, r.hotel_id::text AS item_id,
@@ -83,6 +85,10 @@ def load_hotels(conn):
                          WHERE ha.hotel_id = h.hotel_id), '') AS amenities,
                COALESCE((SELECT string_agg(rt.name || ' ' || COALESCE(rt.description, ''), '. ')
                          FROM room_type rt WHERE rt.hotel_id = h.hotel_id), '') AS rooms,
+               COALESCE((SELECT string_agg(DISTINCT a.name, ', ') FROM room_type rt
+                         JOIN room_type_amenity rta ON rta.room_type_id = rt.room_type_id
+                         JOIN amenity a ON a.amenity_id = rta.amenity_id
+                         WHERE rt.hotel_id = h.hotel_id), '') AS room_amenities,
                (SELECT MIN(p.price_per_night)::float FROM room_type rt
                   JOIN price p ON p.room_type_id = rt.room_type_id
                  WHERE rt.hotel_id = h.hotel_id AND p.room_id IS NULL AND p.rule_type = 'BASE'
@@ -91,27 +97,25 @@ def load_hotels(conn):
         WHERE h.status = 'ACTIVE' AND hp.status <> 'SUSPENDED'
         ORDER BY h.hotel_id
     """)
-    df["text"] = (df["name"] + ". " + df["city"] + ". " + df["description"] + " Tiện nghi: "
-                  + df["amenities"] + ". Phòng: " + df["rooms"])
+    stars = df["star_rating"].map(lambda value: "" if pd.isna(value) else f"sao{int(value)}")
+    df["text"] = (
+        "hotel " + df["name"] + " " + df["city"] + " " + stars + " " + df["description"]
+        + " " + df["amenities"] + " " + df["rooms"] + " " + df["room_amenities"]
+    ).map(fold)
     return df
 
 
 def _age_group(dob, today):
     if dob is None or pd.isna(dob):
-        return "unknown"
+        return None
     age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
     return "<25" if age < 25 else "25-34" if age < 35 else "35-44" if age < 45 else "45+"
 
 
 def load_customers(conn):
-    """Every customer, with the demographic groups and the preferences screen (docs/api/customer-wallet.md).
-
-    Demographic groups follow the paper (age group, country, trip type), with the first travel style standing in for
-    the trip type. Missing values are a group of their own ('unknown'), so a guest who filled nothing in still lands
-    in a group.
-    """
+    """Active customers with their demographic fields and content preferences."""
     df = _frame(conn, """
-        SELECT c.customer_id::text AS user_id, c.date_of_birth, c.nationality
+        SELECT c.customer_id::text AS user_id, c.date_of_birth, c.nationality, c.gender::text AS gender
         FROM customer c JOIN user_account u ON u.user_account_id = c.customer_id
         WHERE u.status = 'ACTIVE'
         ORDER BY c.customer_id
@@ -119,16 +123,15 @@ def load_customers(conn):
     prefs = _frame(conn, """
         SELECT customer_id::text AS user_id, preference_key, preference_value
         FROM customer_preference
-        WHERE preference_key IN ('travelStyles', 'roomAmenities', 'favouriteCity', 'budgetPerNight')
+        WHERE preference_key IN ('likedHotels', 'favouriteCity', 'roomAmenities', 'preferredViews',
+                                 'travelStyles', 'budgetPerNight')
     """)
     by_user = {u: dict(zip(g["preference_key"], g["preference_value"])) for u, g in prefs.groupby("user_id")}
 
     today = date.today()
     df["age_group"] = [_age_group(d, today) for d in df["date_of_birth"]]
-    df["country"] = df["nationality"].fillna("unknown").map(lambda s: fold(s) or "unknown")
+    df["country"] = df["nationality"].fillna("").map(lambda s: fold(s) or None)
     df["preferences"] = df["user_id"].map(lambda u: by_user.get(u, {}))
-    df["trip_type"] = df["preferences"].map(
-        lambda p: (p.get("travelStyles") or "unknown").split(",")[0] or "unknown")
     return df.drop(columns=["date_of_birth", "nationality"])
 
 
@@ -156,51 +159,68 @@ def fail_run(conn, run_id, error):
     conn.commit()
 
 
-def finish_run(conn, run_id, metrics, hyperparameters, rows, keep_runs=3):
-    """Writes the recommendations and marks the run COMPLETED in one transaction.
+def finish_run(conn, run_id, algorithm, rows, metrics=None, hyperparameters=None):
+    """Publish rows, the evaluation and the status together; retain two completed snapshots.
 
-    The API serves the newest COMPLETED run, so readers switch from the old list to the new one at the commit, never
-    seeing half of it. Recommendations of all but the last `keep_runs` completed runs are deleted, except rows a
-    booking points at (booking.recommendation_id), which are the evidence of a conversion.
+    `metrics` are the offline evaluation of the served formula (reco_pipeline.evaluate), None when there were too few
+    ratings to evaluate. `hyperparameters` is merged into what start_run stored, with the comparison to the baselines.
     """
     def num(key):
-        v = metrics.get(key)
-        return None if v is None or (isinstance(v, float) and np.isnan(v)) else round(float(v), 4)
+        value = (metrics or {}).get(key)
+        return None if value is None or value != value else round(float(value), 4)
 
     with conn.cursor() as cur:
-        psycopg2.extras.execute_values(cur, """
-            INSERT INTO recommendation (customer_id, hotel_id, model_run_id, score, rank, reason)
-            VALUES %s
-        """, [(r["customer_id"], r["hotel_id"], run_id, round(float(r["score"]), 3), r["rank"], r["reason"])
-              for r in rows], page_size=2000)
+        with cur.copy("""
+            COPY recommendation (model_run_id, customer_id, hotel_id, score, rank, reason)
+            FROM STDIN
+        """) as copy:
+            for row in rows:
+                copy.write_row((run_id, *row))
         cur.execute("""
             UPDATE model_run SET status = 'COMPLETED', finished_at = now(),
                    rmse = %s, mae = %s, k = %s, relevance_threshold = %s,
                    precision_at_k = %s, recall_at_k = %s, ndcg_at_k = %s, coldstart_coverage = %s,
-                   hyperparameters = %s
+                   hyperparameters = COALESCE(hyperparameters, '{}'::jsonb) || %s::jsonb
             WHERE model_run_id = %s
-        """, (num("rmse"), num("mae"), metrics.get("k"), metrics.get("threshold"),
+        """, (num("rmse"), num("mae"), (metrics or {}).get("k"), (metrics or {}).get("threshold"),
               num("precision"), num("recall"), num("ndcg"), num("coldstart_coverage"),
-              json.dumps(hyperparameters, default=_json_default), run_id))
+              json.dumps(hyperparameters or {}, default=_json_default), run_id))
         cur.execute("""
-            DELETE FROM recommendation r
-            WHERE r.model_run_id NOT IN (
-                    SELECT model_run_id FROM model_run WHERE status = 'COMPLETED'
-                    ORDER BY finished_at DESC LIMIT %s)
-              AND NOT EXISTS (SELECT 1 FROM booking b WHERE b.recommendation_id = r.recommendation_id)
-        """, (keep_runs,))
+            WITH obsolete AS (
+                SELECT r.recommendation_id
+                FROM recommendation r JOIN model_run m USING (model_run_id)
+                WHERE m.algorithm = %s AND m.status = 'COMPLETED'
+                  AND m.model_run_id NOT IN (
+                      SELECT model_run_id FROM model_run WHERE algorithm = %s AND status = 'COMPLETED'
+                      ORDER BY started_at DESC, model_run_id DESC LIMIT 2)
+                  AND NOT EXISTS (SELECT 1 FROM booking b WHERE b.recommendation_id = r.recommendation_id)
+                FOR UPDATE OF r SKIP LOCKED
+            )
+            DELETE FROM recommendation r USING obsolete
+            WHERE r.recommendation_id = obsolete.recommendation_id
+        """, (algorithm, algorithm))
     conn.commit()
 
 
-def _json_default(v):
-    if isinstance(v, (np.integer,)):
-        return int(v)
-    if isinstance(v, (np.floating,)):
-        return None if np.isnan(v) else float(v)
-    if isinstance(v, (datetime, date)):
-        return v.isoformat()
-    raise TypeError(type(v))
+def _json_default(value):
+    """numpy numbers in the comparison; NaN (nothing to measure) as null."""
+    value = float(value)
+    return None if value != value else value
 
 
-def utc_now():
-    return datetime.now(timezone.utc)
+def load_booked(conn):
+    with conn.cursor() as cur:
+        cur.execute("""
+            SELECT DISTINCT customer_id::text, hotel_id::text FROM booking
+            WHERE status NOT IN ('CANCELLED', 'EXPIRED')
+        """)
+        booked = {}
+        for customer, hotel in cur:
+            booked.setdefault(customer, set()).add(hotel)
+    return booked
+
+
+def load_amenities(conn):
+    with conn.cursor() as cur:
+        cur.execute("SELECT amenity_id::text, name FROM amenity")
+        return dict(cur.fetchall())

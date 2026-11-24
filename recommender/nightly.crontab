@@ -1,0 +1,3 @@
+# Install in the deployment host's crontab. The times below assume the host uses UTC.
+# Run at 02:00 in Vietnam. Replace the Docker image tag with the deployed release tag.
+0 19 * * * /usr/bin/docker run --rm --env-file /etc/stayreco/recommender.env stayreco-recommender:local

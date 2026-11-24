@@ -1,64 +1,40 @@
-# recommender
+# StayReco recommender
 
-The offline job that turns guests' stays and reviews into the hotel lists the app serves (`GET /me/recommendations`, the assistant's search). It runs the method of the paper in [`../stayreco-experiment/`](../stayreco-experiment/README.md) on the app's own database: the model code is **imported from there, not copied**, so the numbers here are produced by the same code as the paper's.
+The Python batch reads Postgres, evaluates the served formula, and publishes a new `model_run` with up to 100 ranked hotels per active customer plus one list for signed-out visitors (`recommendation`). NestJS serves the newest completed run: `GET /me/recommendations`, the assistant, and `GET /hotels?sort=recommended` for a signed-in customer, which orders the hotels that pass the search filters by this rank (hotels past the list fall back to stars, price and name). A hotel the customer booked (not `CANCELLED` or `EXPIRED`) is left out of their list, but search still shows it.
 
-```
-Postgres (review, hotel, customer, customer_preference)
-   │  reco_db.py: read
-   ▼
-reco_pipeline.py
-   1. evaluate: the paper's cold-start split → grid search on validation → full-catalogue ranking on test
-   2. recommend: refit on everything → score every (customer, hotel) → top-K with a reason
-   │  reco_db.py: write
-   ▼
-Postgres (model_run, recommendation)  ──►  backend RecommendationsService  ──►  API, assistant
-```
+## The formula
 
-## Run
+Two-sided shrinkage (`weights.py`, `k=40`, `k_item=5`, `k_c=1`) blends SVD++, TF-IDF content and a demographic group mean (`components.py`, ported from `stayreco-experiment/models`). Below 50 ratings, the CF weight goes to content. The content query of a customer is built from their preferences: favourite city, travel styles, room amenities, preferred views and hotels liked at onboarding. A hotel whose cheapest room is more than 20% over `budgetPerNight` is ranked after the others, not removed. Each row carries one reason in Vietnamese saying which part carried it (similar guests, a hotel they rated highly, their preferences, guests of their group), marked "Khách sạn mới" for a hotel nobody has rated.
 
-Uses the paper's conda environment (`stayreco-experiment/environment.yml`) plus a Postgres driver:
+## Evaluation
 
-```bash
-conda activate stayreco
-pip install -r recommender/requirements.txt     # once: psycopg2-binary
+Every run first evaluates the served formula with the paper's protocol, imported from `stayreco-experiment/` (`data/preprocessor.py` cold-start split: 20% of hotels hidden, 30% of guests cut to their first 0-19 stays; `evaluation/ranking.py` full-catalogue ranking, K = 10), against CF only, content only and popularity. The served method's numbers go on `model_run` (`rmse`, `mae`, `precision_at_k`, `recall_at_k`, `ndcg_at_k`, `coldstart_coverage`) and the whole comparison in `hyperparameters.comparison`. Below 50 ratings the evaluation is skipped and the list is still published.
 
-python recommender/train.py --dry-run           # evaluate only, print the comparison, write nothing
-python recommender/train.py                     # evaluate, then publish a new list for every customer
-```
-
-`DATABASE_URL` is read from the environment, else from `backend/.env`. A run takes about 15 s on the seeded data. Run it on a schedule (nightly is plenty): each run is a new `model_run`, the API serves the newest `COMPLETED` one, and the lists of all but the last three runs are deleted (except rows a booking points at).
-
-On a fresh database there is nothing to learn from. `npm run db:seed:reco` in `backend/` generates it: 66 hotels in 10 cities (13 listed recently, with no stays), 900 guests (a fifth who never stayed, half who filled in the preferences screen) and about 4,800 reviewed stays. The ratings are generated from a hidden taste per guest and a style per hotel, so there is a real pattern to learn; see the header of `backend/prisma/seed-reco.ts`.
-
-## The method
-
-From the paper, unchanged:
-
-| Part | Paper code | On the app's data |
-|---|---|---|
-| Collaborative filtering | `models/cf_svdpp.py`: SVD++, 50 factors, 30 epochs | review overall rating per (guest, hotel), averaged over their reviews (as in the paper) |
-| Content | `models/content_based.py`: TF-IDF + item kNN on rating deviations | name, city, description, amenities and room types of each hotel |
-| Demographic | `models/demographic.py`: group mean, shrunk to the hotel mean | age group, nationality, first travel style |
-| Weights | `utils/alpha_scheduler.py` `compute_two_stage_alpha` | `α = n_u/(n_u+k) · m_i/(m_i+k')`, `π = n_u/(n_u+k_c)`, γ = 0 for a hotel nobody rated |
-| Evaluation | `data/preprocessor.py`, `evaluation/ranking.py` | 20% of hotels hidden, 30% of guests cut to 0-19 stays, ranking over the whole catalogue |
-
-Added here, because the app has data the paper's datasets did not:
-
-1. **The preferences screen.** Travel styles, amenities and favourite city become a query in the content model's TF-IDF space; a guest with preferences gets `has_preferences=True` in the weight rule (π = 1). The strength (`pref_gain`) and whether to use them at all are chosen on validation with the other parameters.
-2. **A budget pre-filter** on the stored list: a hotel whose cheapest room is more than 20% over the guest's budget per night is left out (Knowledge pre-filter, as in the project design). Dates and free rooms are checked at query time by the API.
-3. **Reasons.** Each row says which part carried it: similar guests (CF), similarity to a hotel the guest rated highly (content), their preferences, or guests of the same age group and nationality (demographic). A hotel nobody has rated is marked as new.
-
-## Results on the seeded data
-
-`python recommender/train.py --dry-run`, seed 42 (test split, K = 10):
+On the seeded data (`npm run db:seed:reco`, seed 42):
 
 | Method | RMSE | P@10 | R@10 | NDCG@10 | New@10 | New hotels shown |
 |---|---|---|---|---|---|---|
-| **Two-sided + preferences** (served) | **0.748** | **0.085** | **0.569** | **0.348** | 0.379 | **100%** |
-| Two-sided, paper as is | 0.757 | 0.074 | 0.492 | 0.276 | 0.305 | 97% |
-| Fixed α = 0.3 | 0.770 | 0.059 | 0.380 | 0.210 | 0.134 | 93% |
-| CF only (SVD++) | 0.781 | 0.054 | 0.330 | 0.209 | 0.124 | 33% |
-| Content only | 0.767 | 0.065 | 0.418 | 0.219 | 0.166 | 93% |
-| Popularity | 0.837 | 0.033 | 0.203 | 0.111 | 0.011 | 17% |
+| **Two-sided (served)** | **0.782** | **0.094** | **0.485** | **0.290** | 0.174 | **100%** |
+| CF only (SVD++) | 0.786 | 0.076 | 0.374 | 0.252 | 0.099 | 35% |
+| Content only | 0.787 | 0.090 | 0.457 | 0.274 | 0.145 | 100% |
+| Popularity | 0.838 | 0.055 | 0.265 | 0.151 | 0.004 | 13% |
 
-These are numbers on generated data, which has a pattern by construction; they show the pipeline works end to end, not how it will do on real guests. Every run stores its own comparison in `model_run.hyperparameters.comparison`, so the real numbers will be there once real reviews accumulate. `booking.recommendation_id` is set when a guest books a hotel from their list through the assistant, which is the online measure to watch.
+The weights are fixed rather than tuned on a validation split, which is simpler to serve but scores below the earlier tuned pipeline on the same data (RMSE 0.748, NDCG@10 0.348). These are numbers on generated data; they show the pipeline works end to end, not how it will do on real guests.
+
+## Run locally or deploy
+
+Apply the backend migrations before running the image. Build with Docker so the SVD++ extension compiles in Linux; the paper's folder is a second build context:
+
+```sh
+docker build --build-context paper=stayreco-experiment -t stayreco-recommender:local recommender
+docker run --rm --env-file /etc/stayreco/recommender.env stayreco-recommender:local --dry-run
+docker run --rm --env-file /etc/stayreco/recommender.env stayreco-recommender:local
+```
+
+`--dry-run` evaluates and scores without writing a run; `--top-k` changes how many hotels are stored per customer. The env file supplies `DATABASE_URL` for a PostgreSQL host reachable **from inside the container** (`host.docker.internal` for a database on the Docker host; attach the application's network if it is a service name). Install [nightly.crontab](./nightly.crontab) in the host's scheduler with the published image tag. A run on the seeded data takes about 20 s.
+
+COPY, the metrics and the status are published in one transaction. A failed job leaves the previous snapshot available and records `FAILED`. The batch keeps the rows of the two latest completed snapshots and any older rows referenced by bookings. Before the first new snapshot, NestJS can still serve the previous algorithm's last completed run.
+
+For a local experiment, run the base seed then `npm run db:seed:reco` in `backend/` against a dedicated database.
+
+Run the Python tests in the image with the repository's `recommender/` directory mounted as the working directory and `/venv/bin/python -m unittest discover -s tests`. Set `RECOMMENDER_TEST_DATABASE_URL` to a migrated test database to include the transaction test.
