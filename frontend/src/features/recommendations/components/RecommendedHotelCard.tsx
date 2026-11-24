@@ -13,7 +13,7 @@ const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1566073771259-6a850609
 export function RecommendedHotelCard({ hotel, className }: { hotel: RecommendedHotel; className?: string }) {
   return (
     <Link
-      href={`/hotels/${hotel.id}`}
+      href={`/hotels/${hotel.id}${hotel.recommendationId ? `?recommendationId=${hotel.recommendationId}` : ""}`}
       className={cn(
         "group flex flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-xs transition-shadow hover:shadow-md focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none",
         className,

@@ -1,6 +1,6 @@
 "use client";
 
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CompleteOnboardingInput, Onboarding } from "@stayreco/shared";
 import { useAuthStore } from "@/lib/auth-store";
 import * as service from "@/services/recommendations.service";
@@ -10,8 +10,8 @@ import { notificationKeys } from "@/features/notifications/api/notification-quer
 
 export const recommendationKeys = {
   all: ["recommendations"] as const,
-  list: (personal: boolean, params: RecommendationParams) =>
-    [...recommendationKeys.all, personal ? "me" : "public", params] as const,
+  list: (customerId: string | undefined, params: RecommendationParams) =>
+    [...recommendationKeys.all, customerId ?? "public", params] as const,
   onboarding: () => [...recommendationKeys.all, "onboarding"] as const,
 };
 
@@ -25,12 +25,11 @@ export function useRecommendations(params: RecommendationParams = {}) {
   const hasHydrated = useAuthStore((state) => state.hasHydrated);
   const personal = user?.role === "customer";
   return useQuery({
-    queryKey: recommendationKeys.list(personal, params),
+    queryKey: recommendationKeys.list(personal ? user.id : undefined, params),
     queryFn: () => service.getRecommendations(params, personal),
     // Waiting for the stored sign-in avoids asking for the public list and then the personal one.
     enabled: hasHydrated,
     staleTime: 5 * 60 * 1000,
-    placeholderData: keepPreviousData,
   });
 }
 

@@ -69,10 +69,10 @@ function sortRooms(rooms: RoomTypeListing[], query: StayQuery) {
   });
 }
 
-function RoomOffer({ room, query, hotelId }: { room: RoomTypeListing; query: StayQuery; hotelId: string }) {
+function RoomOffer({ room, query, hotelId, recommendationId }: { room: RoomTypeListing; query: StayQuery; hotelId: string; recommendationId?: string }) {
   const { roomType, offer } = room;
   const image = roomType.images[0]?.url ?? FALLBACK_IMAGE;
-  const href = `/hotels/${hotelId}/rooms/${roomType.id}?${staySearch(query)}`;
+  const href = `/hotels/${hotelId}/rooms/${roomType.id}?${staySearch(query, recommendationId)}`;
   const blocker = offerBlocker(offer, query);
   const shownAmenities = roomType.amenities.slice(0, 5);
   const moreAmenities = roomType.amenities.length - shownAmenities.length;
@@ -134,7 +134,7 @@ function RoomOffer({ room, query, hotelId }: { room: RoomTypeListing; query: Sta
   );
 }
 
-export function HotelDetail({ hotelId, query }: { hotelId: string; query: StayQuery }) {
+export function HotelDetail({ hotelId, query, recommendationId }: { hotelId: string; query: StayQuery; recommendationId?: string }) {
   const router = useRouter();
   const { data, isLoading, isFetching, isPlaceholderData, error, refetch } = useHotelListing(hotelId, query);
   const rating = useHotelRatingSummary(hotelId).data;
@@ -208,7 +208,7 @@ export function HotelDetail({ hotelId, query }: { hotelId: string; query: StayQu
 
   const primaryAction = (
     <Link
-      href={cheapest ? `/hotels/${hotelId}/rooms/${cheapest.roomType.id}?${staySearch(query)}` : "#rooms"}
+      href={cheapest ? `/hotels/${hotelId}/rooms/${cheapest.roomType.id}?${staySearch(query, recommendationId)}` : "#rooms"}
       className={cn(buttonVariants(), "h-11 px-5 whitespace-nowrap")}
     >
       {cheapest ? "Chọn phòng" : "Xem phòng"}
@@ -277,7 +277,7 @@ export function HotelDetail({ hotelId, query }: { hotelId: string; query: StayQu
                 initialCheckOut={query.checkOut}
                 initialGuests={query.guests}
                 initialRooms={query.rooms}
-                onSearch={(params) => router.replace(`/hotels/${hotelId}?${staySearch(params)}`, { scroll: false })}
+                onSearch={(params) => router.replace(`/hotels/${hotelId}?${staySearch(params, recommendationId)}`, { scroll: false })}
               />
             </section>
 
@@ -290,7 +290,7 @@ export function HotelDetail({ hotelId, query }: { hotelId: string; query: StayQu
               </div>
               <div className={cn("space-y-4 transition-opacity", updating && "opacity-60")}>
                 {roomTypes.map((room) => (
-                  <RoomOffer key={room.roomType.id} room={room} query={query} hotelId={hotelId} />
+                  <RoomOffer key={room.roomType.id} room={room} query={query} hotelId={hotelId} recommendationId={recommendationId} />
                 ))}
               </div>
               {roomTypes.length === 0 && (

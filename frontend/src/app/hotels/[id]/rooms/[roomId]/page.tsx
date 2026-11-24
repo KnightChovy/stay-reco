@@ -12,6 +12,7 @@ function RoomDetailContent() {
   return (
     <RoomTypeDetail
       hotelId={id}
+      recommendationId={searchParams.get("recommendationId") ?? undefined}
       roomTypeId={roomId}
       query={parseStayQuery(new URLSearchParams(searchParams.toString()))}
     />
