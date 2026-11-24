@@ -11,6 +11,8 @@ import type {
   HotelSummary,
   HotelTodayStats,
   PageMeta,
+  Promotion,
+  PromotionListQuery,
   RejectChangeInput,
   Room,
   RoomListQuery,
@@ -108,4 +110,10 @@ export const getRooms = async (hotelId: string, params: Partial<RoomListQuery> =
 export const cleanRoom = async (roomId: string) => {
   const { data } = await apiService.post<APIResponse<Room>>(`/rooms/${roomId}/clean`);
   return data.data;
+};
+
+/** Ưu đãi của khách sạn, chỉ đọc: lễ tân trả lời khách; chủ khách sạn tạo, đơn đặt tự áp dụng. */
+export const getHotelPromotions = async (hotelId: string, params: Partial<PromotionListQuery> = {}) => {
+  const { data } = await apiService.get<APIResponse<Promotion[]>>(`/hotels/${hotelId}/promotions`, { params });
+  return { promotions: data.data, meta: data.meta as PageMeta };
 };

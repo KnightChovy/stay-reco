@@ -19,6 +19,7 @@ const groups: { title: string; items: Item[] }[] = [
       { icon: 'key', label: 'Check-in & Gán phòng', href: '/staff/check-in' },
       { icon: 'logout', label: 'Check-out', href: '/staff/check-out' },
       { icon: 'currency_exchange', label: 'Yêu cầu hoàn tiền', href: '/staff/refunds' },
+      { icon: 'sell', label: 'Ưu đãi của khách sạn', href: '/staff/promotions' },
       { icon: 'warning', label: 'Cảnh báo nghiệp vụ', href: '/staff/alerts', badge: alerts.filter((a) => a.status !== 'Đã giải quyết').length, tone: 'danger' },
     ],
   },
