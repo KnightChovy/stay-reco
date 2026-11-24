@@ -37,6 +37,8 @@ const IOS: Partial<Record<IconName, SFSymbol>> = {
   flag: 'flag',
   devices: 'laptopcomputer.and.iphone',
   star_half: 'star.leadinghalf.filled',
+  work: 'briefcase',
+  save: 'square.and.arrow.down',
   shield: 'shield',
   verified_user: 'checkmark.shield',
   receipt_long: 'doc.text',
