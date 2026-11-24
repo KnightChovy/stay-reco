@@ -5,6 +5,7 @@ import { isoDateTime, responseSchemas } from './registry';
 export const recommendedHotelResponseSchema = z
   .object({
     id: z.uuid(),
+    recommendationId: z.uuid().nullable().optional(),
     name: z.string(),
     city: z.string(),
     address: z.string(),
@@ -39,6 +40,7 @@ export type Recommendations = z.infer<typeof recommendationsResponseSchema>;
 export const assistantHotelResponseSchema = z
   .object({
     id: z.uuid(),
+    recommendationId: z.uuid().nullable().optional(),
     name: z.string(),
     city: z.string(),
     starRating: z.number().int().nullable(),
@@ -58,6 +60,7 @@ export const bookingProposalResponseSchema = z
     id: z.uuid(),
     hotelId: z.uuid(),
     hotelName: z.string(),
+    recommendationId: z.uuid().optional(),
     roomTypeId: z.uuid(),
     roomTypeName: z.string(),
     checkIn: z.iso.date(),

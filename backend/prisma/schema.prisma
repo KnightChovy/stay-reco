@@ -1073,6 +1073,8 @@ model Recommendation {
   roomType         RoomType? @relation(fields: [roomTypeId], references: [roomTypeId])
   bookings         Booking[]
 
+  @@unique([modelRunId, customerId, hotelId])
+  @@index([customerId, modelRunId])
   @@map("recommendation")
 }
 

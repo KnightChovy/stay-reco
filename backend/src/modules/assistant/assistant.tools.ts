@@ -27,6 +27,7 @@ export interface ToolCustomer {
 /** What the tools collected during one turn, shown to the customer next to the reply. */
 export interface TurnState {
   hotels: Map<string, AssistantHotel>;
+  priorRecommendations: Map<string, string>;
   proposal: BookingProposal | null;
   /** Room types looked at, so the next turn can book one by its real id instead of guessing it. */
   roomTypes: Map<string, { hotelName: string; name: string }>;
@@ -203,27 +204,17 @@ export class AssistantTools {
           ? String(args.freeCancellation)
           : undefined,
       page: 1,
-      pageSize: 100,
+      pageSize: SEARCH_RESULTS,
     });
     if (!parsed.success) return invalid(parsed.error);
 
-    const found = await this.stays.search(parsed.data);
+    const found = await this.stays.search(parsed.data, customer.id);
     const ids = found.items.map((h) => h.id);
     const [scores, cards] = await Promise.all([
       this.recommendations.personalScores(customer.id, ids),
       this.recommendations.cards(ids),
     ]);
-    // The model's list first, in its order; then the rest by guest rating, then price.
-    const ranked = [...found.items].sort((a, b) => {
-      const ra = scores.get(a.id)?.rank ?? Infinity;
-      const rb = scores.get(b.id)?.rank ?? Infinity;
-      if (ra !== rb) return ra - rb;
-      const ga = cards.get(a.id)?.rating ?? 0;
-      const gb = cards.get(b.id)?.rating ?? 0;
-      return gb - ga || a.fromTotal - b.fromTotal;
-    });
-
-    const hotels = ranked.slice(0, SEARCH_RESULTS).map((h) => {
+    const hotels = found.items.map((h) => {
       const card = cards.get(h.id);
       const score = scores.get(h.id);
       const shown: AssistantHotel = {
@@ -237,6 +228,7 @@ export class AssistantTools {
         nights: h.nights,
         pricePerNightFrom: card?.pricePerNightFrom ?? null,
         reason: score?.reason ?? null,
+        recommendationId: score?.recommendationId ?? null,
       };
       state.hotels.set(h.id, shown);
       return {
@@ -254,7 +246,7 @@ export class AssistantTools {
     });
     return {
       nights: found.items[0]?.nights ?? null,
-      matching: found.items.length,
+      matching: found.meta.total,
       hotels,
     };
   }
@@ -285,6 +277,7 @@ export class AssistantTools {
         nights: null,
         pricePerNightFrom: h.pricePerNightFrom,
         reason: h.reason,
+        recommendationId: h.recommendationId ?? null,
       });
     }
     return {
@@ -427,6 +420,9 @@ export class AssistantTools {
     const proposal: BookingProposal = {
       id: randomUUID(),
       hotelId: listing.hotel.id,
+      recommendationId:
+        state.hotels.get(listing.hotel.id)?.recommendationId ??
+        state.priorRecommendations.get(listing.hotel.id),
       hotelName: listing.hotel.name,
       roomTypeId: item.roomType.id,
       roomTypeName: item.roomType.name,

@@ -56,11 +56,27 @@ export class RecommendationsService {
           modelRunId: run.modelRunId,
           customerId: customer,
           hotelId: inCity ? { in: inCity } : { not: null },
-          hotel: bookableHotel,
+          hotel: {
+            ...bookableHotel,
+            ...(customerId && {
+              bookings: {
+                none: {
+                  customerId,
+                  status: { notIn: ['CANCELLED', 'EXPIRED'] },
+                },
+              },
+            }),
+          },
         },
         orderBy: { rank: 'asc' },
         take: query.limit,
-        select: { hotelId: true, rank: true, score: true, reason: true },
+        select: {
+          recommendationId: true,
+          hotelId: true,
+          rank: true,
+          score: true,
+          reason: true,
+        },
       });
 
     let personalized = customerId !== null;
@@ -85,6 +101,7 @@ export class RecommendationsService {
       return [
         {
           ...card,
+          recommendationId: personalized ? r.recommendationId : null,
           rank: r.rank ?? 0,
           score: toNumber(r.score),
           reason: r.reason,
@@ -199,17 +216,21 @@ export class RecommendationsService {
     );
   }
 
-  private latestRun() {
-    return this.prisma.modelRun.findFirst({
-      where: { status: 'COMPLETED' },
-      orderBy: { finishedAt: 'desc' },
-      select: {
-        modelRunId: true,
-        algorithm: true,
-        version: true,
-        finishedAt: true,
-      },
-    });
+  private async latestRun() {
+    const latest = (algorithm: string) =>
+      this.prisma.modelRun.findFirst({
+        where: { algorithm, status: 'COMPLETED', finishedAt: { not: null } },
+        orderBy: [{ startedAt: 'desc' }, { modelRunId: 'desc' }],
+        select: {
+          modelRunId: true,
+          algorithm: true,
+          version: true,
+          finishedAt: true,
+        },
+      });
+    return (
+      (await latest('two-sided-shrinkage')) ?? latest('stayreco-two-sided')
+    );
   }
 
   /** Hotels whose city matches, ignoring case and Vietnamese accents, as the search does. */

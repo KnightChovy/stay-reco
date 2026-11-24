@@ -23,7 +23,6 @@ import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { BookingsService } from '../bookings/bookings.service';
 import { AiService } from '../marketing/ai.service';
-import { RecommendationsService } from '../recommendations/recommendations.service';
 import { systemPrompt } from './assistant.prompt';
 import {
   AssistantTools,
@@ -68,7 +67,6 @@ export class AssistantService {
     private readonly ai: AiService,
     private readonly tools: AssistantTools,
     private readonly bookings: BookingsService,
-    private readonly recommendations: RecommendationsService,
   ) {}
 
   async listMine(customerId: string): Promise<ConversationSummary[]> {
@@ -175,6 +173,7 @@ export class AssistantService {
     let booking: Booking;
     try {
       booking = await this.bookings.create(user, {
+        recommendationId: proposal.recommendationId,
         items: [{ roomTypeId: proposal.roomTypeId, rooms: proposal.rooms }],
         checkIn: proposal.checkIn,
         checkOut: proposal.checkOut,
@@ -191,12 +190,6 @@ export class AssistantService {
       throw err;
     }
 
-    // The conversion the recommender is judged by: a booking of a hotel it recommended to this customer.
-    const score = (
-      await this.recommendations.personalScores(user.accountId, [
-        proposal.hotelId,
-      ])
-    ).get(proposal.hotelId);
     await this.prisma.$transaction([
       this.prisma.message.update({
         where: { messageId: message.messageId },
@@ -218,14 +211,6 @@ export class AssistantService {
           content: `Đã giữ phòng ${proposal.roomTypeName} tại ${proposal.hotelName}, mã đặt phòng ${booking.code}. Vui lòng thanh toán để hoàn tất.`,
         },
       }),
-      ...(score
-        ? [
-            this.prisma.booking.update({
-              where: { bookingId: booking.id },
-              data: { recommendationId: score.recommendationId },
-            }),
-          ]
-        : []),
     ]);
     return booking;
   }
@@ -238,13 +223,17 @@ export class AssistantService {
     input: SendAssistantMessageInput,
   ): Promise<AssistantReply> {
     const customer = await this.customer(user.accountId);
-    const history = conversationId ? await this.history(conversationId) : [];
+    const priorRecommendations = new Map<string, string>();
+    const history = conversationId
+      ? await this.history(conversationId, priorRecommendations)
+      : [];
     const contents: Content[] = merge([
       ...history,
       { role: 'user', parts: [{ text: input.content }] },
     ]);
     const state: TurnState = {
       hotels: new Map(),
+      priorRecommendations,
       proposal: null,
       roomTypes: new Map(),
     };
@@ -362,7 +351,10 @@ export class AssistantService {
 
   /** The stored messages as model turns. Hotels and proposals shown earlier are restated with their ids, so the
    * model can refer back to "the second one" without searching again. */
-  private async history(conversationId: string): Promise<Content[]> {
+  private async history(
+    conversationId: string,
+    priorRecommendations: Map<string, string>,
+  ): Promise<Content[]> {
     const rows = await this.prisma.message.findMany({
       where: { conversationId },
       orderBy: { createdAt: 'desc' },
@@ -374,6 +366,10 @@ export class AssistantService {
       const meta = (m.metadata ?? {}) as MessageMeta;
       const notes: string[] = [];
       if (meta.hotels?.length) {
+        for (const hotel of meta.hotels) {
+          if (hotel.recommendationId)
+            priorRecommendations.set(hotel.id, hotel.recommendationId);
+        }
         notes.push(
           `[Đã hiển thị: ${meta.hotels.map((h) => `${h.name} (hotelId=${h.id})`).join('; ')}]`,
         );

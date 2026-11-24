@@ -149,6 +149,7 @@ export const createBookingSchema = z
     pointsToUse: z.number().int().min(0).max(100_000_000).optional(),
     /** Add-ons booked with the stay and paid in its transfer; only active, prebookable add-ons of the hotel. */
     addOns: addOnLinesSchema.optional(),
+    recommendationId: z.uuid().optional(),
     expectedTotal: moneySchema,
   })
   .superRefine((v, ctx) => {
