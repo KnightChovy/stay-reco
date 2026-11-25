@@ -21,6 +21,7 @@ import { CancellationPolicyForm } from "./CancellationPolicyForm";
 import { HotelImagesManager } from "./HotelImagesManager";
 import { HotelInfoForm } from "./HotelInfoForm";
 import { HotelPoliciesForm } from "./HotelPoliciesForm";
+import { LateCheckoutPolicyForm } from "./LateCheckoutPolicyForm";
 import { OnboardingStrip } from "./OnboardingProgress";
 import { RoomConfigForm } from "./RoomConfigForm";
 
@@ -29,6 +30,7 @@ const tabs = [
   { value: "amenities", label: "Tiện ích" },
   { value: "policies", label: "Chính sách" },
   { value: "cancellation", label: "Huỷ phòng" },
+  { value: "late-checkout", label: "Trả phòng muộn" },
   { value: "room-config", label: "Cấu hình phòng" },
   { value: "images", label: "Hình ảnh" },
 ] as const;
@@ -130,6 +132,9 @@ function HotelDetail({ hotel }: { hotel: Hotel }) {
           </TabsContent>
           <TabsContent value="cancellation" className="pt-4">
             <CancellationPolicyForm hotel={hotel} />
+          </TabsContent>
+          <TabsContent value="late-checkout" className="pt-4">
+            <LateCheckoutPolicyForm hotel={hotel} />
           </TabsContent>
           <TabsContent value="room-config" className="pt-4">
             <RoomConfigForm hotel={hotel} />

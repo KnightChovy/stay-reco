@@ -7,7 +7,7 @@ import {
   useQueryClient,
   type QueryKey,
 } from "@tanstack/react-query";
-import type { ActionItem } from "@stayreco/shared";
+import type { ActionItem, LateCheckoutPolicyInput } from "@stayreco/shared";
 import { getApiErrorMessage } from "@/lib/api-error";
 import * as partnerService from "@/services/partner.service";
 import { usePartnerActions } from "../components/PartnerActionProvider";
@@ -268,5 +268,23 @@ export function usePartnerMutation<TData, TVars = void>(
     },
     onSettled: (_data, _error, vars) =>
       Promise.all(invalidate(vars).map((queryKey) => queryClient.invalidateQueries({ queryKey }))),
+  });
+}
+
+export function useSetLateCheckoutPolicy(hotelId: string) {
+  return usePartnerMutation(
+    (input: LateCheckoutPolicyInput) => partnerService.setLateCheckoutPolicy(hotelId, input),
+    {
+      invalidate: () => [partnerKeys.hotel(hotelId)],
+      successMessage: "Đã lưu chính sách trả phòng muộn.",
+      errorNotice: false,
+    },
+  );
+}
+
+export function useRemoveLateCheckoutPolicy(hotelId: string) {
+  return usePartnerMutation(() => partnerService.removeLateCheckoutPolicy(hotelId), {
+    invalidate: () => [partnerKeys.hotel(hotelId)],
+    successMessage: "Đã tắt phí trả phòng muộn.",
   });
 }
