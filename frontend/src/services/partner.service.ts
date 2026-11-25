@@ -8,7 +8,9 @@ import type {
   Booking,
   BookingSummary,
   CancellationPolicyInput,
+  CheckInInput,
   CheckOutInput,
+  RoomOptions,
   CheckOutQuote,
   CreateHotelInput,
   CreatePayoutInput,
@@ -630,6 +632,21 @@ export async function getCheckOutQuote(bookingId: string) {
 /** UC39: CHECKED_IN → COMPLETED, rooms to CLEANING. Without `lateFee` the fee of the hotel policy is recorded. */
 export async function checkOutBooking(bookingId: string, input: CheckOutInput = {}) {
   const { data } = await api.post<APIResponse<Booking>>(`/bookings/${bookingId}/check-out`, input);
+  return data.data;
+}
+
+export async function getRoomOptions(bookingId: string) {
+  const { data } = await api.get<APIResponse<RoomOptions>>(`/bookings/${bookingId}/room-options`);
+  return data.data;
+}
+
+export async function checkInBooking(bookingId: string, input: CheckInInput = {}) {
+  const { data } = await api.post<APIResponse<Booking>>(`/bookings/${bookingId}/check-in`, input);
+  return data.data;
+}
+
+export async function markNoShow(bookingId: string) {
+  const { data } = await api.post<APIResponse<Booking>>(`/bookings/${bookingId}/no-show`);
   return data.data;
 }
 

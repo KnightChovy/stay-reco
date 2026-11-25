@@ -1,17 +1,33 @@
-import { Sparkles } from "lucide-react";
-import { PartnerUnavailable } from "../components/PartnerUnavailable";
+"use client";
+
+import { ErrorPanel, LoadingPanel, NoHotelPanel, PartnerTitle, SuspendedBanner, usePartnerHotel } from "../components";
+import { ApprovalQueue } from "./ApprovalQueue";
+import { BrandVoicePanel } from "./BrandVoicePanel";
+import { SocialAccountsPanel } from "./SocialAccountsPanel";
 
 export default function PartnerAiBrand() {
+  const { hotel, hotels, isLoading, error, refetch, isSuspended } = usePartnerHotel();
+
   return (
-    <PartnerUnavailable
-      title="Giọng thương hiệu AI"
-      description="Phong cách nội dung AI dùng khi soạn mô tả và phản hồi khách thay cho khách sạn."
-      phase="Phase 5: AI gợi ý & marketing"
-      icon={Sparkles}
-      upcoming={[
-        "Để AI viết mô tả và trả lời khách đúng phong cách khách sạn",
-        "Lên lịch nội dung marketing mà không cần tự soạn từng bài",
-      ]}
-    />
+    <div className="space-y-6">
+      <PartnerTitle
+        title="Giọng thương hiệu AI"
+        description="Dạy AI viết đúng giọng khách sạn, duyệt bài nhân viên soạn và kết nối trang để đăng bài."
+      />
+      {isSuspended && <SuspendedBanner />}
+      {isLoading ? (
+        <LoadingPanel />
+      ) : error ? (
+        <ErrorPanel error={error} onRetry={refetch} />
+      ) : !hotel || hotels.length === 0 ? (
+        <NoHotelPanel />
+      ) : (
+        <div key={hotel.id} className="space-y-6">
+          <ApprovalQueue hotelId={hotel.id} />
+          <BrandVoicePanel hotelId={hotel.id} />
+          <SocialAccountsPanel hotelId={hotel.id} />
+        </div>
+      )}
+    </div>
   );
 }
