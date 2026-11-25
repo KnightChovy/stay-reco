@@ -87,7 +87,6 @@ const navigation: Omit<SidebarItem, "isActive">[] = [
     label: "Chiến dịch & giảm giá",
     icon: Percent,
     section: "Tiếp thị & khách hàng",
-    comingSoon: true,
   },
   {
     href: "/partner/loyalty",

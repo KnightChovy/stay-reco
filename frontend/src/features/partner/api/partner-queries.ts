@@ -47,6 +47,9 @@ export const partnerKeys = {
     [...partnerKeys.statsOf(hotelId), "occupancy-forecast", days] as const,
   statsBreakdown: (hotelId: string, params: partnerService.StatsRangeParams) =>
     [...partnerKeys.statsOf(hotelId), "breakdown", params] as const,
+  promotionsOf: (hotelId: string) => [...partnerKeys.all, "promotions", hotelId] as const,
+  promotions: (hotelId: string, params: partnerService.PromotionListParams) =>
+    [...partnerKeys.promotionsOf(hotelId), params] as const,
   portfolioOf: () => [...partnerKeys.all, "portfolio"] as const,
   portfolio: (params: partnerService.StatsRangeParams) => [...partnerKeys.portfolioOf(), params] as const,
 };
@@ -218,6 +221,15 @@ export function useStatsSeries(hotelId: string | undefined, params: partnerServi
     queryKey: partnerKeys.statsSeries(hotelId ?? "", params ?? {}),
     queryFn: () => partnerService.getStatsSeries(hotelId!, params!),
     enabled: !!hotelId && !!params,
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function usePromotions(hotelId: string | undefined, params: partnerService.PromotionListParams) {
+  return useQuery({
+    queryKey: partnerKeys.promotions(hotelId ?? "", params),
+    queryFn: () => partnerService.getPromotions(hotelId!, params),
+    enabled: !!hotelId,
     placeholderData: keepPreviousData,
   });
 }

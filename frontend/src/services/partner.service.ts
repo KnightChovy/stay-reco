@@ -12,13 +12,16 @@ import type {
   CheckOutQuote,
   CreateHotelInput,
   CreatePricingRuleInput,
+  CreatePromotionInput,
   HotelBookingsQuery,
   LateCheckoutPolicyInput,
   PricePreview,
   PricingRule,
+  Promotion,
   RejectChangeInput,
   UpdateAvailabilityInput,
   UpdatePricingRuleInput,
+  UpdatePromotionInput,
   CreateRoomInput,
   CreateRoomTypeInput,
   Hotel,
@@ -406,6 +409,30 @@ export async function removeLateCheckoutPolicy(hotelId: string) {
   const { data } = await api.delete<APIResponse<Hotel>>(
     `/hotels/${hotelId}/late-checkout-policy`,
   );
+  return data.data;
+}
+
+// ── Promotions (docs/api/promotions.md) ─────────────────────
+
+export type PromotionListParams = { active?: boolean; page?: number; pageSize?: number };
+
+export async function getPromotions(hotelId: string, params: PromotionListParams) {
+  const { data } = await api.get<APIResponse<Promotion[]>>(`/hotels/${hotelId}/promotions`, { params });
+  return { promotions: data.data, meta: data.meta as PageMeta };
+}
+
+export async function createPromotion(hotelId: string, input: CreatePromotionInput) {
+  const { data } = await api.post<APIResponse<Promotion>>(`/hotels/${hotelId}/promotions`, input);
+  return data.data;
+}
+
+export async function updatePromotion(promotionId: string, input: UpdatePromotionInput) {
+  const { data } = await api.patch<APIResponse<Promotion>>(`/promotions/${promotionId}`, input);
+  return data.data;
+}
+
+export async function deactivatePromotion(promotionId: string) {
+  const { data } = await api.delete<APIResponse<Promotion>>(`/promotions/${promotionId}`);
   return data.data;
 }
 
