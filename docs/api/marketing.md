@@ -14,13 +14,15 @@ ideas ─→ generate ─→ [DRAFT] ─→ submit ─→ [PENDING_APPROVAL] ─
 [APPROVED] ─→ schedule ─→ [SCHEDULED] ─→ (the job, every minute) ─→ [PUBLISHED] ─→ metrics
                                                                  ↘ [FAILED]
                                       ↘ cancel ─→ [CANCELLED]
+
+[APPROVED] / [SCHEDULED] ─→ edit (words or picture) ─→ [DRAFT]   (posts still waiting are CANCELLED)
 ```
 
 Three things are worth knowing before reading the table.
 
 **A staff member needs `MARKETING` on every marketing route but the voice and the budget**, including the ones addressed by id (`/marketing-content/:id…`, `/content-schedules/:id…`); the owner always may. Without it a front-desk account could edit, submit or delete a draft, or post on the hotel's page, by knowing an id.
 
-**Staff write, the owner approves.** A staff member with the `MARKETING` permission can ask for a draft, edit it and submit it. Only the **owner** approves or rejects, because what goes out goes out under the hotel's name. The text is frozen on approval, so what was approved is what is posted.
+**Staff write, the owner approves.** A staff member with the `MARKETING` permission can ask for a draft, edit it and submit it. Only the **owner** approves or rejects, because what goes out goes out under the hotel's name. The words and the picture are locked while the piece waits for the owner (`PENDING_APPROVAL`) and once it has gone out (`PUBLISHED`). An approved or scheduled piece **may** still be edited, but the edit sends it back to `DRAFT`, cancels the posts still waiting for it, and it has to be submitted and approved again; on that new submission the owner gets an in-app notice that the piece was changed after approval. So what goes out is always what the owner approved.
 
 **Staff can choose between versions.** `variants` writes three versions of one brief and saves none of them; staff pick one, edit it if they like, and save it with `POST /hotels/:hotelId/marketing-content`. `generate` still writes one and saves it straight away.
 
@@ -212,7 +214,7 @@ Staff **upload a file**; they do not find a URL somewhere. JPEG, PNG or WebP up 
 
 The URL is what Meta needs - **it fetches the image itself**, so a local file or a `localhost` address is no use to it - but asking a marketing assistant to produce a public URL before they may illustrate a post is asking them to be a sysadmin. The upload path is the same `StorageService` that hotel and review photos already use.
 
-**The picture may be changed exactly as long as the words may**: while the piece is a `DRAFT` or has been `REJECTED`. What the owner approved is what goes out, and that includes which photograph is attached - a picture swapped after approval would put something on the hotel's page that nobody agreed to.
+**The picture may be changed exactly as long as the words may, with the same effect**: freely on a `DRAFT` or `REJECTED` piece, and on an `APPROVED` or `SCHEDULED` one by sending it back to `DRAFT` (posts still waiting are cancelled). What the owner approved is what goes out, and that includes which photograph is attached - a picture swapped after approval goes back in front of the owner rather than onto the hotel's page.
 
 Uploading again **replaces** the picture and deletes the file it replaced; deleting the draft takes its file too. A `mediaUrl` that was pasted in by hand through `PATCH` is left alone on both counts: the file is not ours to delete, and guessing at it would be deleting someone else's.
 
@@ -225,7 +227,7 @@ Uploading again **replaces** the picture and deletes the file it replaced; delet
 { "prompt": "Hồ bơi lúc hoàng hôn" }   // optional, 5-500; the post's own words when left out
 ```
 
-The image model (`GEMINI_IMAGE_MODEL`) draws one square picture, which is uploaded and attached **exactly like an upload**: same window (`DRAFT`, `REJECTED`), same `marketing` folder, replaces and deletes the old file. The model is told: photorealistic, no text or logos, no recognisable faces, nothing that claims a price or an award. The owner sees the picture before approving it, and that is the human check on what the model drew.
+The image model (`GEMINI_IMAGE_MODEL`) draws one square picture, which is uploaded and attached **exactly like an upload**: same window and effect (`DRAFT`, `REJECTED`; `APPROVED` and `SCHEDULED` go back to `DRAFT`), same `marketing` folder, replaces and deletes the old file. The model is told: photorealistic, no text or logos, no recognisable faces, nothing that claims a price or an award. The owner sees the picture before approving it, and that is the human check on what the model drew.
 
 A fresh draft still has `mediaUrl: null`; the picture is drawn only when staff ask for it, because one picture costs far more than a draft (see below).
 
@@ -319,7 +321,7 @@ Leaving `GEMINI_API_KEY` empty does **not** stop the server starting — the mar
 | `AI_BUDGET_EXCEEDED` | 403 | The hotel has spent its budget for this calendar month |
 | `AI_REFUSED` | 403 | The model declined to write what was asked for |
 | `CONTENT_NOT_FOUND` | 404 | No such content, or it belongs to another hotel |
-| `CONTENT_STATUS_CONFLICT` | 409 | Editing, submitting, approving or deleting content whose status does not allow it |
+| `CONTENT_STATUS_CONFLICT` | 409 | Editing, submitting, approving or deleting content whose status does not allow it (editing while `PENDING_APPROVAL` or `PUBLISHED`); editing a piece while one of its posts is being sent to the platform right now (`PUBLISHING`): try again in a few minutes |
 | `CONTENT_NOT_APPROVED` | 409 | Scheduling content the owner has not approved |
 | `SOCIAL_ACCOUNT_NOT_FOUND` | 404 | No such page, or it belongs to another hotel |
 | `SCHEDULE_NOT_FOUND` | 404 | No such scheduled post, or it belongs to another hotel |

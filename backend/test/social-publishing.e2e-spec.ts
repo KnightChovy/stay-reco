@@ -921,4 +921,109 @@ describe('Social accounts, scheduling and publishing (e2e)', () => {
       ]);
     });
   });
+  describe('Editing after approval', () => {
+    /** An approved piece waiting on two pages. */
+    const onTwoPages = async () => {
+      const h = await hotel();
+      const pageA = idOf(await connect(h.token, h.hotelId).expect(201));
+      const pageB = idOf(
+        await connect(h.token, h.hotelId, { accountName: '999' }).expect(201),
+      );
+      const contentId = await approvedContent(h.token, h.hotelId);
+      const schedules: string[] = [];
+      for (const page of [pageA, pageB]) {
+        schedules.push(
+          idOf(
+            await schedule(h.token, contentId, {
+              socialAccountId: page,
+              scheduledAt: inHours(24),
+            }).expect(201),
+          ),
+        );
+      }
+      return { ...h, contentId, schedules, pageA };
+    };
+
+    const edit = (token: string, contentId: string) =>
+      t
+        .api()
+        .patch(`/api/v1/marketing-content/${contentId}`)
+        .set(auth(token))
+        .send({ body: 'Bản sửa sau khi duyệt.' });
+
+    it('takes a scheduled piece off the calendar and back to draft', async () => {
+      const h = await onTwoPages();
+
+      const res = await edit(h.token, h.contentId).expect(200);
+
+      expect(res.body.data).toMatchObject({
+        status: 'DRAFT',
+        body: 'Bản sửa sau khi duyệt.',
+      });
+      const rows = await t.prisma.contentSchedule.findMany({
+        where: { marketingContentId: h.contentId },
+      });
+      expect(rows.map((r) => r.status)).toEqual(['CANCELLED', 'CANCELLED']);
+      const log = await t.prisma.auditLog.findFirstOrThrow({
+        where: { action: 'CONTENT_REOPENED' },
+      });
+      expect(JSON.parse(log.newValue!)).toMatchObject({
+        contentId: h.contentId,
+        cancelledSchedules: 2,
+      });
+      // Nothing that was cancelled goes out when the job runs.
+      expect(await runJob(new Date(Date.now() + 48 * 3_600_000))).toMatchObject(
+        {
+          published: 0,
+        },
+      );
+    });
+
+    it('can be scheduled again once the owner approves the edit', async () => {
+      const h = await onTwoPages();
+      await edit(h.token, h.contentId).expect(200);
+      for (const action of ['submit', 'approve']) {
+        await t
+          .api()
+          .post(`/api/v1/marketing-content/${h.contentId}/${action}`)
+          .set(auth(h.token))
+          .expect(200);
+      }
+      await schedule(h.token, h.contentId, { socialAccountId: h.pageA }).expect(
+        201,
+      );
+    });
+
+    it('refuses while one of its posts is going out, and changes nothing', async () => {
+      const h = await onTwoPages();
+      await t.prisma.contentSchedule.update({
+        where: { contentScheduleId: h.schedules[0] },
+        data: { status: 'PUBLISHING', claimedAt: new Date() },
+      });
+
+      const res = await edit(h.token, h.contentId).expect(409);
+
+      expect(res.body.code).toBe('CONTENT_STATUS_CONFLICT');
+      const content = await t.prisma.marketingContent.findUniqueOrThrow({
+        where: { marketingContentId: h.contentId },
+      });
+      expect(content.status).toBe('SCHEDULED');
+      expect(content.body).not.toBe('Bản sửa sau khi duyệt.');
+      const other = await t.prisma.contentSchedule.findUniqueOrThrow({
+        where: { contentScheduleId: h.schedules[1] },
+      });
+      expect(other.status).toBe('SCHEDULED');
+    });
+
+    it('refuses a piece that has gone out', async () => {
+      const h = await onTwoPages();
+      await t.prisma.marketingContent.update({
+        where: { marketingContentId: h.contentId },
+        data: { status: 'PUBLISHED' },
+      });
+
+      const res = await edit(h.token, h.contentId).expect(409);
+      expect(res.body.code).toBe('CONTENT_STATUS_CONFLICT');
+    });
+  });
 });

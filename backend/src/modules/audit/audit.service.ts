@@ -90,6 +90,8 @@ export enum AuditAction {
   CONTENT_APPROVED = 'CONTENT_APPROVED',
   /** The owner sent content back; `new_value` holds the reason. */
   CONTENT_REJECTED = 'CONTENT_REJECTED',
+  /** Approved content was edited, which sent it back to DRAFT and cancelled its waiting posts; needs approving again. */
+  CONTENT_REOPENED = 'CONTENT_REOPENED',
   /** A social page was connected to a hotel (M11). The token itself is never logged. */
   SOCIAL_ACCOUNT_CONNECTED = 'SOCIAL_ACCOUNT_CONNECTED',
   /** A social page was disconnected; anything still scheduled for it was cancelled. */

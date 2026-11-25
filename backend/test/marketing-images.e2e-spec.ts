@@ -163,11 +163,28 @@ describe('A picture on marketing content (e2e)', () => {
     expect(t.storage.uploads).toHaveLength(0);
   });
 
-  it('will not change the picture once the owner has approved it', async () => {
+  it('will not change the picture while the owner is deciding on it', async () => {
     const h = await hotel();
     const id = await draft(h.token, h.hotelId);
     await upload(h.token, id);
     t.storage.clear();
+    await t
+      .api()
+      .post(`/api/v1/marketing-content/${id}/submit`)
+      .set(auth(h.token))
+      .expect(200);
+
+    const res = await upload(h.token, id).expect(409);
+    expect(res.body.code).toBe('CONTENT_STATUS_CONFLICT');
+    expect(t.storage.uploads).toHaveLength(0);
+  });
+
+  it('sends an approved post back to the owner when its picture changes', async () => {
+    const h = await hotel();
+    const id = await draft(h.token, h.hotelId);
+    const first = dataOf<{ mediaUrl: string }>(
+      await upload(h.token, id),
+    ).mediaUrl;
     for (const step of ['submit', 'approve']) {
       await t
         .api()
@@ -176,10 +193,20 @@ describe('A picture on marketing content (e2e)', () => {
         .expect(200);
     }
 
-    // What the owner approved is what goes out, and that includes which photograph is attached.
-    const res = await upload(h.token, id).expect(409);
-    expect(res.body.code).toBe('CONTENT_STATUS_CONFLICT');
-    expect(t.storage.uploads).toHaveLength(0);
+    // What the owner approved is what goes out, photograph included: a new one needs approving again.
+    const res = await upload(h.token, id).expect(201);
+    expect(res.body.data.status).toBe('DRAFT');
+    expect(t.storage.deleted).toEqual([keyOf(first)]);
+
+    const removed = await t
+      .api()
+      .delete(`/api/v1/marketing-content/${id}/image`)
+      .set(auth(h.token))
+      .expect(200);
+    expect(removed.body.data).toMatchObject({
+      status: 'DRAFT',
+      mediaUrl: null,
+    });
   });
 
   describe('drawn by the AI', () => {
@@ -234,7 +261,22 @@ describe('A picture on marketing content (e2e)', () => {
       expect(t.storage.deleted).toEqual([keyOf(first)]);
     });
 
-    it('will not draw once the owner has approved the post', async () => {
+    it('will not draw while the owner is deciding on the post', async () => {
+      const h = await hotel();
+      const id = await draft(h.token, h.hotelId);
+      await t
+        .api()
+        .post(`/api/v1/marketing-content/${id}/submit`)
+        .set(auth(h.token))
+        .expect(200);
+
+      const res = await drawn(h.token, id).expect(409);
+      expect(res.body.code).toBe('CONTENT_STATUS_CONFLICT');
+      // Refused before the model is paid for anything.
+      expect(t.ai.images).toHaveLength(0);
+    });
+
+    it('draws for an approved post and sends it back to the owner', async () => {
       const h = await hotel();
       const id = await draft(h.token, h.hotelId);
       for (const step of ['submit', 'approve']) {
@@ -245,10 +287,9 @@ describe('A picture on marketing content (e2e)', () => {
           .expect(200);
       }
 
-      const res = await drawn(h.token, id).expect(409);
-      expect(res.body.code).toBe('CONTENT_STATUS_CONFLICT');
-      // Refused before the model is paid for anything.
-      expect(t.ai.images).toHaveLength(0);
+      const res = await drawn(h.token, id).expect(200);
+      expect(res.body.data.status).toBe('DRAFT');
+      expect(t.ai.images).toHaveLength(1);
     });
 
     it('refuses a hotel over its budget and keeps the picture it had', async () => {

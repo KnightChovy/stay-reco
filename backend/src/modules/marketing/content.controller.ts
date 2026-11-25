@@ -155,9 +155,9 @@ export class ContentController {
   }
 
   @ApiOperation({
-    summary: 'Edit a draft',
+    summary: 'Edit a piece',
     description:
-      'Only while it is `DRAFT` or `REJECTED`; editing a rejected piece puts it back to `DRAFT`. Once approved the text is frozen, so what the owner approved is what goes out.',
+      '`DRAFT` stays `DRAFT`; `REJECTED` goes back to `DRAFT`. `APPROVED` or `SCHEDULED` goes back to `DRAFT` too, its posts still waiting are cancelled, and it needs submitting and approving again, so what goes out is always what the owner approved. Refused while `PENDING_APPROVAL` or `PUBLISHED`, and while one of its posts is being sent right now.',
   })
   @ApiHotelAccess('member', ErrorCode.CONTENT_NOT_FOUND)
   @ApiData(marketingContentResponseSchema)
@@ -167,8 +167,9 @@ export class ContentController {
     @CurrentUser() user: AuthUser,
     @Param('id') id: string,
     @Body() dto: UpdateContentDto,
+    @ReqMeta() meta: RequestMeta,
   ) {
-    return this.content.update(user, id, dto);
+    return this.content.update(user, id, dto, meta);
   }
 
   @ApiOperation({
@@ -228,7 +229,7 @@ export class ContentController {
   @ApiOperation({
     summary: 'Attach a picture',
     description:
-      'Staff with `MARKETING`, while the piece is a draft or has been rejected - the same window in which the words may be changed, because what the owner approved is what goes out. JPEG, PNG or WebP, up to 10MB. Uploading again replaces the picture and deletes the old file. Facebook and Instagram fetch the image themselves, which is why it is hosted rather than sent with the post; Instagram refuses a post without one.',
+      'Staff with `MARKETING`, in the same window and with the same effect as editing the words: on an `APPROVED` or `SCHEDULED` piece it sends the piece back to `DRAFT` and cancels its waiting posts, because what the owner approved is what goes out. JPEG, PNG or WebP, up to 10MB. Uploading again replaces the picture and deletes the old file. Facebook and Instagram fetch the image themselves, which is why it is hosted rather than sent with the post; Instagram refuses a post without one.',
   })
   @UploadFile('image')
   @ApiData(marketingContentResponseSchema, HttpStatus.CREATED)

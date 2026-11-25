@@ -340,8 +340,101 @@ describe('Marketing content and approval (e2e)', () => {
       });
     });
 
-    it('freezes the text once it is approved', async () => {
+    it('freezes the text while the owner is deciding on it', async () => {
       const h = await hotel();
+      const id = idOf(await generate(h.token, h.hotelId).expect(201));
+      await t
+        .api()
+        .post(`/api/v1/marketing-content/${id}/submit`)
+        .set(auth(h.token))
+        .expect(200);
+
+      const edit = await t
+        .api()
+        .patch(`/api/v1/marketing-content/${id}`)
+        .set(auth(h.token))
+        .send({ body: 'Sửa khi đang chờ duyệt' });
+      expect(edit.status).toBe(409);
+      expect(edit.body.code).toBe('CONTENT_STATUS_CONFLICT');
+    });
+
+    it('sends an approved piece back for approval when it is edited, and tells the owner', async () => {
+      const h = await hotel();
+      const staff = await t.signInStaff(h.hotelId, 'staff@hotel.test', [
+        'MARKETING',
+      ]);
+      const id = idOf(await generate(staff.token, h.hotelId).expect(201));
+      await t
+        .api()
+        .post(`/api/v1/marketing-content/${id}/submit`)
+        .set(auth(staff.token))
+        .expect(200);
+      await t
+        .api()
+        .post(`/api/v1/marketing-content/${id}/approve`)
+        .set(auth(h.token))
+        .expect(200);
+
+      // An approved piece is still not deleted: it is the record of what the owner agreed to.
+      await t
+        .api()
+        .delete(`/api/v1/marketing-content/${id}`)
+        .set(auth(staff.token))
+        .expect(409);
+
+      const edit = await t
+        .api()
+        .patch(`/api/v1/marketing-content/${id}`)
+        .set(auth(staff.token))
+        .send({ body: 'Sửa một chữ sau khi duyệt.' })
+        .expect(200);
+      expect(edit.body.data).toMatchObject({
+        status: 'DRAFT',
+        body: 'Sửa một chữ sau khi duyệt.',
+      });
+      const log = await t.prisma.auditLog.findFirstOrThrow({
+        where: { action: 'CONTENT_REOPENED' },
+      });
+      expect(JSON.parse(log.newValue!)).toMatchObject({
+        contentId: id,
+        hotelId: h.hotelId,
+        cancelledSchedules: 0,
+      });
+
+      // Edited back to a draft, it goes the whole way round again, and the owner is told why it is back.
+      expect(await t.prisma.notification.count()).toBe(0);
+      await t
+        .api()
+        .post(`/api/v1/marketing-content/${id}/submit`)
+        .set(auth(staff.token))
+        .expect(200);
+      const notice = await t.prisma.notification.findFirstOrThrow();
+      expect(notice.userAccountId).toBe(h.id);
+      expect(notice.message).toContain('đã được sửa sau khi duyệt');
+      const approved = await t
+        .api()
+        .post(`/api/v1/marketing-content/${id}/approve`)
+        .set(auth(h.token))
+        .expect(200);
+      expect(approved.body.data.status).toBe('APPROVED');
+    });
+
+    it('does not tell the owner about a piece that was never approved', async () => {
+      const h = await hotel();
+      const id = idOf(await generate(h.token, h.hotelId).expect(201));
+      await t
+        .api()
+        .post(`/api/v1/marketing-content/${id}/submit`)
+        .set(auth(h.token))
+        .expect(200);
+      expect(await t.prisma.notification.count()).toBe(0);
+    });
+
+    it('needs the MARKETING permission to edit an approved piece', async () => {
+      const h = await hotel();
+      const desk = await t.signInStaff(h.hotelId, 'desk@hotel.test', [
+        'FRONT_DESK',
+      ]);
       const id = idOf(await generate(h.token, h.hotelId).expect(201));
       for (const action of ['submit', 'approve']) {
         await t
@@ -350,20 +443,12 @@ describe('Marketing content and approval (e2e)', () => {
           .set(auth(h.token))
           .expect(200);
       }
-
-      const edit = await t
+      await t
         .api()
         .patch(`/api/v1/marketing-content/${id}`)
-        .set(auth(h.token))
-        .send({ body: 'Sửa sau khi duyệt' });
-      expect(edit.status).toBe(409);
-      expect(edit.body.code).toBe('CONTENT_STATUS_CONFLICT');
-
-      const remove = await t
-        .api()
-        .delete(`/api/v1/marketing-content/${id}`)
-        .set(auth(h.token));
-      expect(remove.status).toBe(409);
+        .set(auth(desk.token))
+        .send({ body: 'x' })
+        .expect(403);
     });
 
     it("keeps one hotel out of another's content", async () => {

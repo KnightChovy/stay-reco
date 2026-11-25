@@ -1,6 +1,7 @@
 import {
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import {
@@ -16,6 +17,7 @@ import {
 import { z } from 'zod';
 import type { AuthUser } from '../../common/decorators/current-user.decorator';
 import type { RequestMeta } from '../../common/decorators/request-meta.decorator';
+import { lockMarketingContent } from '../../common/db/locks';
 import { ErrorCode } from '../../common/errors/error-code';
 import {
   HotelAccessService,
@@ -23,10 +25,15 @@ import {
 } from '../../common/hotel-access/hotel-access.service';
 import { Paginated } from '../../common/http/api-response';
 import { pageArgs } from '../../common/http/pagination';
-import { Prisma, StaffPermission } from '../../generated/prisma/client';
+import {
+  type ContentStatus,
+  Prisma,
+  StaffPermission,
+} from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { AuditAction, AuditService } from '../audit/audit.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { BrandVoiceService } from './brand-voice.service';
 import { AiService } from './ai.service';
 
@@ -92,6 +99,36 @@ const wrongStatus = (message: string) =>
     message,
   });
 
+/**
+ * What may be edited (see `ContentService.editable`). `PENDING_APPROVAL` is in front of the owner, and `PUBLISHED`
+ * is on the page: changing either would make the record disagree with what the owner saw or what went out.
+ */
+const EDITABLE: readonly string[] = [
+  'DRAFT',
+  'REJECTED',
+  'APPROVED',
+  'SCHEDULED',
+] satisfies ContentStatus[];
+/** Edited from these, a piece goes back to `DRAFT` and needs the owner again. */
+const REOPENS: readonly string[] = [
+  'APPROVED',
+  'SCHEDULED',
+] satisfies ContentStatus[];
+
+const beingPosted = () =>
+  wrongStatus(
+    'The piece is being posted right now; try again in a few minutes',
+  );
+
+/** Whether the publisher has claimed one of the piece's posts and is calling the platform with it now. */
+const postingNow = async (
+  db: PrismaService | Prisma.TransactionClient,
+  contentId: string,
+) =>
+  (await db.contentSchedule.count({
+    where: { marketingContentId: contentId, status: 'PUBLISHING' },
+  })) > 0;
+
 type ContentRow = Prisma.MarketingContentGetPayload<{
   include: {
     hotelStaff: { select: { userAccount: { select: { fullName: true } } } };
@@ -127,6 +164,8 @@ const toContent = (
  */
 @Injectable()
 export class ContentService {
+  private readonly logger = new Logger(ContentService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly ai: AiService,
@@ -134,6 +173,7 @@ export class ContentService {
     private readonly access: HotelAccessService,
     private readonly audit: AuditService,
     private readonly storage: StorageService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /** Writes a draft in the hotel's voice. The draft is saved whatever the staff member does next. */
@@ -290,51 +330,171 @@ export class ContentService {
   /**
    * The piece, checked to belong to the caller's hotel and to still be theirs to change.
    *
-   * Once it is approved the words are frozen, and so is the picture: what the owner approved is what goes out.
-   * Shared with the image service so both answer the same way rather than drifting apart.
+   * A draft or a rejected piece is edited in place. An approved or scheduled one may be edited too, but the edit
+   * sends it back to `DRAFT` and takes it off the calendar (`saveEdit`), so it needs the owner again: what goes out
+   * is still always what the owner approved. Waiting for approval, or already out, it is frozen. Shared with the
+   * image service so both answer the same way rather than drifting apart.
    */
   async editable(user: AuthUser, contentId: string) {
     const content = await this.owned(user, contentId, 'member');
-    if (content.status !== 'DRAFT' && content.status !== 'REJECTED') {
-      throw wrongStatus('Only a draft or a rejected piece can be edited');
+    if (!EDITABLE.includes(content.status)) {
+      throw wrongStatus(
+        content.status === 'PENDING_APPROVAL'
+          ? 'The piece is waiting for the owner; it can be edited once they approve or reject it'
+          : 'The piece has gone out; write a new one to say something else',
+      );
+    }
+    if (
+      content.status === 'SCHEDULED' &&
+      (await postingNow(this.prisma, contentId))
+    ) {
+      throw beingPosted();
     }
     return content;
   }
 
-  /** Edits a draft. Once it is approved the text is frozen: what was approved is what goes out. */
+  /**
+   * Writes an edit of a piece `editable` let through, and moves it to where the edit leaves it: a rejected piece
+   * back to the writer (`DRAFT`), an approved or scheduled one back to `DRAFT` with its waiting posts cancelled.
+   * Shared by the words and the picture, because changing either after approval needs the owner again.
+   */
+  async saveEdit(
+    user: AuthUser,
+    content: { marketingContentId: string; hotelId: string; status: string },
+    data: Prisma.MarketingContentUpdateInput,
+    meta: RequestMeta = {},
+  ): Promise<ContentRow> {
+    const contentId = content.marketingContentId;
+    const reopening = REOPENS.includes(content.status);
+    const { row, cancelled } = await this.prisma.$transaction(async (tx) => {
+      const cancelled = reopening ? await this.reopen(tx, contentId) : 0;
+      const row = await tx.marketingContent.update({
+        where: { marketingContentId: contentId },
+        data: {
+          ...data,
+          // An edit after a rejection puts it back in the writer's hands.
+          ...(content.status === 'REJECTED' && { status: 'DRAFT' as const }),
+        },
+        include: contentInclude,
+      });
+      return { row, cancelled };
+    });
+    if (reopening) {
+      await this.audit.log(AuditAction.CONTENT_REOPENED, user.accountId, meta, {
+        contentId,
+        hotelId: content.hotelId,
+        cancelledSchedules: cancelled,
+      });
+    }
+    return row;
+  }
+
+  /** Edits a piece; see `editable` for which ones and what an edit after approval does. */
   async update(
     user: AuthUser,
     contentId: string,
     input: UpdateContentInput,
+    meta: RequestMeta = {},
   ): Promise<MarketingContent> {
     const content = await this.editable(user, contentId);
-    const updated = await this.prisma.marketingContent.update({
-      where: { marketingContentId: contentId },
-      data: {
+    const updated = await this.saveEdit(
+      user,
+      content,
+      {
         ...(input.title !== undefined && { title: input.title }),
         ...(input.body !== undefined && { body: input.body }),
         ...(input.mediaUrl !== undefined && { mediaUrl: input.mediaUrl }),
-        // An edit after a rejection puts it back in the writer's hands.
-        ...(content.status === 'REJECTED' && { status: 'DRAFT' as const }),
       },
-      include: contentInclude,
-    });
+      meta,
+    );
     return toContent(updated);
   }
 
-  /** Sends a draft to the owner. */
+  /**
+   * Sends a draft to the owner. A piece edited after it had been approved tells the owner so, since what they
+   * approved earlier is no longer what would go out.
+   */
   async submit(user: AuthUser, contentId: string, meta: RequestMeta = {}) {
     const content = await this.owned(user, contentId, 'member');
     if (content.status !== 'DRAFT' && content.status !== 'REJECTED') {
       throw wrongStatus('Only a draft or a rejected piece can be submitted');
     }
-    return this.moveTo(
+    const submitted = await this.moveTo(
       user,
       contentId,
       'PENDING_APPROVAL',
       AuditAction.CONTENT_SUBMITTED,
       meta,
     );
+    if (await this.wasReopened(contentId)) {
+      await this.tellOwner(content);
+    }
+    return submitted;
+  }
+
+  /**
+   * An edit after approval: cancels the posts still waiting, then sends the piece back to `DRAFT`.
+   *
+   * Under the row lock scheduling takes too, so a scheduling cannot slip in between. A post the publisher already
+   * claimed (`PUBLISHING`) is on its way to the page and cannot be called back, so the edit is refused and the whole
+   * transaction rolls back. Posts already `PUBLISHED`, `FAILED` or `CANCELLED` are left as the record they are.
+   */
+  private async reopen(
+    tx: Prisma.TransactionClient,
+    contentId: string,
+  ): Promise<number> {
+    await lockMarketingContent(tx, contentId);
+    const { count: cancelled } = await tx.contentSchedule.updateMany({
+      where: { marketingContentId: contentId, status: 'SCHEDULED' },
+      data: { status: 'CANCELLED' },
+    });
+    if (await postingNow(tx, contentId)) throw beingPosted();
+    // Conditional on the status, so a piece that went out (or changed) since it was read is not pulled back.
+    const { count } = await tx.marketingContent.updateMany({
+      where: {
+        marketingContentId: contentId,
+        status: { in: ['APPROVED', 'SCHEDULED'] },
+      },
+      data: { status: 'DRAFT' },
+    });
+    if (count === 0) {
+      throw wrongStatus('The piece changed while saving; reload it');
+    }
+    return cancelled;
+  }
+
+  /** Whether the piece was ever sent back to the writer after an approval, read from the audit log. */
+  private async wasReopened(contentId: string): Promise<boolean> {
+    const entry = await this.prisma.auditLog.findFirst({
+      where: {
+        action: AuditAction.CONTENT_REOPENED,
+        newValue: { contains: `"contentId":"${contentId}"` },
+      },
+      select: { auditLogId: true },
+    });
+    return entry !== null;
+  }
+
+  /** The in-app notice to the owner. Logged, never thrown: the submission itself has already succeeded. */
+  private async tellOwner(content: ContentRow): Promise<void> {
+    try {
+      const hotel = await this.prisma.hotel.findUniqueOrThrow({
+        where: { hotelId: content.hotelId },
+        select: { hotelPartnerId: true, name: true },
+      });
+      const title = content.title?.trim() || 'không tiêu đề';
+      await this.notifications.create({
+        userAccountId: hotel.hotelPartnerId,
+        type: 'SYSTEM',
+        title: 'Bài marketing cần duyệt lại',
+        message: `Bài «${title}» của ${hotel.name} đã được sửa sau khi duyệt, cần duyệt lại.`,
+        link: null,
+      });
+    } catch (err) {
+      this.logger.warn(
+        `Could not notify the owner about content ${content.marketingContentId}: ${String(err)}`,
+      );
+    }
   }
 
   /** The owner lets it out. */

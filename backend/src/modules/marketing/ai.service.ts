@@ -74,6 +74,26 @@ const unusable = (message: string) =>
   new ServiceUnavailableException({ code: ErrorCode.AI_UNAVAILABLE, message });
 
 /**
+ * Turns a line break the model escaped twice back into a real one, in every string of a structured answer.
+ *
+ * Gemini sometimes writes `\\n` inside its JSON, which parses to the two characters `\` `n` rather than a line
+ * break; saved as is, a post goes out on Facebook with a literal "\n" in it. Marketing copy never means a literal
+ * backslash-n, so every one is read as the break it was meant to be. A tab becomes a space: posts are not tabulated.
+ */
+export const unescapeNewlines = (value: unknown): unknown => {
+  if (typeof value === 'string') {
+    return value.replace(/\\r\\n|\\n|\\r/g, '\n').replace(/\\t/g, ' ');
+  }
+  if (Array.isArray(value)) return value.map(unescapeNewlines);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([k, v]) => [k, unescapeNewlines(v)]),
+    );
+  }
+  return value;
+};
+
+/**
  * The one place the backend talks to the model (Gemini).
  *
  * Every call goes through `ask`, which checks the hotel's remaining budget first, then records what the call cost.
@@ -194,7 +214,7 @@ export class AiService {
     } catch {
       throw unusable('The model did not answer in JSON');
     }
-    const parsed = schema.safeParse(json);
+    const parsed = schema.safeParse(unescapeNewlines(json));
     if (!parsed.success) {
       this.logger.warn(`Model answer off-schema: ${parsed.error.message}`);
       throw unusable('The model did not answer in the expected shape');

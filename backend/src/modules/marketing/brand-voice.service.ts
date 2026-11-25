@@ -134,7 +134,12 @@ export class BrandVoiceService {
       where: { hotelId },
       select: { name: true, city: true },
     });
-    const lines = [`Hotel: ${hotel.name}, ${hotel.city}.`];
+    const lines = [
+      `Hotel: ${hotel.name}, ${hotel.city}.`,
+      // Without this the model once opened a post for a Đà Nẵng hotel with "off to Đà Lạt": the city was given,
+      // but nothing said it was the only one.
+      `Location: the hotel is in ${hotel.city}. Never place the hotel or the trip in any other city or province, and do not name other destinations.`,
+    ];
     if (voice.summary) lines.push(`Voice: ${voice.summary}`);
     if (voice.audience) lines.push(`Audience: ${voice.audience}`);
     if (voice.highlights) lines.push(`Keeps selling: ${voice.highlights}`);

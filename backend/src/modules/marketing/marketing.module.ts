@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { AiService } from './ai.service';
 import { BrandVoiceService } from './brand-voice.service';
 import { ContentIdeasService } from './content-ideas.service';
@@ -18,6 +19,7 @@ import { SocialAccountsService } from './social-accounts.service';
 import { SocialController } from './social.controller';
 
 @Module({
+  imports: [NotificationsModule],
   controllers: [MarketingController, ContentController, SocialController],
   providers: [
     AiService,

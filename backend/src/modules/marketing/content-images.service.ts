@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { GenerateImageInput, MarketingContent } from '@stayreco/shared';
 import type { AuthUser } from '../../common/decorators/current-user.decorator';
-import { PrismaService } from '../../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { AiService } from './ai.service';
 import { BrandVoiceService } from './brand-voice.service';
@@ -24,14 +23,14 @@ const IMAGE_RULES = `A photograph for a hotel's social media post.
  * can illustrate a post is asking them to be a sysadmin. The upload path is the same `StorageService` that hotel
  * photos and review photos already use.
  *
- * A picture may be changed exactly as long as the words may: while the piece is a draft or has been rejected.
- * What the owner approved is what goes out, and that includes which photograph is attached - an image swapped
- * after approval would put something on the hotel's page that nobody agreed to.
+ * A picture may be changed exactly as long as the words may, and with the same effect (`ContentService.editable`):
+ * changing it on an approved or scheduled piece sends the piece back to `DRAFT` and off the calendar. What the
+ * owner approved is what goes out, and that includes which photograph is attached - an image swapped after approval
+ * goes back in front of the owner rather than onto the hotel's page.
  */
 @Injectable()
 export class ContentImagesService {
   constructor(
-    private readonly prisma: PrismaService,
     private readonly storage: StorageService,
     private readonly content: ContentService,
     private readonly ai: AiService,
@@ -41,7 +40,7 @@ export class ContentImagesService {
   /**
    * The AI draws the picture of a draft (A4) and attaches it, replacing whatever was there.
    *
-   * Same window as uploading one - draft or rejected - and the same storage, so an approved post goes out with a
+   * Same window as uploading one, with the same effect on an approved piece, and the same storage, so an approved post goes out with a
    * hosted picture exactly as if staff had uploaded it. The owner sees the picture before approving, which is the
    * human check on what the model drew. Costs one image call against the monthly budget.
    */
@@ -64,12 +63,7 @@ export class ContentImagesService {
       `${IMAGE_RULES}\n\n${voice}\n\nThe post the picture goes with:\n${subject}`,
     );
     const uploaded = await this.storage.uploadImage(file, 'marketing');
-    await this.prisma.marketingContent.update({
-      where: { marketingContentId: contentId },
-      data: { mediaUrl: uploaded.url, mediaStorageKey: uploaded.storageKey },
-    });
-    await this.forget(current.mediaStorageKey);
-    return this.content.findOne(user, contentId);
+    return this.attach(user, current, uploaded);
   }
 
   /**
@@ -85,23 +79,41 @@ export class ContentImagesService {
   ): Promise<MarketingContent> {
     const current = await this.content.editable(user, contentId);
     const uploaded = await this.storage.uploadImage(file, 'marketing');
-    await this.prisma.marketingContent.update({
-      where: { marketingContentId: contentId },
-      data: { mediaUrl: uploaded.url, mediaStorageKey: uploaded.storageKey },
-    });
-    await this.forget(current.mediaStorageKey);
-    return this.content.findOne(user, contentId);
+    return this.attach(user, current, uploaded);
   }
 
   /** Takes the picture off, and deletes the file if we were the ones who put it there. */
   async remove(user: AuthUser, contentId: string): Promise<MarketingContent> {
     const current = await this.content.editable(user, contentId);
-    await this.prisma.marketingContent.update({
-      where: { marketingContentId: contentId },
-      data: { mediaUrl: null, mediaStorageKey: null },
+    await this.content.saveEdit(user, current, {
+      mediaUrl: null,
+      mediaStorageKey: null,
     });
     await this.forget(current.mediaStorageKey);
     return this.content.findOne(user, contentId);
+  }
+
+  /**
+   * Points the piece at a file just uploaded, then deletes the one it replaced. If the save is refused - the piece
+   * was submitted, or started going out, while the file uploaded - the new file is deleted instead and the piece
+   * keeps its old picture.
+   */
+  private async attach(
+    user: AuthUser,
+    current: Awaited<ReturnType<ContentService['editable']>>,
+    uploaded: { url: string; storageKey: string },
+  ): Promise<MarketingContent> {
+    try {
+      await this.content.saveEdit(user, current, {
+        mediaUrl: uploaded.url,
+        mediaStorageKey: uploaded.storageKey,
+      });
+    } catch (err) {
+      await this.forget(uploaded.storageKey);
+      throw err;
+    }
+    await this.forget(current.mediaStorageKey);
+    return this.content.findOne(user, current.marketingContentId);
   }
 
   /**
