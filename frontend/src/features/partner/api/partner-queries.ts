@@ -45,6 +45,10 @@ export const partnerKeys = {
     [...partnerKeys.statsOf(hotelId), "series", params] as const,
   occupancyForecast: (hotelId: string, days?: number) =>
     [...partnerKeys.statsOf(hotelId), "occupancy-forecast", days] as const,
+  statsBreakdown: (hotelId: string, params: partnerService.StatsRangeParams) =>
+    [...partnerKeys.statsOf(hotelId), "breakdown", params] as const,
+  portfolioOf: () => [...partnerKeys.all, "portfolio"] as const,
+  portfolio: (params: partnerService.StatsRangeParams) => [...partnerKeys.portfolioOf(), params] as const,
 };
 
 export const catalogKeys = {
@@ -214,6 +218,24 @@ export function useStatsSeries(hotelId: string | undefined, params: partnerServi
     queryKey: partnerKeys.statsSeries(hotelId ?? "", params ?? {}),
     queryFn: () => partnerService.getStatsSeries(hotelId!, params!),
     enabled: !!hotelId && !!params,
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useStatsBreakdown(hotelId: string | undefined, params: partnerService.StatsRangeParams | undefined) {
+  return useQuery({
+    queryKey: partnerKeys.statsBreakdown(hotelId ?? "", params ?? {}),
+    queryFn: () => partnerService.getStatsBreakdown(hotelId!, params!),
+    enabled: !!hotelId && !!params,
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function usePortfolioStats(params: partnerService.StatsRangeParams | undefined, enabled: boolean) {
+  return useQuery({
+    queryKey: partnerKeys.portfolio(params ?? {}),
+    queryFn: () => partnerService.getPortfolioStats(params!),
+    enabled: enabled && !!params,
     placeholderData: keepPreviousData,
   });
 }

@@ -101,11 +101,10 @@ function RefreshStats({ hotelId }: { hotelId: string }) {
         className="h-9"
         variant="outline"
         disabled={fetching}
-        onClick={() =>
-          void queryClient.invalidateQueries({
-            queryKey: partnerKeys.statsOf(hotelId),
-          })
-        }
+        onClick={() => {
+          void queryClient.invalidateQueries({ queryKey: partnerKeys.statsOf(hotelId) });
+          void queryClient.invalidateQueries({ queryKey: partnerKeys.portfolioOf() });
+        }}
       >
         <RefreshCw className={fetching ? "animate-spin" : undefined} />
         Làm mới
