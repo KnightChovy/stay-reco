@@ -7,11 +7,13 @@ import type {
   DocumentType,
   HotelStatus,
   PaymentStatus,
+  PayoutStatus,
   PriceAdjustmentType,
   RoomStatus,
   StaffPermission,
   VerificationRequestType,
   VerificationStatus,
+  WalletTxnType,
 } from "@stayreco/shared";
 
 /** Badge classes built from the semantic status tokens in globals.css. */
@@ -97,6 +99,23 @@ export const bookingStatusLabels: Record<BookingStatus, Labelled> = {
   CANCELLED: { label: "Đã huỷ", tone: "danger" },
   NO_SHOW: { label: "Không đến", tone: "danger" },
   EXPIRED: { label: "Hết hạn giữ chỗ", tone: "muted" },
+};
+
+export const walletTxnTypeLabels: Record<WalletTxnType, string> = {
+  BOOKING_PAYMENT: "Thanh toán đặt phòng",
+  COMMISSION: "Hoa hồng nền tảng",
+  REFUND: "Hoàn tiền huỷ phòng",
+  SETTLEMENT: "Chuyển sang khả dụng",
+  PAYOUT: "Rút tiền",
+  ADJUSTMENT: "Điều chỉnh",
+  TOPUP: "Nạp tiền",
+};
+
+export const payoutStatusLabels: Record<PayoutStatus, Labelled> = {
+  PENDING: { label: "Chờ xử lý", tone: "warning" },
+  PAID: { label: "Đã chuyển", tone: "success" },
+  REJECTED: { label: "Bị từ chối", tone: "danger" },
+  CANCELLED: { label: "Đã huỷ", tone: "muted" },
 };
 
 export const paymentStatusLabels: Record<PaymentStatus, Labelled> = {

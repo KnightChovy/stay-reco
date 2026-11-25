@@ -56,7 +56,6 @@ const navigation: Omit<SidebarItem, "isActive">[] = [
     label: "Doanh thu & đối soát",
     icon: ChartNoAxesCombined,
     section: "Kinh doanh",
-    comingSoon: true,
   },
   {
     href: "/partner/hotel",
@@ -87,14 +86,12 @@ const navigation: Omit<SidebarItem, "isActive">[] = [
     label: "Chiến dịch & giảm giá",
     icon: Percent,
     section: "Tiếp thị & khách hàng",
-    comingSoon: true,
   },
   {
     href: "/partner/loyalty",
     label: "Khách hàng thân thiết",
     icon: UsersRound,
     section: "Tiếp thị & khách hàng",
-    comingSoon: true,
   },
   {
     href: "/partner/ai-brand",

@@ -16,6 +16,7 @@ import {
   usePartnerHotel,
 } from "../components";
 import { formatDateTime, hotelStatusLabels } from "../lib/labels";
+import { HotelAddOnsManager } from "./HotelAddOnsManager";
 import { HotelAmenitiesForm } from "./HotelAmenitiesForm";
 import { CancellationPolicyForm } from "./CancellationPolicyForm";
 import { HotelImagesManager } from "./HotelImagesManager";
@@ -31,6 +32,7 @@ const tabs = [
   { value: "policies", label: "Chính sách" },
   { value: "cancellation", label: "Huỷ phòng" },
   { value: "late-checkout", label: "Trả phòng muộn" },
+  { value: "add-ons", label: "Dịch vụ thêm" },
   { value: "room-config", label: "Cấu hình phòng" },
   { value: "images", label: "Hình ảnh" },
 ] as const;
@@ -135,6 +137,9 @@ function HotelDetail({ hotel }: { hotel: Hotel }) {
           </TabsContent>
           <TabsContent value="late-checkout" className="pt-4">
             <LateCheckoutPolicyForm hotel={hotel} />
+          </TabsContent>
+          <TabsContent value="add-ons" className="pt-4">
+            <HotelAddOnsManager hotelId={hotel.id} />
           </TabsContent>
           <TabsContent value="room-config" className="pt-4">
             <RoomConfigForm hotel={hotel} />

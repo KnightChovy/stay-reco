@@ -11,14 +11,25 @@ import type {
   CheckOutInput,
   CheckOutQuote,
   CreateHotelInput,
+  CreatePayoutInput,
+  HotelBeneficiary,
+  HotelLoyaltyProgram,
+  HotelLoyaltyProgramInput,
+  Payout,
+  PayoutStatus,
+  WalletTransaction,
+  WalletTxnType,
   CreatePricingRuleInput,
+  CreatePromotionInput,
   HotelBookingsQuery,
   LateCheckoutPolicyInput,
   PricePreview,
   PricingRule,
+  Promotion,
   RejectChangeInput,
   UpdateAvailabilityInput,
   UpdatePricingRuleInput,
+  UpdatePromotionInput,
   CreateRoomInput,
   CreateRoomTypeInput,
   Hotel,
@@ -406,6 +417,85 @@ export async function removeLateCheckoutPolicy(hotelId: string) {
   const { data } = await api.delete<APIResponse<Hotel>>(
     `/hotels/${hotelId}/late-checkout-policy`,
   );
+  return data.data;
+}
+
+// ── Promotions (docs/api/promotions.md) ─────────────────────
+
+export type PromotionListParams = { active?: boolean; page?: number; pageSize?: number };
+
+export async function getPromotions(hotelId: string, params: PromotionListParams) {
+  const { data } = await api.get<APIResponse<Promotion[]>>(`/hotels/${hotelId}/promotions`, { params });
+  return { promotions: data.data, meta: data.meta as PageMeta };
+}
+
+export async function createPromotion(hotelId: string, input: CreatePromotionInput) {
+  const { data } = await api.post<APIResponse<Promotion>>(`/hotels/${hotelId}/promotions`, input);
+  return data.data;
+}
+
+export async function updatePromotion(promotionId: string, input: UpdatePromotionInput) {
+  const { data } = await api.patch<APIResponse<Promotion>>(`/promotions/${promotionId}`, input);
+  return data.data;
+}
+
+export async function deactivatePromotion(promotionId: string) {
+  const { data } = await api.delete<APIResponse<Promotion>>(`/promotions/${promotionId}`);
+  return data.data;
+}
+
+// ── Loyalty program (docs/api/loyalty.md) ───────────────────
+
+export async function getLoyaltyProgram(hotelId: string) {
+  const { data } = await api.get<APIResponse<HotelLoyaltyProgram>>(`/hotels/${hotelId}/loyalty-program`);
+  return data.data;
+}
+
+export async function setLoyaltyProgram(hotelId: string, input: HotelLoyaltyProgramInput) {
+  const { data } = await api.put<APIResponse<HotelLoyaltyProgram>>(`/hotels/${hotelId}/loyalty-program`, input);
+  return data.data;
+}
+
+// ── Wallet and payouts (docs/api/partner.md) ────────────────
+
+export type WalletTransactionParams = {
+  type?: WalletTxnType[];
+  from?: string;
+  to?: string;
+  page?: number;
+  pageSize?: number;
+};
+
+export async function getWalletTransactions(hotelId: string, params: WalletTransactionParams) {
+  const { data } = await api.get<APIResponse<WalletTransaction[]>>(`/hotels/${hotelId}/wallet/transactions`, {
+    params,
+    paramsSerializer: { indexes: null },
+  });
+  return { transactions: data.data, meta: data.meta as PageMeta };
+}
+
+export async function getBeneficiary(hotelId: string) {
+  const { data } = await api.get<APIResponse<HotelBeneficiary>>(`/hotels/${hotelId}/beneficiary`);
+  return data.data;
+}
+
+export type PayoutListParams = { status?: PayoutStatus[]; page?: number; pageSize?: number };
+
+export async function getPayouts(hotelId: string, params: PayoutListParams) {
+  const { data } = await api.get<APIResponse<Payout[]>>(`/hotels/${hotelId}/payouts`, {
+    params,
+    paramsSerializer: { indexes: null },
+  });
+  return { payouts: data.data, meta: data.meta as PageMeta };
+}
+
+export async function createPayout(hotelId: string, input: CreatePayoutInput) {
+  const { data } = await api.post<APIResponse<Payout>>(`/hotels/${hotelId}/payouts`, input);
+  return data.data;
+}
+
+export async function cancelPayout(hotelId: string, payoutId: string) {
+  const { data } = await api.post<APIResponse<Payout>>(`/hotels/${hotelId}/payouts/${payoutId}/cancel`);
   return data.data;
 }
 

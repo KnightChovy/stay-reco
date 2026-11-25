@@ -47,6 +47,16 @@ export const partnerKeys = {
     [...partnerKeys.statsOf(hotelId), "occupancy-forecast", days] as const,
   statsBreakdown: (hotelId: string, params: partnerService.StatsRangeParams) =>
     [...partnerKeys.statsOf(hotelId), "breakdown", params] as const,
+  promotionsOf: (hotelId: string) => [...partnerKeys.all, "promotions", hotelId] as const,
+  promotions: (hotelId: string, params: partnerService.PromotionListParams) =>
+    [...partnerKeys.promotionsOf(hotelId), params] as const,
+  loyaltyProgram: (hotelId: string) => [...partnerKeys.all, "loyalty-program", hotelId] as const,
+  walletOf: (hotelId: string) => [...partnerKeys.all, "wallet", hotelId] as const,
+  walletTransactions: (hotelId: string, params: partnerService.WalletTransactionParams) =>
+    [...partnerKeys.walletOf(hotelId), "transactions", params] as const,
+  beneficiary: (hotelId: string) => [...partnerKeys.walletOf(hotelId), "beneficiary"] as const,
+  payouts: (hotelId: string, params: partnerService.PayoutListParams) =>
+    [...partnerKeys.walletOf(hotelId), "payouts", params] as const,
   portfolioOf: () => [...partnerKeys.all, "portfolio"] as const,
   portfolio: (params: partnerService.StatsRangeParams) => [...partnerKeys.portfolioOf(), params] as const,
 };
@@ -218,6 +228,49 @@ export function useStatsSeries(hotelId: string | undefined, params: partnerServi
     queryKey: partnerKeys.statsSeries(hotelId ?? "", params ?? {}),
     queryFn: () => partnerService.getStatsSeries(hotelId!, params!),
     enabled: !!hotelId && !!params,
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function usePromotions(hotelId: string | undefined, params: partnerService.PromotionListParams) {
+  return useQuery({
+    queryKey: partnerKeys.promotions(hotelId ?? "", params),
+    queryFn: () => partnerService.getPromotions(hotelId!, params),
+    enabled: !!hotelId,
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useLoyaltyProgram(hotelId: string | undefined) {
+  return useQuery({
+    queryKey: partnerKeys.loyaltyProgram(hotelId ?? ""),
+    queryFn: () => partnerService.getLoyaltyProgram(hotelId!),
+    enabled: !!hotelId,
+  });
+}
+
+export function useWalletTransactions(hotelId: string | undefined, params: partnerService.WalletTransactionParams) {
+  return useQuery({
+    queryKey: partnerKeys.walletTransactions(hotelId ?? "", params),
+    queryFn: () => partnerService.getWalletTransactions(hotelId!, params),
+    enabled: !!hotelId,
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useBeneficiary(hotelId: string | undefined) {
+  return useQuery({
+    queryKey: partnerKeys.beneficiary(hotelId ?? ""),
+    queryFn: () => partnerService.getBeneficiary(hotelId!),
+    enabled: !!hotelId,
+  });
+}
+
+export function usePayouts(hotelId: string | undefined, params: partnerService.PayoutListParams) {
+  return useQuery({
+    queryKey: partnerKeys.payouts(hotelId ?? "", params),
+    queryFn: () => partnerService.getPayouts(hotelId!, params),
+    enabled: !!hotelId,
     placeholderData: keepPreviousData,
   });
 }
