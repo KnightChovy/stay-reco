@@ -13,6 +13,7 @@ import type {
   CreateHotelInput,
   CreatePricingRuleInput,
   HotelBookingsQuery,
+  LateCheckoutPolicyInput,
   PricePreview,
   PricingRule,
   RejectChangeInput,
@@ -382,6 +383,26 @@ export async function setCancellationPolicy(
   const { data } = await api.patch<APIResponse<Hotel>>(
     `/hotels/${hotelId}/cancellation-policy`,
     input,
+  );
+  return data.data;
+}
+
+// ── Late check-out policy ───────────────────────────────────
+
+export async function setLateCheckoutPolicy(
+  hotelId: string,
+  input: LateCheckoutPolicyInput,
+) {
+  const { data } = await api.patch<APIResponse<Hotel>>(
+    `/hotels/${hotelId}/late-checkout-policy`,
+    input,
+  );
+  return data.data;
+}
+
+export async function removeLateCheckoutPolicy(hotelId: string) {
+  const { data } = await api.delete<APIResponse<Hotel>>(
+    `/hotels/${hotelId}/late-checkout-policy`,
   );
   return data.data;
 }
