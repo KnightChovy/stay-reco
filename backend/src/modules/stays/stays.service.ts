@@ -107,7 +107,10 @@ export class StaysService {
         checkInTime: fromTime(h.checkInTime),
       })),
     );
-    const offers = await this.offers(requests, query);
+    const [offers, ratings] = await Promise.all([
+      this.offers(requests, query),
+      this.ratingsOf(hotels.map((h) => h.hotelId)),
+    ]);
 
     const results: HotelSearchResult[] = [];
     for (const h of hotels) {
@@ -126,7 +129,8 @@ export class StaysService {
         coverImageUrl: h.hotelImages[0]?.imageUrl ?? null,
         latitude: toNumber(h.latitude),
         longitude: toNumber(h.longitude),
-        rating: null,
+        rating: ratings.get(h.hotelId)?.rating ?? null,
+        reviewCount: ratings.get(h.hotelId)?.reviewCount ?? 0,
         nights: daysBetween(query.checkIn, query.checkOut),
         fromTotal: cheapest.total,
         freeCancellation: cheapest.freeCancellationUntil !== null,
@@ -295,6 +299,32 @@ export class StaysService {
       );
     }
     return offers;
+  }
+
+  /**
+   * Each hotel's guest rating, the way its own page and the recommendations show it: the average overall rating of
+   * the visible reviews to one decimal, and how many there are. A hotel with no review is left out of the map.
+   */
+  private async ratingsOf(
+    hotelIds: string[],
+  ): Promise<Map<string, { rating: number; reviewCount: number }>> {
+    if (!hotelIds.length) return new Map();
+    const rows = await this.prisma.review.groupBy({
+      by: ['hotelId'],
+      where: { hotelId: { in: hotelIds }, isVisible: true },
+      _avg: { overallRating: true },
+      _count: { _all: true },
+    });
+    const ratings = new Map<string, { rating: number; reviewCount: number }>();
+    for (const row of rows) {
+      const avg = toNumber(row._avg.overallRating);
+      if (avg === null) continue;
+      ratings.set(row.hotelId, {
+        rating: Math.round(avg * 10) / 10,
+        reviewCount: row._count._all,
+      });
+    }
+    return ratings;
   }
 
   /** City, hotel name or address containing the text, ignoring case and Vietnamese accents (decision P9). */

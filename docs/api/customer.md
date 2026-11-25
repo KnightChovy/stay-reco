@@ -36,7 +36,7 @@ Stay parameters used by several endpoints (`stayQuerySchema`):
 | GET | `/room-types/:id/listing` | stay params, all optional | `RoomTypeListing` |
 
 - **Only bookable hotels appear**: `ACTIVE` hotels of partners that are not suspended (BR-01). Any other hotel returns `404 HOTEL_NOT_FOUND`, even if it exists.
-- **Search** lists only hotels with at least one room type that fits the guests and has enough rooms free on **every night** (BR-02). `destination` (at most 100 characters) matches the city, hotel name or address, ignoring case and Vietnamese accents ("da nang" finds "Đà Nẵng"). `priceMin` / `priceMax` filter on the total of the stay; `amenityIds` takes at most 20 ids. `freeCancellation=true` keeps hotels whose policy has a free-cancellation period. `sort` is one of `HOTEL_SORTS`: `recommended` (default: personalized when signed in), `price-asc`, `price-desc`, `star-desc`. Guest ratings arrive with reviews (phase 4); until then `rating` is `null`.
+- **Search** lists only hotels with at least one room type that fits the guests and has enough rooms free on **every night** (BR-02). `destination` (at most 100 characters) matches the city, hotel name or address, ignoring case and Vietnamese accents ("da nang" finds "Đà Nẵng"). `priceMin` / `priceMax` filter on the total of the stay; `amenityIds` takes at most 20 ids. `freeCancellation=true` keeps hotels whose policy has a free-cancellation period. `sort` is one of `HOTEL_SORTS`: `recommended` (default: personalized when signed in), `price-asc`, `price-desc`, `star-desc`. `rating` is the average overall rating of the hotel's visible reviews to one decimal (`null` while it has none) and `reviewCount` how many reviews that average covers, the same figures as the hotel page and the recommendations.
 - **Listing without dates** returns the hotel and its room types without prices (`offer: null`). With dates, each room type carries an `offer`: rooms still available, the price of each night and the total for the requested rooms, and the cancellation terms the booking would get. A room type that is full or too small for the guests comes back with `offer.available: 0` or `fitsGuests: false` (show "sold out"), not left out.
 - Prices are final prices (VAT and service fee included, BR-05), computed by the backend from the partner's pricing rules.
 - `checkIn` in the past or more than 365 days ahead (Vietnam time) answers `400 VALIDATION_ERROR` on `checkIn`.
@@ -156,7 +156,8 @@ Changing dates, room type or guests is not offered: cancel and book again (BR-09
 // HotelSearchResult
 { "id": "uuid", "name": "Sơn Trà Bay Resort & Spa", "city": "Đà Nẵng", "address": "…",
   "starRating": 5, "coverImageUrl": "https://…", "latitude": 16.1, "longitude": 108.27,
-  "rating": null,                         // phase 4
+  "rating": 4.3,                          // visible reviews only; null with none
+  "reviewCount": 118,
   "nights": 2, "fromTotal": 5600000,      // cheapest total for the stay and the requested rooms
   "freeCancellation": true }
 

@@ -228,7 +228,7 @@ export default function HomePage() {
                         starBadge={stay.starRating ? `${stay.starRating} sao` : 'Chỗ nghỉ'}
                         location={`${stay.city}`}
                         rating={stay.rating ?? 0}
-                        reviewCount={0}
+                        reviewCount={stay.reviewCount}
                         tags={[stay.freeCancellation ? 'Miễn phí huỷ' : 'Không hoàn huỷ']}
                         cancellationPolicy={stay.freeCancellation ? 'Miễn phí huỷ phòng' : 'Không hoàn huỷ'}
                         price={formatMoney(stay.fromTotal / Math.max(featuredNights, 1))}

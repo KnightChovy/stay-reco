@@ -80,7 +80,11 @@ export const hotelSearchResultResponseSchema = z
     coverImageUrl: z.url().nullable(),
     latitude: z.number().nullable(),
     longitude: z.number().nullable(),
-    rating: z.number().nullable().describe('Guest rating; null until reviews exist (phase 4).'),
+    rating: z
+      .number()
+      .nullable()
+      .describe('Average overall rating of the visible reviews, one decimal; null while the hotel has none.'),
+    reviewCount: z.number().int().describe('How many visible reviews `rating` is the average of.'),
     nights: z.number().int(),
     fromTotal: z.number().describe('Cheapest total for the whole stay and the requested rooms.'),
     freeCancellation: z.boolean(),

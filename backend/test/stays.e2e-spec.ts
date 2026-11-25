@@ -144,6 +144,7 @@ describe('Search and listings (e2e)', () => {
           latitude: null,
           longitude: null,
           rating: null,
+          reviewCount: 0,
           nights: 2,
           fromTotal: 3000000,
           // Default policy: free until the check-in time the day before.
@@ -156,6 +157,52 @@ describe('Search and listings (e2e)', () => {
         total: 1,
         totalPages: 1,
       });
+    });
+
+    it('shows each hotel’s guest rating from its visible reviews', async () => {
+      const rated = await hotel({ name: 'Rated' }, [
+        { basePrice: 900000, rooms: 1 },
+      ]);
+      await hotel({ name: 'Unrated' }, [{ basePrice: 900000, rooms: 1 }]);
+      const guest = await t.signIn('CUSTOMER', 'guest@hotel.test');
+      // Two visible reviews averaging 4.25 (shown to one decimal) and a hidden one that must not count.
+      for (const [overallRating, isVisible] of [
+        [4.5, true],
+        [4.0, true],
+        [1.0, false],
+      ] as const) {
+        const booking = await t.prisma.booking.create({
+          data: {
+            customerId: guest.id,
+            hotelId: rated.hotelId,
+            checkInDate: new Date('2026-10-10T00:00:00Z'),
+            checkOutDate: new Date('2026-10-11T00:00:00Z'),
+            totalAmount: 900000,
+            status: 'COMPLETED',
+            guestName: 'Khách',
+            contactPhone: '0905123456',
+            cancelFeePercent: 100,
+            commissionRate: 8,
+          },
+        });
+        await t.prisma.review.create({
+          data: {
+            customerId: guest.id,
+            hotelId: rated.hotelId,
+            bookingId: booking.bookingId,
+            overallRating,
+            content: 'Tốt',
+            isVisible,
+          },
+        });
+      }
+
+      const res = await search(`destination=Đà Nẵng&${stay}&guests=2`);
+      const byName = Object.fromEntries(
+        (res.body.data as { name: string }[]).map((h) => [h.name, h]),
+      );
+      expect(byName.Rated).toMatchObject({ rating: 4.3, reviewCount: 2 });
+      expect(byName.Unrated).toMatchObject({ rating: null, reviewCount: 0 });
     });
 
     it('prices the stay with the pricing rules', async () => {

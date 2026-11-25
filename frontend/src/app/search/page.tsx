@@ -303,7 +303,7 @@ function SearchContent() {
                 verified
                 location={`${hotel.address}, ${hotel.city}`}
                 rating={hotel.rating ?? 0}
-                reviewCount={0}
+                reviewCount={hotel.reviewCount}
                 tags={[hotel.freeCancellation ? 'Miễn phí huỷ' : 'Không hoàn huỷ']}
                 cancellationPolicy={hotel.freeCancellation ? 'Miễn phí huỷ phòng' : 'Không hoàn huỷ'}
                 price={formatMoney(hotel.fromTotal)}

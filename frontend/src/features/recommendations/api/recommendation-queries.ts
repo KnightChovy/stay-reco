@@ -12,7 +12,8 @@ export const recommendationKeys = {
   all: ["recommendations"] as const,
   list: (customerId: string | undefined, params: RecommendationParams) =>
     [...recommendationKeys.all, customerId ?? "public", params] as const,
-  onboarding: () => [...recommendationKeys.all, "onboarding"] as const,
+  /** Per account: kept for ever (`staleTime: Infinity`), so a shared key would show one account's answer to the next one signing in on the same tab. */
+  onboarding: (customerId: string | undefined) => [...recommendationKeys.all, "onboarding", customerId ?? "none"] as const,
 };
 
 /**
@@ -34,10 +35,11 @@ export function useRecommendations(params: RecommendationParams = {}) {
 }
 
 export function useOnboarding(enabled: boolean) {
+  const customerId = useAuthStore((state) => state.user?.id);
   return useQuery({
-    queryKey: recommendationKeys.onboarding(),
+    queryKey: recommendationKeys.onboarding(customerId),
     queryFn: service.getOnboarding,
-    enabled,
+    enabled: enabled && Boolean(customerId),
     staleTime: Infinity,
     retry: false,
   });
@@ -45,8 +47,9 @@ export function useOnboarding(enabled: boolean) {
 
 function useOnboardingSettled() {
   const queryClient = useQueryClient();
+  const customerId = useAuthStore((state) => state.user?.id);
   return (onboarding: Onboarding) => {
-    queryClient.setQueryData(recommendationKeys.onboarding(), onboarding);
+    queryClient.setQueryData(recommendationKeys.onboarding(customerId), onboarding);
     // The picks are now preferences and the welcome code is one of the customer's vouchers.
     void queryClient.invalidateQueries({ queryKey: rewardsKeys.all });
     void queryClient.invalidateQueries({ queryKey: notificationKeys.all });
