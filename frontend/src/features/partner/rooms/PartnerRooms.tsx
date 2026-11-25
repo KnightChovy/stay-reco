@@ -2,7 +2,8 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { BedDouble, ImageIcon, Lock, LockOpen, Pencil, Plus, Search, Trash2, Users } from "lucide-react";
 import { ROOM_SORTS, RoomStatus, type Room, type RoomType } from "@stayreco/shared";
 import { TableCommon, TablePagination, type CommonTableColumn } from "@/components/common/table";
@@ -14,6 +15,7 @@ import { useDebounce } from "@/hooks/use-debounce";
 import * as partnerService from "@/services/partner.service";
 import {
   partnerKeys,
+  useActionItem,
   useHotel,
   usePartnerMutation,
   useRooms,
@@ -38,6 +40,8 @@ import { RoomTypeDialog } from "./RoomTypeDialog";
 import { RoomTypeImagesDialog } from "./RoomTypeImagesDialog";
 
 const PAGE_SIZE = 10;
+
+const roomStatuses = new Set<string>(Object.values(RoomStatus));
 
 const sortLabels: Record<(typeof ROOM_SORTS)[number], string> = {
   "room-number-asc": "Số phòng tăng dần",
@@ -277,9 +281,16 @@ function RoomsSection({
   canCreate: boolean;
   createHint?: string;
 }) {
+  // `?status=MAINTENANCE` comes from the dashboard's "phòng bị khoá lâu" item: filter and scroll to the list.
+  const searchParams = useSearchParams();
+  const statusParam = searchParams.get("status");
+  const linkedStatus = statusParam && roomStatuses.has(statusParam) ? statusParam : "";
   const [search, setSearch] = useState("");
   const [roomTypeId, setRoomTypeId] = useState("");
-  const [status, setStatus] = useState("");
+  const [status, setStatus] = useState(linkedStatus);
+  const longLocked = useActionItem(hotelId, "ROOMS_LOCKED_LONG");
+  const longLockedIds = useMemo(() => new Set(longLocked?.params.roomIds), [longLocked]);
+  const scrollPending = useRef(!!linkedStatus);
   const [sort, setSort] = useState<(typeof ROOM_SORTS)[number]>("room-number-asc");
   const [page, setPage] = useState(1);
   const debouncedSearch = useDebounce(search.trim());
@@ -292,6 +303,15 @@ function RoomsSection({
     status: (status || undefined) as RoomStatus | undefined,
   };
   const roomsQuery = useRooms(hotelId, params);
+  const roomsLoaded = roomsQuery.isSuccess;
+
+  // Once, after the rooms arrive (the room types above have their height by then): the list sits below the types.
+  useEffect(() => {
+    if (!roomsLoaded || !scrollPending.current) return;
+    scrollPending.current = false;
+    document.getElementById("rooms-list")?.scrollIntoView({ block: "start" });
+  }, [roomsLoaded]);
+
   const [editing, setEditing] = useState<{ open: boolean; room?: Room }>({ open: false });
   const [locking, setLocking] = useState<Room>();
   const [lockReason, setLockReason] = useState("");
@@ -321,7 +341,12 @@ function RoomsSection({
       id: "status",
       header: "Trạng thái",
       cell: (room) => (
-        <StatusBadge tone={roomStatusLabels[room.status].tone}>{roomStatusLabels[room.status].label}</StatusBadge>
+        <div className="flex flex-col gap-1">
+          <StatusBadge tone={roomStatusLabels[room.status].tone}>{roomStatusLabels[room.status].label}</StatusBadge>
+          {longLocked && longLockedIds.has(room.id) && (
+            <StatusBadge tone="danger">Khoá hơn {longLocked.params.days} ngày</StatusBadge>
+          )}
+        </div>
       ),
     },
     {
@@ -375,7 +400,9 @@ function RoomsSection({
   return (
     <PartnerPanel className="overflow-hidden">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-4">
-        <h2 className="font-bold text-primary">Danh sách phòng</h2>
+        <h2 id="rooms-list" className="scroll-mt-24 font-bold text-primary">
+          Danh sách phòng
+        </h2>
         {canEdit && (
           <div className="flex items-center gap-2">
             {createHint && <span className="text-xs text-muted-foreground">{createHint}</span>}

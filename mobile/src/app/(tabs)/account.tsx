@@ -1,31 +1,36 @@
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
+import { useQuery } from '@tanstack/react-query';
+import { LoyaltyTier } from '@stayreco/shared';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
 import { Icon, type IconName } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
-import { colors, radius, shadow } from '@/constants/theme';
+import { colors } from '@/constants/theme';
+import { tierLabel, tierThreshold } from '@/features/rewards/tier';
 import { images } from '@/lib/mock-data';
+import { formatVnd } from '@/lib/stay';
+import { AMENITIES, BUDGETS, PREF_KEYS, STYLES, splitList } from '@/features/recommendations/preference-options';
+import { getMyPreferences } from '@/services/recommendations.service';
+import { getMyLoyalty, getMyVouchers, getMyWallet } from '@/services/rewards.service';
 import { useAuthStore } from '@/stores/auth.store';
 
-const stats: { value: string; label: string; icon: IconName; bg: string; fg: string }[] = [
-  { value: '8', label: 'Kỳ nghỉ vui', icon: 'bed', bg: colors.primaryFixed, fg: colors.primaryContainer },
-  { value: '3', label: 'Voucher 15%', icon: 'confirmation_number', bg: colors.secondaryFixed, fg: colors.secondary },
-  { value: '24/7', label: 'Trợ lý riêng', icon: 'support_agent', bg: colors.tertiaryFixed, fg: colors.tertiaryContainer },
-];
+const tiers = Object.values(LoyaltyTier);
 
 
-const tastes: { label: string; icon: IconName }[] = [
-  { label: 'Gu yên tĩnh & cách âm', icon: 'volume_off' },
-  { label: 'View sông / hoàng hôn', icon: 'water' },
-  { label: 'Bữa sáng hữu cơ', icon: 'restaurant' },
-  { label: '1.5tr - 3.0tr / đêm', icon: 'payments' },
-];
+type MenuItem = {
+  title: string;
+  desc: string;
+  icon: IconName;
+  bg: string;
+  fg: string;
+  href?: '/notifications' | '/account/password' | '/account/sessions' | '/account/rewards' | '/account/wallet' | '/account/reviews';
+};
 
-const menu: { title: string; desc: string; icon: IconName; bg: string; fg: string; href?: '/notifications' | '/account/password' }[] = [
+const baseMenu: MenuItem[] = [
   {
     title: 'Mật khẩu & Bảo mật tài khoản',
     desc: 'Đổi mật khẩu & đăng xuất các thiết bị khác',
@@ -35,11 +40,12 @@ const menu: { title: string; desc: string; icon: IconName; bg: string; fg: strin
     href: '/account/password',
   },
   {
-    title: 'Voucher & Điểm thưởng',
-    desc: '4 voucher khả dụng • 2.450 StayMiles',
-    icon: 'loyalty',
+    title: 'Thiết bị đăng nhập',
+    desc: 'Xem và đăng xuất các thiết bị đang đăng nhập',
+    icon: 'devices',
     bg: colors.primaryFixed,
-    fg: colors.primaryContainer,
+    fg: colors.primary,
+    href: '/account/sessions',
   },
   {
     title: 'Trung tâm thông báo',
@@ -57,6 +63,79 @@ export default function AccountScreen() {
   const hydrating = useAuthStore((s) => s.hydrating);
   const logout = useAuthStore((s) => s.logout);
   const [signingOut, setSigningOut] = useState(false);
+  const loyalty = useQuery({ queryKey: ['loyalty'], queryFn: getMyLoyalty, enabled: !!account });
+  const vouchers = useQuery({
+    queryKey: ['vouchers', 'count'],
+    queryFn: () => getMyVouchers({ active: true, page: 1, pageSize: 1 }),
+    enabled: !!account,
+  });
+  const wallet = useQuery({ queryKey: ['wallet'], queryFn: getMyWallet, enabled: !!account });
+  const preferences = useQuery({ queryKey: ['preferences'], queryFn: getMyPreferences, enabled: !!account }).data;
+  // Sở thích đã lưu, hiện bằng nhãn của cùng danh sách màn /account/preferences dùng.
+  const tastes: { label: string; icon: IconName }[] = preferences
+    ? [
+        ...STYLES.filter((st) => splitList(preferences[PREF_KEYS.styles]).includes(st.id)).map((st) => ({ label: st.title, icon: st.icon })),
+        ...AMENITIES.filter((a) => splitList(preferences[PREF_KEYS.amenities]).includes(a.id)).map((a) => ({ label: a.label, icon: 'check' as IconName })),
+        ...(preferences[PREF_KEYS.city] ? [{ label: preferences[PREF_KEYS.city], icon: 'location_on' as IconName }] : []),
+        ...BUDGETS.filter((b) => b.id && b.id === preferences[PREF_KEYS.budget]).map((b) => ({ label: b.label + ' / đêm', icon: 'payments' as IconName })),
+      ]
+    : [];
+  const l = loyalty.data;
+  const voucherCount = vouchers.data?.meta.total;
+  const tierIndex = l ? tiers.indexOf(l.tier) : 0;
+  // Tiến độ trong hạng hiện tại, theo điểm tích lũy (dùng điểm không làm tụt hạng).
+  const progress = !l
+    ? 0
+    : !l.nextTier
+      ? 1
+      : (l.lifetimePoints - tierThreshold[l.tier]) / (tierThreshold[l.nextTier.tier] - tierThreshold[l.tier]);
+  const stats: { value: string; label: string; icon: IconName; bg: string; fg: string; href?: MenuItem['href'] }[] = [
+    {
+      value: voucherCount?.toString() ?? '–',
+      label: 'Voucher',
+      icon: 'confirmation_number',
+      bg: colors.secondaryFixed,
+      fg: colors.secondary,
+      href: '/account/rewards',
+    },
+    {
+      value: wallet.data ? formatVnd(wallet.data.balanceAvailable) : '–',
+      label: 'Số dư ví',
+      icon: 'account_balance_wallet',
+      bg: colors.primaryFixed,
+      fg: colors.primaryContainer,
+      href: '/account/wallet',
+    },
+    { value: '24/7', label: 'Trợ lý riêng', icon: 'support_agent', bg: colors.tertiaryFixed, fg: colors.tertiaryContainer },
+  ];
+  const menu: MenuItem[] = [
+    baseMenu[0],
+    {
+      title: 'Voucher & Điểm thưởng',
+      desc: `${voucherCount ?? 0} voucher khả dụng • ${(l?.pointsBalance ?? 0).toLocaleString('vi-VN')} StayMiles`,
+      icon: 'loyalty',
+      bg: colors.primaryFixed,
+      fg: colors.primaryContainer,
+      href: '/account/rewards',
+    },
+    {
+      title: 'Ví StayReco',
+      desc: 'Số dư từ tiền hoàn & lịch sử giao dịch',
+      icon: 'account_balance_wallet',
+      bg: colors.secondaryFixed,
+      fg: colors.secondary,
+      href: '/account/wallet',
+    },
+    {
+      title: 'Đánh giá của tôi',
+      desc: 'Xem và sửa các đánh giá đã viết',
+      icon: 'star',
+      bg: colors.tertiaryFixed,
+      fg: colors.tertiaryContainer,
+      href: '/account/reviews',
+    },
+    ...baseMenu.slice(1),
+  ];
   const signOut = async () => {
     if (signingOut) return;
     setSigningOut(true);
@@ -74,9 +153,9 @@ export default function AccountScreen() {
 
   if (!account) {
     return (
-      <View style={styles.screen}>
+      <View className="flex-1 bg-surface">
         <AppHeader subtitle="Hồ sơ cá nhân" />
-        <View style={[styles.card, styles.guest]}>
+        <View className="gap-3.5 rounded-lg bg-surface-container-lowest p-4 shadow-card m-4 items-center">
           {hydrating ? (
             <Text variant="small" color={colors.onSurfaceVariant} center>
               Đang tải hồ sơ...
@@ -95,19 +174,19 @@ export default function AccountScreen() {
   }
 
   return (
-    <View style={styles.screen}>
+    <View className="flex-1 bg-surface">
       <AppHeader subtitle="Hồ sơ cá nhân" />
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.card}>
-          <View style={styles.row}>
+      <ScrollView contentContainerClassName="gap-4 p-4 pb-[120px]" showsVerticalScrollIndicator={false}>
+        <View className="gap-3.5 rounded-lg bg-surface-container-lowest p-4 shadow-card">
+          <View className="flex-row items-center gap-2">
             <View>
-              <Image source={account.avatarUrl ?? images.avatar} style={styles.avatar} contentFit="cover" />
-              <View style={styles.avatarBadge}>
+              <Image source={account.avatarUrl ?? images.avatar} className="h-[76px] w-[76px] rounded-full" contentFit="cover" />
+              <View className="absolute -bottom-0.5 -right-0.5 h-[26px] w-[26px] items-center justify-center rounded-full border-2 border-white bg-tertiary-container">
                 <Icon name="verified" size={14} color={colors.white} />
               </View>
             </View>
-            <View style={[styles.flex, styles.gap4]}>
-              <View style={styles.wrapRow}>
+            <View className="flex-1 gap-1">
+              <View className="flex-row flex-wrap items-center gap-2">
                 <Text variant="h3" weight="bold">
                   {account.fullName}
                 </Text>
@@ -116,78 +195,103 @@ export default function AccountScreen() {
               <Text variant="caption" color={colors.onSurfaceVariant}>
                 {account.email}
               </Text>
-              <View style={styles.row}>
+              <View className="flex-row items-center gap-2">
                 <Button label="Chỉnh sửa hồ sơ" leadingIcon="edit" variant="muted" size="sm" onPress={editProfile} />
                 <Button label="Đổi ảnh" variant="ghost" size="sm" onPress={editProfile} />
               </View>
             </View>
           </View>
 
-          <View style={styles.elite}>
-            <View style={styles.between}>
-              <View style={styles.row}>
+          <View className="gap-2.5 rounded-lg bg-primary-container p-4">
+            <View className="flex-row items-center justify-between gap-2">
+              <View className="flex-row items-center gap-2">
                 <Icon name="stars" size={22} color={colors.secondaryContainer} />
                 <View>
                   <Text variant="caption" weight="semibold" color={colors.onPrimaryContainer}>
-                    HỘI VIÊN ĐẶC QUYỀN
+                    HỘI VIÊN {(l?.programName ?? 'StayMiles').toUpperCase()}
                   </Text>
                   <Text variant="label" weight="bold" color={colors.white}>
-                    StayReco Elite • Hạng Bạc
+                    Hạng {l ? tierLabel[l.tier] : '...'}
                   </Text>
                 </View>
               </View>
-              <Chip label="Cấp 2/4" tone="neutral" />
+              <Chip label={`Cấp ${tierIndex + 1}/${tiers.length}`} tone="neutral" />
             </View>
-            <View style={styles.progress}>
-              <View style={styles.progressFill} />
+            <View className="h-1.5 rounded-[3px] bg-white/20">
+              <View className="h-1.5 rounded-[3px] bg-secondary-container" style={{ width: `${Math.round(progress * 100)}%` }} />
             </View>
-            <View style={styles.between}>
-              <Text variant="caption" color={colors.primaryFixed}>
-                Còn 550 điểm để lên{' '}
-                <Text variant="caption" weight="bold" color={colors.white}>
-                  Hạng Vàng
-                </Text>
+            <View className="flex-row items-center justify-between gap-2">
+              <Text variant="caption" color={colors.primaryFixed} className="shrink">
+                {l?.nextTier ? (
+                  <>
+                    Còn {l.nextTier.pointsNeeded.toLocaleString('vi-VN')} điểm để lên{' '}
+                    <Text variant="caption" weight="bold" color={colors.white}>
+                      Hạng {tierLabel[l.nextTier.tier]}
+                    </Text>
+                  </>
+                ) : l ? (
+                  'Bạn đang ở hạng cao nhất'
+                ) : (
+                  ''
+                )}
               </Text>
               <Text variant="caption" weight="bold" color={colors.white}>
-                62%
+                {Math.round(progress * 100)}%
               </Text>
             </View>
-            <View style={styles.between}>
+            <View className="flex-row items-center justify-between gap-2">
               <Text variant="h2" color={colors.white}>
-                2.450{' '}
+                {(l?.pointsBalance ?? 0).toLocaleString('vi-VN')}{' '}
                 <Text variant="small" color={colors.primaryFixed}>
                   StayMiles
                 </Text>
               </Text>
-              <Pressable style={styles.redeem}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => router.push('/account/rewards')}
+                className="flex-row items-center gap-1.5 rounded-md bg-secondary px-3.5 py-2"
+              >
                 <Icon name="featured_seasonal_and_gifts" size={18} color={colors.white} />
                 <Text variant="small" weight="bold" color={colors.white}>
-                  Đổi quà
+                  Xem ưu đãi
                 </Text>
               </Pressable>
             </View>
           </View>
         </View>
 
-        <View style={styles.row}>
+        <View className="flex-row items-center gap-2">
           {stats.map((s) => (
-            <View key={s.label} style={styles.stat}>
-              <View style={[styles.statIcon, { backgroundColor: s.bg }]}>
+            <Pressable
+              key={s.label}
+              accessibilityRole={s.href ? 'button' : undefined}
+              disabled={!s.href}
+              onPress={s.href ? () => router.push(s.href!) : undefined}
+              className="flex-1 items-center gap-1 rounded-lg bg-surface-container-lowest py-3.5 shadow-card"
+            >
+              <View className="h-9 w-9 items-center justify-center rounded-full" style={{ backgroundColor: s.bg }}>
                 <Icon name={s.icon} size={18} color={s.fg} />
               </View>
-              <Text variant="h2" color={s.fg === colors.primaryContainer ? colors.onSurface : s.fg}>
+              {/* Số dư ví có thể dài (2.000.000 ₫), co chữ cho vừa một phần ba màn. */}
+              <Text
+                variant="h2"
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                className="px-1"
+                color={s.fg === colors.primaryContainer ? colors.onSurface : s.fg}
+              >
                 {s.value}
               </Text>
               <Text variant="caption" color={colors.onSurfaceVariant}>
                 {s.label}
               </Text>
-            </View>
+            </Pressable>
           ))}
         </View>
 
-        <View style={styles.card}>
-          <View style={styles.between}>
-            <View style={styles.row}>
+        <View className="gap-3.5 rounded-lg bg-surface-container-lowest p-4 shadow-card">
+          <View className="flex-row items-center justify-between gap-2">
+            <View className="flex-row items-center gap-2">
               <Icon name="badge" size={20} color={colors.primaryContainer} />
               <Text variant="label" weight="bold">
                 Hồ sơ định danh cá nhân
@@ -196,12 +300,12 @@ export default function AccountScreen() {
             <Chip label="Khớp CCCD" tone="tertiary" />
           </View>
           {identity.map((f) => (
-            <View key={f.label} style={styles.field}>
-              <Text variant="small" color={colors.onSurfaceVariant} style={styles.flex}>
+            <View key={f.label} className="flex-row items-center justify-between gap-3">
+              <Text variant="small" color={colors.onSurfaceVariant} className="flex-1">
                 {f.label}
               </Text>
-              <View style={[styles.row, styles.fieldValue]}>
-                <Text variant="small" weight="semibold" style={styles.shrink}>
+              <View className="flex-row items-center gap-2 max-w-[68%] shrink flex-wrap justify-end">
+                <Text variant="small" weight="semibold" className="shrink">
                   {f.value}
                 </Text>
                 {f.badge && <Chip label={f.badge} tone="tertiary" />}
@@ -211,11 +315,11 @@ export default function AccountScreen() {
           <Button label="Chỉnh sửa thông tin cá nhân" leadingIcon="edit_note" variant="muted" onPress={editProfile} />
         </View>
 
-        <View style={styles.card}>
-          <View style={styles.between}>
-            <View style={[styles.row, styles.shrink]}>
+        <View className="gap-3.5 rounded-lg bg-surface-container-lowest p-4 shadow-card">
+          <View className="flex-row items-center justify-between gap-2">
+            <View className="flex-row items-center gap-2 shrink">
               <Icon name="tune" size={20} color={colors.primaryContainer} />
-              <Text variant="label" weight="bold" style={styles.shrink}>
+              <Text variant="label" weight="bold" className="shrink">
                 Cấu hình gợi ý & Gu du lịch StayReco
               </Text>
             </View>
@@ -224,32 +328,36 @@ export default function AccountScreen() {
           <Text variant="small" color={colors.onSurfaceVariant}>
             Hệ thống cá nhân hóa phòng nghỉ theo sở thích lưu trú của riêng bạn:
           </Text>
-          <View style={styles.wrapRow}>
-            {tastes.map((t) => (
-              <Chip key={t.label} label={t.label} icon={t.icon} tone="neutral" />
-            ))}
+          <View className="flex-row flex-wrap items-center gap-2">
+            {tastes.length === 0 ? (
+              <Text variant="caption" color={colors.onSurfaceVariant}>
+                Bạn chưa lưu sở thích nào.
+              </Text>
+            ) : (
+              tastes.map((t) => <Chip key={t.label} label={t.label} icon={t.icon} tone="neutral" />)
+            )}
           </View>
           <Button
             label="Tùy chỉnh gợi ý du lịch"
             leadingIcon="auto_awesome"
             variant="ghost"
-            style={styles.tinted}
-            onPress={() => router.push('/assistant')}
+            style={{ backgroundColor: colors.surfaceContainerLow }}
+            onPress={() => router.push('/account/preferences')}
           />
         </View>
 
-        <View style={[styles.card, styles.menu]}>
+        <View className="gap-3.5 rounded-lg bg-surface-container-lowest p-4 shadow-card" style={{ paddingVertical: 4, gap: 0 }}>
           {menu.map((m, i) => (
             <Pressable
               key={m.title}
               accessibilityRole="button"
               onPress={m.href ? () => router.push(m.href!) : undefined}
-              style={[styles.menuItem, i > 0 && styles.menuDivider]}
+              className={`flex-row items-center gap-3 py-3 ${i > 0 ? 'border-t border-surface-container-high' : ''}`}
             >
-              <View style={[styles.menuIcon, { backgroundColor: m.bg }]}>
+              <View className="h-10 w-10 items-center justify-center rounded-full" style={{ backgroundColor: m.bg }}>
                 <Icon name={m.icon} size={20} color={m.fg} />
               </View>
-              <View style={styles.flex}>
+              <View className="flex-1">
                 <Text variant="small" weight="semibold">
                   {m.title}
                 </Text>
@@ -262,9 +370,9 @@ export default function AccountScreen() {
           ))}
         </View>
 
-        <View style={styles.privacy}>
+        <View className="flex-row gap-2.5 rounded-md bg-surface-container p-3.5">
           <Icon name="shield_with_heart" size={18} color={colors.primaryContainer} />
-          <Text variant="caption" color={colors.onSurfaceVariant} style={styles.flex}>
+          <Text variant="caption" color={colors.onSurfaceVariant} className="flex-1">
             Dữ liệu định danh được mã hóa chuẩn SSL 256-bit và bảo mật theo Nghị định bảo vệ dữ liệu cá nhân Việt Nam.
           </Text>
         </View>
@@ -274,7 +382,7 @@ export default function AccountScreen() {
           accessibilityState={{ disabled: signingOut }}
           disabled={signingOut}
           onPress={signOut}
-          style={[styles.logout, signingOut && { opacity: 0.5 }]}
+          className="min-h-[52px] flex-row items-center justify-center gap-2 rounded-md bg-secondary-fixed" style={signingOut && { opacity: 0.5 }}
         >
           <Icon name="logout" size={18} color={colors.secondary} />
           <Text variant="label" weight="bold" color={colors.secondary}>
@@ -285,69 +393,3 @@ export default function AccountScreen() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.surface },
-  content: { padding: 16, gap: 16, paddingBottom: 120 },
-  flex: { flex: 1 },
-  shrink: { flexShrink: 1 },
-  gap4: { gap: 4 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  wrapRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
-  between: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  card: { padding: 16, gap: 14, borderRadius: radius.lg, backgroundColor: colors.surfaceContainerLowest, ...shadow.card },
-  avatar: { width: 76, height: 76, borderRadius: 38 },
-  avatarBadge: {
-    position: 'absolute',
-    right: -2,
-    bottom: -2,
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.tertiaryContainer,
-    borderWidth: 2,
-    borderColor: colors.white,
-  },
-  elite: { padding: 16, gap: 10, borderRadius: radius.lg, backgroundColor: colors.primaryContainer },
-  progress: { height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.2)' },
-  progressFill: { width: '62%', height: 6, borderRadius: 3, backgroundColor: colors.secondaryContainer },
-  redeem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: radius.md,
-    backgroundColor: colors.secondary,
-  },
-  stat: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 4,
-    paddingVertical: 14,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surfaceContainerLowest,
-    ...shadow.card,
-  },
-  statIcon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  fieldValue: { flexShrink: 1, maxWidth: '68%', flexWrap: 'wrap', justifyContent: 'flex-end' },
-  field: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  tinted: { backgroundColor: colors.surfaceContainerLow },
-  menu: { paddingVertical: 4, gap: 0 },
-  menuItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
-  menuDivider: { borderTopWidth: 1, borderTopColor: colors.surfaceContainerHigh },
-  menuIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  privacy: { flexDirection: 'row', gap: 10, padding: 14, borderRadius: radius.md, backgroundColor: colors.surfaceContainer },
-  guest: { margin: 16, alignItems: 'center' },
-  logout: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    minHeight: 52,
-    borderRadius: radius.md,
-    backgroundColor: colors.secondaryFixed,
-  },
-});

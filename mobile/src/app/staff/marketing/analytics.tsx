@@ -1,58 +1,109 @@
-import { StyleSheet, View } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
+import { router } from 'expo-router';
+import { useMutation, useQueries, useQuery } from '@tanstack/react-query';
+import type { ContentMetric, ContentSchedule } from '@stayreco/shared';
+import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
+import type { IconName } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
 import { colors } from '@/constants/theme';
-import { aiRecommendation, marketingKpis as k, topPosts } from '@/features/staff/data';
-import { Banner, Card, Grid, Section, StaffScreen, Stat, accent } from '@/features/staff/ui';
-import { formatVnd } from '@/lib/stay';
+import { ErrorCard, dateTime, marketingError, platformLabels, useMarketingChanged } from '@/features/staff/marketing';
+import { Banner, Card, Grid, KV, Section, StaffScreen, Stat, accent, s, useStaffHotel } from '@/features/staff/ui';
+import { getScheduleMetrics, getSchedules, refreshScheduleMetrics } from '@/services/marketing.service';
 
-export default function StaffMarketingAnalyticsScreen() {
+const figures: { key: 'views' | 'likes' | 'shares' | 'comments'; label: string; icon: IconName }[] = [
+  { key: 'views', label: 'Lượt xem', icon: 'visibility' },
+  { key: 'likes', label: 'Lượt thích', icon: 'favorite' },
+  { key: 'shares', label: 'Chia sẻ', icon: 'share' },
+  { key: 'comments', label: 'Bình luận', icon: 'chat_bubble_outline' },
+];
+
+const count = (n: number) => n.toLocaleString('vi-VN');
+
+function PostCard({ schedule, readings, loading }: { schedule: ContentSchedule; readings?: ContentMetric[]; loading: boolean }) {
+  const changed = useMarketingChanged();
+  const refresh = useMutation({ mutationFn: () => refreshScheduleMetrics(schedule.id), onSuccess: changed });
+  const [latest, previous] = readings ?? [];
   return (
-    <StaffScreen title="Hiệu quả tiếp thị">
-      <Grid>
-        <Stat icon="payments" label="Doanh thu từ Marketing" value={`${k.revenue / 1e6} tr`} unit="₫" foot="Tháng 10/2026" />
-        <Stat icon="receipt_long" label="Lượt đặt phòng từ Camp" value={`${k.bookings}`} unit="booking" foot="Tăng trưởng" tint="#2e7d55" />
-        <Stat icon="bar_chart" label="Tỷ lệ chuyển đổi (CVR)" value={k.cvr} unit="" foot={`${k.clicks} Clicks`} tint={colors.primaryContainer} />
-        <Stat icon="auto_awesome" label="Chỉ số ROI trung bình" value={k.roi} unit="ROI" foot="Trên 3 kênh" tint={accent} />
-      </Grid>
-      <Banner icon="auto_awesome" tone="clay" title="AI Recommendation" text={aiRecommendation} />
-
-      <Section title="Bài viết chuyển đổi cao nhất" />
-      <Card style={styles.list}>
-        {topPosts.map((p, i) => (
-          <View key={p.rank} style={[styles.item, i > 0 && styles.topLine]}>
-            <View style={[styles.rank, p.rank === 1 && styles.rankTop]}>
-              <Text variant="small" weight="bold" color={p.rank === 1 ? colors.onPrimary : colors.primary}>
-                {p.rank}
-              </Text>
-            </View>
-            <View style={styles.body}>
-              <Text variant="small" weight="bold">
-                {p.title}
-              </Text>
-              <Text variant="caption" color={colors.onSurfaceVariant}>
-                {p.platform} · {p.clicks} clicks · {p.bookings} booking
-              </Text>
-              <View style={styles.foot}>
-                <Text variant="small" weight="bold">
-                  {formatVnd(p.revenue)}
-                </Text>
-                <Chip label={`ROI ${p.roi}`} tone="tertiary" />
-              </View>
-            </View>
-          </View>
-        ))}
-      </Card>
-    </StaffScreen>
+    <Card>
+      <View className={s.between}>
+        <Chip label={platformLabels[schedule.platform]} tone="secondary" />
+        <Text variant="caption" color={colors.onSurfaceVariant}>
+          {schedule.publishedAt ? `Đăng ${dateTime(schedule.publishedAt)}` : ''}
+        </Text>
+      </View>
+      <Text variant="label" weight="bold" onPress={() => router.push({ pathname: '/staff/marketing/editor', params: { id: schedule.contentId } })}>
+        {schedule.title || '(Chưa có tiêu đề)'}
+      </Text>
+      {loading ? (
+        <ActivityIndicator color={colors.primary} />
+      ) : latest ? (
+        <>
+          {figures.map(({ key, label }) => {
+            // Mỗi lần đo là một dòng riêng (M15), nên so được với lần đo trước.
+            const delta = previous ? latest[key] - previous[key] : 0;
+            return <KV key={key} label={label} value={`${count(latest[key])}${delta ? ` (${delta > 0 ? '+' : ''}${count(delta)})` : ''}`} strong />;
+          })}
+          <Text variant="caption" color={colors.onSurfaceVariant}>
+            Cập nhật lúc {dateTime(latest.recordedAt)} · {readings!.length} lần đo
+          </Text>
+        </>
+      ) : (
+        <Text variant="small" color={colors.onSurfaceVariant}>
+          Chưa có số liệu. Bấm “Cập nhật số liệu” để lấy số mới nhất từ {platformLabels[schedule.platform]}.
+        </Text>
+      )}
+      {refresh.isError && (
+        <Text variant="caption" color={colors.error}>
+          {marketingError(refresh.error)}
+        </Text>
+      )}
+      <Button label={refresh.isPending ? 'Đang cập nhật…' : 'Cập nhật số liệu'} leadingIcon="refresh" variant="secondary" size="sm" disabled={refresh.isPending} onPress={() => refresh.mutate()} />
+    </Card>
   );
 }
 
-const styles = StyleSheet.create({
-  list: { gap: 0, paddingVertical: 2 },
-  item: { flexDirection: 'row', gap: 12, paddingVertical: 12 },
-  topLine: { borderTopWidth: 1, borderTopColor: colors.surfaceContainerHigh },
-  rank: { width: 28, height: 28, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceContainerLow },
-  rankTop: { backgroundColor: colors.primary },
-  body: { flex: 1, gap: 6 },
-  foot: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-});
+export default function StaffMarketingAnalyticsScreen() {
+  const { hotelId } = useStaffHotel();
+  // Mới đăng nhất trước. shortcut: chỉ 20 bài mới nhất (mỗi bài một request số liệu); phân trang khi cần xem bài cũ hơn.
+  const published = useQuery({
+    queryKey: ['marketing', 'schedules', hotelId, 'analytics'],
+    queryFn: () => getSchedules(hotelId!, { pageSize: 20, status: ['PUBLISHED'], sort: 'published-desc' }),
+    enabled: !!hotelId,
+  });
+  const schedules = published.data?.schedules ?? [];
+  const metrics = useQueries({
+    queries: schedules.map((x) => ({ queryKey: ['marketing', 'metrics', x.id], queryFn: () => getScheduleMetrics(x.id) })),
+  });
+  // Tổng trên lần đo mới nhất của từng bài đang hiển thị.
+  const total = (key: (typeof figures)[number]['key']) => metrics.reduce((sum, q) => sum + (q.data?.[0]?.[key] ?? 0), 0);
+
+  return (
+    <StaffScreen title="Hiệu quả tiếp thị">
+      <Grid>
+        {figures.map(({ key, label, icon }) => (
+          <Stat key={key} icon={icon} label={label} value={count(total(key))} unit="" foot={`${schedules.length}/${published.data?.meta.total ?? 0} bài đã đăng`} tint={accent} />
+        ))}
+      </Grid>
+      <Banner
+        icon="info"
+        tone="blue"
+        title="Lưu ý về số liệu"
+        text="Số bình luận thường là 0 vì Meta không còn cấp quyền đọc bình luận cho trang kết nối mới. Một số liệu bị nền tảng từ chối cũng được ghi là 0."
+      />
+
+      <Section title="Bài đã đăng" />
+      {published.isPending ? (
+        <ActivityIndicator color={colors.primary} />
+      ) : published.isError ? (
+        <ErrorCard error={published.error} onRetry={() => void published.refetch()} />
+      ) : schedules.length === 0 ? (
+        <Text variant="small" color={colors.onSurfaceVariant} center>
+          Chưa có bài nào được đăng. Bài được lên lịch ở Lịch đăng sẽ xuất hiện tại đây sau khi đăng thành công.
+        </Text>
+      ) : (
+        schedules.map((x, i) => <PostCard key={x.id} schedule={x} readings={metrics[i]?.data} loading={metrics[i]?.isPending ?? true} />)
+      )}
+    </StaffScreen>
+  );
+}

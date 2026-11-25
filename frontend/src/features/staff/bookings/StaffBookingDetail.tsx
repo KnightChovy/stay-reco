@@ -3,21 +3,21 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useState, type ReactNode } from "react";
+import { cn } from "@/lib/utils";
 import {
-  AlertTriangle,
-  ArrowLeft,
+  LogOut,
+  Printer as PrintIcon,
   Ban,
   BedDouble,
   CalendarClock,
-  CheckCircle2,
   Clock,
+  ConciergeBell,
   CreditCard,
   History,
   Loader2,
   Mail,
   MapPin,
   Phone,
-  Printer,
   RefreshCw,
   Send,
   ShieldCheck,
@@ -28,13 +28,28 @@ import {
   UserCog,
   Users,
 } from "lucide-react";
-import type { Booking } from "@stayreco/shared";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { ActionMenu, type ActionMenuItem } from "@/components/common/ActionBar";
+import { EmptyState, ErrorState, LoadingState } from "@/components/common/StateViews";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { buttonVariants } from "@/components/ui/button";
+import { StatusPill } from "@/features/booking/components/StatusPill";
+import { todayInVietnam } from "@/features/booking/lib/stay-calendar";
 import { getApiErrorMessage } from "@/lib/api-error";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
+import { BookingInvoice } from "@/features/booking/components/BookingInvoice";
+import { BookingTimeline } from "@/features/booking/components/BookingTimeline";
+import { FrontDeskAddOns } from "@/features/booking/components/FrontDeskAddOns";
 import {
   useAcceptChange,
   useBooking,
@@ -43,37 +58,17 @@ import {
   useRejectChange,
 } from "../api/staff-queries";
 import {
-  bookingStatusLabels,
   formatCalendarDate,
   formatDateTime,
   formatMoney,
   paymentStatusLabels,
-  toneClasses,
   weekdayLabel,
 } from "../lib/labels";
-
-function StatusBadge({ status }: { status: Booking["status"] }) {
-  const { label, tone } = bookingStatusLabels[status];
-  return (
-    <Badge variant="outline" className={`text-xs font-semibold ${toneClasses[tone]}`}>
-      {label}
-    </Badge>
-  );
-}
-
-function PaymentBadge({ status }: { status: Booking["paymentStatus"] }) {
-  const { label, tone } = paymentStatusLabels[status];
-  return (
-    <Badge variant="outline" className={`text-xs font-semibold ${toneClasses[tone]}`}>
-      {label}
-    </Badge>
-  );
-}
 
 function Field({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div>
-      <span className="block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+      <span className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
         {label}
       </span>
       <span className="mt-0.5 block text-sm font-semibold text-foreground">{value}</span>
@@ -92,6 +87,7 @@ export function StaffBookingDetail({ bookingId }: { bookingId: string }) {
 
   const [changeReason, setChangeReason] = useState("");
   const [refundNote, setRefundNote] = useState("");
+  const [noShowOpen, setNoShowOpen] = useState(false);
   const noShow = useNoShow();
   const acceptChange = useAcceptChange();
   const rejectChange = useRejectChange();
@@ -99,72 +95,79 @@ export function StaffBookingDetail({ bookingId }: { bookingId: string }) {
 
   if (!isRealId) {
     return (
-      <Card className="mx-auto mt-10 max-w-xl space-y-4 border-border p-8 text-center shadow-2xs">
-        <ShieldCheck className="mx-auto size-10 text-muted-foreground" />
-        <div className="space-y-1">
-          <h1 className="text-lg font-bold text-foreground">Đơn mẫu chưa có trên hệ thống</h1>
-          <p className="text-sm text-muted-foreground">
-            Danh sách đặt phòng của staff đang dùng dữ liệu mẫu vì API danh sách
-            (<code className="font-mono text-xs">GET /hotels/:hotelId/bookings</code>) chưa được
-            phát hành. Trang chi tiết chỉ tải được đơn có id thật từ backend.
-          </p>
-        </div>
-        <Link href="/staff/bookings">
-          <Button className="gap-2">
-            <ArrowLeft className="size-4" /> Quay lại danh sách
-          </Button>
-        </Link>
-      </Card>
+      <EmptyState
+        icon={ShieldCheck}
+        title="Không tìm thấy đơn này"
+        description="Đường dẫn không phải một mã đơn hợp lệ. Hãy mở đơn từ danh sách đặt phòng."
+        action={
+          <Link href="/staff/bookings" className={cn(buttonVariants(), "h-10")}>
+            Danh sách đặt phòng
+          </Link>
+        }
+        className="mx-auto mt-10 max-w-xl"
+      />
     );
   }
 
-  if (isLoading) {
-    return (
-      <div className="flex min-h-[50vh] items-center justify-center gap-2 text-sm text-muted-foreground">
-        <Loader2 className="size-5 animate-spin" /> Đang tải đặt phòng…
-      </div>
-    );
-  }
+  if (isLoading) return <LoadingState rows={4} label="Đang tải đặt phòng…" />;
 
   if (error || !booking) {
     return (
-      <Card className="mx-auto mt-10 max-w-xl space-y-4 border-border p-8 text-center shadow-2xs">
-        <ShieldCheck className="mx-auto size-10 text-muted-foreground" />
-        <div className="space-y-1">
-          <h1 className="text-lg font-bold text-foreground">Không tải được đặt phòng</h1>
-          <p className="text-sm text-muted-foreground">
-            {error
-              ? getApiErrorMessage(error, "Đơn không tồn tại, không thuộc khách sạn của bạn, hoặc bạn thiếu quyền BOOKING/REFUND.")
-              : "Không tìm thấy đơn đặt phòng."}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center justify-center gap-2">
-          <Button variant="outline" onClick={() => void refetch()} className="gap-2">
-            <RefreshCw className="size-4" /> Thử lại
-          </Button>
-          <Link href="/staff/bookings">
-            <Button className="gap-2">
-              <ArrowLeft className="size-4" /> Danh sách đặt phòng
-            </Button>
+      <ErrorState
+        title="Không tải được đặt phòng"
+        error={error}
+        fallback="Đơn không tồn tại, không thuộc khách sạn của bạn, hoặc bạn thiếu quyền BOOKING/REFUND."
+        onRetry={() => void refetch()}
+        action={
+          <Link href="/staff/bookings" className={cn(buttonVariants({ variant: "outline" }), "h-10")}>
+            Danh sách đặt phòng
           </Link>
-        </div>
-      </Card>
+        }
+        className="mx-auto mt-10 max-w-xl"
+      />
     );
   }
 
   const created = formatDateTime(booking.createdAt);
   const pendingChange = booking.changeRequest?.status === "PENDING";
   const refundPending = booking.paymentStatus === "REFUND_PENDING";
-  const today = new Date().toLocaleDateString("en-CA");
+  const today = todayInVietnam();
   const canNoShow =
     booking.status === "CONFIRMED" && booking.paymentStatus === "PAID" && booking.checkIn < today;
+  const canCheckIn =
+    booking.status === "CONFIRMED" && booking.paymentStatus === "PAID" && booking.checkIn <= today && booking.checkOut > today;
+  const code = encodeURIComponent(booking.code);
+
+  const primary = pendingChange
+    ? { label: "Xử lý yêu cầu đổi thông tin", href: "#change-request", icon: UserCog }
+    : refundPending
+      ? { label: "Chuyển hoàn tiền", href: "#refund-request", icon: Send }
+      : canCheckIn
+        ? { label: "Nhận phòng", href: `/staff/check-in?code=${code}`, icon: BedDouble }
+        : booking.status === "CHECKED_IN"
+          ? { label: "Trả phòng", href: `/staff/check-out?code=${code}`, icon: LogOut }
+          : null;
+
+  const menu: ActionMenuItem[] = [
+    { label: "Làm mới", description: "Tải lại đơn từ hệ thống", icon: RefreshCw, onSelect: () => void refetch(), disabled: isFetching },
+    { label: "In phiếu đăng ký", icon: PrintIcon, onSelect: () => window.print() },
+    ...(canNoShow
+      ? [{
+          label: "Đánh dấu khách không đến",
+          description: "Khách sạn giữ tiền, các đêm còn lại được giải phóng. Không hoàn tác được.",
+          icon: Ban,
+          destructive: true,
+          onSelect: () => setNoShowOpen(true),
+        }]
+      : []),
+  ];
 
   return (
     <div className="space-y-6 pb-16">
-      <Card className="space-y-4 rounded-2xl border border-border bg-white p-6 shadow-2xs">
+      <Card className="space-y-4 rounded-2xl border border-border bg-card p-6 shadow-2xs">
         <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
           <Link href="/staff/dashboard" className="transition-colors hover:text-primary">
-            Tác vụ vận hành
+            Bàn làm việc
           </Link>
           <span>›</span>
           <Link href="/staff/bookings" className="transition-colors hover:text-primary">
@@ -181,8 +184,7 @@ export function StaffBookingDetail({ bookingId }: { bookingId: string }) {
                 Chi tiết đặt phòng{" "}
                 <span className="font-mono font-bold text-primary">#{booking.code}</span>
               </h1>
-              <StatusBadge status={booking.status} />
-              <PaymentBadge status={booking.paymentStatus} />
+              <StatusPill booking={booking} />
             </div>
             <p className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
               <span className="inline-flex items-center gap-1">
@@ -195,31 +197,25 @@ export function StaffBookingDetail({ bookingId }: { bookingId: string }) {
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5">
-            <Button
-              variant="outline"
-              onClick={() => void refetch()}
-              disabled={isFetching}
-              className="h-11 gap-2 border-border bg-slate-50 text-xs font-semibold text-foreground hover:bg-slate-100"
-            >
-              <RefreshCw className={`size-4 ${isFetching ? "animate-spin" : ""}`} /> Làm mới
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => window.print()}
-              className="h-11 gap-2 border-border bg-slate-50 text-xs font-semibold text-foreground hover:bg-slate-100"
-            >
-              <Printer className="size-4" /> In phiếu đăng ký
-            </Button>
+          <div className="flex shrink-0 items-center gap-2">
+            {primary && (
+              <a
+                href={primary.href}
+                className={cn(buttonVariants(), "h-11 flex-1 gap-2 whitespace-nowrap px-4 text-sm font-semibold lg:flex-none")}
+              >
+                <primary.icon className="size-4" aria-hidden /> {primary.label}
+              </a>
+            )}
+            <ActionMenu items={menu} className="h-11" />
           </div>
         </div>
       </Card>
 
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
         <div className="flex flex-col space-y-6 lg:col-span-8">
-          <Card className="space-y-5 rounded-2xl border border-border bg-white p-6 shadow-2xs">
+          <Card className="space-y-5 rounded-2xl border border-border bg-card p-6 shadow-2xs">
             <div className="flex items-center gap-3 border-b border-border pb-3">
-              <div className="flex size-10 items-center justify-center rounded-xl bg-orange-100 font-bold text-[#934a33]">
+              <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10 font-bold text-primary">
                 <User className="size-5" />
               </div>
               <div>
@@ -228,8 +224,16 @@ export function StaffBookingDetail({ bookingId }: { bookingId: string }) {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 rounded-xl border border-border bg-slate-50 p-4 md:grid-cols-3">
+            <div className="grid grid-cols-1 gap-4 rounded-xl border border-border bg-muted/50 p-4 md:grid-cols-3">
               <Field label="Họ và tên khách" value={booking.guestName} />
+              <Field
+                label="Người đặt"
+                value={
+                  booking.bookedBy.name === booking.guestName
+                    ? "Chính khách lưu trú"
+                    : `${booking.bookedBy.name}${booking.bookedBy.phone ? ` · ${booking.bookedBy.phone}` : ""}`
+                }
+              />
               <Field
                 label="Số điện thoại"
                 value={
@@ -250,7 +254,7 @@ export function StaffBookingDetail({ bookingId }: { bookingId: string }) {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4 rounded-xl border border-border bg-slate-50 p-4 text-xs md:grid-cols-4">
+            <div className="grid grid-cols-2 gap-4 rounded-xl border border-border bg-muted/50 p-4 text-xs md:grid-cols-4">
               <Field label="Số phòng đặt" value={`${booking.rooms} phòng`} />
               <Field label="Số khách" value={`${booking.guests} khách`} />
               <Field label="Số đêm" value={`${booking.nights} đêm`} />
@@ -258,7 +262,7 @@ export function StaffBookingDetail({ bookingId }: { bookingId: string }) {
             </div>
 
             <div className="space-y-1 rounded-xl border border-orange-200/70 bg-orange-50/80 p-4">
-              <div className="flex items-center gap-2 text-xs font-bold text-[#934a33]">
+              <div className="flex items-center gap-2 text-xs font-bold text-primary">
                 <Sparkles className="size-3.5" /> Yêu cầu đặc biệt
               </div>
               <p className="pl-6 text-xs italic leading-relaxed text-foreground">
@@ -267,7 +271,7 @@ export function StaffBookingDetail({ bookingId }: { bookingId: string }) {
             </div>
           </Card>
 
-          <Card className="space-y-5 rounded-2xl border border-border bg-white p-6 shadow-2xs">
+          <Card className="space-y-5 rounded-2xl border border-border bg-card p-6 shadow-2xs">
             <div className="flex items-center gap-3 border-b border-border pb-3">
               <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10 font-bold text-primary">
                 <BedDouble className="size-5" />
@@ -279,7 +283,7 @@ export function StaffBookingDetail({ bookingId }: { bookingId: string }) {
             </div>
 
             <div className="grid grid-cols-1 gap-5 md:grid-cols-12">
-              <div className="relative min-h-[160px] overflow-hidden rounded-xl bg-slate-100 shadow-2xs md:col-span-5">
+              <div className="relative min-h-[160px] overflow-hidden rounded-xl bg-muted shadow-2xs md:col-span-5">
                 {booking.hotel.coverImageUrl ? (
                   <Image
                     src={booking.hotel.coverImageUrl}
@@ -294,15 +298,15 @@ export function StaffBookingDetail({ bookingId }: { bookingId: string }) {
                   </div>
                 )}
                 <div className="absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-black/60 via-transparent to-transparent p-3 text-white">
-                  <span className="text-[11px] font-bold uppercase">{booking.roomType.name}</span>
+                  <span className="text-xs font-bold uppercase">{booking.roomType.name}</span>
                   <span className="text-xs font-semibold">{booking.hotel.name}</span>
                 </div>
               </div>
 
               <div className="flex flex-col justify-between space-y-4 md:col-span-7">
-                <div className="grid grid-cols-2 gap-3 rounded-xl border border-border bg-slate-50 p-3.5 text-xs">
+                <div className="grid grid-cols-2 gap-3 rounded-xl border border-border bg-muted/50 p-3.5 text-xs">
                   <div className="space-y-0.5 border-r border-border pr-2">
-                    <span className="block text-[10px] font-bold uppercase text-muted-foreground">
+                    <span className="block text-xs font-bold uppercase text-muted-foreground">
                       Nhận phòng
                     </span>
                     <span className="block text-sm font-bold text-primary">
@@ -313,10 +317,10 @@ export function StaffBookingDetail({ bookingId }: { bookingId: string }) {
                     </span>
                   </div>
                   <div className="space-y-0.5 pl-2">
-                    <span className="block text-[10px] font-bold uppercase text-muted-foreground">
+                    <span className="block text-xs font-bold uppercase text-muted-foreground">
                       Trả phòng
                     </span>
-                    <span className="block text-sm font-bold text-[#934a33]">
+                    <span className="block text-sm font-bold text-primary">
                       {formatCalendarDate(booking.checkOut)}
                     </span>
                     <span className="block text-xs font-semibold capitalize text-foreground">
@@ -326,16 +330,16 @@ export function StaffBookingDetail({ bookingId }: { bookingId: string }) {
                 </div>
 
                 <div className="grid grid-cols-3 gap-2 text-center text-xs">
-                  <div className="rounded-lg border border-border bg-slate-100 p-2">
-                    <span className="block text-[10px] font-semibold text-muted-foreground">Thời gian</span>
+                  <div className="rounded-lg border border-border bg-muted p-2">
+                    <span className="block text-xs font-semibold text-muted-foreground">Thời gian</span>
                     <span className="block font-bold text-foreground">{booking.nights} đêm</span>
                   </div>
-                  <div className="rounded-lg border border-border bg-slate-100 p-2">
-                    <span className="block text-[10px] font-semibold text-muted-foreground">Số khách</span>
+                  <div className="rounded-lg border border-border bg-muted p-2">
+                    <span className="block text-xs font-semibold text-muted-foreground">Số khách</span>
                     <span className="block font-bold text-foreground">{booking.guests}</span>
                   </div>
-                  <div className="rounded-lg border border-border bg-slate-100 p-2">
-                    <span className="block text-[10px] font-semibold text-muted-foreground">Số phòng</span>
+                  <div className="rounded-lg border border-border bg-muted p-2">
+                    <span className="block text-xs font-semibold text-muted-foreground">Số phòng</span>
                     <span className="block font-bold text-foreground">{booking.rooms}</span>
                   </div>
                 </div>
@@ -343,79 +347,46 @@ export function StaffBookingDetail({ bookingId }: { bookingId: string }) {
             </div>
           </Card>
 
-          <Card className="space-y-5 rounded-2xl border border-border bg-white p-6 shadow-2xs">
+          <Card className="space-y-5 rounded-2xl border border-border bg-card p-6 shadow-2xs">
             <div className="flex items-center gap-3 border-b border-border pb-3">
               <div className="flex size-10 items-center justify-center rounded-xl bg-emerald-100 font-bold text-emerald-800">
                 <CreditCard className="size-5" />
               </div>
               <div>
-                <h2 className="text-base font-bold text-foreground">Quyết toán tài chính</h2>
-                <p className="text-xs text-muted-foreground">Giá đã chốt tại thời điểm đặt phòng</p>
+                <h2 className="text-base font-bold text-foreground">Hoá đơn &amp; thanh toán</h2>
+                <p className="text-xs text-muted-foreground">Giá đã chốt lúc đặt; dịch vụ phát sinh thu tại quầy</p>
               </div>
             </div>
 
-            <div className="overflow-x-auto text-xs">
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="border-b border-border bg-slate-50 text-[10px] font-bold uppercase text-muted-foreground">
-                    <th className="px-3 py-2.5">Đêm</th>
-                    <th className="px-3 py-2.5">Ngày</th>
-                    <th className="px-3 py-2.5 text-right">Giá mỗi đêm</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {booking.nightlyPrices.map((night) => (
-                    <tr key={night.date}>
-                      <td className="px-3 py-3 font-semibold text-foreground">
-                        {formatCalendarDate(night.date)}
-                      </td>
-                      <td className="px-3 py-3 capitalize text-muted-foreground">
-                        {weekdayLabel(night.date)}
-                      </td>
-                      <td className="px-3 py-3 text-right font-mono font-semibold text-foreground">
-                        {formatMoney(night.price)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            {booking.holdExpiresAt && (
+              <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">
+                Đang giữ phòng chờ thanh toán đến {formatDateTime(booking.holdExpiresAt)}
+              </p>
+            )}
+            <BookingInvoice booking={booking} />
+          </Card>
 
-            <div className="flex flex-col items-center justify-between gap-4 rounded-xl bg-primary p-4 text-primary-foreground shadow-sm sm:flex-row">
-              <div className="flex items-center gap-3">
-                <CheckCircle2 className="size-6 shrink-0 text-emerald-400" />
-                <div>
-                  <span className="block text-xs font-bold">
-                    {booking.paymentStatus === "PAID"
-                      ? `Đã thanh toán${booking.paidAt ? ` lúc ${formatDateTime(booking.paidAt)}` : ""}`
-                      : paymentStatusLabels[booking.paymentStatus].label}
-                  </span>
-                  <span className="block text-[11px] text-white/80">
-                    {booking.holdExpiresAt
-                      ? `Giữ phòng đến ${formatDateTime(booking.holdExpiresAt)}`
-                      : `${booking.rooms} phòng × ${booking.nights} đêm`}
-                  </span>
-                </div>
+          <Card className="space-y-4 rounded-2xl border border-border bg-card p-6 shadow-2xs">
+            <div className="flex items-center gap-3 border-b border-border pb-3">
+              <div className="flex size-10 items-center justify-center rounded-xl bg-sky-100 font-bold text-sky-800">
+                <ConciergeBell className="size-5" />
               </div>
-              <div className="text-right">
-                <span className="block text-[10px] font-semibold uppercase text-white/80">
-                  Tổng thanh toán
-                </span>
-                <span className="block font-mono text-xl font-bold text-white">
-                  {formatMoney(booking.totalAmount)}
-                </span>
+              <div>
+                <h2 className="text-base font-bold text-foreground">Dịch vụ thêm</h2>
+                <p className="text-xs text-muted-foreground">Đặt kèm khi đặt phòng, hoặc phát sinh trong kỳ lưu trú</p>
               </div>
             </div>
+            <FrontDeskAddOns booking={booking} />
           </Card>
         </div>
 
         <div className="flex flex-col space-y-6 lg:col-span-4">
           {pendingChange && (
-            <Card className="space-y-4 rounded-2xl border border-amber-200 bg-amber-50/60 p-5 shadow-none">
+            <Card id="change-request" className="scroll-mt-24 space-y-4 rounded-2xl border border-amber-200 bg-amber-50/60 p-5 shadow-none">
               <h2 className="flex items-center gap-2 text-sm font-bold text-amber-900">
                 <UserCog className="size-4" /> Yêu cầu đổi thông tin khách
               </h2>
-              <div className="space-y-2 rounded-lg bg-white p-3 text-xs">
+              <div className="space-y-2 rounded-lg bg-card p-3 text-xs">
                 {booking.changeRequest?.changes.guestName && (
                   <p><span className="text-muted-foreground">Họ tên:</span> <strong>{booking.changeRequest.changes.guestName}</strong></p>
                 )}
@@ -428,7 +399,7 @@ export function StaffBookingDetail({ bookingId }: { bookingId: string }) {
                 {booking.changeRequest?.changes.specialRequests !== undefined && (
                   <p><span className="text-muted-foreground">Yêu cầu:</span> <strong>{booking.changeRequest.changes.specialRequests ?? "Xoá"}</strong></p>
                 )}
-                <p className="text-[10px] text-muted-foreground">
+                <p className="text-xs text-muted-foreground">
                   Gửi lúc {formatDateTime(booking.changeRequest?.requestedAt)}
                 </p>
               </div>
@@ -445,7 +416,7 @@ export function StaffBookingDetail({ bookingId }: { bookingId: string }) {
                 <Button
                   onClick={() => acceptChange.mutate(booking.id)}
                   disabled={acceptChange.isPending || rejectChange.isPending}
-                  className="h-9 flex-1 gap-1.5 bg-emerald-600 text-xs font-semibold text-white hover:bg-emerald-700"
+                  className="h-10 flex-1 gap-1.5 text-sm font-semibold"
                 >
                   <ThumbsUp className="size-3.5" /> Chấp nhận
                 </Button>
@@ -456,7 +427,7 @@ export function StaffBookingDetail({ bookingId }: { bookingId: string }) {
                     rejectChange.mutate({ bookingId: booking.id, reason: changeReason.trim() });
                   }}
                   disabled={!changeReason.trim() || acceptChange.isPending || rejectChange.isPending}
-                  className="h-9 flex-1 gap-1.5 border-red-200 text-xs font-semibold text-red-700"
+                  className="h-10 flex-1 gap-1.5 text-sm font-semibold text-destructive"
                 >
                   <ThumbsDown className="size-3.5" /> Từ chối
                 </Button>
@@ -464,37 +435,39 @@ export function StaffBookingDetail({ bookingId }: { bookingId: string }) {
               <Input
                 value={changeReason}
                 onChange={(event) => setChangeReason(event.target.value)}
+                aria-label="Lý do từ chối"
                 placeholder="Lý do từ chối (bắt buộc khi từ chối)…"
-                className="h-9 bg-white text-xs"
+                className="h-10 bg-card text-sm"
               />
             </Card>
           )}
 
           {refundPending && (
-            <Card className="space-y-3 rounded-2xl border border-sky-200 bg-sky-50/60 p-5 shadow-none">
+            <Card id="refund-request" className="scroll-mt-24 space-y-3 rounded-2xl border border-sky-200 bg-sky-50/60 p-5 shadow-none">
               <h2 className="flex items-center gap-2 text-sm font-bold text-sky-900">
                 <Send className="size-4" /> Yêu cầu hoàn tiền
               </h2>
               <p className="text-xs text-sky-900">
                 Khách yêu cầu hoàn <strong>{formatMoney(booking.refund?.amount ?? 0)}</strong>. Chuyển yêu cầu này
-                tới chủ khách sạn để quyết định.
+                tới chủ khách sạn để quyết định; ghi chú là bắt buộc.
               </p>
               {forwardRefund.error && (
-                <p className="text-xs text-red-600">
+                <p className="text-xs text-destructive">
                   {getApiErrorMessage(forwardRefund.error, "Không chuyển được yêu cầu.")}
                 </p>
               )}
               {forwardRefund.isSuccess ? (
-                <p className="rounded-lg bg-white p-3 text-xs font-semibold text-emerald-700">
-                  Đã chuyển yêu cầu tới partner.
+                <p className="rounded-lg bg-card p-3 text-xs font-semibold text-emerald-700">
+                  Đã chuyển yêu cầu cho chủ khách sạn. Chủ khách sạn sẽ duyệt hoặc từ chối.
                 </p>
               ) : (
                 <>
                   <Input
                     value={refundNote}
                     onChange={(event) => setRefundNote(event.target.value)}
-                    placeholder="Ghi chú đã kiểm tra cho partner…"
-                    className="h-9 bg-white text-xs"
+                    aria-label="Ghi chú cho chủ khách sạn (bắt buộc)"
+                    placeholder="Ghi chú đã kiểm tra, gửi chủ khách sạn (bắt buộc)…"
+                    className="h-10 bg-card text-sm"
                   />
                   <Button
                     onClick={() => {
@@ -502,42 +475,16 @@ export function StaffBookingDetail({ bookingId }: { bookingId: string }) {
                       forwardRefund.mutate({ bookingId: booking.id, note: refundNote.trim() });
                     }}
                     disabled={!refundNote.trim() || forwardRefund.isPending}
-                    className="h-9 w-full gap-1.5 bg-sky-700 text-xs font-semibold text-white hover:bg-sky-800"
+                    className="h-10 w-full gap-1.5 text-sm font-semibold"
                   >
-                    <Send className="size-3.5" /> Chuyển partner
+                    <Send className="size-3.5" /> Chuyển cho chủ khách sạn
                   </Button>
                 </>
               )}
             </Card>
           )}
 
-          {canNoShow && (
-            <Card className="space-y-3 rounded-2xl border border-red-200 bg-red-50/60 p-5 shadow-none">
-              <h2 className="flex items-center gap-2 text-sm font-bold text-red-900">
-                <Ban className="size-4" /> Khách không đến
-              </h2>
-              <p className="text-xs text-red-800">
-                Đánh dấu khách không đến sau ngày nhận phòng. Khách sạn giữ tiền và các đêm còn lại được giải phóng.
-              </p>
-              {noShow.error && (
-                <p className="text-xs text-red-700">{getApiErrorMessage(noShow.error, "Không thể đánh dấu no-show.")}</p>
-              )}
-              <Button
-                variant="outline"
-                onClick={() => {
-                  if (window.confirm(`Đánh dấu khách không đến cho đơn ${booking.code}?`)) {
-                    noShow.mutate(booking.id);
-                  }
-                }}
-                disabled={noShow.isPending}
-                className="h-9 w-full gap-1.5 border-red-300 text-xs font-semibold text-red-700 hover:bg-red-50"
-              >
-                <AlertTriangle className="size-3.5" /> Đánh dấu không đến
-              </Button>
-            </Card>
-          )}
-
-          <Card className="space-y-4 rounded-2xl border border-border bg-white p-5 shadow-2xs">
+          <Card className="space-y-4 rounded-2xl border border-border bg-card p-5 shadow-2xs">
             <h2 className="flex items-center gap-2 text-sm font-bold text-foreground">
               <ShieldCheck className="size-4 text-primary" /> Chính sách huỷ
             </h2>
@@ -570,35 +517,21 @@ export function StaffBookingDetail({ bookingId }: { bookingId: string }) {
                 </div>
               )}
               {booking.cancelReason && (
-                <p className="rounded-lg bg-slate-50 p-2.5 text-[11px] text-muted-foreground">
+                <p className="rounded-lg bg-muted/50 p-2.5 text-xs text-muted-foreground">
                   Lý do: {booking.cancelReason}
                 </p>
               )}
             </div>
           </Card>
 
-          <Card className="space-y-4 rounded-2xl border border-border bg-white p-5 shadow-2xs">
+          <Card className="space-y-4 rounded-2xl border border-border bg-card p-5 shadow-2xs">
             <h2 className="flex items-center gap-2 text-sm font-bold text-foreground">
-              <History className="size-4 text-[#934a33]" /> Lịch sử đơn
+              <History className="size-4 text-primary" /> Lịch sử đơn
             </h2>
-            {booking.timeline.length === 0 ? (
-              <p className="text-xs text-muted-foreground">Chưa có cập nhật.</p>
-            ) : (
-              <ol className="space-y-3">
-                {booking.timeline.map((entry, index) => (
-                  <li key={`${entry.at}-${index}`} className="flex gap-3 text-xs">
-                    <span className="mt-1 size-2 shrink-0 rounded-full bg-primary" />
-                    <div>
-                      <p className="font-semibold text-foreground">{entry.event}</p>
-                      <p className="text-[11px] text-muted-foreground">{formatDateTime(entry.at)}</p>
-                    </div>
-                  </li>
-                ))}
-              </ol>
-            )}
+            <BookingTimeline timeline={booking.timeline} />
           </Card>
 
-          <Card className="space-y-3 rounded-2xl border border-border bg-white p-5 shadow-2xs">
+          <Card className="space-y-3 rounded-2xl border border-border bg-card p-5 shadow-2xs">
             <h2 className="flex items-center gap-2 text-sm font-bold text-foreground">
               <CalendarClock className="size-4 text-primary" /> Thông tin khác
             </h2>
@@ -613,6 +546,34 @@ export function StaffBookingDetail({ bookingId }: { bookingId: string }) {
           </Card>
         </div>
       </div>
+
+      <AlertDialog open={noShowOpen} onOpenChange={setNoShowOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Đánh dấu khách không đến?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Đơn {booking.code} của {booking.guestName} sẽ chuyển sang &quot;Khách không đến&quot;. Khách sạn giữ
+              tiền và các đêm còn lại được giải phóng. Không hoàn tác được.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {noShow.error && (
+            <p role="alert" className="text-sm text-destructive">
+              {getApiErrorMessage(noShow.error, "Không thể đánh dấu khách không đến.")}
+            </p>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel className="h-10">Giữ nguyên</AlertDialogCancel>
+            <Button
+              variant="destructive"
+              className="h-10 gap-2"
+              disabled={noShow.isPending}
+              onClick={() => noShow.mutate(booking.id, { onSuccess: () => setNoShowOpen(false) })}
+            >
+              {noShow.isPending && <Loader2 className="size-4 animate-spin" />} Xác nhận không đến
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

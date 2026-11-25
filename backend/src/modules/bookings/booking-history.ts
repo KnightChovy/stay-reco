@@ -19,6 +19,8 @@ const HISTORY_ACTIONS = {
   [AuditAction.BOOKING_CHANGE_REQUESTED]: 'CHANGE_REQUESTED',
   [AuditAction.BOOKING_CHANGE_ACCEPTED]: 'CHANGE_ACCEPTED',
   [AuditAction.BOOKING_CHANGE_REJECTED]: 'CHANGE_REJECTED',
+  [AuditAction.BOOKING_ADD_ON_ADDED]: 'ADD_ON_ADDED',
+  [AuditAction.BOOKING_ADD_ON_REMOVED]: 'ADD_ON_REMOVED',
 } as const;
 
 /** The audit actions that open and close a change request, latest first decides whether one is waiting. */
@@ -235,14 +237,13 @@ export async function pendingChangeRequests(
 ): Promise<{ bookingId: string; requestedAt: Date }[]> {
   const rows = await db.$queryRaw<{ booking_id: string; requested_at: Date }[]>`
     SELECT b.booking_id, last.created_at AS requested_at FROM booking b
-    JOIN room_type rt ON rt.room_type_id = b.room_type_id
     JOIN LATERAL (
       SELECT a.action, a.created_at FROM audit_log a
       WHERE a.entity_type = 'booking' AND a.entity_id = b.booking_id
         AND a.action IN (${Prisma.join(CHANGE_ACTIONS)})
       ORDER BY a.created_at DESC LIMIT 1
     ) last ON true
-    WHERE rt.hotel_id = ${hotelId}::uuid AND b.status = 'CONFIRMED'
+    WHERE b.hotel_id = ${hotelId}::uuid AND b.status = 'CONFIRMED'
       AND last.action = ${AuditAction.BOOKING_CHANGE_REQUESTED}
     ORDER BY last.created_at`;
   return rows.map((r) => ({

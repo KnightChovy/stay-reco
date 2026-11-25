@@ -15,13 +15,25 @@ import { BookingsModule } from './modules/bookings/bookings.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
 import { HotelsModule } from './modules/hotels/hotels.module';
 import { PaymentsModule } from './modules/payments/payments.module';
+import { PayoutsModule } from './modules/payouts/payouts.module';
+import { PlatformModule } from './modules/platform/platform.module';
+import { AdminModule } from './modules/admin/admin.module';
 import { PricingModule } from './modules/pricing/pricing.module';
+import { AddOnsModule } from './modules/add-ons/add-ons.module';
 import { RoomsModule } from './modules/rooms/rooms.module';
 import { StaffModule } from './modules/staff/staff.module';
 import { StatsModule } from './modules/stats/stats.module';
 import { StaysModule } from './modules/stays/stays.module';
 import { MailModule } from './modules/mail/mail.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { ReviewsModule } from './modules/reviews/reviews.module';
+import { LoyaltyModule } from './modules/loyalty/loyalty.module';
+import { MarketingModule } from './modules/marketing/marketing.module';
+import { OnboardingModule } from './modules/onboarding/onboarding.module';
+import { PreferencesModule } from './modules/preferences/preferences.module';
+import { PromotionsModule } from './modules/promotions/promotions.module';
+import { RecommendationsModule } from './modules/recommendations/recommendations.module';
+import { AssistantModule } from './modules/assistant/assistant.module';
 import { StorageModule } from './modules/storage/storage.module';
 import { VerificationModule } from './modules/verification/verification.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -56,14 +68,26 @@ import { PrismaModule } from './prisma/prisma.module';
     HotelsModule,
     RoomsModule,
     PricingModule,
+    AddOnsModule,
     AvailabilityModule,
     StaysModule,
     BookingsModule,
     PaymentsModule,
+    PayoutsModule,
+    PlatformModule,
+    AdminModule,
     StaffModule,
     VerificationModule,
     StatsModule,
     NotificationsModule,
+    ReviewsModule,
+    PromotionsModule,
+    LoyaltyModule,
+    PreferencesModule,
+    RecommendationsModule,
+    AssistantModule,
+    OnboardingModule,
+    MarketingModule,
   ],
   controllers: [AppController],
   providers: [

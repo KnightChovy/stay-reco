@@ -7,6 +7,7 @@ import {
   useQueryClient,
   type QueryKey,
 } from "@tanstack/react-query";
+import type { ActionItem } from "@stayreco/shared";
 import { getApiErrorMessage } from "@/lib/api-error";
 import * as partnerService from "@/services/partner.service";
 import { usePartnerActions } from "../components/PartnerActionProvider";
@@ -32,6 +33,7 @@ export const partnerKeys = {
   bookings: (hotelId: string, params: partnerService.HotelBookingsParams) =>
     [...partnerKeys.bookingsOf(hotelId), params] as const,
   booking: (bookingId: string) => [...partnerKeys.all, "booking", bookingId] as const,
+  checkOutQuote: (bookingId: string) => [...partnerKeys.booking(bookingId), "check-out-quote"] as const,
   /** Every dashboard figure of a hotel, so the refresh button can refetch them together. */
   statsOf: (hotelId: string) => [...partnerKeys.all, "stats", hotelId] as const,
   actionItems: (hotelId: string) => [...partnerKeys.statsOf(hotelId), "action-items"] as const,
@@ -154,6 +156,16 @@ export function useRefundQueueCount(hotelId: string | undefined) {
   return { ...query, count: query.data?.meta.total ?? 0 };
 }
 
+/** Late fee and early check-out of checking out now; refetched each time it is shown (it depends on the time). */
+export function useCheckOutQuote(bookingId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: partnerKeys.checkOutQuote(bookingId),
+    queryFn: () => partnerService.getCheckOutQuote(bookingId),
+    enabled,
+    staleTime: 0,
+  });
+}
+
 export function useBooking(bookingId: string | undefined) {
   return useQuery({
     queryKey: partnerKeys.booking(bookingId ?? ""),
@@ -168,6 +180,15 @@ export function useActionItems(hotelId: string | undefined) {
     queryFn: () => partnerService.getActionItems(hotelId!),
     enabled: !!hotelId,
   });
+}
+
+/**
+ * One action item of the hotel, typed by its `type` (undefined when there is none). Lets the screen an item links to
+ * mark the rows the item is about (its `params` ids), from the same cached request as the dashboard.
+ */
+export function useActionItem<T extends ActionItem["type"]>(hotelId: string | undefined, type: T) {
+  const query = useActionItems(hotelId);
+  return query.data?.items.find((item): item is Extract<ActionItem, { type: T }> => item.type === type);
 }
 
 export function useTodayStats(hotelId: string | undefined, arrivalsLimit?: number) {
@@ -220,6 +241,13 @@ type PartnerMutationOptions<TData, TVars> = {
  * One mutation wrapper for every partner write: shows the outcome as a notice and refreshes the affected queries.
  * Use `isPending` to disable the submit button so a double click sends one request.
  */
+/** Downloads the dashboard workbook of a period; nothing to invalidate, the figures do not change. */
+export function useExportStats(hotelId: string) {
+  return usePartnerMutation((params: partnerService.StatsRangeParams) => partnerService.exportStats(hotelId, params), {
+    invalidate: () => [],
+  });
+}
+
 export function usePartnerMutation<TData, TVars = void>(
   mutationFn: (vars: TVars) => Promise<TData>,
   { invalidate, successMessage, errorNotice = true, onSuccess }: PartnerMutationOptions<TData, TVars>,

@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { router } from 'expo-router';
 import { Chip } from '@/components/ui/chip';
 import { Icon } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
 import { colors } from '@/constants/theme';
 import { conversations, inboxMatches, type Conversation, type InboxFilter } from '@/features/staff/data';
-import { Avatar, FilterChips, StaffTabScreen, accent, s } from '@/features/staff/ui';
+import { Avatar, FilterChips, StaffTabScreen, s } from '@/features/staff/ui';
 
 const filters: { key: InboxFilter; label: string }[] = [
   { key: 'all', label: 'Tất cả' },
@@ -39,19 +39,19 @@ export default function StaffInboxScreen() {
             key={c.id}
             accessibilityRole="button"
             onPress={() => router.push({ pathname: '/staff/chat', params: { id: c.id } })}
-            style={styles.item}
+            className="flex-row items-center gap-3 border-b border-surface-container-high py-3.5"
           >
             <View>
               <Avatar text={c.avatar} size={46} />
-              <View style={styles.channel}>
-                <Text variant="caption" weight="bold" color={colors.onPrimary} style={styles.channelText}>
+              <View className="absolute -bottom-1.5 -left-1 -right-1 items-center rounded-full border-2 border-surface bg-primary">
+                <Text variant="caption" weight="bold" color={colors.onPrimary} style={{ fontSize: 9, lineHeight: 12 }}>
                   {c.channel}
                 </Text>
               </View>
             </View>
-            <View style={[s.flex, styles.body]}>
-              <View style={s.between}>
-                <Text variant="label" weight="bold" style={s.flex} numberOfLines={1}>
+            <View className={`gap-[3px] ${s.flex}`}>
+              <View className={s.between}>
+                <Text variant="label" weight="bold" className={s.flex} numberOfLines={1}>
                   {c.guestName}
                 </Text>
                 <Text variant="caption" color={colors.onSurfaceVariant}>
@@ -61,19 +61,19 @@ export default function StaffInboxScreen() {
               <Text variant="caption" color={colors.onSurfaceVariant}>
                 {c.roomNum}
               </Text>
-              <View style={s.row}>
-                <Text variant="small" numberOfLines={1} style={s.flex}>
+              <View className={s.row}>
+                <Text variant="small" numberOfLines={1} className={s.flex}>
                   {c.lastMessage}
                 </Text>
                 {c.unreadCount > 0 && (
-                  <View style={styles.unread}>
-                    <Text variant="caption" weight="bold" color={colors.onPrimary} style={styles.channelText}>
+                  <View className="h-5 min-w-5 items-center justify-center rounded-full bg-secondary px-1.5">
+                    <Text variant="caption" weight="bold" color={colors.onPrimary} style={{ fontSize: 9, lineHeight: 12 }}>
                       {c.unreadCount}
                     </Text>
                   </View>
                 )}
               </View>
-              <View style={s.wrap}>
+              <View className={s.wrap}>
                 <Chip label={c.status} tone={statusTone[c.status]} />
                 {c.sentiment === 'bức xúc' && <Chip label="AI: Thái độ bức xúc" icon="warning" tone="danger" />}
               </View>
@@ -85,11 +85,3 @@ export default function StaffInboxScreen() {
     </StaffTabScreen>
   );
 }
-
-const styles = StyleSheet.create({
-  item: { flexDirection: 'row', gap: 12, paddingVertical: 14, alignItems: 'center', borderBottomWidth: 1, borderBottomColor: colors.surfaceContainerHigh },
-  body: { gap: 3 },
-  channel: { position: 'absolute', bottom: -6, left: -4, right: -4, alignItems: 'center', borderRadius: 999, backgroundColor: colors.primary, borderWidth: 2, borderColor: colors.surface },
-  channelText: { fontSize: 9, lineHeight: 12 },
-  unread: { minWidth: 20, height: 20, paddingHorizontal: 6, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: accent },
-});

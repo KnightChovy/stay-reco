@@ -15,9 +15,9 @@ export function ManagerTitle({
     <section className="flex flex-col gap-5 border-b border-border/70 pb-6 lg:flex-row lg:items-end lg:justify-between">
       <div className="min-w-0">
         <div className="mb-2 flex items-center gap-2 text-[11px] font-medium text-muted-foreground">
-          <span>StayReco Operations</span>
+          <span>Vận hành StayReco</span>
           <span aria-hidden="true">/</span>
-          <span className="text-primary">Platform Manager</span>
+          <span className="text-primary">Quản lý nền tảng</span>
         </div>
         <h1 className="max-w-4xl text-[clamp(1.6rem,2.3vw,2.15rem)] font-bold leading-[1.18] tracking-[-0.025em] text-primary">
           {title}

@@ -54,6 +54,62 @@ const TAGS: [name: string, description: string][] = [
     'dashboard',
     'Partner dashboard: action items, today, KPIs with the previous period, chart series, occupancy forecast. Guide: docs/api/partner-dashboard.md',
   ],
+  [
+    'reviews',
+    'Post-stay reviews: the rating criteria, writing and editing a review, the rating figures of a hotel, photos, and reporting a review. Guide: docs/api/reviews.md',
+  ],
+  [
+    'promotions',
+    'Discount campaigns and personal voucher codes, and the quote that decides what a booking is charged. Guide: docs/api/promotions.md, rules: docs/money-rules.md',
+  ],
+  [
+    'add-ons',
+    'Services a hotel sells on top of the room: the catalogue, booking them with the stay, and front-desk add-ons collected at check-out. Guide: docs/api/add-ons.md',
+  ],
+  [
+    'loyalty',
+    'Loyalty points: the balance and tier, earning at check-out, spending on a booking, the history. Guide: docs/api/loyalty.md',
+  ],
+  [
+    'wallet',
+    'The customer wallet: balance, movements, and paying a whole booking from it. Guide: docs/api/customer-wallet.md, rules: docs/money-rules.md',
+  ],
+  [
+    'preferences',
+    'Saved customer preferences, free-form keys the backend does not interpret. Guide: docs/api/customer-wallet.md#preferences',
+  ],
+  [
+    'recommendations',
+    'Hotels picked for a customer by the trained recommender (recommender/, the two-sided rule of stayreco-experiment). Guide: docs/api/assistant.md#recommendations',
+  ],
+  [
+    'assistant',
+    'The customer chat assistant: searches, recommends and proposes bookings the customer confirms with one click. Guide: docs/api/assistant.md',
+  ],
+  [
+    'onboarding',
+    "First-login preferences (destinations, hotels, views, styles, budget) saved as the customer's preferences, and the platform's welcome voucher for finishing. Guide: docs/api/onboarding.md, rules: docs/money-rules.md",
+  ],
+  [
+    'payouts',
+    'Hotel withdrawals: a partner asks to be paid out of the available balance and a platform manager marks it paid or rejects it. Guide: docs/api/partner.md#withdrawals, docs/api/manager.md',
+  ],
+  [
+    'platform',
+    'Platform manager figures and lists: revenue, commissions, cash flow, the dashboard and the hotels. Guide: docs/api/manager.md#platform-figures',
+  ],
+  [
+    'compliance',
+    'Compliance cases a platform manager opens on a hotel, and the partner suspension requests sent to the admin. Guide: docs/api/manager.md#compliance-cases',
+  ],
+  [
+    'admin',
+    'Admin only: accounts, partner suspensions, commission rates, payments and settings, and the logs. Guide: docs/api/admin.md',
+  ],
+  [
+    'marketing',
+    'AI marketing: the brand voice, drafts the owner approves, the picture, connecting a page, the posting calendar and how a post did. Guide: docs/api/marketing.md, Facebook setup: docs/social-setup.md',
+  ],
 ];
 
 /** The OpenAPI document served by Swagger UI; also built by the Swagger e2e test. */

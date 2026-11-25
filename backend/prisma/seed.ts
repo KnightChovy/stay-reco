@@ -34,6 +34,14 @@ const AMENITIES = [
   { category: 'Phòng', name: 'Ban công', icon: 'door-open' },
   { category: 'Phòng', name: 'Bồn tắm', icon: 'bath' },
   { category: 'Phòng', name: 'Máy sấy tóc', icon: 'wind' },
+  // The views a customer picks from on their first sign-in (docs/design/onboarding-welcome-voucher.md, W8); a partner
+  // attaches them to a room type like any other amenity.
+  { category: 'Tầm nhìn', name: 'Hướng biển', icon: 'waves' },
+  { category: 'Tầm nhìn', name: 'Hướng sông', icon: 'sailboat' },
+  { category: 'Tầm nhìn', name: 'Hướng núi', icon: 'mountain' },
+  { category: 'Tầm nhìn', name: 'Hướng phố', icon: 'building-2' },
+  { category: 'Tầm nhìn', name: 'Hướng vườn', icon: 'trees' },
+  { category: 'Tầm nhìn', name: 'Hướng hồ bơi', icon: 'droplets' },
 ];
 
 const BED_TYPES = [
@@ -44,6 +52,31 @@ const BED_TYPES = [
   { name: 'Giường tầng', description: 'Hai giường đơn xếp tầng', capacity: 2 },
   { name: 'Sofa giường', description: 'Sofa kéo thành giường', capacity: 1 },
 ];
+
+/**
+ * The criteria a guest scores after a stay (BR-12), matching the review screen. The weights add up to 1, so the
+ * weighted average of the sub-ratings is the review's overall rating.
+ */
+const RATING_CRITERIA = [
+  { name: 'Vệ sinh & Tiện nghi phòng', description: 'Phòng sạch sẽ, trang thiết bị hoạt động tốt', weight: 0.25 },
+  { name: 'Vị trí', description: 'Thuận tiện đi lại, gần điểm tham quan', weight: 0.2 },
+  { name: 'Thái độ phục vụ', description: 'Lễ tân và nhân viên thân thiện, hỗ trợ nhanh', weight: 0.25 },
+  { name: 'Độ yên tĩnh', description: 'Không gian yên tĩnh, dễ ngủ', weight: 0.15 },
+  { name: 'Giá trị tương xứng chi phí', description: 'Chất lượng nhận được so với số tiền đã trả', weight: 0.15 },
+];
+
+/**
+ * The platform-wide loyalty programme (BR-11). One per system, `hotel_id` null, so a customer keeps a single points
+ * balance wherever they stay instead of a scrap at each hotel. A hotel may still run its own programme alongside it.
+ *
+ * 1 point per 1,000 d spent, and a point is worth 100 d when spent: a 2,000,000 d stay earns 2,000 points, worth
+ * 200,000 d off a later stay, so roughly 10% comes back.
+ */
+const PLATFORM_LOYALTY = {
+  name: 'StayMiles',
+  pointsPerCurrency: 0.001,
+  pointValue: 100,
+};
 
 /** Catalog tables have no unique name, so insert only the names that are missing (safe to re-run). */
 async function seedCatalog() {
@@ -63,13 +96,22 @@ async function seedCatalog() {
   const bedTypes = BED_TYPES.filter((b) => !bedNames.has(b.name));
   await prisma.bedType.createMany({ data: bedTypes });
 
+  const criterionNames = new Set(
+    (await prisma.ratingCriterion.findMany({ select: { name: true } })).map(
+      (c) => c.name,
+    ),
+  );
+  const criteria = RATING_CRITERIA.filter((c) => !criterionNames.has(c.name));
+  await prisma.ratingCriterion.createMany({ data: criteria });
+
   console.log(
-    `Catalog: +${amenities.length} amenities, +${bedTypes.length} bed types`,
+    `Catalog: +${amenities.length} amenities, +${bedTypes.length} bed types, +${criteria.length} rating criteria`,
   );
 }
 
 async function main() {
   await seedCatalog();
+  await seedLoyalty();
   await seedAdmin();
   if (shouldSeedDemo()) await seedDemo(prisma);
 }
@@ -85,6 +127,19 @@ function shouldSeedDemo() {
     return flag === 'true';
   }
   return flag !== 'false';
+}
+
+/** The one platform-wide programme; re-running the seed leaves an existing one, and its rates, alone. */
+async function seedLoyalty() {
+  const existing = await prisma.loyaltyProgram.findFirst({
+    where: { hotelId: null },
+  });
+  if (existing) {
+    console.log(`Loyalty programme ${existing.name} already exists, skipping`);
+    return;
+  }
+  await prisma.loyaltyProgram.create({ data: PLATFORM_LOYALTY });
+  console.log(`Created loyalty programme ${PLATFORM_LOYALTY.name}`);
 }
 
 async function seedAdmin() {

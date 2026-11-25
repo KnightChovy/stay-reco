@@ -14,7 +14,7 @@ export default function BookingProgress() {
   const activeStep = pathname.includes('/confirmation') ? 2 : pathname.includes('/payment') ? 1 : 0;
 
   return (
-    <nav aria-label="Tiến trình đặt phòng" className="border-b border-slate-200/80 bg-white">
+    <nav aria-label="Tiến trình đặt phòng" className="border-b border-border/80 bg-white">
       <div className="mx-auto flex max-w-marketplace items-center px-4 py-4 sm:px-6">
         {steps.map((step, index) => {
           const complete = index < activeStep;
@@ -22,13 +22,13 @@ export default function BookingProgress() {
 
           return (
             <div key={step.href} className="flex min-w-0 flex-1 items-center last:flex-none">
-              <div className={`flex items-center gap-2 sm:gap-2.5 ${active ? 'text-[#013758]' : complete ? 'text-[#35624A]' : 'text-slate-400'}`}>
-                <span className={`flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${active ? 'bg-[#234e70] text-white' : complete ? 'bg-[#EDF4EE] text-[#35624A]' : 'bg-slate-100 text-slate-500'}`}>
+              <div className={`flex items-center gap-2 sm:gap-2.5 ${active ? 'text-primary' : complete ? 'text-emerald-700' : 'text-muted-foreground'}`}>
+                <span className={`flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${active ? 'bg-primary text-primary-foreground' : complete ? 'bg-emerald-50 text-emerald-700' : 'bg-muted text-muted-foreground'}`}>
                   {complete ? <Check className="size-4" /> : index + 1}
                 </span>
                 <span className={`hidden text-sm sm:block ${active ? 'font-bold' : 'font-medium'}`}>{step.label}</span>
               </div>
-              {index < steps.length - 1 && <span className={`mx-2 h-0.5 flex-1 rounded-full sm:mx-4 ${index < activeStep ? 'bg-[#35624A]' : 'bg-slate-200'}`} />}
+              {index < steps.length - 1 && <span className={`mx-2 h-0.5 flex-1 rounded-full sm:mx-4 ${index < activeStep ? 'bg-emerald-600' : 'bg-border'}`} />}
             </div>
           );
         })}

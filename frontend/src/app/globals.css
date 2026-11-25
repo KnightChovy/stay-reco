@@ -222,7 +222,8 @@
   --sr-background: #f8f9fc;
   --sr-surface-hover: #f7f8fc;
   --sr-text: #303951;
-  --sr-text-secondary: #6a748b;
+  /* #6a748b gave 4.26:1 on --muted and 4.45:1 on the page background, under WCAG AA (4.5:1). */
+  --sr-text-secondary: #5d6680;
   --sr-border-subtle: #e0e4ef;
   --sr-border-control: #b6bece;
   --sr-accent: #b28a45;
@@ -300,6 +301,35 @@
   color: var(--role-kpi) !important;
   font-weight: 750;
   letter-spacing: -0.035em;
+}
+
+/*
+ * Partner portal: everything clickable shows the pointer hand, so the partner can tell at a glance what reacts.
+ * Scoped with `body:has(.partner-role)` instead of `.partner-role` so it also reaches dialogs, menus and select popups,
+ * which Base UI portals to <body>. Unlayered on purpose: it must beat the `cursor-default` utility that the menu, select
+ * and combobox item primitives set. Disabled controls keep `not-allowed` (base layer below); resize handles keep theirs.
+ */
+body:has(.partner-role)
+  :where(
+    a[href],
+    button,
+    summary,
+    select,
+    label:has(input[type='file'], input[type='checkbox'], input[type='radio']),
+    input:is([type='checkbox'], [type='radio'], [type='file'], [type='range'], [type='color']),
+    [role='button'],
+    [role='tab'],
+    [role='link'],
+    [role='option'],
+    [role='menuitem'],
+    [role='menuitemcheckbox'],
+    [role='menuitemradio'],
+    [role='checkbox'],
+    [role='radio'],
+    [role='switch'],
+    [role='combobox']:not(input)
+  ):not(:disabled, [aria-disabled='true'], [data-disabled], [data-slot='sidebar-rail']) {
+  cursor: pointer;
 }
 
 @layer base {

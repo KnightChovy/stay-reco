@@ -1,0 +1,40 @@
+/* Admin surfaces and spacing follow the supplied Stitch screens. */
+.admin-role,
+body:has(.admin-role) {
+  --sr-primary: #013758;
+  --sr-primary-soft: #eaf0f5;
+  --sr-background: #f7f9ff;
+  --sr-text: #181c20;
+  --sr-text-secondary: #59636e;
+  --sr-border-subtle: #e6e8ee;
+  --sr-accent: #934a33;
+  --background: #f7f9ff;
+  --foreground: #181c20;
+  --primary: #013758;
+  --accent: #eaf0f5;
+  --accent-foreground: #013758;
+  --muted: #f1f3f9;
+  --muted-foreground: #59636e;
+  --border: #e6e8ee;
+  --sidebar-primary: #234e70;
+  --sidebar-accent: #eaf0f5;
+  --sidebar-accent-foreground: #013758;
+}
+
+.admin-role [data-slot='sidebar-menu-button'] {
+  min-height: 2.75rem;
+  border-radius: 0.625rem;
+}
+
+.admin-role [data-slot='sidebar-menu-button'][data-active] {
+  background: #234e70;
+  color: white;
+}
+
+.admin-role table th {
+  background: var(--muted);
+}
+
+body:has(.admin-role) :where(button, a, select, [role='tab']):not(:disabled) {
+  cursor: pointer;
+}

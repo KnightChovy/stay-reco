@@ -1,502 +1,545 @@
 'use client';
 
-import React, { useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import Header from '@/components/layout/Header';
-import Footer from '@/components/layout/Footer';
-import AppBreadcrumb from '@/components/common/breadcrumb/AppBreadcrumb';
+import { useParams, useRouter } from 'next/navigation';
+import {
+  Calendar,
+  CheckCircle2,
+  Clock,
+  Edit2,
+  Info,
+  Loader2,
+  MapPin,
+  Send,
+  ShieldCheck,
+} from 'lucide-react';
+import { createReviewSchema, type RatingCriterion, type Review, type ReviewImage } from '@stayreco/shared';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Textarea } from '@/components/ui/textarea';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { EmptyState, ErrorState } from '@/components/common/StateViews';
+import { getApiErrorCode, getApiErrorMessage, getApiFieldErrors, validateWith } from '@/lib/api-error';
+import { cn } from '@/lib/utils';
+import { FALLBACK_HOTEL_IMAGE } from '@/features/booking/lib/booking-status';
 import {
-  Star,
-  Upload,
-  CheckCircle2,
-  MapPin,
-  Calendar,
-  Building2,
-  Trash2,
-  Edit2,
-  ThumbsUp,
-  Wrench,
-  Award,
-  ShieldCheck,
-  ArrowLeft,
-  Send,
-  Info,
-  Check,
-  Plus
-} from 'lucide-react';
+  BookingBreadcrumb,
+  BookingPageLoading,
+  linkButton,
+} from '@/features/account/booking-detail/BookingPageParts';
+import { useBooking } from '@/features/booking/api/booking-queries';
+import {
+  useCreateReview,
+  useDeleteReviewImage,
+  useMyReviews,
+  useRatingCriteria,
+  useReviewEligibility,
+  useUpdateReview,
+  useUploadReviewImage,
+} from '@/features/account/api/rewards-queries';
+import { notify } from '@/features/account/AccountShell';
+import {
+  checkReviewPhoto,
+  ReviewPhotoPicker,
+  type PendingPhoto,
+} from '@/features/reviews/components/ReviewPhotoPicker';
+import { StarDisplay, StarInput } from '@/features/reviews/components/StarRating';
+import { formatDate, formatDateTime } from '@/features/stays/lib/format';
 
-export default function ReviewBookingPage() {
-  const [overallRating, setOverallRating] = useState(5);
-  const [subRatings, setSubRatings] = useState({
-    cleanliness: 5,
-    location: 5,
-    service: 4.8,
-    quietness: 4.5,
-    value: 5,
-  });
+const CONTENT_MIN = 10;
+const CONTENT_MAX = 5000;
 
-  const [title, setTitle] = useState('Kỳ nghỉ tuyệt vời ngắm trọn Cầu Rồng, phòng ốc chỉn chu và bữa sáng xuất sắc');
-  const [body, setBody] = useState('Gia đình mình có 2 đêm nghỉ ngơi thực sự thư giãn tại phòng 608 nhìn thẳng ra dòng sông Hàn thơ mộng. Khách sạn sở hữu phong cách boutique tối giản rất có gu, các vật dụng thủ công làm từ gốm và gỗ tự nhiên tạo cảm giác ấm cúng. Đặc biệt ấn tượng với buffet sáng món Việt hữu cơ tươi ngon, nước ép ép lạnh nguyên chất.');
-  
-  const [positiveTags, setPositiveTags] = useState(['View sông Hàn thoáng đãng', 'Bữa sáng buffet hữu cơ', 'Kính cách âm cực tốt', 'Lễ tân thân thiện chu đáo']);
-  const [improvementTags, setImprovementTags] = useState(['Cần thêm móc treo đồ trong phòng tắm', 'Tăng áp lực nước vòi sen giờ cao điểm']);
-  const [confirmedAuthentic, setConfirmedAuthentic] = useState(true);
+const REASON_TEXT: Record<string, string> = {
+  REVIEW_NOT_ALLOWED: 'Bạn chỉ có thể đánh giá sau khi đã trả phòng và chuyến đi được ghi nhận là hoàn tất.',
+  REVIEW_WINDOW_CLOSED: 'Đã quá thời hạn đánh giá chuyến đi này.',
+  REVIEW_ALREADY_EXISTS: 'Bạn đã đánh giá chuyến đi này.',
+};
 
-  const starDescriptors: Record<number, string> = {
-    1: '1 sao: Kém - Trải nghiệm không như mong đợi',
-    2: '2 sao: Trung bình - Cần cải thiện nhiều điểm',
-    3: '3 sao: Khá - Tạm ổn nhưng chưa nổi bật',
-    4: '4 sao: Tốt - Hài lòng với dịch vụ',
-    5: '5 sao: Tuyệt hảo - Vượt trên kỳ vọng',
+/** The weighted average the backend will compute, shown live so the guest sees what their stars add up to. */
+function previewOverall(criteria: RatingCriterion[], scores: Record<string, number>) {
+  const scored = criteria.filter((criterion) => scores[criterion.id] !== undefined);
+  if (scored.length !== criteria.length || criteria.length === 0) return null;
+  const totalWeight = criteria.reduce((sum, criterion) => sum + criterion.weight, 0) || 1;
+  const value = criteria.reduce((sum, criterion) => sum + scores[criterion.id] * criterion.weight, 0) / totalWeight;
+  return Math.round(value * 10) / 10;
+}
+
+function ReviewForm({
+  bookingId,
+  criteria,
+  existing,
+  closesAt,
+}: {
+  bookingId: string;
+  criteria: RatingCriterion[];
+  existing: Review | null;
+  closesAt: string | null;
+}) {
+  const router = useRouter();
+  const createReview = useCreateReview();
+  const updateReview = useUpdateReview();
+  const uploadImage = useUploadReviewImage();
+  const deleteImage = useDeleteReviewImage();
+  // Photos picked here are uploaded once the review exists; `uploading` counts them for the button.
+  const [photos, setPhotos] = useState<PendingPhoto[]>([]);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [uploading, setUploading] = useState<{ done: number; total: number } | null>(null);
+  const pending = createReview.isPending || updateReview.isPending || uploading !== null;
+  const savedImages: ReviewImage[] = existing?.images ?? [];
+
+  const addPhotos = async (files: File[]) => {
+    setPhotoError(null);
+    const problems: string[] = [];
+    const accepted: PendingPhoto[] = [];
+    for (const file of files) {
+      const problem = await checkReviewPhoto(file);
+      if (problem) problems.push(problem);
+      else accepted.push({ id: `${file.name}-${file.lastModified}-${Math.random()}`, file, url: URL.createObjectURL(file) });
+    }
+    if (accepted.length > 0) setPhotos((current) => [...current, ...accepted]);
+    if (problems.length > 0) setPhotoError(problems.join(' '));
   };
 
-  const wordCount = body.trim() ? body.trim().split(/\s+/).length : 0;
-
-  const togglePositiveTag = (tag: string) => {
-    setPositiveTags((prev) =>
-      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
-    );
+  const removeSaved = (image: ReviewImage) => {
+    if (!window.confirm('Xoá ảnh này khỏi đánh giá? Không thể hoàn tác.')) return;
+    setPhotoError(null);
+    deleteImage.mutate(image.id, {
+      onSuccess: () => notify.success('Đã xoá ảnh'),
+      onError: (error) =>
+        setPhotoError(
+          getApiErrorCode(error) === 'REVIEW_IMAGE_REPORTED'
+            ? 'Ảnh này đang bị báo cáo nên chưa xoá được; bạn xoá được sau khi quản lý StayReco xử lý xong.'
+            : getApiErrorMessage(error, 'Không xoá được ảnh.'),
+        ),
+    });
   };
 
-  const toggleImprovementTag = (tag: string) => {
-    setImprovementTags((prev) =>
-      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
-    );
-  };
+  const [title, setTitle] = useState(existing?.title ?? '');
+  const [content, setContent] = useState(existing?.content ?? '');
+  const [scores, setScores] = useState<Record<string, number>>(() =>
+    Object.fromEntries((existing?.subRatings ?? []).map((rating) => [rating.criterionId, rating.score])),
+  );
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [formError, setFormError] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    alert('Cảm ơn bạn đã đóng góp đánh giá! Bạn đã nhận +100 điểm thưởng StayReco Elite.');
+  const [showMissing, setShowMissing] = useState(false);
+  const submitted = useRef(false);
+
+  const overall = previewOverall(criteria, scores);
+  const missing = criteria.filter((criterion) => scores[criterion.id] === undefined);
+
+  // Leaving with unsaved words loses up to 5,000 characters: ask first. Cleared once the review is saved.
+  const initialScores = useMemo(
+    () => JSON.stringify(Object.fromEntries((existing?.subRatings ?? []).map((r) => [r.criterionId, r.score]))),
+    [existing],
+  );
+  const dirty =
+    title !== (existing?.title ?? '') ||
+    content !== (existing?.content ?? '') ||
+    JSON.stringify(scores) !== initialScores ||
+    photos.length > 0;
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      if (submitted.current) return;
+      event.preventDefault();
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [dirty]);
+
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    setFormError(null);
+    if (missing.length > 0) {
+      setShowMissing(true);
+      setFormError(`Còn ${missing.length} tiêu chí chưa chấm điểm.`);
+      document
+        .getElementById(`criterion-${missing[0].id}`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+    const input = {
+      title: title.trim() || undefined,
+      content: content.trim(),
+      subRatings: criteria.map((criterion) => ({ criterionId: criterion.id, score: scores[criterion.id] })),
+    };
+    const result = validateWith(createReviewSchema, input);
+    if (result.errors) {
+      setErrors(result.errors);
+      return;
+    }
+    setErrors({});
+
+    const onError = (error: unknown) => {
+      setErrors(getApiFieldErrors(error));
+      setFormError(getApiErrorMessage(error, 'Không gửi được đánh giá. Vui lòng thử lại.'));
+    };
+    // The words are saved first; then each picked photo is sent one by one, so a refused photo does not lose the
+    // review. Whatever could not be uploaded is reported, and the guest can add it again while editing is open.
+    const onSuccess = async (review: Review) => {
+      submitted.current = true;
+      const failed: string[] = [];
+      if (photos.length > 0) {
+        setUploading({ done: 0, total: photos.length });
+        for (const [index, photo] of photos.entries()) {
+          try {
+            await uploadImage.mutateAsync({ reviewId: review.id, file: photo.file });
+          } catch (error) {
+            failed.push(`${photo.file.name}: ${getApiErrorMessage(error, 'không tải lên được')}`);
+          }
+          setUploading({ done: index + 1, total: photos.length });
+        }
+      }
+      if (failed.length > 0) {
+        notify.error(`${failed.length} ảnh chưa tải lên được`, failed.join(' · '));
+      }
+      router.replace(`/account/bookings/${bookingId}?reviewed=${review.isVisible ? 'visible' : 'hidden'}`);
+    };
+
+    if (existing) {
+      // Sending `subRatings` replaces all of them, so the whole set always goes.
+      updateReview.mutate({ reviewId: existing.id, input: result.data }, { onSuccess, onError });
+    } else {
+      createReview.mutate({ bookingId, input: result.data }, { onSuccess, onError });
+    }
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-background font-sans antialiased text-foreground">
-      <Header />
-
-      <main className="flex-1 w-full bg-[#f7f9ff] py-6 lg:py-10">
-        <div className="mx-auto max-w-[100rem] px-4 sm:px-6 lg:px-8">
-          
-          {/* Breadcrumb */}
-          <AppBreadcrumb
-            items={[
-              { label: 'Trang chủ', href: '/' },
-              { label: 'Tài khoản', href: '/account/profile' },
-              { label: 'Chuyến đi của tôi', href: '/account/bookings' },
-              { label: 'Chi tiết #SR-261020-0842', href: '/account/bookings/SR-261020-0842' },
-              { label: 'Viết đánh giá', active: true },
-            ]}
-          />
-
-          {/* Page Header */}
-          <div className="mt-6 mb-8">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-semibold mb-3">
-              <Award className="size-3.5" /> Mã đặt phòng: #SR-261020-0842
-            </span>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-              Đánh giá kỳ nghỉ & Đóng góp hình ảnh thực tế
-            </h1>
-            <p className="text-muted-foreground text-sm mt-1.5 max-w-3xl">
-              Chia sẻ trải nghiệm chân thực của bạn tại An Nhiên Riverside Hotel để giúp cộng đồng du khách StayReco có thêm góc nhìn khách quan.
-            </p>
+    <form onSubmit={submit} className="space-y-6" noValidate>
+      <Card className="space-y-5 rounded-xl border border-border bg-card p-5 shadow-xs sm:p-7">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
+          <h2 className="text-lg font-bold text-foreground">Chấm điểm theo từng tiêu chí</h2>
+          <div className="flex items-center gap-2 rounded-lg bg-muted px-3 py-1.5">
+            <span className="text-xs font-semibold text-muted-foreground uppercase">Điểm tổng</span>
+            <span className="text-lg font-bold text-primary">{overall !== null ? overall.toFixed(1) : '—'}</span>
+            {overall !== null && <StarDisplay value={overall} size="size-3.5" />}
           </div>
-
-          {/* Main Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-            
-            {/* Left Column (8 cols) */}
-            <form onSubmit={handleSubmit} className="lg:col-span-8 space-y-6">
-              
-              {/* 1. Hotel Snippet Card */}
-              <Card className="p-5 bg-white border border-border shadow-xs rounded-xl flex flex-col md:flex-row gap-5 items-start">
-                <div className="relative w-full md:w-44 h-32 rounded-lg overflow-hidden shrink-0">
-                  <Image
-                    src="https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=600&q=80"
-                    alt="An Nhiên Riverside Hotel"
-                    fill
-                    className="object-cover"
-                  />
-                  <Badge className="absolute top-2 left-2 bg-white/95 text-foreground hover:bg-white text-[10px]">
-                    ★ 4 sao
-                  </Badge>
-                </div>
-
-                <div className="flex-1 space-y-2">
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-semibold">
-                    <CheckCircle2 className="size-3.5" /> Lưu trú đã hoàn tất & Được xác thực bởi StayReco
-                  </span>
-                  <h2 className="text-lg font-bold text-foreground">An Nhiên Riverside Hotel Đà Nẵng</h2>
-                  <p className="text-xs text-muted-foreground flex items-center gap-1">
-                    <MapPin className="size-3.5 text-primary" /> 128 Bạch Đằng, Quận Hải Châu, TP. Đà Nẵng
-                  </p>
-
-                  <div className="grid grid-cols-2 gap-2 pt-3 border-t border-border text-xs text-muted-foreground">
-                    <div>
-                      <span>Kỳ lưu trú: <strong className="text-foreground">20/10 – 22/10/2026 (2 đêm)</strong></span>
-                    </div>
-                    <div>
-                      <span>Phòng: <strong className="text-foreground">Deluxe River View (P.608)</strong></span>
-                    </div>
-                  </div>
-                </div>
-              </Card>
-
-              {/* 2. Detailed Rating Section */}
-              <Card className="p-5 sm:p-6 bg-white border border-border shadow-xs rounded-xl space-y-6">
-                <div className="pb-4 border-b border-border space-y-3">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs sm:text-sm font-bold text-foreground uppercase tracking-wider">
-                      Điểm đánh giá tổng thể *
-                    </label>
-                    <span className="text-xs text-primary font-semibold">
-                      {starDescriptors[overallRating]}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <button
-                        key={star}
-                        type="button"
-                        onClick={() => setOverallRating(star)}
-                        className="p-1 text-amber-400 hover:scale-110 transition-transform focus:outline-none"
-                      >
-                        <Star
-                          className={`size-8 sm:size-9 ${
-                            star <= overallRating ? 'fill-amber-400' : 'text-slate-200'
-                          }`}
-                        />
-                      </button>
-                    ))}
-                    <span className="text-3xl font-bold text-foreground ml-3">{overallRating}.0</span>
-                  </div>
-                </div>
-
-                {/* Sub Ratings */}
-                <div className="space-y-4">
-                  <h3 className="text-sm font-bold text-foreground">Chi tiết tiêu chí phục vụ & chất lượng</h3>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-                    {[
-                      { key: 'cleanliness', label: 'Vệ sinh & Tiện nghi phòng', val: subRatings.cleanliness },
-                      { key: 'location', label: 'Vị trí & Tầm nhìn bờ sông Hàn', val: subRatings.location },
-                      { key: 'service', label: 'Thái độ phục vụ & Lễ tân', val: subRatings.service },
-                      { key: 'quietness', label: 'Độ yên tĩnh & Giấc ngủ', val: subRatings.quietness },
-                      { key: 'value', label: 'Giá trị tương xứng với chi phí', val: subRatings.value },
-                    ].map((item) => (
-                      <div key={item.key} className="space-y-1.5">
-                        <div className="flex justify-between text-xs font-medium text-foreground">
-                          <span>{item.label}</span>
-                          <span className="font-bold">{item.val.toFixed(1)}</span>
-                        </div>
-                        <div className="flex gap-1">
-                          {[1, 2, 3, 4, 5].map((level) => (
-                            <button
-                              key={level}
-                              type="button"
-                              onClick={() =>
-                                setSubRatings({ ...subRatings, [item.key]: level })
-                              }
-                              className={`h-2 flex-1 rounded-full transition-colors ${
-                                level <= item.val ? 'bg-primary' : 'bg-slate-200'
-                              }`}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </Card>
-
-              {/* 3. Review Text Inputs */}
-              <Card className="p-5 sm:p-6 bg-white border border-border shadow-xs rounded-xl space-y-5">
-                <div className="space-y-1.5">
-                  <Label htmlFor="review-title" className="text-xs sm:text-sm font-semibold">
-                    Tiêu đề đánh giá (Tóm tắt trải nghiệm) *
-                  </Label>
-                  <Input
-                    id="review-title"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    className="h-11 text-sm focus-visible:ring-primary font-medium"
-                    required
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="review-body" className="text-xs sm:text-sm font-semibold">
-                      Nội dung chi tiết kỳ nghỉ *
-                    </Label>
-                    <span
-                      className={`text-xs font-semibold flex items-center gap-1 ${
-                        wordCount >= 30 ? 'text-emerald-600' : 'text-amber-600'
-                      }`}
-                    >
-                      <CheckCircle2 className="size-3.5" />
-                      {wordCount >= 30
-                        ? `Đã đạt tiêu chuẩn chi tiết (${wordCount} từ / tối thiểu 30 từ)`
-                        : `Cần thêm ${30 - wordCount} từ để đạt mức chi tiết`}
-                    </span>
-                  </div>
-                  <textarea
-                    id="review-body"
-                    rows={5}
-                    value={body}
-                    onChange={(e) => setBody(e.target.value)}
-                    className="w-full p-3.5 rounded-lg border border-border bg-slate-50 text-sm focus:outline-none focus:ring-1 focus:ring-primary leading-relaxed resize-none"
-                    required
-                  />
-                  <div className="flex justify-between text-[11px] text-muted-foreground pt-1">
-                    <span>Đánh giá cụ thể giúp tăng điểm độ tin cậy của tài khoản</span>
-                    <span>{body.length} ký tự</span>
-                  </div>
-                </div>
-
-                {/* Tag Pills */}
-                <div className="space-y-4 pt-3 border-t border-border">
-                  <div className="space-y-2">
-                    <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                      <ThumbsUp className="size-4 text-emerald-600" /> Điểm bạn thích nhất ở An Nhiên Riverside:
-                    </label>
-                    <div className="flex flex-wrap gap-2">
-                      {[
-                        'View sông Hàn thoáng đãng',
-                        'Bữa sáng buffet hữu cơ',
-                        'Kính cách âm cực tốt',
-                        'Lễ tân thân thiện chu đáo',
-                        'Hồ bơi sân thượng',
-                        'Trà chiều miễn phí',
-                      ].map((tag) => {
-                        const active = positiveTags.includes(tag);
-                        return (
-                          <button
-                            key={tag}
-                            type="button"
-                            onClick={() => togglePositiveTag(tag)}
-                            className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors flex items-center gap-1 ${
-                              active
-                                ? 'bg-primary/10 border-primary text-primary'
-                                : 'bg-slate-50 border-border text-muted-foreground hover:bg-slate-100'
-                            }`}
-                          >
-                            {active ? <Check className="size-3.5" /> : <Plus className="size-3.5" />} {tag}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                      <Wrench className="size-4 text-secondary" /> Góp ý để khách sạn hoàn thiện hơn (Tùy chọn):
-                    </label>
-                    <div className="flex flex-wrap gap-2">
-                      {[
-                        'Cần thêm móc treo đồ trong phòng tắm',
-                        'Tăng áp lực nước vòi sen giờ cao điểm',
-                        'Đỗ xe ô tô lúc đông khách',
-                        'Đa dạng thêm đồ uống minibar',
-                      ].map((tag) => {
-                        const active = improvementTags.includes(tag);
-                        return (
-                          <button
-                            key={tag}
-                            type="button"
-                            onClick={() => toggleImprovementTag(tag)}
-                            className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors flex items-center gap-1 ${
-                              active
-                                ? 'bg-orange-50 border-secondary text-secondary'
-                                : 'bg-slate-50 border-border text-muted-foreground hover:bg-slate-100'
-                            }`}
-                          >
-                            {active ? <Check className="size-3.5" /> : <Plus className="size-3.5" />} {tag}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              </Card>
-
-              {/* 4. Photos Section */}
-              <Card className="p-5 sm:p-6 bg-white border border-border shadow-xs rounded-xl space-y-5">
-                <div>
-                  <h3 className="text-base font-bold text-foreground">Hình ảnh thực tế từ chuyến đi của bạn</h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Hình ảnh chân thực giúp cộng đồng hình dung rõ nét nhất. Hỗ trợ JPG, PNG (tối đa 10MB/ảnh).
-                  </p>
-                </div>
-
-                {/* Upload box */}
-                <div className="border-2 border-dashed border-border hover:border-primary rounded-xl p-8 flex flex-col items-center justify-center text-center cursor-pointer bg-slate-50/50 hover:bg-primary/5 transition-colors">
-                  <div className="size-12 rounded-full bg-primary/10 text-primary flex items-center justify-center mb-3">
-                    <Upload className="size-6" />
-                  </div>
-                  <p className="text-xs sm:text-sm font-semibold text-foreground">
-                    Kéo thả hình ảnh vào đây hoặc <span className="text-primary underline">chọn từ thiết bị</span>
-                  </p>
-                  <p className="text-[11px] text-muted-foreground mt-1">
-                    Tối đa 8 ảnh • Bạn đã tải lên 3/8 hình
-                  </p>
-                </div>
-
-                {/* Image Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  {[
-                    {
-                      img: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=400&q=80',
-                      caption: 'View ban công ngắm sông Hàn',
-                      meta: 'P.608 • Đã kiểm duyệt',
-                      size: '4.2 MB',
-                    },
-                    {
-                      img: 'https://images.unsplash.com/photo-1582719508461-905c673771fd?auto=format&fit=crop&w=400&q=80',
-                      caption: 'Bữa sáng tại nhà hàng Sen Vàng',
-                      meta: 'Tầng 2 • 07:30 AM',
-                      size: '3.8 MB',
-                    },
-                    {
-                      img: 'https://images.unsplash.com/photo-1571896349842-33c89424de2d?auto=format&fit=crop&w=400&q=80',
-                      caption: 'Giường ngủ phòng Deluxe #608',
-                      meta: 'Góc nhìn cận cảnh',
-                      size: '5.1 MB',
-                    },
-                  ].map((item, idx) => (
-                    <div key={idx} className="bg-slate-50 rounded-lg overflow-hidden border border-border group">
-                      <div className="relative h-32 w-full">
-                        <Image src={item.img} alt={item.caption} fill className="object-cover" />
-                        <span className="absolute bottom-2 left-2 bg-black/70 text-white text-[10px] px-2 py-0.5 rounded backdrop-blur-xs">
-                          {item.size}
-                        </span>
-                        <button
-                          type="button"
-                          className="absolute top-2 right-2 size-7 rounded-full bg-white/90 text-red-600 hover:bg-white flex items-center justify-center shadow-xs"
-                        >
-                          <Trash2 className="size-3.5" />
-                        </button>
-                      </div>
-                      <div className="p-2.5 space-y-1">
-                        <div className="flex items-center justify-between text-xs font-semibold text-foreground">
-                          <span className="truncate">{item.caption}</span>
-                          <Edit2 className="size-3 text-muted-foreground shrink-0" />
-                        </div>
-                        <span className="text-[10px] text-muted-foreground block">{item.meta}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="pt-2">
-                  <div className="flex items-start space-x-2">
-                    <Checkbox
-                      id="authentic"
-                      checked={confirmedAuthentic}
-                      onCheckedChange={(checked) => setConfirmedAuthentic(!!checked)}
-                      className="mt-0.5"
-                    />
-                    <label htmlFor="authentic" className="text-xs text-foreground leading-normal cursor-pointer">
-                      Tôi xác nhận những hình ảnh và nội dung đánh giá này hoàn toàn xuất phát từ trải nghiệm lưu trú thực tế cá nhân của tôi tại An Nhiên Riverside Hotel và không nhận thù lao quảng cáo trái phép.
-                    </label>
-                  </div>
-                </div>
-              </Card>
-
-              {/* Action Buttons */}
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2 mb-10">
-                <Link href="/account/bookings/SR-261020-0842">
-                  <Button variant="ghost" className="text-xs font-semibold gap-2">
-                    <ArrowLeft className="size-4" /> Hủy và quay lại chi tiết chuyến đi
-                  </Button>
-                </Link>
-
-                <div className="flex items-center gap-3 w-full sm:w-auto">
-                  <Button variant="outline" type="button" className="h-11 px-5 text-xs sm:text-sm font-semibold">
-                    Lưu bản nháp
-                  </Button>
-                  <Button
-                    type="submit"
-                    className="h-11 px-8 bg-primary text-primary-foreground hover:bg-[#193b56] font-bold text-xs sm:text-sm gap-2 shadow-md"
-                  >
-                    <span>Gửi đánh giá & Nhận +100 Điểm StayReco Elite</span>
-                    <Send className="size-4" />
-                  </Button>
-                </div>
-              </div>
-
-            </form>
-
-            {/* Right Sidebar (4 cols) */}
-            <div className="lg:col-span-4 space-y-6 lg:sticky lg:top-24">
-              
-              {/* Reward Banner */}
-              <Card className="p-5 bg-white border border-secondary/30 rounded-xl shadow-xs space-y-3 relative overflow-hidden">
-                <div className="flex items-center gap-3">
-                  <div className="size-10 rounded-full bg-orange-100 text-secondary flex items-center justify-center font-bold text-base">
-                    <Award className="size-5" />
-                  </div>
-                  <div>
-                    <span className="text-[10px] uppercase font-bold tracking-wider text-secondary">Đặc quyền đóng góp</span>
-                    <h3 className="font-bold text-sm text-foreground">Thưởng StayReco Elite</h3>
-                  </div>
-                </div>
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  Mỗi nhận xét kèm hình ảnh chất lượng giúp bạn tiến gần hơn tới cấp thành viên <strong className="text-foreground font-semibold">Bạch Kim</strong>.
-                </p>
-
-                <div className="p-3 bg-slate-50 rounded-lg flex items-center justify-between border border-border">
-                  <span className="text-xs font-semibold text-foreground">Điểm cộng nhận được</span>
-                  <span className="text-base font-bold text-secondary">+100 pts</span>
-                </div>
-              </Card>
-
-              {/* Policy Guidelines */}
-              <Card className="p-5 bg-white border border-border shadow-xs rounded-xl space-y-4">
-                <div className="flex items-center gap-2 text-primary font-bold text-sm border-b border-border pb-3">
-                  <ShieldCheck className="size-5" /> Tiêu chuẩn đánh giá StayReco
-                </div>
-
-                <div className="space-y-3 text-xs text-muted-foreground">
-                  <div className="flex items-start gap-2">
-                    <CheckCircle2 className="size-4 text-emerald-600 shrink-0 mt-0.5" />
-                    <span><strong className="text-foreground">100% khách thực:</strong> Chỉ du khách đã hoàn tất kỳ nghỉ mới có quyền xuất bản nhận xét.</span>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <CheckCircle2 className="size-4 text-emerald-600 shrink-0 mt-0.5" />
-                    <span><strong className="text-foreground">Bảo vệ riêng tư:</strong> Không công khai số điện thoại, email hay số căn cước của bạn.</span>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <CheckCircle2 className="size-4 text-emerald-600 shrink-0 mt-0.5" />
-                    <span><strong className="text-foreground">Kiểm duyệt khách quan:</strong> Hệ thống rà soát tự động trong vòng 2 giờ.</span>
-                  </div>
-                </div>
-              </Card>
-
-              {/* Hotel Response Note */}
-              <div className="p-4 bg-primary/5 rounded-xl border border-primary/20 space-y-2 text-xs">
-                <div className="flex items-center gap-2 text-primary font-bold">
-                  <Info className="size-4" /> Phản hồi từ khách sạn
-                </div>
-                <p className="text-muted-foreground leading-relaxed">
-                  Đội ngũ Ban quản lý <strong className="text-foreground">An Nhiên Riverside Hotel</strong> sẽ trực tiếp đọc và phản hồi tới bạn trong vòng 24 giờ.
-                </p>
-              </div>
-
-            </div>
-
-          </div>
-
         </div>
-      </main>
+        <p className="-mt-2 text-xs text-muted-foreground">
+          Điểm tổng được tính tự động theo trọng số của từng tiêu chí; bạn cần chấm đủ mọi tiêu chí.
+        </p>
 
-      <Footer />
-    </div>
+        <ul className="divide-y divide-border">
+          {criteria.map((criterion) => (
+            <li
+              key={criterion.id}
+              id={`criterion-${criterion.id}`}
+              className={cn(
+                'flex scroll-mt-28 flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between',
+                showMissing && scores[criterion.id] === undefined && '-mx-3 rounded-lg bg-red-50 px-3',
+              )}
+            >
+              <div>
+                <p className="text-sm font-semibold text-foreground">{criterion.name}</p>
+                {criterion.description && <p className="text-sm text-muted-foreground">{criterion.description}</p>}
+                {showMissing && scores[criterion.id] === undefined && (
+                  <p className="text-sm font-semibold text-red-600">Chưa chấm</p>
+                )}
+              </div>
+              <StarInput
+                label={criterion.name}
+                value={scores[criterion.id]}
+                disabled={pending}
+                onChange={(score) => setScores((prev) => ({ ...prev, [criterion.id]: score }))}
+              />
+            </li>
+          ))}
+        </ul>
+      </Card>
+
+      <Card className="space-y-5 rounded-xl border border-border bg-card p-5 shadow-xs sm:p-7">
+        <h2 className="border-b border-border pb-3 text-lg font-bold text-foreground">Chia sẻ trải nghiệm</h2>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="title" className="text-xs font-semibold text-foreground sm:text-sm">
+            Tiêu đề <span className="font-normal text-muted-foreground">(không bắt buộc)</span>
+          </Label>
+          <Input
+            id="title"
+            value={title}
+            maxLength={255}
+            disabled={pending}
+            onChange={(event) => setTitle(event.target.value)}
+            placeholder="Ví dụ: Phòng sạch, nhân viên dễ thương"
+            aria-invalid={!!errors.title}
+            className="h-11"
+          />
+          {errors.title && <p className="text-xs text-red-600">{errors.title}</p>}
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="content" className="text-xs font-semibold text-foreground sm:text-sm">
+            Nội dung đánh giá <span className="text-red-500">*</span>
+          </Label>
+          <Textarea
+            id="content"
+            rows={6}
+            value={content}
+            maxLength={CONTENT_MAX}
+            disabled={pending}
+            onChange={(event) => setContent(event.target.value)}
+            placeholder="Phòng ốc, vị trí, dịch vụ, bữa sáng… điều gì khiến bạn hài lòng hoặc cần cải thiện?"
+            aria-invalid={!!errors.content}
+            className="min-h-36 text-base sm:text-sm"
+          />
+          <div className="flex justify-between text-xs">
+            <span className={errors.content ? 'text-red-600' : 'text-muted-foreground'}>
+              {errors.content ?? `Tối thiểu ${CONTENT_MIN} ký tự.`}
+            </span>
+            <span className="text-muted-foreground">
+              {content.trim().length}/{CONTENT_MAX}
+            </span>
+          </div>
+        </div>
+
+        <ReviewPhotoPicker
+          saved={savedImages}
+          pending={photos}
+          onAdd={(files) => void addPhotos(files)}
+          onRemovePending={(id) => setPhotos((current) => current.filter((photo) => photo.id !== id))}
+          onRemoveSaved={existing ? removeSaved : undefined}
+          removingId={deleteImage.isPending ? deleteImage.variables : null}
+          disabled={pending}
+          error={photoError}
+        />
+
+        <div className="flex items-start gap-2 rounded-lg bg-muted p-3 text-xs text-muted-foreground">
+          <Info className="mt-0.5 size-4 shrink-0 text-primary" />
+          <p className="leading-relaxed">
+            Đánh giá được đăng công khai ngay trên trang khách sạn với tên rút gọn của bạn (ví dụ &ldquo;Nguyễn Văn
+            A.&rdquo;). Khách sạn không thể ẩn đánh giá; chỉ quản lý StayReco ẩn một đánh giá vi phạm sau khi nó bị báo
+            cáo.
+            {closesAt && ` Bạn có thể chỉnh sửa đến ${formatDateTime(closesAt)}.`}
+          </p>
+        </div>
+      </Card>
+
+      {formError && (
+        <Alert variant="destructive" className="bg-red-50">
+          <AlertTitle className="text-xs">Chưa gửi được đánh giá</AlertTitle>
+          <AlertDescription className="mt-1 text-xs">{formError}</AlertDescription>
+        </Alert>
+      )}
+
+      <div className="flex justify-end">
+        <Button type="submit" disabled={pending} className="h-11 w-full gap-2 px-8 sm:w-auto">
+          {pending ? <Loader2 className="size-4 animate-spin" /> : existing ? <Edit2 className="size-4" /> : <Send className="size-4" />}
+          {uploading
+            ? `Đang tải ảnh ${Math.min(uploading.done + 1, uploading.total)}/${uploading.total}…`
+            : existing
+              ? 'Lưu chỉnh sửa'
+              : 'Gửi đánh giá'}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+function ReviewSummary({ review }: { review: Review }) {
+  return (
+    <Card className="space-y-4 rounded-xl border border-border bg-card p-5 shadow-xs sm:p-7">
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="text-3xl font-bold text-primary">{review.overallRating.toFixed(1)}</span>
+        <StarDisplay value={review.overallRating} />
+        {!review.isVisible && (
+          <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground">
+            Đang bị ẩn sau khi bị báo cáo
+          </span>
+        )}
+      </div>
+      {review.title && <h3 className="text-base font-bold text-foreground">{review.title}</h3>}
+      <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">{review.content}</p>
+      {review.images.length > 0 && (
+        <ul className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+          {review.images.map((image) => (
+            <li key={image.id} className="aspect-square overflow-hidden rounded-lg bg-muted">
+              {/* eslint-disable-next-line @next/next/no-img-element -- review photos come from storage at their own size */}
+              <img src={image.url} alt="Ảnh trong đánh giá của bạn" className="size-full object-cover" />
+            </li>
+          ))}
+        </ul>
+      )}
+      <ul className="grid grid-cols-1 gap-2 border-t border-border pt-3 sm:grid-cols-2">
+        {review.subRatings.map((rating) => (
+          <li key={rating.criterionId} className="flex items-center justify-between gap-2 text-xs">
+            <span className="text-muted-foreground">{rating.name}</span>
+            <span className="font-semibold text-foreground">{rating.score.toFixed(1)}</span>
+          </li>
+        ))}
+      </ul>
+      <p className="text-xs text-muted-foreground">Viết lúc {formatDateTime(review.createdAt)}</p>
+    </Card>
+  );
+}
+
+export default function ReviewBookingPage() {
+  const params = useParams<{ id: string }>();
+  const bookingId = params.id;
+  // When the page was opened; the API still refuses an edit sent after the window closes.
+  const [openedAt] = useState(() => Date.now());
+  const bookingQuery = useBooking(bookingId);
+  const eligibilityQuery = useReviewEligibility(bookingId);
+  const criteriaQuery = useRatingCriteria();
+  const eligibility = eligibilityQuery.data;
+  // There is no GET /reviews/:id: the review already written is read back from the author's own list.
+  const myReviewsQuery = useMyReviews({ pageSize: 100 }, !!eligibility?.reviewId);
+  const existing = useMemo(
+    () => myReviewsQuery.data?.reviews.find((review) => review.id === eligibility?.reviewId) ?? null,
+    [myReviewsQuery.data, eligibility?.reviewId],
+  );
+
+  const booking = bookingQuery.data;
+  const loading =
+    bookingQuery.isLoading ||
+    eligibilityQuery.isLoading ||
+    criteriaQuery.isLoading ||
+    (!!eligibility?.reviewId && myReviewsQuery.isLoading);
+  const error = bookingQuery.error ?? eligibilityQuery.error ?? criteriaQuery.error ?? myReviewsQuery.error;
+
+  const windowOpen = !!eligibility?.closesAt && new Date(eligibility.closesAt).getTime() > openedAt;
+  // A written review can be edited while the window is open (the API refuses after it).
+  const editable = !!existing && windowOpen;
+  const canWrite = !!eligibility?.canReview;
+
+  const breadcrumb = (
+    <BookingBreadcrumb
+      items={[
+        { label: 'Tài khoản', href: '/account/profile' },
+        { label: 'Chuyến đi của tôi', href: '/account/bookings' },
+        { label: booking ? `Chi tiết #${booking.code}` : 'Chi tiết', href: `/account/bookings/${bookingId}` },
+        { label: existing ? 'Đánh giá của bạn' : 'Viết đánh giá', active: true },
+      ]}
+    />
+  );
+
+  if (loading) {
+    return (
+      <>
+        {breadcrumb}
+        <BookingPageLoading label="Đang tải trang đánh giá…" />
+      </>
+    );
+  }
+
+  if (error || !booking || !eligibility || !criteriaQuery.data) {
+    return (
+      <>
+        {breadcrumb}
+        <div className="mx-auto max-w-lg px-4 py-14">
+          <ErrorState
+            title="Không mở được trang đánh giá"
+            error={error}
+            fallback="Không tải được thông tin chuyến đi hoặc tiêu chí đánh giá."
+            onRetry={() => {
+              void bookingQuery.refetch();
+              void eligibilityQuery.refetch();
+              void criteriaQuery.refetch();
+              if (eligibility?.reviewId) void myReviewsQuery.refetch();
+            }}
+            action={
+              <Link href="/account/bookings" className={linkButton('ghost')}>
+                Chuyến đi của tôi
+              </Link>
+            }
+          />
+        </div>
+      </>
+    );
+  }
+
+  return (
+    <>
+      {breadcrumb}
+      <div className="mx-auto w-full max-w-marketplace px-4 py-6 sm:px-6 sm:py-8">
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+            {existing ? (editable ? 'Chỉnh sửa đánh giá' : 'Đánh giá của bạn') : 'Đánh giá kỳ nghỉ'}
+          </h1>
+          <p className="mt-1.5 max-w-3xl text-sm text-muted-foreground">
+            Chia sẻ trải nghiệm thực tế tại {booking.hotel.name} để giúp những du khách khác chọn chỗ nghỉ phù hợp.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12 lg:gap-8">
+          <div className="space-y-6 lg:col-span-8">
+            {canWrite || editable ? (
+              <ReviewForm
+                bookingId={booking.id}
+                criteria={criteriaQuery.data}
+                existing={editable ? existing : null}
+                closesAt={eligibility.closesAt}
+              />
+            ) : existing ? (
+              <>
+                <Alert className="border-border bg-card">
+                  <Clock className="size-4" />
+                  <AlertDescription className="text-sm">
+                    Đã hết thời hạn chỉnh sửa. Đánh giá của bạn vẫn được giữ nguyên như dưới đây.
+                  </AlertDescription>
+                </Alert>
+                <ReviewSummary review={existing} />
+              </>
+            ) : (
+              <EmptyState
+                icon={Info}
+                title={REASON_TEXT[eligibility.reason ?? ''] ?? 'Chuyến đi này chưa thể đánh giá.'}
+                action={
+                  <Link href={`/account/bookings/${booking.id}`} className={linkButton('default')}>
+                    Về chi tiết đặt phòng
+                  </Link>
+                }
+              />
+            )}
+          </div>
+
+          <aside className="space-y-4 lg:sticky lg:top-24 lg:col-span-4">
+            <Card className="overflow-hidden rounded-xl border border-border bg-card shadow-md">
+              <div className="relative h-40 w-full bg-muted">
+                <Image
+                  src={booking.hotel.coverImageUrl ?? FALLBACK_HOTEL_IMAGE}
+                  alt={booking.hotel.name}
+                  fill
+                  sizes="(min-width: 1024px) 380px, 100vw"
+                  className="object-cover"
+                />
+              </div>
+              <div className="space-y-3 p-5">
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                  <CheckCircle2 className="size-3.5" aria-hidden /> Lưu trú đã xác thực
+                </span>
+                <h2 className="text-base font-bold text-foreground">{booking.hotel.name}</h2>
+                <p className="flex items-center gap-1 text-sm text-muted-foreground">
+                  <MapPin className="size-4 text-primary" aria-hidden /> {booking.hotel.city}
+                </p>
+                <div className="space-y-1.5 border-t border-border pt-3 text-sm text-muted-foreground">
+                  <p className="flex items-center gap-1.5">
+                    <Calendar className="size-4 text-primary" aria-hidden /> {formatDate(booking.checkIn)} –{' '}
+                    {formatDate(booking.checkOut)} · {booking.nights} đêm
+                  </p>
+                  <p>
+                    Mã đặt phòng: <strong className="text-foreground">#{booking.code}</strong>
+                  </p>
+                  {eligibility.closesAt && (
+                    <p className="flex items-center gap-1.5">
+                      <Clock className="size-4 text-amber-700" aria-hidden /> Hạn đánh giá:{' '}
+                      {formatDateTime(eligibility.closesAt)}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </Card>
+            <div className="flex items-start gap-2 rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground">
+              <ShieldCheck className="mt-0.5 size-4 shrink-0 text-emerald-700" aria-hidden />
+              <p>Chỉ khách đã hoàn tất kỳ nghỉ mới được đánh giá, mỗi chuyến đi một đánh giá.</p>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </>
   );
 }

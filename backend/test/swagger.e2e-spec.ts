@@ -69,7 +69,17 @@ describe('Swagger (e2e)', () => {
       );
       expect({ name, success: success.length }).toEqual({ name, success: 1 });
       const [status] = success;
-      if (status !== '204') {
+      const content = op.responses[status].content as Json | undefined;
+      const file = Object.entries(content ?? {}).find(
+        ([type]) => type !== 'application/json',
+      );
+      if (file) {
+        // A download: the file itself, never inside the envelope.
+        expect({ name, file: file[1] }).toEqual({
+          name,
+          file: { schema: { type: 'string', format: 'binary' } },
+        });
+      } else if (status !== '204') {
         expect({
           name,
           data: op.responses[status].content?.['application/json']?.schema
@@ -137,6 +147,25 @@ describe('Swagger (e2e)', () => {
         defined: !!document.components?.schemas?.[name!],
       }).toEqual({ name, defined: true });
     }
+  });
+
+  it('gives every tag a description, so the sidebar says where its guide is', () => {
+    const described = new Map(
+      (document.tags ?? []).map((tag) => [tag.name, tag.description ?? '']),
+    );
+    const used = new Set(
+      operations(document).flatMap(({ op }) => (op.tags ?? []) as string[]),
+    );
+
+    // An undescribed tag is a group of endpoints a frontend developer finds in the sidebar with nothing saying
+    // what they are for or which page in docs/api/ explains them - which is how the phase 4 and 5 groups sat
+    // there unexplained while every earlier one was documented.
+    expect([...used].filter((tag) => !described.has(tag))).toEqual([]);
+    for (const tag of used) {
+      expect(described.get(tag)!.length).toBeGreaterThan(20);
+    }
+    // And nothing described that no route uses, which would be a tag renamed in one place only.
+    expect([...described.keys()].filter((tag) => !used.has(tag))).toEqual([]);
   });
 
   it('describes path params as uuids', () => {

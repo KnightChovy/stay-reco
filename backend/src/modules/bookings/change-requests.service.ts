@@ -197,12 +197,12 @@ export class ChangeRequestsService {
     const booking = isUuid(bookingId)
       ? await this.prisma.booking.findUnique({
           where: { bookingId },
-          select: { roomType: { select: { hotelId: true } } },
+          select: { hotelId: true },
         })
       : null;
     const access = await this.access.assertResource(
       user,
-      booking?.roomType.hotelId,
+      booking?.hotelId,
       'member',
       bookingNotFound,
     );

@@ -17,7 +17,7 @@ Sources: the SRS business rules (Report 3, section 5.1, BR-01 to BR-29), the pre
 | Refund amount | Paid − cancellation fee − already refunded, never more than paid | BR-08 |
 | Refund approver | The partner (hotel owner), after staff with the Refund permission check it | Slide 08 |
 | Refund destination | The customer's StayReco wallet | Slide 08 |
-| Commission | Rate at booking time, default 8%, admin can set 8–15% | BR-13 |
+| Commission | Rate at booking time, default 8%, admin can set 8–15%; a platform discount (at most 8 % of the rooms) is paid out of it | BR-13, decision 2026-11-22 |
 | Hotel share on payment | The **full** amount goes to the hotel wallet's pending balance; the commission is taken at check-out | BR-22, team decision |
 | Platform revenue | Kept in the **platform wallet**; the sum of all wallets reconciles with the platform's bank account | Team decision |
 | Late check-out fee | Set by each hotel (none by default); a percent of the last night's price; paid at the front desk, outside StayReco's wallets and commission | Team decision (L1–L8) |
@@ -28,7 +28,10 @@ Sources: the SRS business rules (Report 3, section 5.1, BR-01 to BR-29), the pre
 
 Final price of a booking = sum of the nightly prices (from the pricing rules) − promotion or voucher discount − value of loyalty points used (BR-05, BR-06). It is never below 0, includes VAT and the service fee, is paid in full when booking and does not change afterwards.
 
-Phase 2 has no promotions, vouchers or points (phase 4), so the final price = sum of the nightly prices × number of rooms.
+Phase 2 has no promotions, vouchers or points (phase 4), so the final price = sum of the nightly prices × number of rooms, added up over the room types of the booking (a booking holds 1–5 room types of one hotel since 2026-11-09).
+Promotions and vouchers are built (phase 4): the final price = sum of the nightly prices × number of rooms, minus **one** discount. A booking takes a promotion **or** a voucher, never both, and gets whichever saves more; a code-only campaign (`requires_code`, set when it issues personal codes) never applies to everyone. The discount is capped by the voucher's `maxDiscount`, never exceeds the subtotal (a stay may reach 0 but never below), and is rounded half up to whole dong. Loyalty points are the third subtraction and are built too (BR-11): one platform-wide programme, points earned at check-out on what the stay was **actually paid**, and spent at the programme's point value. They stack on top of the discount, are capped at what the stay still owes, and points beyond that stay on the balance. A hotel may set its own rules on top (decisions L8–L11, 2026-11-16): an earning rate (the platform rate for now; up to 3× once M4 settles who pays for bonus points, §9), whether it takes points at all, and the most points may pay as a share (1–100 %) of the stay after the discount, rounded down to whole dong; the value of a point is the platform's everywhere. See [api/promotions.md](./api/promotions.md) and [api/loyalty.md](./api/loyalty.md).
+
+**Platform campaigns** (`hotel_id` null, decided 2026-11-22): a discount the platform gives, such as the welcome voucher a customer earns by finishing onboarding ([design/onboarding-welcome-voucher.md](./design/onboarding-welcome-voucher.md)), takes off **at most 8 % of the room subtotal**, the lowest commission rate (BR-13), whether it is a percentage or a fixed amount, and is always code-only. **The platform pays for it out of its commission** (§5.4), so the hotel nets exactly what it would have without it. The welcome voucher defaults to 5 %, at most 200,000 ₫, on a stay of at least 500,000 ₫, valid 30 days (environment settings, the percent at most 8).
 
 ### 2.2 Pricing rules
 
@@ -98,6 +101,7 @@ There is **no** payment-transaction table and no refund-request table.
 |---|---|---|---|
 | Customer holds rooms | `PENDING` | `UNPAID` | none |
 | SePay reports a matching transfer | `CONFIRMED` | `PAID`, with the SePay transaction id and payment time | booking payment into the hotel wallet's **pending** balance (BR-22) |
+| Customer pays from their wallet (W1) | `CONFIRMED` | `PAID`, method `WALLET` | customer wallet available −total; booking payment into the hotel wallet's **pending** balance, as a transfer would |
 | 15 minutes without payment | `EXPIRED` | `FAILED` | none (rooms released) |
 | Customer cancels, nothing to refund | `CANCELLED` | stays `PAID` | none (rooms released; the hotel keeps the money as the cancellation fee, settled after the holding period) |
 | Customer cancels, money to refund | stays `CONFIRMED` | `REFUND_PENDING` | none (waiting for the decision, section 7) |
@@ -114,18 +118,27 @@ StayReco's own money is tracked like a party of its own, so revenue is managed p
 
 - On payment the hotel wallet gets the **full** amount in its pending balance. The platform takes nothing yet, so a refund before check-out only moves money between the hotel and the customer.
 - At check-out (or no-show) the commission moves as a pair of transactions: hotel wallet pending −commission, platform wallet available +commission.
-- Costs or compensations the platform bears (goodwill credits to a customer, platform-funded promotions, bank fees) are debited from the platform wallet.
+- Costs or compensations the platform bears (goodwill credits to a customer, bank fees) are debited from the platform wallet. A platform-funded discount is not a debit: it is taken out of the commission of the booking that used it (§5.4), so the platform wallet simply receives less.
 - Platform revenue for a period = the platform wallet's commission transactions minus its debits; its balance is always at hand.
-- Reconciliation: money in the platform's bank account = sum of all wallet balances (hotels, customers, platform) once payouts are recorded.
+- Reconciliation: money in the platform's bank account = money received through SePay for bookings − withdrawals paid = sum of all wallet balances (hotels, customers, platform), each counted as **available + pending + reserved** (an amount waiting to be paid out is still in the bank). SePay transfers that confirmed nothing, or came late, are in the bank but in no wallet until they are refunded by hand, so they are shown apart.
 
 ### 5.4 Commission and payouts
 
 - The platform commission is charged on every **completed** booking and every **no-show** (the hotel keeps that money), at the partner's rate **at booking time** (fixed on the booking). Default 8%, the admin can set 8–15% (BR-13). Cancelled bookings pay no commission.
 - Commission = booking total × rate, rounded half up to whole dong, recorded once at check-out or no-show (keys `commission:<bookingId>:hotel` and `commission:<bookingId>:platform`).
+- **With a platform discount** (§2.1): commission = (booking total + platform discount) × rate, rounded half up, − platform discount. The rate applies to what the stay was worth before the platform's discount, and the discount comes off what the platform keeps, so the hotel nets the same as without it. The cap of 8 % of the rooms keeps this at 0 or more. Example: rooms 2,000,000 ₫, rate 10 %, welcome code 5 % (100,000 ₫): the guest pays 1,900,000 ₫, the commission is 200,000 − 100,000 = 100,000 ₫, and the hotel nets 1,800,000 ₫ as it would have from 2,000,000 ₫. The platform discount is worked out again from the room subtotal and the code's terms, both fixed at booking time. The commission the platform screens forecast for a stay not yet checked out uses the same formula.
 - Refunds happen only before check-in, so they never meet a commission. Should one ever correct a commission later, it is a new adjustment entry; the original entry is never edited (SRS 3.5.7).
 - **Settlement** (BR-22): `WALLET_HOLD_DAYS` after the check-out or no-show (default 1 day, an env setting until the admin screen exists), a job moves the hotel's net amount (payment − commission) from pending to available as a pair of `SETTLEMENT` transactions (keys `settlement:<bookingId>:pending` and `settlement:<bookingId>:available`). The total balance does not change; only the available part grows.
 - A **cancelled** booking that left the hotel money (the whole payment with nothing to refund, or the fee of a partial refund) is settled the same way, `WALLET_HOLD_DAYS` after the cancellation, with no commission: net = payment − refund. Example: 5,000,000 ₫ paid, 30% fee, refund 3,500,000 ₫ approved → 1,500,000 ₫ becomes available one day after the approval. A full refund leaves nothing to settle.
-- A partner withdraws at most the available balance, only to the declared beneficiary account, with one pending request per hotel at a time; platform managers process it within 2 working days (BR-22). Not built yet (phase 6).
+- **Withdrawals** (BR-22, decisions M1–M3 of the reporting and administration phase; built 2026-11-12): a partner withdraws at most the available balance, more than 0, in whole dong, only to the beneficiary account of the hotel's latest approved verification, with one pending request per hotel at a time; a suspended partner cannot request one. Platform managers process it within 2 working days (Monday–Friday). There is no withdrawal table: a request is a `PAYOUT` transaction on the hotel wallet (key `payout:<id>`), and its state comes from its audit events.
+
+| Event | Hotel wallet | Wallet transaction |
+|---|---|---|
+| Partner requests X | available −X, reserved +X | `PAYOUT` −X |
+| Manager pays (bank transfer made, reference recorded) | reserved −X | none: the money has left the platform's bank account |
+| Manager rejects with a reason, or partner cancels | reserved −X, available +X | `ADJUSTMENT` +X (key `payout:<id>:return`) |
+
+`balance_after` stays available + pending, so a `PAYOUT` row lowers it by X and its `ADJUSTMENT` brings it back.
 
 ### 5.5 Late check-out fee (collected at the hotel)
 
@@ -169,7 +182,7 @@ When the customer books, the booking stores the **free-cancellation deadline** (
 
 ### 7.1 Formula
 
-**Cancellation fee** = 0 before the free-cancellation deadline; otherwise fee percent × amount paid.
+**Cancellation fee** = 0 before the free-cancellation deadline; otherwise fee percent × (amount paid − prepaid add-ons). Prepaid add-ons are refunded in full ([api/add-ons.md](./api/add-ons.md)).
 
 **Refund** = amount paid − cancellation fee − amount already refunded; never negative and never more than the amount paid (BR-08). Rounded half up to 2 decimals.
 
@@ -213,9 +226,11 @@ Per BR-20, only when: the booking was already refunded or the request is a dupli
 
 ## 9. Not built yet, or still open
 
-- Promotions, vouchers, loyalty points (BR-06, BR-11): phase 4.
-- Paying with the customer wallet, withdrawing it: phase 4.
-- Partner withdrawals (BR-22): phase 6. The holding period set by an admin: phase 6.
+- Promotions, vouchers and loyalty points (BR-06, BR-11) are built; see §2.1.
+- Paying a booking **from the customer wallet** is built (decision W1): all or nothing, the hotel still credited into pending exactly as a transfer would. See [api/customer-wallet.md](./api/customer-wallet.md).
+- **Withdrawing** the customer wallet to a bank account: open. Customers have no bank details in the schema; storing them needs a decision first. Partner withdrawals do not need this, the beneficiary comes from the hotel's verification.
+- Partner withdrawals (BR-22): built, §5.4. The holding period and the gateway settings stay environment settings, shown read-only to the admin (decision M10).
+- **Who pays for discounts** (decision M4, 2026-11-12): a hotel's own promotions and vouchers are paid by the hotel (it is credited the total after the discount, as now). The platform's own campaigns are paid by the platform out of its commission (§2.1, §5.4, 2026-11-22). The platform-wide loyalty points are to be paid by the platform: the platform wallet will make up the value of the points to the hotel. Until that is built in the loyalty flow, the hotel is credited the total after points; a hotel's redemption conditions (L10: not taking points, or a share below 100 %) are how it limits that cost. Bonus points a hotel gives (L9) would be spent at other hotels, which would then pay for them: a hotel could run a cash-back on other hotels' money, or book itself and spend the points elsewhere at a profit. So the earning rate is held at the platform rate (since 2026-11-18) until the hotel that gives a bonus also pays for it, for example by charging it the value of the extra points at check-out; that is decided with M4.
 
 ## Changelog
 
@@ -234,3 +249,10 @@ Per BR-20, only when: the booking was already refunded or the request is a dupli
 | 2026-10-29 | Hotel operations: commission at check-out and on no-shows (whole dong, a hotel / platform pair); the hotel keeps a no-show's payment; early check-out is not refunded; settlement of the net amount from pending to available `WALLET_HOLD_DAYS` (default 1 day) after check-out or no-show, as `SETTLEMENT` transactions |
 | 2026-10-29 | Settlement also covers cancelled bookings: the money the hotel keeps as the fee becomes available `WALLET_HOLD_DAYS` after the cancellation, with no commission |
 | 2026-10-31 | Late check-out fee (§5.5): hotel policy (grace, cutoff, two percents of the last night's price), the policy at check-out applies, staff may lower it with a reason, paid at the front desk outside the wallets and commission |
+| 2026-11-09 | Promotions and vouchers (§2.1, BR-06): one discount per booking, a promotion or a voucher and never both, the larger of the two; a campaign that issued codes no longer applies automatically; capped by `maxDiscount`, never more than the stay, whole dong; the code is given back when a hold expires unpaid or the booking is cancelled |
+| 2026-11-10 | Loyalty points (§2.1, BR-11): one platform-wide programme, earned at check-out on the amount actually paid, spent as the third subtraction after the discount, capped at what the stay owes, whole dong; points come back when a booking never becomes a stay |
+| 2026-11-10 | Customer wallet (§5, decision W1): a booking may be paid entirely from the balance, never partly, because SePay matches an exact amount; the hotel is credited into pending exactly as a transfer would, so commission, settlement and refunds are unchanged. Withdrawing the customer wallet moves to phase 6 with partner payouts |
+| 2026-11-12 | Withdrawals planned (§5.4, M1–M3): a `PAYOUT` row reserves the amount, paid takes it out, rejected or cancelled gives it back with an `ADJUSTMENT`; reconciliation counts reserved amounts and withdrawals paid, unmatched SePay transfers apart (§5.3); who pays for discounts and points (M4, §9); withdrawing the customer wallet stays open |
+| 2026-11-16 | A hotel's own loyalty rules (§2.1, §9, L8–L11): earning rate 1–3× the platform rate, `acceptsPoints`, `maxRedeemPercent` of the stay after the discount (rounded down to whole dong); one balance and one point value unchanged. The stale duplicate line of §2.1 removed |
+| 2026-11-18 | Hotel earning rate held at the platform rate (§2.1, §9, L9) until the hotel that gives bonus points also pays for them: otherwise the hotel where they are spent pays, which a hotel could turn into a cash-back on other hotels' money |
+| 2026-11-22 | Platform campaigns (§2.1, §5.4, §9): at most 8 % of the room subtotal, always code-only, and paid by the platform out of its commission: commission = (total + platform discount) × rate − platform discount, so the hotel nets the same as without it. The welcome voucher for finishing onboarding (5 %, at most 200,000 ₫, from 500,000 ₫, 30 days). Code-only campaigns are marked by `requires_code` |

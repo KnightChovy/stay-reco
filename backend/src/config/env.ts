@@ -38,6 +38,68 @@ const envSchema = z
       (v) => (v === '' ? undefined : v),
       z.coerce.number().int().min(0).default(1),
     ),
+    /** Review window (BR-12): days after check-out during which a guest may write or edit the review of a stay. */
+    REVIEW_WINDOW_DAYS: z.preprocess(
+      (v) => (v === '' ? undefined : v),
+      z.coerce.number().int().min(1).default(30),
+    ),
+    /**
+     * The welcome voucher a customer earns by finishing onboarding (docs/design/onboarding-welcome-voucher.md, W5):
+     * percent of the rooms, at most 8 (the platform cap, money-rules §2.1), so start-up refuses more.
+     */
+    WELCOME_VOUCHER_PERCENT: z.preprocess(
+      (v) => (v === '' ? undefined : v),
+      z.coerce.number().positive().max(8).default(5),
+    ),
+    /** The most the welcome voucher takes off, in whole dong. */
+    WELCOME_VOUCHER_MAX_DISCOUNT: z.preprocess(
+      (v) => (v === '' ? undefined : v),
+      z.coerce.number().int().positive().default(200_000),
+    ),
+    /** The smallest room subtotal the welcome voucher applies to, in whole dong; 0 for none. */
+    WELCOME_VOUCHER_MIN_BOOKING: z.preprocess(
+      (v) => (v === '' ? undefined : v),
+      z.coerce.number().int().min(0).default(500_000),
+    ),
+    /** Days the welcome voucher is valid for, counting the day it is issued. */
+    WELCOME_VOUCHER_DAYS: z.preprocess(
+      (v) => (v === '' ? undefined : v),
+      z.coerce.number().int().min(1).default(30),
+    ),
+    /** Gemini API key for the marketing writer. Leave empty to disable it: the endpoints answer 503. */
+    GEMINI_API_KEY: z.string().optional(),
+    /** Model the marketing writer calls. Flash is the default: a draft costs a fraction of a cent. */
+    GEMINI_MODEL: z.string().default('gemini-3.8-flash'),
+    /** Model that draws the picture of a draft (A4). Billed per image, far above a caption: see model-pricing.ts. */
+    GEMINI_IMAGE_MODEL: z.string().default('gemini-3.1-flash-image'),
+    /**
+     * The Meta Graph API version the Facebook and Instagram publishers call. It has to be a version the connected
+     * app is allowed to use; Meta retires one about every two years.
+     */
+    META_GRAPH_VERSION: z.string().default('v26.0'),
+    /**
+     * The Meta app the owner-facing connect flow runs through. Leave `META_APP_ID` empty and the OAuth endpoints
+     * answer 503: pasting a page token by hand still works, which is how the flow is demonstrated without an app.
+     */
+    META_APP_ID: z.string().optional(),
+    /** The app secret. Never leaves the server: it is what turns Facebook's one-time code into a token. */
+    META_APP_SECRET: z.string().optional(),
+    /**
+     * Where Facebook sends the owner's browser back to. It must match a Valid OAuth Redirect URI on the app
+     * exactly, including the scheme and any trailing slash, and it is a page in our frontend rather than an API
+     * route: a redirect carries no Authorization header, so that page posts the code back inside the owner's session.
+     */
+    META_OAUTH_REDIRECT_URI: z.string().url().optional(),
+    /** Spend cap per hotel per calendar month, in US dollars (phase 5 Definition of Done). */
+    AI_MONTHLY_BUDGET_USD: z.preprocess(
+      (v) => (v === '' ? undefined : v),
+      z.coerce.number().positive().default(5),
+    ),
+    /** Spend cap of the assistant chat per customer per calendar month, in US dollars. */
+    AI_ASSISTANT_MONTHLY_BUDGET_USD: z.preprocess(
+      (v) => (v === '' ? undefined : v),
+      z.coerce.number().positive().default(0.5),
+    ),
     /** SMTP for real emails. Leave SMTP_HOST empty to print emails to the console instead (dev, tests). */
     SMTP_HOST: z.string().optional(),
     SMTP_PORT: z.coerce.number().int().positive().default(587),

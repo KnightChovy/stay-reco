@@ -42,6 +42,15 @@ const setupStepLabels: Record<(typeof SETUP_STEPS)[number], string> = {
   ROOMS: "loại phòng & phòng",
 };
 
+/** Where each missing setup step is filled in: a tab of `/partner/hotel`, or the rooms screen. */
+const setupStepHrefs: Record<(typeof SETUP_STEPS)[number], string> = {
+  AMENITIES: "/partner/hotel?tab=amenities",
+  POLICIES: "/partner/hotel?tab=policies",
+  IMAGES: "/partner/hotel?tab=images",
+  ROOM_CONFIG: "/partner/hotel?tab=room-config",
+  ROOMS: "/partner/rooms",
+};
+
 const knownTypes = new Set<string>(ACTION_ITEM_TYPES);
 
 /** The backend sends codes and parameters; the wording and the target screen belong to the FE (§4.1). */
@@ -61,7 +70,11 @@ function present(item: ActionItem): {
       return {
         title: `${item.count} booking quá giờ trả phòng`,
         detail: "Khách vẫn đang lưu trú sau giờ trả phòng.",
-        href: "/partner/bookings",
+        // Opens the guests in house, where these bookings are marked; a single one opens straight in the detail.
+        href:
+          item.params.bookingIds.length === 1
+            ? `/partner/bookings?status=CHECKED_IN&open=${item.params.bookingIds[0]}`
+            : "/partner/bookings?status=CHECKED_IN",
       };
     case "REFUND_REQUESTS_PENDING":
       return {
@@ -73,19 +86,22 @@ function present(item: ActionItem): {
       return {
         title: `${item.count} yêu cầu đổi booking chờ xử lý`,
         detail: `Yêu cầu cũ nhất lúc ${formatDateTime(item.params.oldestAt)}`,
-        href: "/partner/bookings",
+        href: "/partner/bookings?tab=changes",
       };
-    case "SETUP_INCOMPLETE":
+    case "SETUP_INCOMPLETE": {
+      // Opens the first missing step (the steps come in the order of the checklist).
+      const first = item.params.missing[0];
       return {
         title: "Hoàn tất thông tin khách sạn",
         detail: `Còn thiếu: ${item.params.missing.map((step) => setupStepLabels[step]).join(", ")}`,
-        href: "/partner/hotel",
+        href: first ? setupStepHrefs[first] : "/partner/hotel",
       };
+    }
     case "ROOMS_LOCKED_LONG":
       return {
         title: `${item.count} phòng bị khoá hơn ${item.params.days} ngày`,
         detail: "Mở khoá nếu phòng đã sửa xong để bán lại.",
-        href: "/partner/rooms",
+        href: "/partner/rooms?status=MAINTENANCE",
       };
     case "NO_AVAILABILITY_DATES":
       return {
@@ -93,7 +109,9 @@ function present(item: ActionItem): {
         detail:
           item.params.dates.slice(0, 3).map(formatDate).join(", ") +
           (item.params.dates.length > 3 ? "…" : ""),
-        href: "/partner/availability",
+        href: item.params.dates[0]
+          ? `/partner/availability?from=${item.params.dates[0]}`
+          : "/partner/availability",
       };
     case "STAFF_INVITES_PENDING":
       return {
@@ -111,7 +129,7 @@ function present(item: ActionItem): {
       return {
         title: `${item.count} ngày tới công suất từ ${item.params.threshold}%`,
         detail: `Sớm nhất ${formatDate(item.params.firstDate)}: cân nhắc tăng giá.`,
-        href: "/partner/pricing",
+        href: `/partner/pricing?date=${item.params.firstDate}`,
       };
   }
 }

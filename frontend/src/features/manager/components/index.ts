@@ -1,6 +1,7 @@
 export { ManagerPanel } from "./ManagerPanel";
 export { ManagerActionProvider, useManagerActions } from "./ManagerActionProvider";
 export { ManagerTitle } from "./ManagerTitle";
+export { ManagerDemoBanner } from "./ManagerDemoBanner";
 export { ManagerNotice } from "./ManagerNotice";
 export type { ManagerNoticeTone } from "./ManagerNotice";
 export { StatusBadge, ErrorPanel } from "./ManagerUi";

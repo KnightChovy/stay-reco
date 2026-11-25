@@ -18,7 +18,7 @@ const PREFIX = {
 } as const;
 const ACCOUNT_NUMBER_KEY = `${PREFIX.beneficiary}accountNumber`;
 
-const mask = (value: string) => `****${value.slice(-4)}`;
+export const mask = (value: string) => `****${value.slice(-4)}`;
 
 export const requestInclude = {
   hotel: { select: { name: true } },
@@ -71,6 +71,21 @@ export const beneficiaryInclude = {
   },
 } satisfies Prisma.HotelVerificationRequestInclude;
 
+/** The bank account of a request's `beneficiary.*` rows, account number decrypted (in full: mask it before showing). */
+export function beneficiaryAccount(
+  properties: { propertyKey: string; propertyValue: string }[],
+  cipher: FieldCipher,
+) {
+  const value = (key: string) =>
+    properties.find((p) => p.propertyKey === PREFIX.beneficiary + key)
+      ?.propertyValue ?? '';
+  return {
+    bankName: value('bankName'),
+    accountNumber: cipher.decrypt(value('accountNumber')),
+    accountHolder: value('accountHolder'),
+  };
+}
+
 /** The payout account from `approved` (the latest approved request with one, or none), always masked. */
 export function toHotelBeneficiary(
   approved: Prisma.HotelVerificationRequestGetPayload<{
@@ -80,16 +95,9 @@ export function toHotelBeneficiary(
   cipher: FieldCipher,
 ): HotelBeneficiary {
   if (!approved) return { account: null, verifiedAt: null, updatePending };
-  const value = (key: string) =>
-    approved.hotelProperties.find(
-      (p) => p.propertyKey === PREFIX.beneficiary + key,
-    )?.propertyValue ?? '';
+  const account = beneficiaryAccount(approved.hotelProperties, cipher);
   return {
-    account: {
-      bankName: value('bankName'),
-      accountNumber: mask(cipher.decrypt(value('accountNumber'))),
-      accountHolder: value('accountHolder'),
-    },
+    account: { ...account, accountNumber: mask(account.accountNumber) },
     verifiedAt: approved.reviewedAt?.toISOString() ?? null,
     updatePending,
   };

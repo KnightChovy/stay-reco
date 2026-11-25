@@ -1,267 +1,339 @@
 "use client";
 
-import React, { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
-import {
-  Sparkles,
-  Search,
-  Plus,
-  ChevronRight,
-  Calendar,
-  Share2,
-  ThumbsUp,
-  Edit,
-  Eye,
-  CheckCircle2,
-  Clock,
-  BarChart3,
-  Mail,
-  Zap,
-  Camera,
-  Globe,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { useQueries } from "@tanstack/react-query";
+import { Clock, ImageIcon, Lightbulb, Loader2, PenLine, RefreshCw, Search, Sparkles } from "lucide-react";
+import type { ContentStatus, MarketingContent } from "@stayreco/shared";
+import Pagination from "@/components/common/pagination/Pagination";
+import { EmptyState } from "@/components/common/StateViews";
+import { buttonVariants, Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
+import * as marketingService from "@/services/marketing.service";
+import { useStaffHotel } from "@/features/staff/components/StaffHotelProvider";
+import { marketingKeys, useBrandVoice, useContentIdeas, useContents } from "@/features/staff/api/marketing-queries";
+import { toneClasses } from "@/features/staff/lib/labels";
+import { contentTypeLabels, ideaKindLabels } from "@/features/staff/lib/marketing-labels";
+import { getMarketingErrorMessage, isMissingMarketingPermission } from "@/features/staff/lib/marketing-errors";
+import { formatDateTime } from "@/features/stays/lib/format";
+import {
+  AiBudgetCard,
+  ContentStatusPill,
+  MarketingErrorPanel,
+  MarketingHeader,
+  Pill,
+  useAiBudgetState,
+} from "@/features/staff/marketing/MarketingParts";
+import { GenerateContentDialog } from "@/features/staff/marketing/GenerateContentDialog";
 
-interface ContentCardItem {
-  id: string;
-  title: string;
-  previewText: string;
-  coverImage: string;
-  platform: "Facebook" | "Instagram" | "Email" | "Zalo";
-  aiScore: number;
-  status: "Bản nháp" | "Đã duyệt" | "Đã xuất bản";
-  updatedAt: string;
-  targetAudience: string;
+const PAGE_SIZE = 9;
+
+const TABS: Array<{ id: string; label: string; status?: ContentStatus[] }> = [
+  { id: "all", label: "Tất cả" },
+  { id: "draft", label: "Bản nháp", status: ["DRAFT"] },
+  { id: "pending", label: "Chờ duyệt", status: ["PENDING_APPROVAL"] },
+  { id: "approved", label: "Đã duyệt", status: ["APPROVED", "SCHEDULED"] },
+  { id: "published", label: "Đã đăng", status: ["PUBLISHED"] },
+  { id: "rejected", label: "Bị từ chối", status: ["REJECTED"] },
+];
+
+/** The one thing to do with a piece, by status. */
+function CardAction({ content }: { content: MarketingContent }) {
+  const href = `/staff/marketing/content/${content.id}`;
+  const cls = "h-10 w-full justify-center whitespace-nowrap";
+  switch (content.status) {
+    case "DRAFT":
+    case "REJECTED":
+      return (
+        <Link href={href} className={cn(buttonVariants(), cls)}>
+          <PenLine className="size-4" aria-hidden /> Sửa
+        </Link>
+      );
+    case "APPROVED":
+      return (
+        <Link href={href} className={cn(buttonVariants(), cls)}>
+          Lên lịch
+        </Link>
+      );
+    case "PENDING_APPROVAL":
+      return (
+        <p className="flex h-10 items-center justify-center gap-1.5 rounded-lg bg-muted px-3 text-xs font-medium text-muted-foreground">
+          <Clock className="size-3.5" aria-hidden /> Đang chờ chủ khách sạn duyệt
+        </p>
+      );
+    default:
+      return (
+        <Link href={href} className={cn(buttonVariants({ variant: "outline" }), cls)}>
+          Xem
+        </Link>
+      );
+  }
+}
+
+function ContentCard({ content }: { content: MarketingContent }) {
+  return (
+    <div className="group flex flex-col overflow-hidden rounded-xl border border-border bg-card shadow-2xs transition hover:border-primary/40 hover:shadow-sm">
+      <Link href={`/staff/marketing/content/${content.id}`} className="flex flex-1 flex-col" aria-label={content.title || "Mở nội dung"}>
+        <div className="relative h-36 bg-muted">
+          {content.mediaUrl ? (
+            // Uploaded pictures live on the storage provider; the URL is the one Meta will fetch.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={content.mediaUrl} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <div className="flex h-full items-center justify-center text-muted-foreground">
+              <ImageIcon className="size-8" aria-hidden />
+            </div>
+          )}
+          <span className="absolute left-2 top-2 rounded-md bg-card">
+            <ContentStatusPill status={content.status} />
+          </span>
+        </div>
+        <div className="flex flex-1 flex-col gap-2 p-4">
+          <span className="text-xs font-semibold uppercase text-primary">{contentTypeLabels[content.contentType]}</span>
+          <h3 className="line-clamp-2 text-sm font-bold text-foreground group-hover:text-primary">
+            {content.title || "(Chưa có tiêu đề)"}
+          </h3>
+          <p className="line-clamp-3 text-xs leading-relaxed text-muted-foreground">{content.body}</p>
+          {content.status === "REJECTED" && content.rejectedReason && (
+            <p className="line-clamp-2 text-xs font-medium text-destructive">Góp ý: {content.rejectedReason}</p>
+          )}
+          <p className="mt-auto pt-2 text-xs text-muted-foreground">
+            {content.authorName ?? "Chủ khách sạn"} · {formatDateTime(content.createdAt)}
+          </p>
+        </div>
+      </Link>
+      <div className="px-4 pb-4">
+        <CardAction content={content} />
+      </div>
+    </div>
+  );
 }
 
 export default function StaffMarketingContentPage() {
-  const [activeTab, setActiveTab] = useState<"all" | "fb" | "insta" | "email">("all");
+  const { hotel, isLoading: hotelLoading } = useStaffHotel();
+  const hotelId = hotel?.summary.id;
+  const [tab, setTab] = useState("all");
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState("");
+  const [dialog, setDialog] = useState<{ open: boolean; brief: string; key: number }>({ open: false, brief: "", key: 0 });
 
-  const contents: ContentCardItem[] = [
-    {
-      id: "cnt-1",
-      title: "Ưu Đãi Mùa Thu — Đặt Phòng Deluxe Ocean King Tặng Voucher Spa 300K",
-      previewText: "🍂 Thưởng thức cảnh bình minh sông Hàn ngoạn mục ngay từ ban công phòng Deluxe Ocean King! Đặt phòng tuần này nhận ngay Voucher Spa & Buffet hữu cơ...",
-      coverImage: "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=600&q=80",
-      platform: "Facebook",
-      aiScore: 95,
-      status: "Đã duyệt",
-      updatedAt: "Hôm nay 10:00",
-      targetAudience: "Khách gia đình & Cặp đôi",
-    },
-    {
-      id: "cnt-2",
-      title: "Story Visual: Trải nghiệm Buffet Sáng Hữu Cơ tại An Nhiên Riverside",
-      previewText: "Bắt đầu ngày mới đầy năng lượng với nguyên liệu rau củ sạch trồng tại trang trại hữu cơ riêng. Đặt ngay qua StayReco để nhận thêm VIP Lounge...",
-      coverImage: "https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=600&q=80",
-      platform: "Instagram",
-      aiScore: 91,
-      status: "Bản nháp",
-      updatedAt: "13/10/2026",
-      targetAudience: "Gen Z & Khách du lịch trẻ",
-    },
-    {
-      id: "cnt-3",
-      title: "Email Newsletter: Tri Ân Hội Viên VIP Gold — Đặc Quyền Late Check-out 14:00",
-      previewText: "Kính gửi quý khách VIP, cảm ơn bạn đã đồng hành cùng StayReco. Khách sạn trân trọng gửi tặng ưu đãi Nâng hạng phòng miễn phí...",
-      coverImage: "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&w=600&q=80",
-      platform: "Email",
-      aiScore: 88,
-      status: "Đã xuất bản",
-      updatedAt: "12/10/2026",
-      targetAudience: "Hội viên VIP Gold",
-    },
-  ];
-
-  const filteredContents = contents.filter((c) => {
-    if (activeTab === "fb") return c.platform === "Facebook";
-    if (activeTab === "insta") return c.platform === "Instagram";
-    if (activeTab === "email") return c.platform === "Email";
-    return true;
+  const status = TABS.find((item) => item.id === tab)?.status;
+  const contentsQuery = useContents(hotelId, { page, pageSize: PAGE_SIZE, status });
+  const forbidden = isMissingMarketingPermission(contentsQuery.error);
+  const ideasQuery = useContentIdeas(hotelId);
+  const voice = useBrandVoice(hotelId).data;
+  const loaded = contentsQuery.data?.contents;
+  // The API has no text search, so this narrows the page on screen only.
+  const needle = search.trim().toLowerCase();
+  const contents = useMemo(() => {
+    const all = loaded ?? [];
+    return needle ? all.filter((item) => `${item.title ?? ""} ${item.body}`.toLowerCase().includes(needle)) : all;
+  }, [loaded, needle]);
+  const { exhausted } = useAiBudgetState(hotelId);
+  // One cheap request per tab for its count (page size 1: only `meta.total` is read).
+  const counts = useQueries({
+    queries: TABS.map((item) => ({
+      queryKey: marketingKeys.contents(hotelId ?? "", { page: 1, pageSize: 1, status: item.status }),
+      queryFn: () => marketingService.getContents(hotelId!, { page: 1, pageSize: 1, status: item.status }),
+      enabled: !!hotelId && !forbidden,
+      retry: false,
+    })),
   });
+  const meta = contentsQuery.data?.meta;
+
+  const openWriter = (brief = "") => setDialog((prev) => ({ open: true, brief, key: prev.key + 1 }));
 
   return (
-    <div className="font-sans antialiased text-foreground">
-      <main>
-        <div className="p-8 space-y-6 max-w-7xl mx-auto w-full">
-          {/* Breadcrumb & Title */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2 text-xs text-slate-500 mb-1">
-                <Link href="/staff/dashboard" className="hover:text-[#934a33]">Bàn làm việc</Link>
-                <ChevronRight className="w-3 h-3" />
-                <span className="text-slate-800 font-medium">Marketing & Thư viện nội dung AI</span>
-              </div>
-              <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-                <Sparkles className="w-7 h-7 text-[#934a33]" /> Thư Viện Nội Dung Marketing AI
-              </h1>
-            </div>
+    <div className="space-y-5">
+      <MarketingHeader
+        title="Thư viện nội dung AI"
+        icon={<Sparkles className="size-7 shrink-0 text-primary" aria-hidden />}
+        crumbs={[{ label: "Thư viện nội dung" }]}
+        description={
+          <>
+            Nhờ AI viết bài theo giọng thương hiệu của khách sạn, chỉnh sửa rồi <strong>gửi chủ khách sạn duyệt</strong>.
+            Bài đã duyệt mới được lên lịch đăng lên Facebook / Instagram.
+          </>
+        }
+        actions={
+          !forbidden && (
+            <Button onClick={() => openWriter()} disabled={!hotelId || exhausted} className="h-10 gap-1.5 whitespace-nowrap">
+              <PenLine className="size-4" aria-hidden /> Viết bài bằng AI
+            </Button>
+          )
+        }
+      />
 
-            <div className="flex items-center gap-3">
-              <Link href="/staff/marketing/calendar">
-                <Button variant="outline" className="h-10 text-xs font-semibold border-slate-300">
-                  <Calendar className="w-4 h-4 mr-1.5" /> Xem Lịch Đăng Bài
-                </Button>
-              </Link>
-              <Link href="/staff/marketing/content/cnt-1">
-                <Button className="h-10 bg-[#934a33] hover:bg-[#7b3e2b] text-white text-xs font-semibold shadow-md">
-                  <Plus className="w-4 h-4 mr-1.5" /> Tạo Nội Dung Mới Bằng AI
-                </Button>
-              </Link>
-            </div>
-          </div>
-
-          {/* Metric Stats Header */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-2">
-              <span className="text-xs text-slate-500 font-semibold uppercase">Nội dung đã khởi tạo AI</span>
-              <div className="flex items-baseline justify-between">
-                <span className="text-2xl font-bold text-slate-900">24 Bài viết</span>
-                <Sparkles className="w-4 h-4 text-amber-500" />
-              </div>
-            </div>
-
-            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-2">
-              <span className="text-xs text-slate-500 font-semibold uppercase">Dự đoán tỷ lệ tương tác AI</span>
-              <div className="flex items-baseline justify-between">
-                <span className="text-2xl font-bold text-emerald-600">92% Điểm cao</span>
-                <Badge className="bg-emerald-100 text-emerald-800 text-[10px]">Tối ưu tốt</Badge>
-              </div>
-            </div>
-
-            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-2">
-              <span className="text-xs text-slate-500 font-semibold uppercase">Bài viết đã xuất bản</span>
-              <div className="flex items-baseline justify-between">
-                <span className="text-2xl font-bold text-slate-900">18 Bài</span>
-                <span className="text-xs text-slate-500">Trên 3 kênh</span>
-              </div>
-            </div>
-
-            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-2">
-              <span className="text-xs text-slate-500 font-semibold uppercase">Doanh thu chuyển đổi</span>
-              <div className="flex items-baseline justify-between">
-                <span className="text-2xl font-bold text-[#934a33]">145,000,000 đ</span>
-                <Badge className="bg-amber-100 text-amber-800 text-[10px]">ROI 4.8x</Badge>
-              </div>
-            </div>
-          </div>
-
-          {/* Filter Bar & Search */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setActiveTab("all")}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
-                  activeTab === "all"
-                    ? "bg-[#934a33] text-white"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                }`}
-              >
-                Tất cả bài viết ({contents.length})
-              </button>
-              <button
-                onClick={() => setActiveTab("fb")}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
-                  activeTab === "fb"
-                    ? "bg-[#934a33] text-white"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                }`}
-              >
-                Facebook (1)
-              </button>
-              <button
-                onClick={() => setActiveTab("insta")}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
-                  activeTab === "insta"
-                    ? "bg-[#934a33] text-white"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                }`}
-              >
-                Instagram (1)
-              </button>
-              <button
-                onClick={() => setActiveTab("email")}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
-                  activeTab === "email"
-                    ? "bg-[#934a33] text-white"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                }`}
-              >
-                Email (1)
-              </button>
-            </div>
-
-            <div className="relative w-full sm:w-64">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <Input placeholder="Tìm nội dung, chiến dịch..." className="pl-9 h-9 text-xs bg-slate-50" />
-            </div>
-          </div>
-
-          {/* Cards Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredContents.map((cnt) => (
-              <div
-                key={cnt.id}
-                className="bg-white rounded-xl border border-slate-200 shadow-2xs hover:shadow-md transition overflow-hidden flex flex-col justify-between"
-              >
-                <div>
-                  <div className="relative h-44 w-full bg-slate-100">
-                    <Image
-                      src={cnt.coverImage}
-                      alt={cnt.title}
-                      fill
-                      className="object-cover"
-                    />
-                    <div className="absolute top-3 left-3 flex items-center gap-1.5">
-                      <Badge className="bg-slate-900/80 backdrop-blur-md text-white font-bold text-[10px]">
-                        {cnt.platform}
-                      </Badge>
-                      <Badge className="bg-amber-500 text-white font-bold text-[10px] flex items-center gap-1">
-                        <Sparkles className="w-3 h-3" /> AI {cnt.aiScore} pts
-                      </Badge>
-                    </div>
-                  </div>
-
-                  <div className="p-4 space-y-2">
-                    <div className="flex items-center justify-between text-[11px] text-slate-500">
-                      <span>Đối tượng: <strong className="text-slate-800">{cnt.targetAudience}</strong></span>
-                      <span>{cnt.updatedAt}</span>
-                    </div>
-
-                    <h3 className="font-bold text-slate-900 text-sm line-clamp-2 leading-snug">{cnt.title}</h3>
-                    <p className="text-xs text-slate-600 line-clamp-3 leading-relaxed font-medium">
-                      {cnt.previewText}
-                    </p>
-                  </div>
+      {forbidden ? (
+        <MarketingErrorPanel error={contentsQuery.error} />
+      ) : (
+        <>
+          <div className="grid gap-3 lg:grid-cols-3">
+            <AiBudgetCard hotelId={hotelId} />
+            <div className="rounded-xl border border-border bg-card p-4 shadow-2xs lg:col-span-2">
+              <p className="text-xs font-semibold uppercase text-muted-foreground">Giọng thương hiệu</p>
+              {voice?.summary ? (
+                <div className="mt-1 space-y-1 text-xs text-muted-foreground">
+                  <p className="font-semibold text-foreground">{voice.summary}</p>
+                  {voice.audience && <p>Khách mục tiêu: {voice.audience}</p>}
+                  {voice.highlights && <p>Điểm nổi bật: {voice.highlights}</p>}
+                  {voice.forbiddenWords && <p>Từ cần tránh: {voice.forbiddenWords}</p>}
                 </div>
+              ) : (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Chưa thiết lập. AI vẫn viết được với giọng ấm áp, trung tính; chủ khách sạn có thể dạy AI giọng văn
+                  riêng từ các bài đã đăng.
+                </p>
+              )}
+            </div>
+          </div>
 
-                <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between">
-                  <Badge
-                    className={`${
-                      cnt.status === "Đã xuất bản"
-                        ? "bg-emerald-100 text-emerald-800"
-                        : cnt.status === "Đã duyệt"
-                        ? "bg-blue-100 text-blue-800"
-                        : "bg-amber-100 text-amber-800"
-                    }`}
-                  >
-                    {cnt.status}
-                  </Badge>
-
-                  <Link href={`/staff/marketing/content/${cnt.id}`}>
-                    <Button className="h-8 text-xs bg-[#934a33] hover:bg-[#7b3e2b] text-white font-semibold">
-                      <Edit className="w-3.5 h-3.5 mr-1" /> Chỉnh sửa AI
+          <section className="rounded-xl border border-border bg-card p-4 shadow-2xs">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <h2 className="flex items-center gap-2 text-sm font-bold text-foreground">
+                <Lightbulb className="size-4 text-amber-500" aria-hidden /> Gợi ý chủ đề từ số liệu khách sạn
+              </h2>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-10 gap-1.5"
+                onClick={() => void ideasQuery.refetch()}
+                disabled={ideasQuery.isFetching}
+              >
+                <RefreshCw className={cn("size-3.5", ideasQuery.isFetching && "animate-spin")} /> Làm mới
+              </Button>
+            </div>
+            {ideasQuery.isLoading ? (
+              <div className="grid gap-3 md:grid-cols-3">
+                {[0, 1, 2].map((key) => (
+                  <Skeleton key={key} className="h-24 rounded-lg" />
+                ))}
+              </div>
+            ) : ideasQuery.error ? (
+              <p className="text-xs text-muted-foreground">{getMarketingErrorMessage(ideasQuery.error)}</p>
+            ) : (ideasQuery.data ?? []).length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                Hiện chưa có gợi ý: khách sạn không có phòng trống đáng kể, khuyến mãi đang chạy hay đánh giá 4.5★ mới.
+              </p>
+            ) : (
+              <ul className="grid gap-3 md:grid-cols-3">
+                {ideasQuery.data!.map((idea, index) => (
+                  <li key={`${idea.kind}-${index}`} className="flex flex-col gap-2 rounded-lg border border-border bg-muted/40 p-3">
+                    <Pill className={cn("self-start", toneClasses[ideaKindLabels[idea.kind].tone])}>
+                      {ideaKindLabels[idea.kind].label}
+                    </Pill>
+                    <p className="text-xs font-semibold text-foreground">{idea.brief}</p>
+                    <p className="text-xs text-muted-foreground">{idea.detail}</p>
+                    <Button
+                      variant="outline"
+                      disabled={exhausted}
+                      className="mt-auto h-10 gap-1.5 self-start whitespace-nowrap"
+                      onClick={() => openWriter(idea.brief)}
+                    >
+                      <Sparkles className="size-3.5" aria-hidden /> Viết từ gợi ý này
                     </Button>
-                  </Link>
-                </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          <section className="space-y-3">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1" role="tablist" aria-label="Lọc theo trạng thái">
+                {TABS.map((item, index) => {
+                  const count = counts[index]?.data?.meta.total;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={tab === item.id}
+                      onClick={() => {
+                        setTab(item.id);
+                        setPage(1);
+                      }}
+                      className={cn(
+                        "h-10 shrink-0 whitespace-nowrap rounded-lg px-3 text-xs font-semibold transition",
+                        tab === item.id ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/70",
+                      )}
+                    >
+                      {item.label}
+                      {count !== undefined && <span className="ml-1.5 tabular-nums opacity-80">{count}</span>}
+                    </button>
+                  );
+                })}
               </div>
-            ))}
-          </div>
-        </div>
-      </main>
+              <div className="relative sm:ml-auto sm:w-64">
+                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+                <Input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Tìm trong trang này"
+                  aria-label="Tìm nội dung trong trang đang xem"
+                  className="h-10 pl-9 text-sm"
+                />
+              </div>
+              {contentsQuery.isFetching && !contentsQuery.isLoading && (
+                <Loader2 className="size-4 animate-spin text-muted-foreground" aria-label="Đang cập nhật" />
+              )}
+            </div>
+
+            {hotelLoading || contentsQuery.isLoading ? (
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {[0, 1, 2].map((key) => (
+                  <Skeleton key={key} className="h-72 rounded-xl" />
+                ))}
+              </div>
+            ) : contentsQuery.error ? (
+              <MarketingErrorPanel error={contentsQuery.error} onRetry={() => void contentsQuery.refetch()} />
+            ) : contents.length === 0 ? (
+              <EmptyState
+                icon={Sparkles}
+                title={needle ? "Không có nội dung khớp từ khoá" : "Chưa có nội dung nào ở mục này"}
+                description={
+                  needle
+                    ? "Tìm kiếm chỉ áp dụng cho trang đang xem. Xoá từ khoá hoặc chuyển trang."
+                    : "Chọn một gợi ý phía trên hoặc tự nhập chủ đề, AI sẽ viết bản nháp trong vài giây."
+                }
+                action={
+                  needle ? (
+                    <Button variant="outline" className="h-10" onClick={() => setSearch("")}>
+                      Xoá từ khoá
+                    </Button>
+                  ) : (
+                    <Button onClick={() => openWriter()} disabled={exhausted} className="h-10 gap-1.5">
+                      <PenLine className="size-4" aria-hidden /> Viết bài bằng AI
+                    </Button>
+                  )
+                }
+              />
+            ) : (
+              <div className={cn("grid gap-4 sm:grid-cols-2 xl:grid-cols-3", contentsQuery.isPlaceholderData && "opacity-60")}>
+                {contents.map((content) => (
+                  <ContentCard key={content.id} content={content} />
+                ))}
+              </div>
+            )}
+
+            {meta && meta.totalPages > 1 && (
+              <Pagination currentPage={meta.page} totalPages={meta.totalPages} onPageChange={setPage} />
+            )}
+          </section>
+        </>
+      )}
+
+      {hotelId && (
+        <GenerateContentDialog
+          key={dialog.key}
+          hotelId={hotelId}
+          open={dialog.open}
+          initialBrief={dialog.brief}
+          onOpenChange={(open) => setDialog((prev) => ({ ...prev, open }))}
+        />
+      )}
     </div>
   );
 }

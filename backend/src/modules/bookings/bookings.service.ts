@@ -10,6 +10,7 @@ import {
   type Booking,
   type BookingSummary,
   type BookingVoucher,
+  bookingItemsOf,
   type CreateBookingInput,
   type MyBookingsQuery,
 } from '@stayreco/shared';
@@ -28,7 +29,7 @@ import {
   isUuid,
 } from '../../common/hotel-access/hotel-access.service';
 import type { Env } from '../../config/env';
-import type { BookingStatus, Prisma } from '../../generated/prisma/client';
+import { type BookingStatus, Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AvailabilityService } from '../availability/availability.service';
 import {
@@ -38,6 +39,14 @@ import {
   toTime,
 } from '../hotels/hotel.mapper';
 import { PriceEngine } from '../pricing/price-engine';
+import { AuditAction, AuditService } from '../audit/audit.service';
+import { LoyaltyService } from '../loyalty/loyalty.service';
+import { DiscountService } from '../promotions/discount.service';
+import {
+  afterPoints,
+  payable,
+  StayDiscountService,
+} from '../promotions/stay-discount.service';
 import { roomTypeNotFound } from '../rooms/room-types.service';
 import { byRoomNumber } from '../rooms/rooms.service';
 import { bookableHotel, sellableRoomType } from '../stays/bookable';
@@ -48,14 +57,19 @@ import {
   retryOnUniqueClash,
 } from './booking-code';
 import {
+  type AssignedRoom,
   bookingInclude,
+  bookingItemsInclude,
   bookingSummaryInclude,
   type NightlyPrices,
+  roomsOf,
   toBooking,
   toBookingSummary,
 } from './booking.mapper';
 import { assertCanSeeBookings } from './booking-access';
 import { loadBookingHistory, type StayRoom } from './booking-history';
+import { loadInvoiceParts } from './booking-invoice';
+import { AddOnsService } from '../add-ons/add-ons.service';
 import { HoldExpiryService } from './hold-expiry.service';
 import { SepayPayment } from './sepay-payment';
 import { signVoucher } from './voucher-token';
@@ -97,16 +111,29 @@ export class BookingsService {
     private readonly engine: PriceEngine,
     private readonly holds: HoldExpiryService,
     private readonly sepay: SepayPayment,
+    private readonly discounts: DiscountService,
+    private readonly stayDiscount: StayDiscountService,
+    private readonly loyalty: LoyaltyService,
+    private readonly addOns: AddOnsService,
+    private readonly audit: AuditService,
     private readonly config: ConfigService<Env, true>,
   ) {}
 
   async create(user: AuthUser, input: CreateBookingInput): Promise<Booking> {
-    const { roomTypeId, checkIn, checkOut, rooms, guests } = input;
+    const { checkIn, checkOut, guests } = input;
+    const requested = bookingItemsOf(input);
     assertBookableDates(checkIn);
-    const roomType = await this.prisma.roomType.findFirst({
-      where: { roomTypeId, ...sellableRoomType, hotel: bookableHotel },
+    const ids = requested.map((i) => i.roomTypeId);
+    const roomTypes = await this.prisma.roomType.findMany({
+      where: {
+        roomTypeId: { in: ids },
+        ...sellableRoomType,
+        hotel: bookableHotel,
+      },
       select: {
+        roomTypeId: true,
         maxOccupancy: true,
+        hotelId: true,
         hotel: {
           select: {
             checkInTime: true,
@@ -116,19 +143,63 @@ export class BookingsService {
         },
       },
     });
-    if (!roomType) throw roomTypeNotFound();
-    if (guests > rooms * roomType.maxOccupancy) {
+    // Every room type sellable, all of one hotel (docs/design/booking-items.md §3).
+    const hotelIds = new Set(roomTypes.map((r) => r.hotelId));
+    if (roomTypes.length !== ids.length || hotelIds.size !== 1) {
+      throw roomTypeNotFound();
+    }
+    const byId = new Map(roomTypes.map((r) => [r.roomTypeId, r]));
+    const { hotelId, hotel } = roomTypes[0];
+    const capacity = requested.reduce(
+      (n, i) => n + i.rooms * byId.get(i.roomTypeId)!.maxOccupancy,
+      0,
+    );
+    if (guests > capacity) {
       throw validation(
         'guests',
-        `at most ${rooms * roomType.maxOccupancy} guests in ${rooms} rooms of this type`,
+        `at most ${capacity} guests in the rooms of this booking`,
       );
     }
 
     // Priced before the hold: the rules do not depend on availability, and BR-09 fixes the result on the booking.
-    const quote = (
-      await this.engine.quote([roomTypeId], checkIn, checkOut)
-    ).get(roomTypeId)!;
-    const total = quote.total.times(rooms);
+    const quotes = await this.engine.quote(ids, checkIn, checkOut);
+    const items = requested.map((item, index) => {
+      const quote = quotes.get(item.roomTypeId)!;
+      return {
+        ...item,
+        index,
+        quote,
+        subtotal: quote.total.times(item.rooms),
+        nightlyPrices: quote.nights.map((n) => ({
+          date: n.date,
+          price: toNumber(n.price),
+        })) satisfies NightlyPrices,
+      };
+    });
+    // The stay subtotal adds up every room type of the booking; the discount and the points come off that
+    // sum, not off one room type (money-rules §2.1).
+    const subtotal = items.reduce(
+      (sum, i) => sum.plus(i.subtotal),
+      new Prisma.Decimal(0),
+    );
+    // A promotion or the typed code comes off the stay, never both (BR-06, money-rules §2.1).
+    const discount = await this.discounts.forStay(
+      user.accountId,
+      hotelId,
+      subtotal,
+      input.code,
+    );
+    const afterDiscount = payable(subtotal, discount);
+    // Points are the third subtraction (money-rules §2.1), taken off what the discount left.
+    const points = await this.stayDiscount.points(
+      user.accountId,
+      hotelId,
+      afterDiscount,
+      input.pointsToUse,
+    );
+    // Prepaid add-ons ride on the same transfer but are never discounted: the campaign and the points are on the room.
+    const addOns = await this.addOns.price(hotelId, input.addOns, 'customer');
+    const total = afterPoints(afterDiscount, points).plus(addOns.total);
     if (!total.equals(input.expectedTotal)) {
       throw new ConflictException({
         code: ErrorCode.BOOKING_PRICE_CHANGED,
@@ -141,39 +212,75 @@ export class BookingsService {
     const expiresAt = new Date(
       now.getTime() + BOOKING_LIMITS.holdMinutes * 60_000,
     );
-    const policy = cancellationPolicyOf(roomType.hotel.hotelProperties);
-    const nightlyPrices: NightlyPrices = quote.nights.map((n) => ({
-      date: n.date,
-      price: toNumber(n.price),
-    }));
+    const policy = cancellationPolicyOf(hotel.hotelProperties);
 
     const bookingId = await retryOnUniqueClash(() =>
       this.prisma.$transaction(async (tx) => {
-        await lockRoomType(tx, roomTypeId);
-        await this.holds.expireDue(roomTypeId, tx);
-        const picked = await this.availability.pickRooms(
-          tx,
-          roomTypeId,
-          checkIn,
-          checkOut,
-          rooms,
-        );
-        if (!picked) {
+        // Locks in id order, so two bookings of the same room types never wait on each other.
+        for (const id of [...ids].sort()) {
+          await lockRoomType(tx, id);
+          await this.holds.expireDue(id, tx);
+        }
+        const picks: {
+          item: (typeof items)[number];
+          picked: Map<string, string[]>;
+        }[] = [];
+        for (const item of items) {
+          const picked = await this.availability.pickRooms(
+            tx,
+            item.roomTypeId,
+            checkIn,
+            checkOut,
+            item.rooms,
+          );
+          if (!picked) {
+            throw new ConflictException({
+              code: ErrorCode.ROOM_SOLD_OUT,
+              message: 'Not enough rooms left for every night of the stay',
+              details: [
+                {
+                  field: `items.${item.index}.rooms`,
+                  message: 'not enough rooms of this type',
+                },
+              ],
+            });
+          }
+          picks.push({ item, picked });
+        }
+
+        // Taken inside the booking's transaction: two bookings racing for one code, or for a campaign's last use,
+        // cannot both win. The loser is told the price changed rather than quietly paying more than it agreed to.
+        if (discount && !(await this.discounts.consume(tx, discount))) {
           throw new ConflictException({
-            code: ErrorCode.ROOM_SOLD_OUT,
-            message: 'Not enough rooms left for every night of the stay',
+            code: ErrorCode.BOOKING_PRICE_CHANGED,
+            message: 'The discount is no longer available',
+            details: [{ field: 'expectedTotal', message: subtotal.toString() }],
           });
         }
 
+        const recommendation = input.recommendationId
+          ? (
+              await tx.$queryRaw<{ id: string }[]>`
+              SELECT r.recommendation_id AS id
+              FROM recommendation r JOIN model_run m USING (model_run_id)
+              WHERE r.recommendation_id = ${input.recommendationId}::uuid
+                AND r.customer_id = ${user.accountId}::uuid AND r.hotel_id = ${hotelId}::uuid
+                AND m.status = 'COMPLETED'
+              FOR KEY SHARE OF r
+            `
+            )[0]
+          : undefined;
         const booking = await tx.booking.create({
           data: {
             customerId: user.accountId,
-            roomTypeId,
+            hotelId,
+            recommendationId: recommendation?.id,
+            loyaltyProgramId: points?.pointsUsed ? points.programId : null,
+            promotionId: discount?.promotionId ?? null,
+            voucherId: discount?.voucherId ?? null,
             checkInDate: fromCalendarDate(checkIn),
             checkOutDate: fromCalendarDate(checkOut),
             numGuests: guests,
-            numRooms: rooms,
-            nightlyPrices,
             totalAmount: total,
             status: 'PENDING',
             guestName: input.guestName,
@@ -183,37 +290,83 @@ export class BookingsService {
             freeCancelUntil: freeCancellationUntil(
               policy,
               checkIn,
-              fromTime(roomType.hotel.checkInTime),
+              fromTime(hotel.checkInTime),
               now,
             ),
             cancelFeePercent: policy.feePercent,
-            commissionRate: roomType.hotel.hotelPartner.commissionRate,
+            commissionRate: hotel.hotelPartner.commissionRate,
+            items: {
+              create: items.map((i) => ({
+                roomTypeId: i.roomTypeId,
+                numRooms: i.rooms,
+                nightlyPrices: i.nightlyPrices,
+                subtotal: i.subtotal,
+              })),
+            },
+            addOns: {
+              create: addOns.lines.map((l) => ({
+                hotelAddOnId: l.hotelAddOnId,
+                name: l.name,
+                unitPrice: l.unitPrice,
+                quantity: l.quantity,
+                amount: l.amount,
+                payment: 'PREPAID' as const,
+              })),
+            },
           },
           select: { bookingId: true },
         });
+        // Spent after the booking exists, so the movement can name it, but still inside the same transaction: two
+        // bookings racing for the same points cannot both win, and the loser is told its price changed rather than
+        // quietly paying the total without them.
+        if (
+          points?.pointsUsed &&
+          !(await this.loyalty.spend(
+            tx,
+            user.accountId,
+            booking.bookingId,
+            points.pointsUsed,
+          ))
+        ) {
+          throw new ConflictException({
+            code: ErrorCode.BOOKING_PRICE_CHANGED,
+            message: 'The points are no longer available',
+            details: [
+              {
+                field: 'expectedTotal',
+                message: afterDiscount.plus(addOns.total).toString(),
+              },
+            ],
+          });
+        }
+
         await tx.invoice.create({
           data: {
             bookingId: booking.bookingId,
             invoiceNumber: await this.unusedCode(tx, now),
-            subtotal: total,
+            subtotal: subtotal.plus(addOns.total),
             taxAmount: 0,
-            discountAmount: 0,
+            discountAmount: (discount?.amount ?? 0) + (points?.amount ?? 0),
             totalAmount: total,
             paymentMethod: 'SEPAY',
           },
         });
 
-        const nightPrice = new Map(quote.nights.map((n) => [n.date, n.price]));
-        const held = [...picked].flatMap(([date, roomIds]) =>
-          roomIds.map((roomId) => ({
-            roomId,
-            date: fromCalendarDate(date),
-            bookingId: booking.bookingId,
-            status: 'HELD' as const,
-            holdExpiresAt: expiresAt,
-            priceOverride: nightPrice.get(date),
-          })),
-        );
+        const held = picks.flatMap(({ item, picked }) => {
+          const nightPrice = new Map(
+            item.quote.nights.map((n) => [n.date, n.price]),
+          );
+          return [...picked].flatMap(([date, roomIds]) =>
+            roomIds.map((roomId) => ({
+              roomId,
+              date: fromCalendarDate(date),
+              bookingId: booking.bookingId,
+              status: 'HELD' as const,
+              holdExpiresAt: expiresAt,
+              priceOverride: nightPrice.get(date),
+            })),
+          );
+        });
         // Rows marked AVAILABLE carry nothing and would collide with the hold.
         await tx.roomCalendars.deleteMany({
           where: {
@@ -229,6 +382,20 @@ export class BookingsService {
         return booking.bookingId;
       }),
     );
+    if (discount) {
+      await this.audit.log(
+        AuditAction.BOOKING_DISCOUNT_APPLIED,
+        user.accountId,
+        {},
+        {
+          bookingId,
+          kind: discount.kind,
+          promotionId: discount.promotionId,
+          code: discount.code,
+          amount: discount.amount,
+        },
+      );
+    }
     return this.load(bookingId);
   }
 
@@ -239,7 +406,7 @@ export class BookingsService {
           where: { bookingId },
           select: {
             customerId: true,
-            roomType: { select: { hotelId: true } },
+            hotelId: true,
           },
         })
       : null;
@@ -250,7 +417,7 @@ export class BookingsService {
     } else {
       const access = await this.access.assertResource(
         user,
-        booking.roomType.hotelId,
+        booking.hotelId,
         'member',
         bookingNotFound,
       );
@@ -296,9 +463,8 @@ export class BookingsService {
           where: { bookingId, customerId: user.accountId },
           include: {
             invoice: true,
-            roomType: {
-              select: { name: true, hotel: { select: { name: true } } },
-            },
+            hotel: { select: { name: true } },
+            items: bookingItemsInclude,
           },
         })
       : null;
@@ -310,14 +476,19 @@ export class BookingsService {
       });
     }
     const code = booking.invoice!.invoiceNumber;
+    const rooms = roomsOf(booking.items);
     return {
       code,
-      hotelName: booking.roomType.hotel.name,
-      roomTypeName: booking.roomType.name,
+      hotelName: booking.hotel.name,
+      items: booking.items.map((i) => ({
+        roomTypeName: i.roomType.name,
+        rooms: i.numRooms,
+      })),
+      roomTypeName: booking.items[0].roomType.name,
       checkIn: toCalendarDate(booking.checkInDate),
       checkOut: toCalendarDate(booking.checkOutDate),
-      rooms: booking.numRooms,
-      guests: booking.numGuests ?? booking.numRooms,
+      rooms,
+      guests: booking.numGuests ?? rooms,
       guestName: booking.guestName,
       amountPaid: toNumber(booking.invoice!.totalAmount),
       qrToken: signVoucher(
@@ -339,21 +510,41 @@ export class BookingsService {
       }),
       loadBookingHistory(this.prisma, bookingId),
     ]);
-    const rooms =
-      history.checkedInRooms ??
-      (forHotel ? await this.heldRooms(bookingId) : []);
-    return toBooking(booking, this.sepay.details, history, rooms);
+    const invoiceParts = await loadInvoiceParts(this.prisma, booking);
+    const rooms = history.checkedInRooms
+      ? await this.withRoomTypes(history.checkedInRooms)
+      : forHotel
+        ? await this.heldRooms(bookingId)
+        : [];
+    return toBooking(booking, this.sepay.details, history, rooms, invoiceParts);
   }
 
   /** Every room the booking has a night on, in room number order. */
-  private async heldRooms(bookingId: string): Promise<StayRoom[]> {
+  private async heldRooms(bookingId: string): Promise<AssignedRoom[]> {
     const rooms = await this.prisma.room.findMany({
       where: { roomCalendars: { some: { bookingId } } },
-      select: { roomId: true, roomNumber: true },
+      select: { roomId: true, roomNumber: true, roomTypeId: true },
     });
     return rooms
-      .map((r) => ({ id: r.roomId, roomNumber: r.roomNumber }))
+      .map((r) => ({
+        id: r.roomId,
+        roomNumber: r.roomNumber,
+        roomTypeId: r.roomTypeId,
+      }))
       .sort((a, b) => byRoomNumber(a.roomNumber, b.roomNumber));
+  }
+
+  /** The check-in audit entry keeps the room numbers; the type comes from the room. */
+  private async withRoomTypes(rooms: StayRoom[]): Promise<AssignedRoom[]> {
+    const types = new Map(
+      (
+        await this.prisma.room.findMany({
+          where: { roomId: { in: rooms.map((r) => r.id) } },
+          select: { roomId: true, roomTypeId: true },
+        })
+      ).map((r) => [r.roomId, r.roomTypeId]),
+    );
+    return rooms.map((r) => ({ ...r, roomTypeId: types.get(r.id)! }));
   }
 
   private async unusedCode(tx: Prisma.TransactionClient, now: Date) {

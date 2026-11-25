@@ -5,12 +5,19 @@ import type { Prisma, WalletTxnType } from '../../generated/prisma/client';
 export const PLATFORM_WALLET_ID = '00000000-0000-0000-0000-000000000001';
 
 export interface LedgerEntry {
+  /** Set when the caller needs the row's id before writing it (a withdrawal's key holds it). */
+  id?: string;
   walletId: string;
   type: WalletTxnType;
   /** Signed: positive credits the wallet, negative debits it. */
   amount: Prisma.Decimal;
   /** Which balance moves: money still held for a stay (`pending`) or money the owner can use (`available`). */
   balance: 'pending' | 'available';
+  /**
+   * Change of the reserved balance in the same update: a withdrawal moves its amount from available to reserved
+   * (+), and a rejected or cancelled one moves it back (−). Reserved money is outside `balance_after`.
+   */
+  reserved?: Prisma.Decimal;
   /** Unique across all movements, so a retried webhook or decision writes the row once (P7, P11). */
   idempotencyKey: string;
   bookingId?: string;
@@ -49,14 +56,19 @@ export class WalletLedger {
   async post(tx: Prisma.TransactionClient, entry: LedgerEntry) {
     const wallet = await tx.wallet.update({
       where: { walletId: entry.walletId },
-      data:
-        entry.balance === 'pending'
+      data: {
+        ...(entry.balance === 'pending'
           ? { balancePending: { increment: entry.amount } }
-          : { balanceAvailable: { increment: entry.amount } },
+          : { balanceAvailable: { increment: entry.amount } }),
+        ...(entry.reserved && {
+          balanceReserved: { increment: entry.reserved },
+        }),
+      },
       select: { balanceAvailable: true, balancePending: true },
     });
     return tx.walletTransaction.create({
       data: {
+        walletTransactionId: entry.id,
         walletId: entry.walletId,
         bookingId: entry.bookingId,
         platformManagerId: entry.platformManagerId,

@@ -34,6 +34,11 @@ const IOS: Partial<Record<IconName, SFSymbol>> = {
   hotel_class: 'star.circle',
   forest: 'tree',
   star: 'star.fill',
+  flag: 'flag',
+  devices: 'laptopcomputer.and.iphone',
+  star_half: 'star.leadinghalf.filled',
+  work: 'briefcase',
+  save: 'square.and.arrow.down',
   shield: 'shield',
   verified_user: 'checkmark.shield',
   receipt_long: 'doc.text',
@@ -157,6 +162,8 @@ const IOS: Partial<Record<IconName, SFSymbol>> = {
   meeting_room: 'door.left.hand.open',
   cleaning_services: 'sparkles',
   contact_phone: 'phone.circle',
+  history: 'clock.arrow.circlepath',
+  add_comment: 'square.and.pencil',
 };
 
 type Props = {

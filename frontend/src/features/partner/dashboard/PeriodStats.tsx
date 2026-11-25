@@ -19,6 +19,7 @@ import { useStatsOverview, useStatsSeries } from "../api/partner-queries";
 import { DateInput, ErrorPanel, PartnerPanel } from "../components";
 import { addDays, todayInVietnam } from "../lib/dates";
 import { formatDate, formatMoney } from "../lib/labels";
+import { ExportExcelButton } from "./ExportExcelButton";
 import { Delta, formatNumber, formatPercent } from "./format";
 import { barMetrics, StatsChart, type BarMetric } from "./StatsChart";
 
@@ -71,8 +72,14 @@ const fitsSeries = (
   statsBucketCount(range.from, range.to, granularity) <=
   STATS_LIMITS.seriesMaxBuckets[granularity];
 
-/** ③ KPIs of the period against the previous one, ④ the chart, and the wallet. Owner only. */
-export function PeriodStats({ hotelId }: { hotelId: string }) {
+/** ③ KPIs of the period against the previous one, ④ the chart, the wallet, and the Excel export of the period. Owner only. */
+export function PeriodStats({
+  hotelId,
+  hotelName,
+}: {
+  hotelId: string;
+  hotelName: string;
+}) {
   const today = todayInVietnam();
   const [preset, setPreset] = useState<Preset>("month");
   const [custom, setCustom] = useState<StatsRangeParams>({
@@ -121,23 +128,31 @@ export function PeriodStats({ hotelId }: { hotelId: string }) {
             </p>
           )}
         </div>
-        <div
-          role="group"
-          aria-label="Chọn kỳ thống kê"
-          className="flex flex-wrap gap-1.5"
-        >
-          {(Object.keys(presetLabels) as Preset[]).map((value) => (
-            <Button
-              className={"cursor-pointer"}
-              key={value}
-              size="sm"
-              variant={preset === value ? "default" : "outline"}
-              aria-pressed={preset === value}
-              onClick={() => setPreset(value)}
-            >
-              {presetLabels[value]}
-            </Button>
-          ))}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <div
+            role="group"
+            aria-label="Chọn kỳ thống kê"
+            className="flex flex-wrap gap-1.5"
+          >
+            {(Object.keys(presetLabels) as Preset[]).map((value) => (
+              <Button
+                key={value}
+                size="sm"
+                variant={preset === value ? "default" : "outline"}
+                aria-pressed={preset === value}
+                onClick={() => setPreset(value)}
+              >
+                {presetLabels[value]}
+              </Button>
+            ))}
+          </div>
+          <span aria-hidden className="hidden h-5 w-px bg-border sm:block" />
+          {/* Exports the period picked here, so the file has the same figures as the screen. */}
+          <ExportExcelButton
+            hotelId={hotelId}
+            hotelName={hotelName}
+            range={range}
+          />
         </div>
       </div>
 
@@ -196,7 +211,6 @@ export function PeriodStats({ hotelId }: { hotelId: string }) {
             >
               {(Object.keys(barMetrics) as BarMetric[]).map((value) => (
                 <Button
-                  className={"cursor-pointer"}
                   key={value}
                   size="sm"
                   variant={chartMetric === value ? "outline" : "ghost"}
@@ -211,7 +225,6 @@ export function PeriodStats({ hotelId }: { hotelId: string }) {
             <div role="group" aria-label="Gộp theo" className="flex gap-1.5">
               {STATS_GRANULARITIES.map((value) => (
                 <Button
-                  className={"cursor-pointer"}
                   key={value}
                   size="sm"
                   variant={
@@ -292,7 +305,7 @@ function Kpis({ overview }: { overview: HotelStatsOverview }) {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4 cursor-pointer">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         <KpiCard
           label="Doanh thu phòng"
           metric={performance.roomRevenue}

@@ -1,17 +1,24 @@
 import { Injectable } from '@nestjs/common';
 import type {
+  HotelStatsBreakdown,
   HotelStatsOverview,
   HotelStatsSeries,
   HotelTodayStats,
   OccupancyForecast,
   OccupancyForecastDay,
+  PaymentMethod,
   StatsPeriod,
   StatsRangeQuery,
   StatsSeriesPoint,
   StatsSeriesQuery,
   TodayStatsQuery,
 } from '@stayreco/shared';
-import { defaultGranularity, daysBetween } from '@stayreco/shared';
+import {
+  BOOKING_SOURCES,
+  CREATED_BOOKING_STATUSES,
+  defaultGranularity,
+  daysBetween,
+} from '@stayreco/shared';
 import {
   addDays,
   fromCalendarDate,
@@ -35,8 +42,19 @@ import {
 
 /** Booking statuses that count as sold (decision PD2: no-shows included). */
 const SOLD = Prisma.sql`('CONFIRMED', 'CHECKED_IN', 'COMPLETED', 'NO_SHOW')`;
-/** Hotel wallet rows that make up the net received (payouts excluded). */
-const EARNINGS = Prisma.sql`('BOOKING_PAYMENT', 'COMMISSION', 'REFUND', 'ADJUSTMENT')`;
+/**
+ * Whether the hotel wallet row `wt` counts in the net received. Withdrawals are left out, and so is what a rejected
+ * or cancelled withdrawal gives back (an `ADJUSTMENT` keyed `payout:<id>:return`): both only move money the hotel
+ * had already earned.
+ */
+export const EARNINGS = Prisma.sql`(wt.type IN ('BOOKING_PAYMENT', 'COMMISSION', 'REFUND')
+  OR (wt.type = 'ADJUSTMENT' AND wt.idempotency_key NOT LIKE 'payout:%'))`;
+/** `BookingSource` of the booking aliased `b` (an AI suggestion wins over a promotion). */
+export const BOOKING_SOURCE = Prisma.sql`CASE
+          WHEN b.recommendation_id IS NOT NULL THEN 'AI_RECOMMENDATION'
+          WHEN b.promotion_id IS NOT NULL OR b.voucher_id IS NOT NULL THEN 'PROMOTION'
+          ELSE 'DIRECT'
+        END`;
 
 /** One day of performance and cash figures (docs/api/partner-dashboard.md §3). */
 interface DayRow {
@@ -51,7 +69,7 @@ interface DayRow {
   refunds: Prisma.Decimal;
 }
 
-interface Totals {
+export interface Totals {
   roomsAvailable: number;
   nightsSold: number;
   revenue: Prisma.Decimal;
@@ -60,6 +78,24 @@ interface Totals {
   net: Prisma.Decimal;
   commission: Prisma.Decimal;
   refunds: Prisma.Decimal;
+}
+
+/** One room type over the period. */
+interface RoomTypeRow {
+  roomTypeId: string;
+  name: string;
+  rooms: number;
+  roomsAvailable: number;
+  nightsSold: number;
+  revenue: Prisma.Decimal;
+}
+
+/** Bookings created in the period sharing a status, payment method and source. */
+interface CreatedRow {
+  status: string;
+  method: PaymentMethod | null;
+  source: string;
+  n: number;
 }
 
 interface Averages {
@@ -143,6 +179,26 @@ export class StatsService {
     };
   }
 
+  /**
+   * A hotel's totals of `period` and of `previous`, and the period's average rating: the same figures as `overview`,
+   * for the partner's view of all its hotels (§4.7).
+   */
+  async periodTotals(
+    hotelId: string,
+    period: StatsPeriod,
+    previous: StatsPeriod,
+  ): Promise<{ cur: Totals; prev: Totals; rating: number | null }> {
+    const [days, averages] = await Promise.all([
+      this.days(hotelId, previous.from, period.to),
+      this.averages(hotelId, period),
+    ]);
+    return {
+      cur: totalOf(days.filter((d) => d.day >= period.from)),
+      prev: totalOf(days.filter((d) => d.day < period.from)),
+      rating: averages.rating,
+    };
+  }
+
   async series(
     hotelId: string,
     query: StatsSeriesQuery,
@@ -171,6 +227,80 @@ export class StatsService {
     return { generatedAt: now.toISOString(), granularity, period, points };
   }
 
+  async breakdown(
+    hotelId: string,
+    query: StatsRangeQuery,
+    now = new Date(),
+  ): Promise<HotelStatsBreakdown> {
+    const period = resolvePeriod(query, todayInVietnam(now));
+    const [types, created] = await Promise.all([
+      this.roomTypeFigures(hotelId, period),
+      this.createdBookings(hotelId, period),
+    ]);
+
+    const byRoomType = types
+      .map((r) => ({
+        roomTypeId: r.roomTypeId,
+        name: r.name,
+        rooms: r.rooms,
+        roomNightsSold: r.nightsSold,
+        roomNightsAvailable: r.roomsAvailable,
+        occupancyRate: ratio(r.nightsSold, r.roomsAvailable, 1, 100),
+        roomRevenue: toNumber(r.revenue),
+        adr: ratio(r.revenue, r.nightsSold, 2),
+      }))
+      .sort(
+        (a, b) =>
+          b.roomRevenue - a.roomRevenue || a.name.localeCompare(b.name, 'vi'),
+      );
+
+    const zero = new Prisma.Decimal(0);
+    const revenue = types.reduce((s, r) => s.plus(r.revenue), zero);
+    const sum = (f: (r: RoomTypeRow) => number) =>
+      types.reduce((s, r) => s + f(r), 0);
+    const nightsSold = sum((r) => r.nightsSold);
+    const roomsAvailable = sum((r) => r.roomsAvailable);
+    const bookingsCreated = created.reduce((s, r) => s + r.n, 0);
+
+    const share = (n: number) => ratio(n, bookingsCreated, 1, 100);
+    const countBy = (key: (r: CreatedRow) => string | null, k: string) =>
+      created.filter((r) => key(r) === k).reduce((s, r) => s + r.n, 0);
+    const methods = [
+      ...new Set(created.flatMap((r) => (r.method ? [r.method] : []))),
+    ]
+      .map((method) => ({ method, bookings: countBy((r) => r.method, method) }))
+      .sort(
+        (a, b) => b.bookings - a.bookings || a.method.localeCompare(b.method),
+      );
+
+    return {
+      generatedAt: now.toISOString(),
+      period,
+      byRoomType,
+      totals: {
+        rooms: sum((r) => r.rooms),
+        roomNightsSold: nightsSold,
+        roomNightsAvailable: roomsAvailable,
+        occupancyRate: ratio(nightsSold, roomsAvailable, 1, 100),
+        roomRevenue: toNumber(revenue),
+        adr: ratio(revenue, nightsSold, 2),
+        bookingsCreated,
+      },
+      bySource: BOOKING_SOURCES.map((source) => {
+        const bookings = countBy((r) => r.source, source);
+        return { source, bookings, sharePercent: share(bookings) };
+      }),
+      byStatus: CREATED_BOOKING_STATUSES.map((status) => {
+        const bookings = countBy((r) => r.status, status);
+        return { status, bookings, sharePercent: share(bookings) };
+      }),
+      byPaymentMethod: methods.map((m) => ({
+        ...m,
+        sharePercent: share(m.bookings),
+      })),
+    };
+  }
+
   async today(
     hotelId: string,
     query: TodayStatsQuery,
@@ -178,7 +308,7 @@ export class StatsService {
   ): Promise<HotelTodayStats> {
     const date = todayInVietnam(now);
     const day = fromCalendarDate(date);
-    const ofHotel = { roomType: { hotelId } };
+    const ofHotel = { hotelId };
     const roomOfHotel = { room: { roomType: { hotelId } } };
     const count = (where: Prisma.BookingWhereInput) =>
       this.prisma.booking.count({ where: { ...ofHotel, ...where } });
@@ -220,7 +350,7 @@ export class StatsService {
       }),
       this.prisma.room.groupBy({
         by: ['status'],
-        where: ofHotel,
+        where: { roomType: { hotelId } },
         _count: true,
       }),
       count({
@@ -244,13 +374,15 @@ export class StatsService {
           guestName: true,
           checkInDate: true,
           checkOutDate: true,
-          numRooms: true,
           numGuests: true,
           arrivalTime: true,
           status: true,
           specialRequests: true,
           invoice: { select: { invoiceNumber: true, paymentStatus: true } },
-          roomType: { select: { name: true } },
+          items: {
+            select: { numRooms: true, roomType: { select: { name: true } } },
+            orderBy: [{ roomType: { name: 'asc' } }, { bookingItemId: 'asc' }],
+          },
           roomCalendars: {
             where: { date: day },
             select: { room: { select: { roomNumber: true } } },
@@ -295,12 +427,12 @@ export class StatsService {
         bookingId: b.bookingId,
         code: b.invoice!.invoiceNumber,
         guestName: b.guestName,
-        roomTypeName: b.roomType.name,
+        roomTypeName: b.items.map((i) => i.roomType.name).join(', '),
         nights: daysBetween(
           toCalendarDate(b.checkInDate),
           toCalendarDate(b.checkOutDate),
         ),
-        rooms: b.numRooms,
+        rooms: b.items.reduce((n, i) => n + i.numRooms, 0),
         numGuests: b.numGuests,
         arrivalTime: fromTime(b.arrivalTime),
         roomNumbers: b.roomCalendars.map((c) => c.room.roomNumber),
@@ -398,8 +530,7 @@ export class StatsService {
         WHERE rt.hotel_id = ${hotelId}::uuid
       ),
       hotel_bookings AS (
-        SELECT b.* FROM booking b JOIN room_type rt ON rt.room_type_id = b.room_type_id
-        WHERE rt.hotel_id = ${hotelId}::uuid
+        SELECT b.* FROM booking b WHERE b.hotel_id = ${hotelId}::uuid
       ),
       existing AS (
         SELECT days.day, count(hr.room_id) AS rooms
@@ -414,9 +545,10 @@ export class StatsService {
       ),
       sold AS (
         SELECT (n->>'date')::date AS day,
-          sum(b.num_rooms) AS nights,
-          sum((n->>'price')::numeric * b.num_rooms) AS revenue
-        FROM hotel_bookings b CROSS JOIN LATERAL jsonb_array_elements(b.nightly_prices) AS n
+          sum(bi.num_rooms) AS nights,
+          sum((n->>'price')::numeric * bi.num_rooms) AS revenue
+        FROM hotel_bookings b JOIN booking_item bi ON bi.booking_id = b.booking_id
+          CROSS JOIN LATERAL jsonb_array_elements(bi.nightly_prices) AS n
         WHERE b.status IN ${SOLD}
           AND b.check_in_date <= ${to}::date AND b.check_out_date > ${from}::date
         GROUP BY 1
@@ -435,7 +567,7 @@ export class StatsService {
       ),
       ledger AS (
         SELECT (wt.created_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::date AS day,
-          sum(wt.amount) FILTER (WHERE wt.type IN ${EARNINGS}) AS net,
+          sum(wt.amount) FILTER (WHERE ${EARNINGS}) AS net,
           -sum(wt.amount) FILTER (WHERE wt.type = 'COMMISSION') AS commission,
           -sum(wt.amount) FILTER (WHERE wt.type = 'REFUND') AS refunds
         FROM wallet_transaction wt JOIN wallet w ON w.wallet_id = wt.wallet_id
@@ -461,6 +593,74 @@ export class StatsService {
       ORDER BY days.day`;
   }
 
+  /**
+   * Every room type of the hotel with the §3 performance figures over the period, so that the types add up to the
+   * hotel: nights sold and revenue by the booking's room type, nights available by the room's current type.
+   */
+  private roomTypeFigures(hotelId: string, period: StatsPeriod) {
+    const { from, to } = period;
+    return this.prisma.$queryRaw<RoomTypeRow[]>`
+      WITH days AS (
+        SELECT d::date AS day FROM generate_series(${from}::date, ${to}::date, interval '1 day') AS d
+      ),
+      types AS (
+        SELECT room_type_id, name FROM room_type WHERE hotel_id = ${hotelId}::uuid
+      ),
+      type_rooms AS (
+        SELECT r.room_id, r.room_type_id, (r.created_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::date AS since
+        FROM room r JOIN types t ON t.room_type_id = r.room_type_id
+      ),
+      existing AS (
+        SELECT tr.room_type_id, count(*) AS nights
+        FROM type_rooms tr JOIN days ON tr.since <= days.day
+        GROUP BY 1
+      ),
+      blocked AS (
+        SELECT tr.room_type_id, count(*) AS nights
+        FROM room_calendars rc JOIN type_rooms tr ON tr.room_id = rc.room_id
+        WHERE rc.status = 'BLOCKED' AND rc.date BETWEEN ${from}::date AND ${to}::date
+        GROUP BY 1
+      ),
+      sold AS (
+        SELECT bi.room_type_id,
+          sum(bi.num_rooms) AS nights,
+          sum((n->>'price')::numeric * bi.num_rooms) AS revenue
+        FROM booking b JOIN booking_item bi ON bi.booking_id = b.booking_id
+          JOIN types t ON t.room_type_id = bi.room_type_id
+          CROSS JOIN LATERAL jsonb_array_elements(bi.nightly_prices) AS n
+        WHERE b.status IN ${SOLD}
+          AND b.check_in_date <= ${to}::date AND b.check_out_date > ${from}::date
+          AND (n->>'date')::date BETWEEN ${from}::date AND ${to}::date
+        GROUP BY 1
+      )
+      SELECT t.room_type_id AS "roomTypeId", t.name,
+        (SELECT count(*) FROM type_rooms tr WHERE tr.room_type_id = t.room_type_id)::int AS rooms,
+        (coalesce(existing.nights, 0) - coalesce(blocked.nights, 0))::int AS "roomsAvailable",
+        coalesce(sold.nights, 0)::int AS "nightsSold",
+        coalesce(sold.revenue, 0) AS revenue
+      FROM types t
+      LEFT JOIN existing ON existing.room_type_id = t.room_type_id
+      LEFT JOIN blocked ON blocked.room_type_id = t.room_type_id
+      LEFT JOIN sold ON sold.room_type_id = t.room_type_id`;
+  }
+
+  /** The bookings counted in `bookingsCreated` (§3), grouped by current status, payment method and source. */
+  private createdBookings(hotelId: string, period: StatsPeriod) {
+    const start = startOf(period.from);
+    const end = startOf(addDays(period.to, 1));
+    return this.prisma.$queryRaw<CreatedRow[]>`
+      SELECT b.status::text AS status,
+        i.payment_method::text AS method,
+        ${BOOKING_SOURCE} AS source,
+        count(*)::int AS n
+      FROM booking b
+      LEFT JOIN invoice i ON i.booking_id = b.booking_id
+      WHERE b.hotel_id = ${hotelId}::uuid
+        AND b.status NOT IN ('PENDING', 'EXPIRED')
+        AND b.created_at >= ${start} AND b.created_at < ${end}
+      GROUP BY 1, 2, 3`;
+  }
+
   /** Averages that do not add up day by day: stay length, lead time, rating. */
   private async averages(
     hotelId: string,
@@ -477,8 +677,7 @@ export class StatsService {
       }[]
     >`
       WITH hotel_bookings AS (
-        SELECT b.* FROM booking b JOIN room_type rt ON rt.room_type_id = b.room_type_id
-        WHERE rt.hotel_id = ${hotelId}::uuid
+        SELECT b.* FROM booking b WHERE b.hotel_id = ${hotelId}::uuid
       ),
       reviews AS (
         SELECT overall_rating FROM review

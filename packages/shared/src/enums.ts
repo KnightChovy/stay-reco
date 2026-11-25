@@ -115,6 +115,105 @@ export const PaymentStatus = {
 } as const;
 export type PaymentStatus = (typeof PaymentStatus)[keyof typeof PaymentStatus];
 
+/** What a piece of marketing content is (phase 5). */
+export const ContentType = {
+  /** A social post. */
+  POST: 'POST',
+  BLOG: 'BLOG',
+  /** A short caption for a photo or video. */
+  CAPTION: 'CAPTION',
+  /** A post built around a discount the hotel is running. */
+  PROMOTION: 'PROMOTION',
+} as const;
+export type ContentType = (typeof ContentType)[keyof typeof ContentType];
+
+/** How far a piece of content has got (M7): a staff member writes, the owner approves. */
+export const ContentStatus = {
+  DRAFT: 'DRAFT',
+  PENDING_APPROVAL: 'PENDING_APPROVAL',
+  APPROVED: 'APPROVED',
+  SCHEDULED: 'SCHEDULED',
+  PUBLISHED: 'PUBLISHED',
+  REJECTED: 'REJECTED',
+} as const;
+export type ContentStatus = (typeof ContentStatus)[keyof typeof ContentStatus];
+
+/** Where a scheduled post stands (M9). */
+export const ScheduleStatus = {
+  SCHEDULED: 'SCHEDULED',
+  /**
+   * Claimed by the publisher job while the platform is called, so no second run or instance can send it again and a
+   * cancel cannot land mid-call. A row left here means the process stopped during the call: check the page by hand.
+   */
+  PUBLISHING: 'PUBLISHING',
+  PUBLISHED: 'PUBLISHED',
+  FAILED: 'FAILED',
+  CANCELLED: 'CANCELLED',
+} as const;
+export type ScheduleStatus = (typeof ScheduleStatus)[keyof typeof ScheduleStatus];
+
+/** Where a post goes. */
+export const SocialPlatform = {
+  FACEBOOK: 'FACEBOOK',
+  INSTAGRAM: 'INSTAGRAM',
+  TIKTOK: 'TIKTOK',
+} as const;
+export type SocialPlatform = (typeof SocialPlatform)[keyof typeof SocialPlatform];
+
+/** Why a review, or one of its photos, was flagged for a platform manager (R11). */
+export const ReportReason = {
+  /** Abusive, obscene or otherwise offensive. */
+  OFFENSIVE: 'OFFENSIVE',
+  /** The reviewer does not appear to have stayed. */
+  NOT_A_STAY: 'NOT_A_STAY',
+  /** Shows someone's face, name, phone number or document. */
+  PERSONAL_DATA: 'PERSONAL_DATA',
+  SPAM_OR_ADVERT: 'SPAM_OR_ADVERT',
+  /** About a different hotel. */
+  WRONG_HOTEL: 'WRONG_HOTEL',
+  /** Looks generated rather than photographed. */
+  AI_GENERATED: 'AI_GENERATED',
+  OTHER: 'OTHER',
+} as const;
+export type ReportReason = (typeof ReportReason)[keyof typeof ReportReason];
+
+/** How far a report has got. Shared with the partner policy violations the schema already had. */
+export const ViolationStatus = {
+  OPEN: 'OPEN',
+  INVESTIGATING: 'INVESTIGATING',
+  RESOLVED: 'RESOLVED',
+  DISMISSED: 'DISMISSED',
+} as const;
+export type ViolationStatus = (typeof ViolationStatus)[keyof typeof ViolationStatus];
+
+/** Loyalty tiers (BR-11), reached by lifetime points and never lost by spending them. */
+export const LoyaltyTier = {
+  MEMBER: 'MEMBER',
+  SILVER: 'SILVER',
+  GOLD: 'GOLD',
+  PLATINUM: 'PLATINUM',
+} as const;
+export type LoyaltyTier = (typeof LoyaltyTier)[keyof typeof LoyaltyTier];
+
+/** How a promotion or voucher takes money off a stay (BR-06). */
+export const DiscountType = {
+  /** 0-100 % of the stay total, capped by the voucher's `maxDiscount` when there is one. */
+  PERCENTAGE: 'PERCENTAGE',
+  /** A flat amount in dong. */
+  FIXED_AMOUNT: 'FIXED_AMOUNT',
+} as const;
+export type DiscountType = (typeof DiscountType)[keyof typeof DiscountType];
+
+/** How a booking was paid, stored on its invoice; only SEPAY is offered for now. */
+export const PaymentMethod = {
+  VNPAY: 'VNPAY',
+  SEPAY: 'SEPAY',
+  WALLET: 'WALLET',
+  CASH: 'CASH',
+  MIXED: 'MIXED',
+} as const;
+export type PaymentMethod = (typeof PaymentMethod)[keyof typeof PaymentMethod];
+
 /** What an in-app notification is about (the FE picks the icon). */
 export const NotificationType = {
   BOOKING: 'BOOKING',
@@ -183,3 +282,18 @@ export const WalletTxnType = {
   SETTLEMENT: 'SETTLEMENT',
 } as const;
 export type WalletTxnType = (typeof WalletTxnType)[keyof typeof WalletTxnType];
+
+/** When a hotel add-on is delivered; a catalogue label, it does not limit when the add-on can be booked. */
+export const AddOnTiming = {
+  BEFORE_STAY: 'BEFORE_STAY',
+  DURING_STAY: 'DURING_STAY',
+  AFTER_STAY: 'AFTER_STAY',
+} as const;
+export type AddOnTiming = (typeof AddOnTiming)[keyof typeof AddOnTiming];
+
+/** PREPAID: booked with the stay and paid in its transfer. FRONT_DESK: added by staff, collected at the desk. */
+export const AddOnPayment = {
+  PREPAID: 'PREPAID',
+  FRONT_DESK: 'FRONT_DESK',
+} as const;
+export type AddOnPayment = (typeof AddOnPayment)[keyof typeof AddOnPayment];

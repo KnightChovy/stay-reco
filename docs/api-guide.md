@@ -95,7 +95,7 @@ Role checks in the FE only drive navigation. The backend always re-checks permis
 
 ## 4. Response format (decided)
 
-Based on the `APIResponse` type the FE drafted (`frontend/src/types/response.type.ts`), extended with `meta` for lists and `code`/`details` for errors. Every endpoint uses this format, except **204** responses (no body).
+Based on the `APIResponse` type the FE drafted (`frontend/src/types/response.type.ts`), extended with `meta` for lists and `code`/`details` for errors. Every endpoint uses this format, except **204** responses (no body) and **file downloads** (the body is the file itself, e.g. `GET /hotels/:hotelId/stats/export` answers an `.xlsx` with `Content-Disposition: attachment; filename="..."`; its errors still use the error format of §4.2).
 
 ### 4.1 Success
 
@@ -202,10 +202,11 @@ There is no `status` field in the body; the HTTP status is already available as 
 | `UPLOAD_UNAVAILABLE` | 503 | File storage not configured or unreachable | "Upload is temporarily unavailable" |
 | `IMAGE_NOT_FOUND` | 404 | Image doesn't exist or belongs to a hotel the caller doesn't manage | Reload the image list |
 | `IMAGE_LIMIT_REACHED` | 409 | The hotel already has 30 images | "Delete an image before adding more" |
-| `ROOM_SOLD_OUT` | 409 | Not enough rooms of the type left for every night of the stay | MSG12, go back to the hotel page |
+| `ROOM_SOLD_OUT` | 409 | Not enough rooms of a room type left for every night of the stay; `details[0].field` names the booking item (`items.1.rooms`) | MSG12, go back to the hotel page |
 | `BOOKING_PRICE_CHANGED` | 409 | The total differs from `expectedTotal`; `details` holds the new total | MSG13, ask the customer to confirm the new total |
 | `BOOKING_NOT_FOUND` | 404 | Booking doesn't exist or the caller cannot see it | Reload the list |
 | `BOOKING_STATUS_CONFLICT` | 409 | The booking's status does not allow the action (cancel twice, voucher of a cancelled booking…) | Reload the booking |
+| `ADD_ON_NOT_FOUND` | 404 | Add-on doesn't exist, belongs to another hotel, is off sale or cannot be booked in advance | Reload the hotel's add-ons |
 | `CANCELLATION_NOT_ALLOWED` | 409 | Cancelling after check-in (BR-09) | "This booking can no longer be cancelled" |
 | `REFUND_STATUS_CONFLICT` | 409 | Deciding a refund that is not pending | Reload the booking |
 | `INVALID_API_KEY` | 401 | SePay webhook called with a missing or wrong API key | Not for clients: check `SEPAY_WEBHOOK_API_KEY` and the key in the SePay dashboard |
@@ -214,12 +215,62 @@ There is no `status` field in the body; the HTTP status is already available as 
 | `VOUCHER_INVALID` | 400 | The voucher QR token was edited or is not a StayReco voucher | MSG20, ask for the booking code |
 | `CHECK_IN_NOT_OPEN` | 409 | Check-in before the check-in date, or on / after the check-out date | "Check-in is open from <check-in date>" |
 | `REFUND_DECISION_PENDING` | 409 | Check-in or no-show while a refund request waits for the hotel | "Decide the refund request first" |
-| `ROOM_NOT_ASSIGNABLE` | 409 | A chosen room is of another room type, not `AVAILABLE`, or taken on a remaining night | Reload the room options |
+| `ROOM_NOT_ASSIGNABLE` | 409 | A chosen room is of a room type not booked, not `AVAILABLE`, or taken on a remaining night, or a booked room type does not get its number of rooms | Reload the room options |
 | `NO_SHOW_NOT_ALLOWED` | 409 | Marking a no-show before the day after the check-in date | "Possible from <day after check-in>" |
 | `ROOM_STATUS_CONFLICT` | 409 | Marking a room cleaned when it is not `CLEANING` | Reload the room |
 | `CHANGE_REQUEST_PENDING` | 409 | The booking already has a change request waiting | Show the waiting request |
 | `CHANGE_REQUEST_STATUS_CONFLICT` | 409 | Accepting or rejecting when no change request is waiting | Reload the booking |
 | `NOTIFICATION_NOT_FOUND` | 404 | Notification doesn't exist or belongs to someone else | Reload the list |
+| `AI_UNAVAILABLE` | 503 | The AI writer is off, or answered unusably | Hide the generate button, or retry once |
+| `AI_BUDGET_EXCEEDED` | 403 | The hotel, or the customer's assistant chat, used its AI budget this month | Show the spend and when it resets |
+| `AI_REFUSED` | 403 | The model declined to write this | Ask the user to rephrase the brief |
+| `CONVERSATION_NOT_FOUND` | 404 | The assistant conversation doesn't exist or belongs to someone else | Reload the conversation list |
+| `BOOKING_PROPOSAL_NOT_FOUND` | 404 | No booking proposal with this id in the conversation | Reload the conversation |
+| `BOOKING_PROPOSAL_INVALID` | 409 | The proposal was already confirmed, or expired | Ask the assistant to price it again |
+| `CONTENT_NOT_FOUND` | 404 | The content doesn't exist or belongs to another hotel | Reload the list |
+| `CONTENT_STATUS_CONFLICT` | 409 | That action does not fit the content's status | Reload the piece |
+| `CONTENT_NOT_APPROVED` | 409 | Scheduling content the owner has not approved | Send it for approval first |
+| `SOCIAL_ACCOUNT_NOT_FOUND` | 404 | The page doesn't exist or belongs to another hotel | Reload the connected pages |
+| `SCHEDULE_NOT_FOUND` | 404 | The scheduled post doesn't exist or belongs to another hotel | Reload the calendar |
+| `SCHEDULE_STATUS_CONFLICT` | 409 | Cancelling a post that went out, or reading figures for one that did not | Reload the calendar |
+| `SOCIAL_PUBLISH_FAILED` | 502 | The platform refused or could not be reached | Show `message`: it carries the platform's own words |
+| `SOCIAL_PLATFORM_UNSUPPORTED` | 501 | TikTok, or Instagram without a photo | Show `message`; for Instagram, ask for a photo |
+| `SOCIAL_OAUTH_DISABLED` | 503 | No Meta app is configured, so the owner cannot be sent to Facebook | Hide the connect button; a token can still be pasted |
+| `SOCIAL_OAUTH_INVALID` | 400 | The `state` or `connectionToken` is not ours, is for another hotel, or has expired | Start the connect flow again |
+| `SOCIAL_OAUTH_FAILED` | 502 | Facebook refused the exchange, or granted no page | Show `message`: it carries Facebook's own words |
+| `REVIEW_NOT_FOUND` | 404 | Review doesn't exist or belongs to another customer | Reload the booking |
+| `REVIEW_NOT_ALLOWED` | 409 | The stay is not completed, so it cannot be reviewed yet | Hide the review button |
+| `REVIEW_ALREADY_EXISTS` | 409 | The booking already has a review; one review per stay | Open the existing review |
+| `REVIEW_WINDOW_CLOSED` | 409 | The review window closed (`REVIEW_WINDOW_DAYS` after check-out) | "Reviews close <n> days after check-out" |
+| `RATING_CRITERION_NOT_FOUND` | 404 | A sub-rating names a criterion that does not exist | Reload the criteria |
+| `WALLET_INSUFFICIENT` | 409 | The balance does not cover the whole booking | Show the balance and the shortfall; offer a transfer |
+| `PAYOUT_NOT_FOUND` | 404 | The withdrawal doesn't exist, or belongs to another hotel | Reload the list |
+| `PAYOUT_PENDING` | 409 | The hotel already has a withdrawal waiting for a platform manager | Show the pending withdrawal; offer to cancel it |
+| `PAYOUT_EXCEEDS_BALANCE` | 409 | More than the available balance; `details[0].message` holds the available balance | MSG30, show the available balance |
+| `BENEFICIARY_MISSING` | 409 | The hotel has no approved verification with a beneficiary account | Link to the verification request |
+| `PAYOUT_STATUS_CONFLICT` | 409 | The withdrawal is no longer pending (paid, rejected or cancelled in the meantime) | Reload the withdrawal |
+| `VIOLATION_NOT_FOUND` | 404 | The compliance case doesn't exist | Reload the list |
+| `VIOLATION_STATUS_CONFLICT` | 409 | The case is closed, or the status change does not follow OPEN → INVESTIGATING → RESOLVED / DISMISSED | Reload the case |
+| `SUSPENSION_REQUEST_PENDING` | 409 | The partner already has a suspension request waiting for the admin | Show the waiting request |
+| `PARTNER_NOT_FOUND` | 404 | The hotel partner doesn't exist | Reload the list |
+| `PARTNER_STATUS_CONFLICT` | 409 | Reinstating a partner that is not suspended | Reload the account |
+| `SUSPENSION_REQUEST_NOT_FOUND` | 404 | The suspension request doesn't exist | Reload the list |
+| `SUSPENSION_STATUS_CONFLICT` | 409 | The suspension request was already decided | Reload the request |
+| `USER_NOT_FOUND` | 404 | The account doesn't exist | Reload the list |
+| `ACCOUNT_STATUS_CONFLICT` | 409 | The account's status does not allow it (locking a locked account, unlocking an active one) | Reload the account |
+| `LOYALTY_PROGRAM_NOT_FOUND` | 404 | No loyalty programme is running | Hide the points section |
+| `LOYALTY_POINTS_INSUFFICIENT` | 409 | More points than the customer holds | Show the balance and re-quote |
+| `LOYALTY_POINTS_NOT_ACCEPTED` | 409 | The hotel of the stay does not take loyalty points | Hide the points field for this hotel and re-quote without `pointsToUse` |
+| `VOUCHER_NOT_FOUND` | 404 | The discount code doesn't exist or belongs to another customer | "Mã không hợp lệ" |
+| `REVIEW_IMAGE_NOT_FOUND` | 404 | The photo doesn't exist or belongs to another review | Reload the review |
+| `REPORT_ALREADY_RAISED` | 409 | You already flagged this review or photo | "Bạn đã báo cáo nội dung này" |
+| `REPORT_NOT_FOUND` | 404 | The report doesn't exist | Reload the queue |
+| `REPORT_STATUS_CONFLICT` | 409 | The report is already resolved or dismissed | Reload the report |
+| `VOUCHER_ALREADY_USED` | 409 | The voucher was already used on another booking | "Mã đã được sử dụng" |
+| `VOUCHER_EXPIRED` | 409 | The voucher, or the campaign behind it, is past its end date | "Mã đã hết hạn" |
+| `VOUCHER_NOT_APPLICABLE` | 409 | Below the campaign's minimum amount, or another hotel | Show the minimum, or which hotel it is for |
+| `PROMOTION_NOT_FOUND` | 404 | The promotion doesn't exist or belongs to another hotel | Reload the list |
+| `PROMOTION_NOT_ACTIVE` | 409 | Switched off, outside its dates, or out of uses | Reload the promotion |
 
 Important: **refresh only when `status === 401` and `code === 'UNAUTHENTICATED'`.** Refreshing on the other 401 errors (`AUTH_INVALID_CREDENTIALS`, `AUTH_WRONG_PASSWORD`, `AUTH_REFRESH_TOKEN_INVALID`) causes infinite loops or unexpected sign-outs.
 
@@ -242,6 +293,7 @@ The response `meta` (`page`, `pageSize`, `total`, `totalPages`) maps directly to
 ## 6. Generated API docs (Swagger)
 
 - Swagger UI: `http://localhost:3000/api/docs`. OpenAPI spec as JSON: `http://localhost:3000/api/docs-json` (import into Postman or generate FE types from it).
+- **162 operations across 19 tagged groups**, every group carrying a one-line description and a link to its page in [api/](./api/README.md). 18 routes are public and show no lock; the other 144 need a bearer token.
 - Enabled only when `NODE_ENV !== 'production'`.
 - To try authenticated endpoints: call `/auth/login`, copy `accessToken`, click **Authorize** and paste it. Swagger keeps the token across page reloads.
 - Swagger is the primary source for endpoints and DTOs. This file keeps only the overall flows and shared rules.

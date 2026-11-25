@@ -54,10 +54,92 @@ export enum AuditAction {
   BOOKING_CHANGE_ACCEPTED = 'BOOKING_CHANGE_ACCEPTED',
   /** The hotel kept the booking as it was; `new_value` holds the reason sent to the customer (UC43). */
   BOOKING_CHANGE_REJECTED = 'BOOKING_CHANGE_REJECTED',
+  BOOKING_ADD_ON_ADDED = 'BOOKING_ADD_ON_ADDED',
+  BOOKING_ADD_ON_REMOVED = 'BOOKING_ADD_ON_REMOVED',
+  /** The guest wrote the review of a completed stay (BR-12). */
+  REVIEW_CREATED = 'REVIEW_CREATED',
+  /** The author edited their review inside the review window. */
+  REVIEW_UPDATED = 'REVIEW_UPDATED',
+  /** The hotel hid or showed a review; `new_value` holds the new visibility. */
+  REVIEW_VISIBILITY_CHANGED = 'REVIEW_VISIBILITY_CHANGED',
+  /** Someone flagged a review, or one of its photos, for a platform manager (R11). */
+  REVIEW_REPORTED = 'REVIEW_REPORTED',
+  /** A platform manager decided a report; `new_value` says whether the content was hidden. */
+  REVIEW_REPORT_DECIDED = 'REVIEW_REPORT_DECIDED',
+  /** A guest added a photo to their review. */
+  REVIEW_IMAGE_ADDED = 'REVIEW_IMAGE_ADDED',
+  /** A guest removed a photo from their review. */
+  REVIEW_IMAGE_REMOVED = 'REVIEW_IMAGE_REMOVED',
+  /** The hotel started a discount campaign (BR-06). */
+  PROMOTION_CREATED = 'PROMOTION_CREATED',
+  /** The hotel changed a campaign; `new_value` holds the fields that changed. */
+  PROMOTION_UPDATED = 'PROMOTION_UPDATED',
+  /** The owner saved the hotel's own loyalty rules (L8–L10); `new_value` holds the hotel and the rules before and after. */
+  LOYALTY_PROGRAM_UPDATED = 'LOYALTY_PROGRAM_UPDATED',
+  /** Personal discount codes handed to customers of a campaign. */
+  VOUCHERS_ISSUED = 'VOUCHERS_ISSUED',
+  /** A booking took a discount; `new_value` holds the campaign, the code and the amount taken off. */
+  BOOKING_DISCOUNT_APPLIED = 'BOOKING_DISCOUNT_APPLIED',
+  /** The AI wrote a marketing draft (M7). */
+  CONTENT_GENERATED = 'CONTENT_GENERATED',
+  /** Staff saved a draft they picked from the AI variants, or wrote themselves. */
+  CONTENT_CREATED = 'CONTENT_CREATED',
+  /** A staff member sent a draft to the owner. */
+  CONTENT_SUBMITTED = 'CONTENT_SUBMITTED',
+  /** The owner approved content for publishing. */
+  CONTENT_APPROVED = 'CONTENT_APPROVED',
+  /** The owner sent content back; `new_value` holds the reason. */
+  CONTENT_REJECTED = 'CONTENT_REJECTED',
+  /** A social page was connected to a hotel (M11). The token itself is never logged. */
+  SOCIAL_ACCOUNT_CONNECTED = 'SOCIAL_ACCOUNT_CONNECTED',
+  /** A social page was disconnected; anything still scheduled for it was cancelled. */
+  SOCIAL_ACCOUNT_DISCONNECTED = 'SOCIAL_ACCOUNT_DISCONNECTED',
+  /** Approved content was put on the calendar (M9). */
+  CONTENT_SCHEDULED = 'CONTENT_SCHEDULED',
+  /** A scheduled post was taken off the calendar before it went out. */
+  SCHEDULE_CANCELLED = 'SCHEDULE_CANCELLED',
+  /** A post went out; `new_value` holds the platform's own id for it. */
+  CONTENT_PUBLISHED = 'CONTENT_PUBLISHED',
+  /** The platform refused a post; `new_value` holds what it said. */
+  CONTENT_PUBLISH_FAILED = 'CONTENT_PUBLISH_FAILED',
   /** A SePay transfer that confirmed nothing (no or unknown code, wrong amount, other account): for manual handling. */
   SEPAY_TRANSFER_UNMATCHED = 'SEPAY_TRANSFER_UNMATCHED',
   /** A SePay transfer for a booking no longer waiting for payment (expired, already paid): refund by hand. */
   SEPAY_TRANSFER_LATE = 'SEPAY_TRANSFER_LATE',
+  /**
+   * Withdrawals (BR-22, M1): events of the `PAYOUT` wallet movement (`entity_type` `wallet_transaction`); the latest
+   * of REQUESTED / PAID / REJECTED / CANCELLED is its state. REQUESTED holds the verification request the beneficiary
+   * account comes from, never the account number.
+   */
+  PAYOUT_REQUESTED = 'PAYOUT_REQUESTED',
+  /** A platform manager opened the withdrawal with the full account number (M3). */
+  PAYOUT_ACCOUNT_VIEWED = 'PAYOUT_ACCOUNT_VIEWED',
+  /** A platform manager made the bank transfer; `new_value` holds the bank reference. */
+  PAYOUT_PAID = 'PAYOUT_PAID',
+  /** A platform manager refused it; `new_value` holds the reason sent to the partner. */
+  PAYOUT_REJECTED = 'PAYOUT_REJECTED',
+  /** The partner took the request back. */
+  PAYOUT_CANCELLED = 'PAYOUT_CANCELLED',
+  /**
+   * Compliance cases (BR-15, M8): events of a `policy_violation`. OPENED holds the hotel concerned and the evidence
+   * file ids; UPDATED the status or severity set and the manager's note.
+   */
+  VIOLATION_OPENED = 'VIOLATION_OPENED',
+  VIOLATION_UPDATED = 'VIOLATION_UPDATED',
+  /** A platform manager asks the admin to suspend the partner of a case; `new_value` holds the reason. */
+  SUSPENSION_REQUESTED = 'SUSPENSION_REQUESTED',
+  /** The admin suspended the partner; `new_value` holds the reason. */
+  SUSPENSION_APPROVED = 'SUSPENSION_APPROVED',
+  /** The admin kept the partner as it was; `new_value` holds the reason. */
+  SUSPENSION_REJECTED = 'SUSPENSION_REJECTED',
+  /** The admin locked an account (`entity` the account); `new_value` holds the reason and the status before. */
+  ACCOUNT_SUSPENDED = 'ACCOUNT_SUSPENDED',
+  /** The admin unlocked an account; `new_value` holds the reason and the status set. */
+  ACCOUNT_ACTIVATED = 'ACCOUNT_ACTIVATED',
+  /** The admin lifted a partner's suspension; `new_value` holds the reason. */
+  PARTNER_REINSTATED = 'PARTNER_REINSTATED',
+  /** The admin changed a partner's commission rate (BR-13); `new_value` holds the old and new rates. */
+  COMMISSION_RATE_CHANGED = 'COMMISSION_RATE_CHANGED',
 }
 
 /** audit_log has one actor column per role; the account id is the role row's id. */

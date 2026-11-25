@@ -51,7 +51,7 @@ export class HotelBookingsService {
       query.changeRequest &&
       (await pendingChangeRequests(this.prisma, access.hotelId));
     const where = {
-      roomType: { hotelId: access.hotelId },
+      hotelId: access.hotelId,
       bookingId: pendingChanges
         ? { in: pendingChanges.map((r) => r.bookingId) }
         : undefined,

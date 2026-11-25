@@ -1,6 +1,7 @@
 import { z } from 'zod';
-import { BookingStatus, DayOfWeek, PaymentStatus, PriceAdjustmentType, PriceRuleType, RoomStatus } from '../enums';
+import { BookingStatus, DayOfWeek, PaymentMethod, PaymentStatus, PriceAdjustmentType, PriceRuleType, RoomStatus } from '../enums';
 import { CHANGE_REQUEST_STATUSES } from '../schemas/booking';
+import { bookingAddOnResponseSchema, hotelAddOnResponseSchema } from './add-on';
 import {
   amenityResponseSchema,
   cancellationPolicyResponseSchema,
@@ -140,6 +141,7 @@ export const hotelListingResponseSchema = z
       policies: z.record(z.string(), z.string()),
       cancellationPolicy: cancellationPolicyResponseSchema,
       lateCheckoutPolicy: lateCheckoutPolicyResponseSchema.nullable().describe('null: no late check-out fee.'),
+      addOns: z.array(hotelAddOnResponseSchema).describe('Active add-ons, by name; `prebookable` ones can go on POST /bookings.'),
     }),
     roomTypes: z.array(roomTypeListingResponseSchema),
   })
@@ -148,6 +150,16 @@ export type HotelListing = z.infer<typeof hotelListingResponseSchema>;
 
 // ── Bookings ────────────────────────────────────────────────
 
+export const bookingItemResponseSchema = z
+  .object({
+    roomType: z.object({ id: z.uuid(), name: z.string() }),
+    rooms: z.number().int(),
+    subtotal: z.number().describe('Nightly prices × rooms, fixed at booking time.'),
+    nightlyPrices: z.array(nightlyPriceResponseSchema).describe('Price of one room per night, fixed at booking time.'),
+  })
+  .register(responseSchemas, { id: 'BookingItem', description: 'One room type of a booking.' });
+export type BookingItem = z.infer<typeof bookingItemResponseSchema>;
+
 export const bookingSummaryResponseSchema = z
   .object({
     id: z.uuid(),
@@ -155,12 +167,20 @@ export const bookingSummaryResponseSchema = z
     status: z.enum(BookingStatus),
     paymentStatus: z.enum(PaymentStatus),
     hotel: z.object({ id: z.uuid(), name: z.string(), city: z.string(), coverImageUrl: z.url().nullable() }),
-    roomType: z.object({ id: z.uuid(), name: z.string() }),
+    items: z.array(bookingItemResponseSchema).describe('1–5 room types of the hotel.'),
+    roomType: z
+      .object({ id: z.uuid(), name: z.string() })
+      .describe("Deprecated: the first item's room type, until the apps read `items`."),
     checkIn: calendarDate(),
     checkOut: calendarDate(),
     nights: z.number().int(),
-    rooms: z.number().int(),
+    rooms: z.number().int().describe('Rooms over every item.'),
     guests: z.number().int(),
+    guestName: z.string().describe('Who is staying; may differ from `bookedBy` when the stay was booked for someone.'),
+    contactPhone: z.string(),
+    bookedBy: z
+      .object({ name: z.string(), phone: z.string().nullable() })
+      .describe('The customer account that made the booking.'),
     totalAmount: z.number(),
     createdAt: isoDateTime(),
   })
@@ -184,19 +204,55 @@ export const bookingPaymentResponseSchema = z
   });
 export type BookingPayment = z.infer<typeof bookingPaymentResponseSchema>;
 
+export const bookingInvoiceResponseSchema = z
+  .object({
+    number: z.string().describe('Same as the booking `code`.'),
+    paymentMethod: z
+      .enum(PaymentMethod)
+      .describe('SEPAY until the booking is paid from the wallet, then WALLET.'),
+    subtotal: z.number().describe('Rooms plus the prepaid add-ons, before any subtraction.'),
+    addOnsTotal: z.number().describe('The PREPAID add-ons inside `subtotal`; the discount and points never touch them.'),
+    discount: z
+      .object({
+        kind: z.enum(['PROMOTION', 'VOUCHER']),
+        name: z.string().describe('Name of the campaign.'),
+        code: z.string().nullable().describe('The voucher code; null for a promotion, which has none.'),
+        amount: z.number(),
+      })
+      .nullable()
+      .describe('The promotion or the voucher (never both); null when none applied.'),
+    points: z
+      .object({ used: z.number().int(), amount: z.number().describe('What the points took off, in dong.') })
+      .nullable()
+      .describe('Loyalty points spent on the stay; null when none.'),
+    tax: z.number().describe('Always 0 for now: prices include tax and no tax line is computed.'),
+    total: z.number().describe('subtotal − discount − points + tax; what was charged.'),
+    frontDeskDue: z
+      .number()
+      .describe('FRONT_DESK add-ons, collected at the desk at check-out; not in `total`, no commission.'),
+    currency: z.string(),
+  })
+  .register(responseSchemas, {
+    id: 'BookingInvoice',
+    description: 'The invoice of a booking: what the stay cost and how it was paid (money-rules §2.1).',
+  });
+export type BookingInvoice = z.infer<typeof bookingInvoiceResponseSchema>;
+
 export const bookingResponseSchema = bookingSummaryResponseSchema
   .extend({
-    guestName: z.string(),
-    contactPhone: z.string(),
     arrivalTime: z.string().nullable().describe('"HH:mm", start of the one-hour arrival window.'),
     specialRequests: z.string().nullable(),
-    nightlyPrices: z.array(nightlyPriceResponseSchema).describe('Prices fixed at booking time.'),
+    nightlyPrices: z
+      .array(nightlyPriceResponseSchema)
+      .describe("Deprecated: the first item's prices, until the apps read `items`."),
     cancellation: z.object({
       freeUntil: isoDateTime().nullable().describe('null: no free cancellation.'),
       feePercent: z.number(),
     }),
     holdExpiresAt: isoDateTime().nullable().describe('Set while PENDING.'),
     paidAt: isoDateTime().nullable(),
+    invoice: bookingInvoiceResponseSchema,
+    addOns: z.array(bookingAddOnResponseSchema).describe('Prepaid and front-desk add-ons, oldest first, then by name.'),
     payment: bookingPaymentResponseSchema.nullable().describe('Set while PENDING.'),
     refund: z
       .object({ status: z.enum(PaymentStatus), amount: z.number() })
@@ -209,7 +265,7 @@ export const bookingResponseSchema = bookingSummaryResponseSchema
     cancelReason: z.string().nullable(),
     cancelledAt: isoDateTime().nullable(),
     assignedRooms: z
-      .array(z.object({ id: z.uuid(), roomNumber: z.string() }))
+      .array(z.object({ id: z.uuid(), roomNumber: z.string(), roomTypeId: z.uuid() }))
       .describe(
         'Rooms of the stay: held at booking, replaced by the rooms assigned at check-in. Empty for the customer before check-in.',
       ),
@@ -245,7 +301,12 @@ export const bookingResponseSchema = bookingSummaryResponseSchema
 export type Booking = z.infer<typeof bookingResponseSchema>;
 
 export const roomOptionResponseSchema = z
-  .object({ id: z.uuid(), roomNumber: z.string(), status: z.enum(RoomStatus) })
+  .object({
+    id: z.uuid(),
+    roomNumber: z.string(),
+    status: z.enum(RoomStatus),
+    roomTypeId: z.uuid().describe('Check-in gives each booking item as many rooms of its type as it booked.'),
+  })
   .register(responseSchemas, { id: 'RoomOption' });
 export type RoomOption = z.infer<typeof roomOptionResponseSchema>;
 
@@ -254,7 +315,7 @@ export const roomOptionsResponseSchema = z
     held: z.array(roomOptionResponseSchema).describe('Rooms the booking holds now.'),
     available: z
       .array(roomOptionResponseSchema)
-      .describe('Other rooms of the booked type, AVAILABLE and free on every remaining night.'),
+      .describe('Other rooms of the booked types, AVAILABLE and free on every remaining night.'),
   })
   .register(responseSchemas, { id: 'RoomOptions', description: 'Rooms to assign at check-in (UC38, BR-10).' });
 export type RoomOptions = z.infer<typeof roomOptionsResponseSchema>;
@@ -272,11 +333,12 @@ export const checkOutQuoteResponseSchema = z
           .number()
           .int()
           .describe('Of the night price: the rate of the departure time, plus the full rate for each later day.'),
-        nightPrice: z.number().describe('Last night price × rooms, fixed at booking.'),
+        nightPrice: z.number().describe('Last night price × rooms over every item, fixed at booking.'),
       })
       .nullable()
       .describe('null: within the grace period, not late, or the hotel has no late check-out policy.'),
     amountPaid: z.number(),
+    addOnsDue: z.number().describe('FRONT_DESK add-ons to collect at the desk, besides the late fee.'),
   })
   .register(responseSchemas, {
     id: 'CheckOutQuote',
@@ -288,10 +350,11 @@ export const bookingVoucherResponseSchema = z
   .object({
     code: z.string(),
     hotelName: z.string(),
-    roomTypeName: z.string(),
+    items: z.array(z.object({ roomTypeName: z.string(), rooms: z.number().int() })),
+    roomTypeName: z.string().describe("Deprecated: the first item's room type, until the apps read `items`."),
     checkIn: calendarDate(),
     checkOut: calendarDate(),
-    rooms: z.number().int(),
+    rooms: z.number().int().describe('Rooms over every item.'),
     guests: z.number().int(),
     guestName: z.string(),
     amountPaid: z.number(),

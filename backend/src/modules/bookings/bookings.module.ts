@@ -1,4 +1,7 @@
-import { Module } from '@nestjs/common';
+import { AddOnsModule } from '../add-ons/add-ons.module';
+import { Module, forwardRef } from '@nestjs/common';
+import { LoyaltyModule } from '../loyalty/loyalty.module';
+import { PromotionsModule } from '../promotions/promotions.module';
 import { AvailabilityModule } from '../availability/availability.module';
 import { PricingModule } from '../pricing/pricing.module';
 import { NotificationsModule } from '../notifications/notifications.module';
@@ -23,8 +26,11 @@ import { SettlementService } from './settlement.service';
   imports: [
     PricingModule,
     AvailabilityModule,
-    WalletsModule,
+    forwardRef(() => WalletsModule),
     NotificationsModule,
+    PromotionsModule,
+    LoyaltyModule,
+    AddOnsModule,
   ],
   controllers: [
     BookingsController,

@@ -1,453 +1,513 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import Header from '@/components/layout/Header';
-import Footer from '@/components/layout/Footer';
-import AppBreadcrumb from '@/components/common/breadcrumb/AppBreadcrumb';
-import AccountSubNav from '@/features/account/AccountSubNav';
+import { Gender, UPLOAD_RULES, updateProfileSchema, type Account, type UpdateProfileInput } from '@stayreco/shared';
+import { AlertTriangle, Calendar, Camera, CheckCircle2, Gift, Globe, Loader2, Luggage, Phone, Save, Sparkles, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
-import {
-  User,
-  ShieldCheck,
-  CheckCircle2,
-  Camera,
-  Trash2,
-  Save,
-  RotateCcw,
-  ArrowRight,
-  Sparkles,
-  Lock,
-  Phone,
-  Mail,
-  Calendar,
-  Home,
-  CreditCard,
-  Gift,
-  Headset,
-  Check
-} from 'lucide-react';
+import { ErrorState, LoadingState } from '@/components/common/StateViews';
+import { cn } from '@/lib/utils';
+import { AccountPageHeader, accountContainer, notify } from '@/features/account/AccountShell';
+import { SupportCard } from '@/features/account/SupportCard';
+import { useMe, useRemoveAvatar, useUpdateProfile, useUploadAvatar } from '@/features/account/api/account-queries';
+import { getApiErrorMessage, getApiFieldErrors, validateWith, type FieldErrors } from '@/lib/api-error';
+import { useMyLoyalty, useMyVouchers } from '@/features/account/api/rewards-queries';
+import { useMyBookings } from '@/features/booking/api/booking-queries';
+import { TIER_LABELS, formatPoints } from '@/features/account/lib/rewards-labels';
 
-import { useAuthStore } from '@/lib/auth-store';
+type ProfileForm = {
+  fullName: string;
+  phone: string;
+  dateOfBirth: string;
+  gender: Gender | '';
+  nationality: string;
+};
+
+const genderOptions: Array<{ value: Gender; label: string }> = [
+  { value: Gender.MALE, label: 'Nam' },
+  { value: Gender.FEMALE, label: 'Nữ' },
+  { value: Gender.OTHER, label: 'Khác' },
+];
+
+/** Account states other than ACTIVE, worded for the customer (`Account.status`, docs/api/auth.md). */
+const ACCOUNT_STATUS_NOTICE: Record<string, string> = {
+  PENDING_VERIFICATION: 'Tài khoản đang chờ xác thực email.',
+  INVITED: 'Tài khoản chưa được kích hoạt.',
+  SUSPENDED: 'Tài khoản đang bị tạm khoá. Liên hệ hỗ trợ để biết thêm.',
+  DEACTIVATED: 'Tài khoản đã bị vô hiệu hoá.',
+  DELETED: 'Tài khoản đã bị xoá.',
+};
+
+function customerProfile(account: Account) {
+  const profile = account.profile;
+  return profile && 'gender' in profile ? profile : null;
+}
+
+function toForm(account: Account): ProfileForm {
+  const profile = customerProfile(account);
+  return {
+    fullName: account.fullName,
+    phone: account.phone ?? '',
+    dateOfBirth: profile?.dateOfBirth ?? '',
+    gender: profile?.gender ?? '',
+    nationality: profile?.nationality ?? '',
+  };
+}
+
+/** Only the changed fields; an emptied optional field is sent as `null` to clear it. */
+function diff(account: Account, form: ProfileForm): UpdateProfileInput {
+  const initial = toForm(account);
+  const changes: Record<string, string | null> = {};
+  const fullName = form.fullName.trim();
+  if (fullName !== initial.fullName) changes.fullName = fullName;
+  for (const key of ['phone', 'dateOfBirth', 'gender', 'nationality'] as const) {
+    const value = form[key].trim();
+    if (value !== initial[key]) changes[key] = value === '' ? null : value;
+  }
+  return changes as UpdateProfileInput;
+}
+
+function initialsOf(name: string) {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(-2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('');
+}
 
 export default function ProfilePage() {
-  const user = useAuthStore((state) => state.user);
+  const me = useMe();
+  const account = me.data;
 
-  const [formData, setFormData] = useState({
-    fullName: user?.name || 'Nguyễn Minh Anh',
-    email: user?.email || 'minhanh.nguyen@email.vn',
-    phone: user?.phone || '+84 0912 345 678',
-    birthDate: '18/08/1995',
-    gender: 'female',
-    address: 'Quận Hải Châu, TP. Đà Nẵng',
-    idNumber: '04819500xxxx',
-  });
+  return (
+    <div className={cn(accountContainer.narrow, 'space-y-6')}>
+      <AccountPageHeader
+        title="Hồ sơ cá nhân"
+        description="Thông tin liên lạc để khách sạn nhận diện và liên hệ khi bạn lưu trú."
+      />
 
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+      {me.isLoading ? (
+        <LoadingState rows={2} label="Đang tải hồ sơ…" />
+      ) : !account ? (
+        <ErrorState title="Không tải được hồ sơ" error={me.error} onRetry={() => void me.refetch()} />
+      ) : (
+        <ProfileEditor key={account.id} account={account} />
+      )}
+
+      <AccountSummary />
+      <SupportCard note="Cần đổi email đăng nhập hoặc gặp sự cố với tài khoản? Liên hệ chúng tôi." />
+    </div>
+  );
+}
+
+function ProfileEditor({ account }: { account: Account }) {
+  const [formData, setFormData] = useState<ProfileForm>(() => toForm(account));
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [formError, setFormError] = useState<string | null>(null);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
+
+  const updateProfile = useUpdateProfile();
+  const uploadAvatar = useUploadAvatar();
+  const removeAvatar = useRemoveAvatar();
+
+  const changes = diff(account, formData);
+  const dirty = Object.keys(changes).length > 0;
+  const avatarBusy = uploadAvatar.isPending || removeAvatar.isPending;
+  const isCustomer = account.role === 'CUSTOMER';
+  const statusNotice = account.status === 'ACTIVE' ? null : (ACCOUNT_STATUS_NOTICE[account.status] ?? null);
+
+  const setField = <K extends keyof ProfileForm>(key: K, value: ProfileForm[K]) => {
+    setFormData((prev) => ({ ...prev, [key]: value }));
+    setFieldErrors((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setToastMessage('Thông tin hồ sơ cá nhân đã được đồng bộ an toàn!');
-    setTimeout(() => setToastMessage(null), 3500);
+    if (!dirty || updateProfile.isPending) return;
+    setFormError(null);
+    const parsed = validateWith(updateProfileSchema, changes);
+    if (parsed.errors) {
+      setFieldErrors(parsed.errors);
+      return;
+    }
+    updateProfile.mutate(parsed.data, {
+      onSuccess: (updated) => {
+        setFormData(toForm(updated));
+        setFieldErrors({});
+        notify.success('Đã lưu hồ sơ');
+      },
+      onError: (err) => {
+        setFieldErrors(getApiFieldErrors(err));
+        setFormError(getApiErrorMessage(err));
+      },
+    });
+  };
+
+  const handleReset = () => {
+    setFormData(toForm(account));
+    setFieldErrors({});
+    setFormError(null);
+  };
+
+  const handleAvatarSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setAvatarError(null);
+    if (!(UPLOAD_RULES.image.mimeTypes as readonly string[]).includes(file.type)) {
+      setAvatarError('Ảnh đại diện phải là JPG, PNG hoặc WebP.');
+      return;
+    }
+    if (file.size > UPLOAD_RULES.image.maxBytes) {
+      setAvatarError(`Ảnh đại diện tối đa ${UPLOAD_RULES.image.maxBytes / 1024 / 1024} MB.`);
+      return;
+    }
+    uploadAvatar.mutate(file, {
+      onSuccess: () => notify.success('Đã cập nhật ảnh đại diện'),
+      onError: (err) => setAvatarError(getApiErrorMessage(err)),
+    });
+  };
+
+  const handleRemoveAvatar = () => {
+    setAvatarError(null);
+    removeAvatar.mutate(undefined, {
+      onSuccess: () => notify.success('Đã gỡ ảnh đại diện'),
+      onError: (err) => setAvatarError(getApiErrorMessage(err)),
+    });
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-background font-sans antialiased text-foreground">
-      <Header />
-
-      <main className="flex-1 w-full bg-[#f7f9ff]">
-        
-        {/* Account Sub-navigation */}
-        <AccountSubNav activeTab="profile" />
-
-        <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-          
-          {/* Breadcrumbs */}
-          <AppBreadcrumb
-            items={[
-              { label: 'Trang chủ', href: '/' },
-              { label: 'Tài khoản', href: '/account/profile' },
-              { label: 'Hồ sơ cá nhân', active: true },
-            ]}
-          />
-
-          {/* Page Header */}
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <span className="px-2.5 py-0.5 rounded-full bg-orange-100 text-[#934a33] text-[11px] font-semibold uppercase tracking-wider">
-                Tài khoản cá nhân
-              </span>
-              <span className="text-xs text-muted-foreground">• Đã xác minh danh tính</span>
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-foreground tracking-tight">Hồ sơ cá nhân</h1>
-            <p className="text-xs sm:text-sm text-muted-foreground max-w-2xl">
-              Quản lý thông tin định danh và liên lạc để nhận xác nhận đặt phòng và dịch vụ lưu trú chu đáo nhất từ StayReco.
-            </p>
-          </div>
-
-          {/* Membership Banner */}
-          <div className="w-full rounded-2xl bg-linear-to-r from-[#124b6d] via-[#193b56] to-[#ae583c] p-6 text-white flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-md relative overflow-hidden">
-            <div className="flex items-center gap-4 z-10">
-              <div className="size-12 rounded-xl bg-white/15 backdrop-blur-md flex items-center justify-center text-amber-300">
-                <Sparkles className="size-6" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="text-lg font-bold">StayReco Elite Bạc</h3>
-                  <span className="bg-white/20 text-white text-[10px] px-2 py-0.5 rounded-full font-medium">
-                    Cấp 2/4
-                  </span>
-                </div>
-                <p className="text-xs text-white/80 mt-0.5">
-                  Mã hội viên: <span className="font-mono font-bold text-white">SR-99482</span>
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3 z-10 w-full md:w-auto justify-between md:justify-end">
-              <div className="text-left md:text-right">
-                <span className="text-[11px] text-white/70 block">Điểm tích lũy hiện tại</span>
-                <span className="text-sm font-bold text-white">2.450 Điểm StayMiles</span>
-              </div>
-              <Link href="/account/rewards">
-                <Button className="h-9 px-4 bg-white text-primary hover:bg-slate-100 font-semibold text-xs shrink-0">
-                  Đổi quà
-                </Button>
-              </Link>
-            </div>
-          </div>
-
-          {/* Main Card */}
-          <Card className="p-6 sm:p-8 bg-white border border-border shadow-xs rounded-2xl space-y-8">
-            
-            {/* Avatar Module */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 p-5 rounded-xl bg-slate-50 border border-border">
-              <div className="relative shrink-0">
-                <Image
-                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuBdlMA-ifD0Y3DpGGrzoeXCxc22mKVS31RDqViBrMVQ8k2eirKGhRyxx1asXqfgwBKXejp6XusmcLoC06oceCmP8tXgZpTJLRty_8jUucLiD7I4wgZiRUTW5jZSIcaNRfF-X5uJYThpums1vDU5iHxgrMW2YNbO2AaQkQfak79iPadU5lYrOAyE_zBijHFLDWuH5QkT1ODpnfONYH8YaFQiCWWEiLR_kkfQFGvPbzsvNY2cNbdFaElr"
-                  alt="Avatar"
-                  width={80}
-                  height={80}
-                  className="rounded-full object-cover size-20 shadow-xs"
-                />
-                <span className="absolute -bottom-1 -right-1 bg-emerald-100 text-emerald-700 p-1 rounded-full border border-white">
-                  <CheckCircle2 className="size-3.5" />
-                </span>
-              </div>
-
-              <div className="space-y-1.5 flex-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h2 className="text-base font-bold text-foreground">Nguyễn Minh Anh</h2>
-                  <Badge className="bg-orange-50 text-[#934a33] border border-orange-200 hover:bg-orange-50 text-[10px] gap-1 font-bold">
-                    <Sparkles className="size-3" /> StayReco Elite Bạc
-                  </Badge>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Hỗ trợ JPG, PNG hoặc WebP (tối đa 5MB). Ảnh rõ nét giúp lễ tân nhận diện khi làm thủ tục ưu tiên.
-                </p>
-                <div className="flex items-center gap-3 pt-1">
-                  <Button variant="outline" className="h-8 text-xs font-semibold gap-1.5">
-                    <Camera className="size-3.5" /> Thay đổi ảnh
-                  </Button>
-                  <Button variant="ghost" className="h-8 text-xs text-red-600 hover:text-red-700 hover:bg-red-50">
-                    Gỡ ảnh
-                  </Button>
-                </div>
-              </div>
-            </div>
-
-            {/* Profile Form */}
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                
-                {/* Full Name */}
-                <div className="space-y-1.5">
-                  <div className="flex justify-between items-center">
-                    <Label htmlFor="fullName" className="text-xs sm:text-sm font-semibold">
-                      Họ và tên đầy đủ <span className="text-red-500">*</span>
-                    </Label>
-                    <span className="text-[11px] text-muted-foreground">Khớp giấy tờ tùy thân</span>
-                  </div>
-                  <Input
-                    id="fullName"
-                    value={formData.fullName}
-                    onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
-                    className="h-11 text-sm focus-visible:ring-primary font-medium"
-                    required
-                  />
-                  <span className="text-[11px] text-muted-foreground block">
-                    Vui lòng nhập đúng như trên CMND/CCCD/Hộ chiếu để nhận phòng thuận lợi.
-                  </span>
-                </div>
-
-                {/* Account Role */}
-                <div className="space-y-1.5">
-                  <Label className="text-xs sm:text-sm font-semibold">Vai trò tài khoản</Label>
-                  <div className="h-11 px-3 bg-slate-100 rounded-lg flex items-center justify-between text-xs font-semibold text-foreground border border-border">
-                    <span className="flex items-center gap-2">
-                      <ShieldCheck className="size-4 text-primary" /> Khách hàng (Customer)
-                    </span>
-                    <span className="text-[11px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                      Đã xác thực
-                    </span>
-                  </div>
-                  <span className="text-[11px] text-muted-foreground block">
-                    Cấp phép truy cập tiêu chuẩn dành cho người lưu trú cá nhân.
-                  </span>
-                </div>
-
-                {/* Email */}
-                <div className="space-y-1.5">
-                  <div className="flex justify-between items-center">
-                    <Label htmlFor="email" className="text-xs sm:text-sm font-semibold">
-                      Email liên hệ <span className="text-red-500">*</span>
-                    </Label>
-                    {user?.emailVerified ? (
-                      <span className="text-[11px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 font-medium">
-                        Đã xác thực
-                      </span>
-                    ) : (
-                      <span className="text-[11px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200 font-medium">
-                        Chưa xác thực
-                      </span>
-                    )}
-                  </div>
-                  <div className="relative">
-                    <Input
-                      id="email"
-                      type="email"
-                      value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      className="h-11 text-sm focus-visible:ring-primary font-medium pr-10"
-                      required
-                    />
-                    <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-emerald-600" />
-                  </div>
-                  <span className="text-[11px] text-muted-foreground block">
-                    Dùng để nhận mã E-Voucher phòng, hành trình và hóa đơn VAT.
-                  </span>
-                </div>
-
-                {/* Phone */}
-                <div className="space-y-1.5">
-                  <div className="flex justify-between items-center">
-                    <Label htmlFor="phone" className="text-xs sm:text-sm font-semibold">
-                      Số điện thoại <span className="text-red-500">*</span>
-                    </Label>
-                  </div>
-                  <div className="relative">
-                    <Input
-                      id="phone"
-                      type="tel"
-                      value={formData.phone}
-                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                      className="h-11 text-sm focus-visible:ring-primary font-medium pr-10"
-                      required
-                    />
-                    <Phone className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-emerald-600" />
-                  </div>
-                  <span className="text-[11px] text-muted-foreground block">
-                    Khách sạn sẽ liên lạc khi cần hỗ trợ đưa đón hoặc nhận phòng sớm.
-                  </span>
-                </div>
-
-                {/* BirthDate */}
-                <div className="space-y-1.5">
-                  <Label htmlFor="birthDate" className="text-xs sm:text-sm font-semibold">
-                    Ngày sinh
-                  </Label>
-                  <div className="relative">
-                    <Input
-                      id="birthDate"
-                      value={formData.birthDate}
-                      onChange={(e) => setFormData({ ...formData, birthDate: e.target.value })}
-                      className="h-11 text-sm focus-visible:ring-primary font-medium pr-10"
-                      placeholder="DD/MM/YYYY"
-                    />
-                    <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                  </div>
-                  <span className="text-[11px] text-muted-foreground block">
-                    Dùng để nhận quà sinh nhật và ưu đãi đặc quyền thường niên.
-                  </span>
-                </div>
-
-                {/* Gender */}
-                <div className="space-y-1.5">
-                  <Label className="text-xs sm:text-sm font-semibold">Giới tính</Label>
-                  <div className="h-11 px-3 bg-slate-50 rounded-lg flex items-center justify-around text-xs font-semibold text-foreground border border-border">
-                    <label className="flex items-center gap-1.5 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="gender"
-                        value="male"
-                        checked={formData.gender === 'male'}
-                        onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
-                        className="accent-primary"
-                      />
-                      <span>Nam</span>
-                    </label>
-                    <label className="flex items-center gap-1.5 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="gender"
-                        value="female"
-                        checked={formData.gender === 'female'}
-                        onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
-                        className="accent-primary"
-                      />
-                      <span>Nữ</span>
-                    </label>
-                    <label className="flex items-center gap-1.5 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="gender"
-                        value="other"
-                        checked={formData.gender === 'other'}
-                        onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
-                        className="accent-primary"
-                      />
-                      <span>Khác</span>
-                    </label>
-                  </div>
-                  <span className="text-[11px] text-muted-foreground block">
-                    Giúp khách sạn chuẩn bị bộ tiện ích phòng phù hợp.
-                  </span>
-                </div>
-
-                {/* Address */}
-                <div className="space-y-1.5">
-                  <Label htmlFor="address" className="text-xs sm:text-sm font-semibold">
-                    Địa chỉ thường trú / Thành phố
-                  </Label>
-                  <div className="relative">
-                    <Input
-                      id="address"
-                      value={formData.address}
-                      onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                      className="h-11 text-sm focus-visible:ring-primary font-medium pr-10"
-                    />
-                    <Home className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                  </div>
-                  <span className="text-[11px] text-muted-foreground block">
-                    Dùng đối soát chứng từ cư trú và gợi ý hành trình phù hợp.
-                  </span>
-                </div>
-
-                {/* ID Number */}
-                <div className="space-y-1.5">
-                  <div className="flex justify-between items-center">
-                    <Label htmlFor="idNumber" className="text-xs sm:text-sm font-semibold">
-                      Số CCCD / Hộ chiếu
-                    </Label>
-                    <span className="text-[11px] text-muted-foreground">Tùy chọn</span>
-                  </div>
-                  <div className="relative">
-                    <Input
-                      id="idNumber"
-                      value={formData.idNumber}
-                      onChange={(e) => setFormData({ ...formData, idNumber: e.target.value })}
-                      className="h-11 text-sm focus-visible:ring-primary font-mono pr-10"
-                    />
-                    <CreditCard className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                  </div>
-                  <span className="text-[11px] text-muted-foreground block">
-                    Giúp rút ngắn thời gian check-in không chạm tại quầy lễ tân.
-                  </span>
-                </div>
-
-              </div>
-
-              {/* Trust Box */}
-              <div className="p-4 bg-primary/5 rounded-xl border border-primary/20 flex items-start gap-3 text-xs">
-                <ShieldCheck className="size-5 text-primary shrink-0 mt-0.5" />
-                <div className="space-y-0.5">
-                  <h4 className="font-bold text-foreground">Quyền riêng tư & Bảo vệ dữ liệu cá nhân</h4>
-                  <p className="text-muted-foreground leading-relaxed">
-                    Thông tin định danh của bạn được mã hóa chuẩn 256-bit SSL quân sự và tuân thủ tiêu chuẩn PCI-DSS.
-                  </p>
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-border">
-                <div className="flex items-center gap-3 w-full sm:w-auto">
-                  <Button
-                    type="submit"
-                    className="h-11 px-8 bg-primary text-primary-foreground hover:bg-[#193b56] font-bold text-xs sm:text-sm gap-2 shadow-sm"
-                  >
-                    <Save className="size-4" /> <span>Lưu thay đổi</span>
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setToastMessage('Đã đặt lại dữ liệu ban đầu')}
-                    className="h-11 px-5 text-xs sm:text-sm font-semibold"
-                  >
-                    Hủy thay đổi / Đặt lại
-                  </Button>
-                </div>
-
-                <Link href="/account/security" className="text-xs font-semibold text-primary hover:underline flex items-center gap-1">
-                  Chuyển sang Đổi mật khẩu & Bảo mật <ArrowRight className="size-3.5" />
-                </Link>
-              </div>
-
-            </form>
-          </Card>
-
-          {/* Widgets */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Card className="p-4 bg-white border border-border shadow-xs rounded-xl flex items-center gap-3">
-              <div className="size-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-                <CheckCircle2 className="size-5" />
-              </div>
-              <div>
-                <span className="text-[11px] text-muted-foreground block">Chuyến đi đã hoàn tất</span>
-                <span className="text-xs sm:text-sm font-bold text-foreground">8 Kỳ nghỉ thành công</span>
-              </div>
-            </Card>
-
-            <Card className="p-4 bg-white border border-border shadow-xs rounded-xl flex items-center gap-3">
-              <div className="size-10 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
-                <Gift className="size-5" />
-              </div>
-              <div>
-                <span className="text-[11px] text-muted-foreground block">E-Voucher khả dụng</span>
-                <span className="text-xs sm:text-sm font-bold text-foreground">3 Phiếu ưu đãi 15%</span>
-              </div>
-            </Card>
-
-            <Card className="p-4 bg-white border border-border shadow-xs rounded-xl flex items-center gap-3">
-              <div className="size-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                <Headset className="size-5" />
-              </div>
-              <div>
-                <span className="text-[11px] text-muted-foreground block">Chăm sóc khách hàng</span>
-                <span className="text-xs sm:text-sm font-bold text-foreground">Trợ lý riêng 24/7</span>
-              </div>
-            </Card>
-          </div>
-
-        </div>
-      </main>
-
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-primary text-primary-foreground px-5 py-3.5 rounded-xl shadow-xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5">
-          <CheckCircle2 className="size-5 text-emerald-400 shrink-0" />
-          <div>
-            <h4 className="text-xs sm:text-sm font-bold">Cập nhật thành công!</h4>
-            <p className="text-[11px] text-white/80">{toastMessage}</p>
-          </div>
-        </div>
+    <Card className="space-y-8 rounded-2xl border border-border bg-card p-5 shadow-xs sm:p-8">
+      {statusNotice && (
+        <p role="status" className="flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden /> {statusNotice}
+        </p>
       )}
 
-      <Footer />
+      {/* Avatar */}
+      <div className="flex flex-col items-start gap-5 rounded-xl border border-border bg-muted/50 p-5 sm:flex-row sm:items-center">
+        <div className="relative shrink-0">
+          {account.avatarUrl ? (
+            <Image
+              src={account.avatarUrl}
+              alt={`Ảnh đại diện của ${account.fullName}`}
+              width={80}
+              height={80}
+              className="size-20 rounded-full object-cover shadow-xs"
+            />
+          ) : (
+            <div className="flex size-20 items-center justify-center rounded-full bg-primary/10 text-xl font-bold text-primary shadow-xs">
+              {initialsOf(account.fullName) || <User className="size-8" />}
+            </div>
+          )}
+          {avatarBusy && (
+            <span className="absolute inset-0 flex items-center justify-center rounded-full bg-white/70">
+              <Loader2 className="size-5 animate-spin text-primary" aria-label="Đang xử lý ảnh" />
+            </span>
+          )}
+        </div>
+
+        <div className="min-w-0 flex-1 space-y-2">
+          <h2 className="text-base font-bold text-foreground">{account.fullName}</h2>
+          <p className="text-xs text-muted-foreground">
+            JPG, PNG hoặc WebP, tối đa {UPLOAD_RULES.image.maxBytes / 1024 / 1024} MB.
+          </p>
+          <input
+            ref={fileInput}
+            type="file"
+            accept={UPLOAD_RULES.image.mimeTypes.join(',')}
+            className="hidden"
+            onChange={handleAvatarSelected}
+            aria-label="Chọn ảnh đại diện"
+          />
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={avatarBusy}
+              onClick={() => fileInput.current?.click()}
+              className="h-10 gap-1.5 whitespace-nowrap"
+            >
+              <Camera className="size-4" /> {account.avatarUrl ? 'Đổi ảnh' : 'Tải ảnh lên'}
+            </Button>
+            {account.avatarUrl && (
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={avatarBusy}
+                onClick={handleRemoveAvatar}
+                className="h-10 whitespace-nowrap text-destructive hover:bg-destructive/10 hover:text-destructive"
+              >
+                Gỡ ảnh
+              </Button>
+            )}
+          </div>
+          {avatarError && (
+            <p role="alert" className="text-xs font-medium text-destructive">
+              {avatarError}
+            </p>
+          )}
+        </div>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-6" noValidate>
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+          <Field id="fullName" label="Họ và tên" required error={fieldErrors.fullName} hint="Như trên CCCD hoặc hộ chiếu.">
+            <Input
+              id="fullName"
+              value={formData.fullName}
+              onChange={(e) => setField('fullName', e.target.value)}
+              aria-invalid={!!fieldErrors.fullName}
+              aria-describedby="fullName-hint"
+              autoComplete="name"
+              className="h-11 text-sm font-medium"
+              required
+            />
+          </Field>
+
+          <Field
+            id="email"
+            label="Email đăng nhập"
+            hint="Nhận voucher và hoá đơn. Không đổi được."
+            adornment={
+              account.emailVerified ? (
+                <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700">
+                  <CheckCircle2 className="size-3.5" aria-hidden /> Đã xác thực
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700">
+                  <AlertTriangle className="size-3.5" aria-hidden /> Chưa xác thực
+                </span>
+              )
+            }
+          >
+            <Input
+              id="email"
+              type="email"
+              value={account.email}
+              readOnly
+              aria-describedby="email-hint"
+              className="h-11 bg-muted text-sm font-medium text-muted-foreground"
+            />
+          </Field>
+
+          <Field id="phone" label="Số điện thoại" error={fieldErrors.phone} hint="Khách sạn gọi khi cần hỗ trợ nhận phòng.">
+            <div className="relative">
+              <Input
+                id="phone"
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                value={formData.phone}
+                onChange={(e) => setField('phone', e.target.value)}
+                placeholder="0901234567"
+                aria-invalid={!!fieldErrors.phone}
+                aria-describedby="phone-hint"
+                className="h-11 pr-10 text-sm font-medium"
+              />
+              <Phone className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+            </div>
+          </Field>
+
+          {isCustomer && (
+            <>
+              <Field id="dateOfBirth" label="Ngày sinh" error={fieldErrors.dateOfBirth}>
+                <div className="relative">
+                  <Input
+                    id="dateOfBirth"
+                    type="date"
+                    value={formData.dateOfBirth}
+                    onChange={(e) => setField('dateOfBirth', e.target.value)}
+                    min="1900-01-01"
+                    autoComplete="bday"
+                    aria-invalid={!!fieldErrors.dateOfBirth}
+                    aria-describedby="dateOfBirth-hint"
+                    className="h-11 pr-10 text-sm font-medium"
+                  />
+                  <Calendar className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+                </div>
+              </Field>
+
+              <Field id="gender" label="Giới tính" error={fieldErrors.gender}>
+                <div
+                  role="radiogroup"
+                  aria-label="Giới tính"
+                  aria-describedby="gender-hint"
+                  className="flex h-11 items-center justify-around rounded-lg border border-border bg-muted/50 px-1 text-sm font-semibold text-foreground"
+                >
+                  {genderOptions.map((option) => (
+                    <label key={option.value} className="flex h-10 cursor-pointer items-center gap-1.5 px-3">
+                      <input
+                        type="radio"
+                        name="gender"
+                        value={option.value}
+                        checked={formData.gender === option.value}
+                        onChange={() => setField('gender', option.value)}
+                        className="accent-primary"
+                      />
+                      <span>{option.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </Field>
+
+              <Field id="nationality" label="Quốc tịch" error={fieldErrors.nationality} hint="Dùng khi khai báo lưu trú.">
+                <div className="relative">
+                  <Input
+                    id="nationality"
+                    value={formData.nationality}
+                    onChange={(e) => setField('nationality', e.target.value)}
+                    placeholder="Việt Nam"
+                    autoComplete="country-name"
+                    aria-invalid={!!fieldErrors.nationality}
+                    aria-describedby="nationality-hint"
+                    className="h-11 pr-10 text-sm font-medium"
+                  />
+                  <Globe className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+                </div>
+              </Field>
+            </>
+          )}
+        </div>
+
+        {/* Stays in view at the bottom of the screen while there is something to save. */}
+        <div
+          className={cn(
+            'flex items-center gap-3 border-t border-border pt-4',
+            dirty && 'sticky bottom-0 -mx-5 bg-card px-5 pb-4 sm:-mx-8 sm:px-8',
+          )}
+        >
+          <Button
+            type="submit"
+            disabled={!dirty || updateProfile.isPending}
+            className="h-11 gap-2 px-6 font-bold whitespace-nowrap"
+          >
+            {updateProfile.isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+            {updateProfile.isPending ? 'Đang lưu…' : 'Lưu thay đổi'}
+          </Button>
+          {dirty && (
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={handleReset}
+              disabled={updateProfile.isPending}
+              className="h-11 px-4 whitespace-nowrap"
+            >
+              Huỷ thay đổi
+            </Button>
+          )}
+          {formError && (
+            <p role="alert" className="min-w-0 text-sm font-medium text-destructive">
+              {formError}
+            </p>
+          )}
+        </div>
+      </form>
+    </Card>
+  );
+}
+
+/** StayMiles, trips and vouchers at a glance, each a way into its own page. */
+function AccountSummary() {
+  const loyalty = useMyLoyalty().data;
+  // Counts only: one row per list is enough to read `meta.total`.
+  const endedTrips = useMyBookings({ tab: 'completed', page: 1, pageSize: 1 }).data?.meta.total;
+  const usableVouchers = useMyVouchers({ page: 1, pageSize: 1, active: true }).data?.meta.total;
+
+  const tiles = [
+    {
+      href: '/account/rewards',
+      icon: Sparkles,
+      label: loyalty ? `${loyalty.programName} · Hạng ${TIER_LABELS[loyalty.tier]}` : 'Điểm StayMiles',
+      value: loyalty ? formatPoints(loyalty.pointsBalance) : '—',
+    },
+    {
+      href: '/account/bookings',
+      icon: Luggage,
+      // The "completed" tab also holds no-shows, so the label says ended rather than successful.
+      label: 'Chuyến đi đã kết thúc',
+      value: endedTrips === undefined ? '—' : `${endedTrips} chuyến`,
+    },
+    {
+      href: '/account/rewards',
+      icon: Gift,
+      label: 'Voucher còn dùng được',
+      value: usableVouchers === undefined ? '—' : `${usableVouchers} voucher`,
+    },
+  ];
+
+  return (
+    <section aria-label="Tóm tắt tài khoản" className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      {tiles.map((tile) => {
+        const Icon = tile.icon;
+        return (
+          <Link
+            key={tile.label}
+            href={tile.href}
+            className="flex min-h-16 items-center gap-3 rounded-xl border border-border bg-card p-4 shadow-xs transition-colors hover:border-primary/40 hover:bg-primary/5"
+          >
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <Icon className="size-5" aria-hidden />
+            </span>
+            <span className="min-w-0">
+              <span className="block truncate text-xs text-muted-foreground">{tile.label}</span>
+              <span className="block text-sm font-bold text-foreground">{tile.value}</span>
+            </span>
+          </Link>
+        );
+      })}
+    </section>
+  );
+}
+
+function Field({
+  id,
+  label,
+  required,
+  error,
+  hint,
+  adornment,
+  children,
+}: {
+  id: string;
+  label: string;
+  required?: boolean;
+  error?: string;
+  hint?: string;
+  adornment?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between gap-2">
+        <Label htmlFor={id} className="text-sm font-semibold">
+          {label} {required && <span className="text-destructive">*</span>}
+        </Label>
+        {adornment}
+      </div>
+      {children}
+      {error ? (
+        <p id={`${id}-hint`} role="alert" className="text-xs font-medium text-destructive">
+          {error}
+        </p>
+      ) : (
+        hint && (
+          <p id={`${id}-hint`} className="text-xs text-muted-foreground">
+            {hint}
+          </p>
+        )
+      )}
     </div>
   );
 }

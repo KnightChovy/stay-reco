@@ -1,8 +1,12 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { Check, ExternalLink, FilePenLine, RotateCcw, X } from "lucide-react";
-import { verificationDecisionSchema, type VerificationRequest } from "@stayreco/shared";
+import { Check, CircleAlert, CircleCheck, ExternalLink, FilePenLine, RotateCcw, X } from "lucide-react";
+import {
+  REQUIRED_VERIFICATION_DOCUMENTS,
+  verificationDecisionSchema,
+  type VerificationRequest,
+} from "@stayreco/shared";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -62,6 +66,37 @@ const reasonActions: Record<ReasonAction, { title: string; label: string; confir
     hint: "Ví dụ giấy phép hết hạn. Khách sạn vẫn hoạt động trong lúc đối tác chuẩn bị hồ sơ.",
   },
 };
+
+/** Frequent reasons, added as bullet lines; the manager can still edit the text freely. */
+const reasonTemplates = [
+  "Ảnh tài liệu mờ hoặc bị cắt, không đọc được",
+  "Tên pháp nhân không khớp giấy chứng nhận đăng ký kinh doanh",
+  "Giấy chứng nhận PCCC đã hết hiệu lực",
+  "Chủ tài khoản thụ hưởng không trùng tên pháp nhân",
+  "Địa chỉ cơ sở khác địa chỉ trên giấy phép",
+];
+
+/** "CÔNG TY TNHH Sông Hàn" and "Cong ty TNHH Song Han" are the same name for the holder check. */
+function normalizeName(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/đ/gi, "d")
+    .replace(/[^a-z0-9]/gi, "")
+    .toLowerCase();
+}
+
+function CheckItem({ ok, children }: { ok: boolean; children: ReactNode }) {
+  const Icon = ok ? CircleCheck : CircleAlert;
+  return (
+    <p
+      className={`flex items-start gap-2 rounded-lg p-3 text-sm ${ok ? "bg-success-soft text-success" : "bg-warning-soft text-warning"}`}
+    >
+      <Icon size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
+      <span>{children}</span>
+    </p>
+  );
+}
 
 export function VerificationDetailDialog({
   requestId,
@@ -174,6 +209,13 @@ function VerificationDetail({ request, onDecided }: { request: VerificationReque
   }
 
   const reasonForm = reasonAction && reasonActions[reasonAction];
+  const missingDocuments = REQUIRED_VERIFICATION_DOCUMENTS.filter(
+    (type) => !request.documents.some((document) => document.documentType === type),
+  );
+  const legalName = request.legal.legalName ?? "";
+  // A payout to an account under another name is the usual red flag; it is shown, the manager decides.
+  const holderMismatch =
+    !!request.beneficiary && !!legalName && normalizeName(request.beneficiary.accountHolder) !== normalizeName(legalName);
 
   return (
     <div className="space-y-5">
@@ -193,81 +235,19 @@ function VerificationDetail({ request, onDecided }: { request: VerificationReque
         </div>
       )}
 
-      {(isPending || request.status === "APPROVED") && (
-        <div className="space-y-3 rounded-xl border p-4">
-          {isPending ? (
-            <>
-              <p className="text-sm text-muted-foreground">
-                {request.requestType === "INITIAL"
-                  ? "Duyệt hồ sơ lần đầu sẽ kích hoạt khách sạn và cho phép mở bán."
-                  : "Hồ sơ cập nhật hoặc tái xác minh không làm thay đổi trạng thái khách sạn, dù kết quả thế nào."}
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <Button onClick={() => setConfirmApprove(true)} disabled={busy}>
-                  <Check />
-                  Duyệt hồ sơ
-                </Button>
-                <Button variant="outline" onClick={() => openReason("request-changes")} disabled={busy}>
-                  <FilePenLine />
-                  Yêu cầu bổ sung
-                </Button>
-                <Button variant="outline" onClick={() => openReason("reject")} disabled={busy}>
-                  <X />
-                  Từ chối
-                </Button>
-              </div>
-            </>
-          ) : (
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <p className="flex-1 text-sm text-muted-foreground">
-                Khách sạn đang hoạt động cần thẩm định lại (ví dụ giấy phép hết hạn)?
-              </p>
-              <Button variant="outline" onClick={() => openReason("reverification")} disabled={busy}>
-                <RotateCcw />
-                Yêu cầu tái xác minh
-              </Button>
-            </div>
-          )}
-
-          {reasonForm && (
-            <div className="space-y-2 rounded-lg bg-muted/50 p-3">
-              <p className="text-sm font-semibold text-primary">{reasonForm.title}</p>
-              <label className="grid gap-1.5 text-xs font-semibold text-foreground">
-                <span>
-                  {reasonForm.label}
-                  <span className="text-danger"> *</span>
-                </span>
-                <Textarea
-                  value={reason}
-                  onChange={(event) => setReason(event.target.value)}
-                  maxLength={REASON_MAX}
-                  rows={4}
-                  aria-invalid={!!reasonError}
-                />
-              </label>
-              {reasonError ? (
-                <p role="alert" className="text-xs text-danger">
-                  {reasonError}
-                </p>
-              ) : (
-                <p className="text-xs text-muted-foreground">{reasonForm.hint}</p>
-              )}
-              <div className="flex justify-end gap-2">
-                <Button variant="ghost" onClick={() => setReasonAction(undefined)} disabled={decide.isPending}>
-                  Huỷ
-                </Button>
-                <Button
-                  variant={reasonAction === "reject" ? "destructive" : "default"}
-                  onClick={submitReason}
-                  disabled={decide.isPending}
-                >
-                  {decide.isPending && <Spinner />}
-                  {reasonForm.confirm}
-                </Button>
-              </div>
-            </div>
-          )}
-        </div>
+      {isPending && (
+        <section aria-label="Điểm cần kiểm tra" className="grid gap-2 sm:grid-cols-2">
+          <CheckItem ok={missingDocuments.length === 0}>
+            {missingDocuments.length === 0
+              ? `Đủ ${REQUIRED_VERIFICATION_DOCUMENTS.length}/${REQUIRED_VERIFICATION_DOCUMENTS.length} tài liệu bắt buộc`
+              : `Thiếu: ${missingDocuments.map((type) => documentTypeLabels[type]).join(", ")}`}
+          </CheckItem>
+          <CheckItem ok={!holderMismatch}>
+            {holderMismatch
+              ? "Chủ tài khoản thụ hưởng khác tên pháp nhân, cần đối chiếu"
+              : "Chủ tài khoản khớp tên pháp nhân"}
+          </CheckItem>
+        </section>
       )}
 
       <section className="grid gap-5 md:grid-cols-2">
@@ -315,6 +295,99 @@ function VerificationDetail({ request, onDecided }: { request: VerificationReque
         </div>
       </section>
 
+      {/* The decision comes after reading the file, so it sits at the bottom and stays in view while scrolling. */}
+      {(isPending || request.status === "APPROVED") && (
+        <div className="sticky -bottom-4 z-10 -mx-4 -mb-4 space-y-3 border-t bg-popover/95 p-4 backdrop-blur">
+          {isPending ? (
+            <>
+              <p className="text-sm text-muted-foreground">
+                {request.requestType === "INITIAL"
+                  ? "Duyệt hồ sơ lần đầu sẽ kích hoạt khách sạn và cho phép mở bán."
+                  : "Hồ sơ cập nhật hoặc tái xác minh không làm thay đổi trạng thái khách sạn, dù kết quả thế nào."}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={() => setConfirmApprove(true)} disabled={busy}>
+                  <Check />
+                  Duyệt hồ sơ
+                </Button>
+                <Button variant="outline" onClick={() => openReason("request-changes")} disabled={busy}>
+                  <FilePenLine />
+                  Yêu cầu bổ sung
+                </Button>
+                <Button variant="outline" onClick={() => openReason("reject")} disabled={busy}>
+                  <X />
+                  Từ chối
+                </Button>
+              </div>
+            </>
+          ) : (
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <p className="flex-1 text-sm text-muted-foreground">
+                Khách sạn đang hoạt động cần thẩm định lại (ví dụ giấy phép hết hạn)?
+              </p>
+              <Button variant="outline" onClick={() => openReason("reverification")} disabled={busy}>
+                <RotateCcw />
+                Yêu cầu tái xác minh
+              </Button>
+            </div>
+          )}
+
+          {reasonForm && (
+            <div className="space-y-2 rounded-lg bg-muted/50 p-3">
+              <p className="text-sm font-semibold text-primary">{reasonForm.title}</p>
+              <label className="grid gap-1.5 text-xs font-semibold text-foreground">
+                <span>
+                  {reasonForm.label}
+                  <span className="text-danger"> *</span>
+                </span>
+                <Textarea
+                  value={reason}
+                  onChange={(event) => setReason(event.target.value)}
+                  maxLength={REASON_MAX}
+                  rows={3}
+                  autoFocus
+                  aria-invalid={!!reasonError}
+                />
+              </label>
+              {reasonAction !== "reverification" && (
+                <div className="flex flex-wrap gap-1.5" role="group" aria-label="Lý do thường gặp">
+                  {reasonTemplates.map((template) => (
+                    <button
+                      key={template}
+                      type="button"
+                      onClick={() => setReason((prev) => (prev.trim() ? `${prev.trimEnd()}\n- ${template}` : `- ${template}`))}
+                      className="rounded-full border bg-card px-2.5 py-1 text-xs text-foreground hover:border-primary/40 hover:bg-primary/5"
+                    >
+                      + {template}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {reasonError ? (
+                <p role="alert" className="text-xs text-danger">
+                  {reasonError}
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">{reasonForm.hint}</p>
+              )}
+              <div className="flex justify-end gap-2">
+                <Button variant="ghost" onClick={() => setReasonAction(undefined)} disabled={decide.isPending}>
+                  Huỷ
+                </Button>
+                <Button
+                  variant={reasonAction === "reject" ? "destructive" : "default"}
+                  onClick={submitReason}
+                  disabled={decide.isPending}
+                >
+                  {decide.isPending && <Spinner />}
+                  {reasonForm.confirm}
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       <AlertDialog open={confirmApprove} onOpenChange={setConfirmApprove}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -324,6 +397,19 @@ function VerificationDetail({ request, onDecided }: { request: VerificationReque
                 ? "Khách sạn chuyển sang Đang hoạt động và hiển thị với khách. Đối tác nhận kết quả qua email."
                 : "Hồ sơ được ghi nhận là đã duyệt; trạng thái khách sạn không đổi. Đối tác nhận kết quả qua email."}
             </AlertDialogDescription>
+            {/* Repeated here so an open point is not approved by a quick click. */}
+            {(missingDocuments.length > 0 || holderMismatch) && (
+              <p role="alert" className="rounded-lg bg-warning-soft p-3 text-sm text-warning">
+                Hồ sơ còn điểm cần kiểm tra:{" "}
+                {[
+                  missingDocuments.length > 0 && "thiếu tài liệu bắt buộc",
+                  holderMismatch && "chủ tài khoản khác tên pháp nhân",
+                ]
+                  .filter(Boolean)
+                  .join(", ")}
+                .
+              </p>
+            )}
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={approve.isPending}>Huỷ</AlertDialogCancel>

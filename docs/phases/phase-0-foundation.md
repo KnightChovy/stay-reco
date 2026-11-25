@@ -30,7 +30,7 @@ A shared base so later phases only add features: sign-in for the 5 roles, a fixe
 
 ## Out of scope
 
-- Social sign-in (pending decision)
+- Social sign-in (Google / Facebook): not built, see Open questions
 - Detailed profile (`account/profile`) → phase 4
 
 ## Agreed decisions
@@ -40,11 +40,11 @@ A shared base so later phases only add features: sign-in for the 5 roles, a fixe
 
 ## Open questions
 
-- [ ] Google/Facebook sign-in (`AuthSocialActions` on the FE): do we build it, and in which phase?
+- [x] Google/Facebook sign-in (`AuthSocialActions` on the FE): **not built**; the FE removed the buttons from sign-in and sign-up (2026-11-03).
 
 ## Definition of Done
 
-- [ ] BE: auth e2e tests pass (`test/auth.e2e-spec.ts` exists)
+- [x] BE: auth e2e tests pass (`test/auth.e2e-spec.ts`)
 - [ ] FE web and mobile sign in / sign up / refresh against the real API, mocks removed
 - [ ] [api/auth.md](../api/auth.md) matches the code, API status `Integrated`
 
@@ -59,3 +59,4 @@ A shared base so later phases only add features: sign-in for the 5 roles, a fixe
 | 2026-10-20 | BE | Added the `DEACTIVATED` account status and `AUTH_ACCOUNT_DEACTIVATED` (staff deactivated by the partner) |
 | 2026-10-21 | BE | Docs moved from `packages/docs/` to `docs/` at the repo root; endpoints moved to [api/auth.md](../api/auth.md) |
 | 2026-10-21 | BE | Docs translated to English |
+| 2026-11-09 | BE | Social sign-in not built (FE buttons removed 2026-11-03); auth e2e item ticked |

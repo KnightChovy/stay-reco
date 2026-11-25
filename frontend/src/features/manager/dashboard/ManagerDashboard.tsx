@@ -1,13 +1,16 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useIsFetching, useQueryClient } from "@tanstack/react-query";
 import { Download, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { managerKeys } from "../api/manager-queries";
 import {
+  ManagerDemoBanner,
   ManagerSystemBanner,
   ManagerTitle,
   useManagerActions,
 } from "../components";
+import { PendingVerifications } from "./components/PendingVerifications";
 import {
   managerDashboardChartHeights,
   managerDashboardMetrics,
@@ -21,24 +24,10 @@ import { DashboardOperations } from "./components/DashboardOperations";
 
 export default function ManagerDashboard() {
   const { notify } = useManagerActions();
-  const [refreshing, setRefreshing] = useState(false);
-  const refreshTimer = useRef<number | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (refreshTimer.current) window.clearTimeout(refreshTimer.current);
-    };
-  }, []);
-
-  const refresh = () => {
-    if (refreshTimer.current) window.clearTimeout(refreshTimer.current);
-    setRefreshing(true);
-    refreshTimer.current = window.setTimeout(() => {
-      setRefreshing(false);
-      notify("Làm mới bảng điều hành");
-      refreshTimer.current = null;
-    }, 500);
-  };
+  const queryClient = useQueryClient();
+  // Only the live block reads the API, so refreshing refetches the manager queries (sample data has nothing to fetch).
+  const refreshing = useIsFetching({ queryKey: managerKeys.all }) > 0;
+  const refresh = () => void queryClient.invalidateQueries({ queryKey: managerKeys.all });
 
   return (
     <div className="space-y-6">
@@ -49,17 +38,21 @@ export default function ManagerDashboard() {
           <>
             <Button
               variant="outline"
+              className="h-9"
               onClick={() => notify("Xuất báo cáo điều hành")}
             >
               <Download />
               Xuất báo cáo
             </Button>
-            <Button size="icon" variant="outline" aria-label="Làm mới dữ liệu" onClick={refresh}>
+            <Button size="icon-lg" variant="outline" aria-label="Làm mới dữ liệu" onClick={refresh} disabled={refreshing}>
               <RefreshCw className={refreshing ? "animate-spin" : ""} />
             </Button>
           </>
         }
       />
+      {/* Live data first; everything below the banner is sample data until the Phase 6 APIs exist. */}
+      <PendingVerifications />
+      <ManagerDemoBanner what="Các chỉ số, biểu đồ và danh sách bên dưới" />
       <ManagerSystemBanner
         title="Hệ thống đang vận hành ổn định"
         subtitle="99,97% uptime · Đối soát thanh toán hoạt động bình thường"

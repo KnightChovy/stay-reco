@@ -10,7 +10,7 @@ import type {
 } from '@stayreco/shared';
 import type { AuthUser } from '../../common/decorators/current-user.decorator';
 import type { RequestMeta } from '../../common/decorators/request-meta.decorator';
-import { lockRoomType } from '../../common/db/locks';
+import { lockRoomTypes } from '../../common/db/locks';
 import { ErrorCode } from '../../common/errors/error-code';
 import { toNumber } from '../../common/http/decimal';
 import { isUuid } from '../../common/hotel-access/hotel-access.service';
@@ -19,7 +19,10 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { BookingMailer } from './booking-mailer';
 import { BookingsService } from './bookings.service';
 import { AuditAction } from '../audit/audit.service';
+import { LoyaltyService } from '../loyalty/loyalty.service';
+import { DiscountService } from '../promotions/discount.service';
 import { closePendingChange, recordBookingEvent } from './booking-history';
+import { addOnsOf } from './booking-invoice';
 import { cancellationAmounts } from './cancellation';
 
 const bookingNotFound = () =>
@@ -36,11 +39,12 @@ const notCancellable = (status: string) =>
 
 const cancellableSelect = {
   bookingId: true,
-  roomTypeId: true,
+  items: { select: { roomTypeId: true } },
   status: true,
   freeCancelUntil: true,
   cancelFeePercent: true,
   invoice: { select: { paymentStatus: true, totalAmount: true } },
+  addOns: { select: { payment: true, amount: true } },
 } satisfies Prisma.BookingSelect;
 
 type CancellableBooking = Prisma.BookingGetPayload<{
@@ -58,6 +62,8 @@ export class BookingCancellationService {
     private readonly prisma: PrismaService,
     private readonly bookings: BookingsService,
     private readonly mailer: BookingMailer,
+    private readonly discounts: DiscountService,
+    private readonly loyalty: LoyaltyService,
   ) {}
 
   /** What cancelling now would cost (MSG11). */
@@ -65,7 +71,12 @@ export class BookingCancellationService {
     const booking = await this.findOwn(user, bookingId);
     assertCancellable(booking);
     const paid = booking.invoice!.totalAmount;
-    const { fee, refund } = cancellationAmounts(booking, paid);
+    const { fee, refund } = cancellationAmounts(
+      booking,
+      paid,
+      undefined,
+      addOnsOf(booking, 'PREPAID'),
+    );
     return {
       freeUntil: booking.freeCancelUntil?.toISOString() ?? null,
       feePercent: toNumber(booking.cancelFeePercent),
@@ -86,12 +97,20 @@ export class BookingCancellationService {
     assertCancellable(booking);
     const now = new Date();
     const paid = booking.invoice!.totalAmount;
-    const { fee, refund } = cancellationAmounts(booking, paid, now);
+    const { fee, refund } = cancellationAmounts(
+      booking,
+      paid,
+      now,
+      addOnsOf(booking, 'PREPAID'),
+    );
 
     await this.prisma.$transaction(async (tx) => {
       // The lock check-in takes: a cancel and a check-in at once run one after the other, and the later one sees the
       // earlier one's result in the conditions below.
-      await lockRoomType(tx, booking.roomTypeId);
+      await lockRoomTypes(
+        tx,
+        booking.items.map((i) => i.roomTypeId),
+      );
       // Conditional on the state checked above, so two cancels at once, or a cancel racing the hotel, apply once.
       const stillCancellable = {
         status: 'CONFIRMED',
@@ -115,6 +134,9 @@ export class BookingCancellationService {
         if (!count) throw notCancellable('changed');
         // Nothing to refund: the hotel keeps the money as the fee, and the nights go back on sale.
         await tx.roomCalendars.deleteMany({ where: { bookingId } });
+        // The stay never happened, so the campaign got no business: the code goes back to the customer.
+        await this.discounts.release(tx, bookingId);
+        await this.loyalty.refund(tx, bookingId);
         await closePendingChange(tx, bookingId, now);
       }
       await recordBookingEvent(tx, {

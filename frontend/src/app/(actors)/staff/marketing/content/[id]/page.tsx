@@ -1,260 +1,438 @@
 "use client";
 
-import React, { useState } from "react";
-import Link from "next/link";
-import Image from "next/image";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
-  Sparkles,
-  ChevronRight,
-  ArrowLeft,
   CheckCircle2,
-  Calendar,
-  Share2,
-  Zap,
+  Clock,
+  ImageIcon,
+  ImagePlus,
+  Loader2,
+  Lock,
+  Save,
+  Send,
+  Sparkles,
+  Trash2,
   Wand2,
-  RefreshCw,
-  ThumbsUp,
-  MessageCircle,
-  Eye,
-  Bot,
-  Copy,
-  Check,
+  XCircle,
 } from "lucide-react";
+import { updateContentSchema, type MarketingContent } from "@stayreco/shared";
+import { ActionBar, ActionMenu, type ActionMenuItem } from "@/components/common/ActionBar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Skeleton } from "@/components/ui/skeleton";
+import { validateWith } from "@/lib/api-error";
+import { formatDateTime } from "@/features/stays/lib/format";
+import { useStaffHotel } from "@/features/staff/components/StaffHotelProvider";
+import {
+  useContent,
+  useDeleteContent,
+  useGenerateContentImage,
+  useRemoveContentImage,
+  useSubmitContent,
+  useUpdateContent,
+  useUploadContentImage,
+} from "@/features/staff/api/marketing-queries";
+import { contentTypeLabels, EDITABLE_STATUSES } from "@/features/staff/lib/marketing-labels";
+import { getMarketingErrorMessage } from "@/features/staff/lib/marketing-errors";
+import {
+  ConfirmDialog,
+  ContentStatusPill,
+  MarketingErrorPanel,
+  MarketingHeader,
+  useAiBudgetState,
+} from "@/features/staff/marketing/MarketingParts";
+import { SchedulePanel } from "@/features/staff/marketing/SchedulePanel";
+import { AiImagePanel } from "@/features/staff/marketing/AiImagePanel";
 
-export default function StaffMarketingContentEditPage() {
-  const [selectedTone, setSelectedTone] = useState<string>("Sang trọng & Cuốn hút");
-  const [promoOffer, setPromoOffer] = useState<string>("Giảm 15% + Miễn phí Spa 300K");
-  const [contentTitle, setContentTitle] = useState<string>(
-    "Ưu Đãi Mùa Thu — Đặt Phòng Deluxe Ocean King Tặng Voucher Spa 300K"
-  );
-  const [contentBody, setContentBody] = useState<string>(
-    `🍂 Thưởng thức cảnh bình minh sông Hàn ngoạn mục ngay từ ban công phòng Deluxe Ocean King!
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
-Đặt phòng tuần này qua hệ thống StayReco để nhận ngay gói ưu đãi độc quyền:
-✨ Tặng Voucher Spa thư giãn trị giá 300.000 VNĐ
-✨ Buffet sáng hữu cơ cao cấp phục vụ tại nhà hàng Riverside
-✨ Hỗ trợ Check-in sớm linh hoạt theo tình trạng phòng
+const STATUS_HINT: Record<MarketingContent["status"], string> = {
+  DRAFT: "Bản nháp: chỉnh sửa thoải mái, xong thì gửi chủ khách sạn duyệt.",
+  PENDING_APPROVAL: "Đang chờ chủ khách sạn duyệt. Nội dung tạm khoá chỉnh sửa.",
+  APPROVED: "Chủ khách sạn đã duyệt. Nội dung được giữ nguyên như lúc duyệt; hãy lên lịch đăng.",
+  SCHEDULED: "Đã lên lịch đăng. Khi chưa có lịch nào đăng xong, bạn có thể đăng thêm lên trang khác.",
+  PUBLISHED: "Bài đã được đăng.",
+  REJECTED: "Chủ khách sạn đã từ chối. Sửa theo góp ý rồi gửi duyệt lại.",
+};
 
-📍 An Nhiên Riverside Hotel — 128 Bạch Đằng, Đà Nẵng
-👉 Đặt ngay để giữ giá tốt nhất!`
-  );
+/** The words and picture of a draft; the piece is remounted (keyed on its status) when the server changes it. */
+function useContentEditor(content: MarketingContent) {
+  const update = useUpdateContent();
+  const upload = useUploadContentImage();
+  const removeImage = useRemoveContentImage();
+  const [title, setTitle] = useState(content.title ?? "");
+  const [body, setBody] = useState(content.body);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [imageError, setImageError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
 
-  const [isCopied, setIsCopied] = useState<boolean>(false);
-  const [isGenerating, setIsGenerating] = useState<boolean>(false);
+  const dirty = title.trim() !== (content.title ?? "") || body.trim() !== content.body;
 
-  const handleAiPolish = (type: "short" | "engaging" | "emoji") => {
-    setIsGenerating(true);
-    setTimeout(() => {
-      if (type === "short") {
-        setContentBody(
-          `🌊 Nghỉ dưỡng sang trọng tại An Nhiên Riverside! Đặt Deluxe Ocean King tuần này nhận ngay Voucher Spa 300K & Buffet sáng hữu cơ. Đặt phòng ngay trên StayReco!`
-        );
-      } else if (type === "engaging") {
-        setContentBody(
-          `✨ Bạn đã sẵn sàng cho chuyến đi Đà Nẵng hoàn hảo? Phòng Deluxe Ocean King hướng sông Hàn thơ mộng đang chờ bạn! Tặng kèm Voucher Spa 300K & Buffet sáng cao cấp khi đặt phòng hôm nay!`
-        );
-      } else {
-        setContentBody(
-          `🍂 ✨ 🌿 NGHỈ DƯỠNG MÙA THU TẠI AN NHIÊN RIVERSIDE! 🏨 🌊
-🎁 Đặt Deluxe Ocean King tặng ngay Voucher Spa 300.000đ & Buffet hữu cơ!
-👉 Đặt ngay qua StayReco! #StayReco #AnNhienRiverside #DaNangTrip #LuxuriousStay`
-        );
-      }
-      setIsGenerating(false);
-    }, 600);
+  const save = (after?: () => void) => {
+    setSaved(false);
+    const input = {
+      ...(title.trim() !== (content.title ?? "") ? { title: title.trim() || null } : {}),
+      ...(body.trim() !== content.body ? { body: body.trim() } : {}),
+    };
+    const result = validateWith(updateContentSchema, input);
+    if (result.errors) {
+      setErrors(result.errors);
+      return;
+    }
+    setErrors({});
+    update.mutate(
+      { contentId: content.id, input: result.data },
+      {
+        onSuccess: () => {
+          setSaved(true);
+          after?.();
+        },
+      },
+    );
   };
 
+  const pickImage = (file: File | undefined) => {
+    setImageError(null);
+    if (!file) return;
+    if (!IMAGE_TYPES.includes(file.type)) {
+      setImageError("Chỉ nhận ảnh JPG, PNG hoặc WebP.");
+      return;
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      setImageError("Ảnh tối đa 10 MB.");
+      return;
+    }
+    upload.mutate({ contentId: content.id, file }, { onError: (error) => setImageError(getMarketingErrorMessage(error)) });
+  };
+
+  return { title, setTitle, body, setBody, errors, dirty, save, saved, update, upload, removeImage, imageError, pickImage };
+}
+
+function ContentDetail({ contentId }: { contentId: string }) {
+  const router = useRouter();
+  const generated = useSearchParams().get("generated") === "1";
+  const { hotel } = useStaffHotel();
+  const contentQuery = useContent(contentId);
+  const content = contentQuery.data;
+
+  if (contentQuery.isLoading) {
+    return (
+      <div className="grid gap-5 lg:grid-cols-3">
+        <Skeleton className="h-96 rounded-xl lg:col-span-2" />
+        <Skeleton className="h-64 rounded-xl" />
+      </div>
+    );
+  }
+  if (contentQuery.error || !content) {
+    return <MarketingErrorPanel error={contentQuery.error} onRetry={() => void contentQuery.refetch()} />;
+  }
+
   return (
-    <div className="font-sans antialiased text-foreground">
-      <main>
-        <div className="p-8 space-y-6 max-w-7xl mx-auto w-full">
-          {/* Breadcrumb & Navigation */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2 text-xs text-slate-500 mb-1">
-                <Link href="/staff/dashboard" className="hover:text-[#934a33]">Bàn làm việc</Link>
-                <ChevronRight className="w-3 h-3" />
-                <Link href="/staff/marketing/content" className="hover:text-[#934a33]">Nội dung AI</Link>
-                <ChevronRight className="w-3 h-3" />
-                <span className="text-slate-800 font-medium">Soạn & Duyệt Nội Dung AI</span>
-              </div>
-              <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-                <Wand2 className="w-7 h-7 text-[#934a33]" /> AI Marketing Co-Pilot Editor
-              </h1>
-            </div>
+    <ContentWorkspace
+      key={`${content.id}-${content.status}`}
+      content={content}
+      hotelId={hotel?.summary.id}
+      generated={generated}
+      onDeleted={() => router.replace("/staff/marketing/content")}
+    />
+  );
+}
 
-            <div className="flex items-center gap-3">
-              <Link href="/staff/marketing/content">
-                <Button variant="outline" className="h-10 text-xs font-semibold border-slate-300">
-                  <ArrowLeft className="w-4 h-4 mr-1.5" /> Thư Viện Nội Dung
-                </Button>
-              </Link>
-              <Link href="/staff/marketing/calendar">
-                <Button className="h-10 bg-[#934a33] hover:bg-[#7b3e2b] text-white text-xs font-semibold shadow-md">
-                  <CheckCircle2 className="w-4 h-4 mr-1.5" /> Duyệt & Lên Lịch Đăng Bài
-                </Button>
-              </Link>
-            </div>
-          </div>
+function ContentWorkspace({
+  content,
+  hotelId,
+  generated,
+  onDeleted,
+}: {
+  content: MarketingContent;
+  hotelId: string | undefined;
+  generated: boolean;
+  onDeleted: () => void;
+}) {
+  const editor = useContentEditor(content);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const submit = useSubmitContent();
+  const remove = useDeleteContent();
+  const drawImage = useGenerateContentImage();
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
+  const { exhausted } = useAiBudgetState(hotelId);
+  const editable = EDITABLE_STATUSES.includes(content.status);
+  const busy =
+    editor.update.isPending ||
+    submit.isPending ||
+    editor.upload.isPending ||
+    editor.removeImage.isPending ||
+    drawImage.isPending;
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            {/* Left Column: AI Prompt Controls (3 cols) */}
-            <div className="lg:col-span-3 bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-5">
-              <div className="border-b border-slate-100 pb-3">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                  <Bot className="w-4 h-4 text-[#934a33]" /> Cấu hình gợi ý AI
-                </h3>
-              </div>
+  // Unsaved words are lost on reload or closing the tab: ask first.
+  const dirty = editable && editor.dirty;
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
 
-              <div className="space-y-4 text-xs">
-                <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Phong cách giọng văn (Tone):</label>
-                  <select
-                    value={selectedTone}
-                    onChange={(e) => setSelectedTone(e.target.value)}
-                    className="w-full h-9 rounded-lg border border-slate-300 bg-slate-50 text-xs px-3 font-medium text-slate-800"
-                  >
-                    <option value="Sang trọng & Cuốn hút">✨ Sang trọng & Cuốn hút</option>
-                    <option value="Thân thiện & Đô thị">😊 Thân thiện & Trẻ trung</option>
-                    <option value="Khuyến mãi & Thúc đẩy">🔥 Khuyến mãi & Thúc đẩy booking</option>
-                  </select>
-                </div>
+  const sendForApproval = () => {
+    // Unsaved words go first: what is submitted is what the owner reads.
+    if (editor.dirty) editor.save(() => submit.mutate(content.id));
+    else submit.mutate(content.id);
+  };
 
-                <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Gói ưu đãi đính kèm:</label>
-                  <Input
-                    value={promoOffer}
-                    onChange={(e) => setPromoOffer(e.target.value)}
-                    className="h-9 text-xs bg-slate-50"
-                  />
-                </div>
+  const actionError = submit.error ?? editor.update.error ?? remove.error;
+  const lockedReason =
+    content.status === "PENDING_APPROVAL"
+      ? "Đang chờ chủ khách sạn duyệt nên chữ và ảnh tạm khoá, để chủ đọc đúng bản đã gửi."
+      : content.status === "PUBLISHED"
+        ? "Bài đã đăng nên chữ và ảnh không sửa được nữa."
+        : "Bài đã được duyệt nên chữ và ảnh giữ nguyên như lúc duyệt. Muốn sửa, hãy tạo bài mới.";
 
-                <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Hạng phòng trọng tâm:</label>
-                  <Input defaultValue="Deluxe Ocean King" className="h-9 text-xs bg-slate-50" />
-                </div>
+  const imageMenu: ActionMenuItem[] = [
+    {
+      label: content.mediaUrl ? "Đổi ảnh bằng ảnh tải lên" : "Tải ảnh lên",
+      description: "JPG, PNG hoặc WebP, tối đa 10 MB.",
+      icon: ImagePlus,
+      onSelect: () => fileRef.current?.click(),
+      disabled: busy,
+    },
+    {
+      label: "AI vẽ ảnh",
+      description: exhausted ? "Đã hết ngân sách AI tháng này." : "Khoảng $0.07 mỗi ảnh, trừ vào ngân sách AI.",
+      icon: Wand2,
+      onSelect: () => setAiOpen(true),
+      disabled: busy || exhausted,
+    },
+    ...(content.mediaUrl
+      ? [
+          {
+            label: "Gỡ ảnh",
+            description: "Bài sẽ không còn ảnh; Instagram bắt buộc có ảnh.",
+            icon: Trash2,
+            destructive: true,
+            onSelect: () => editor.removeImage.mutate(content.id),
+            disabled: busy,
+          },
+        ]
+      : []),
+  ];
 
-                <Button
-                  className="w-full h-10 bg-[#934a33] hover:bg-[#7b3e2b] text-white text-xs font-semibold shadow-2xs"
-                  onClick={() => handleAiPolish("engaging")}
-                  disabled={isGenerating}
-                >
-                  <RefreshCw className={`w-4 h-4 mr-1.5 ${isGenerating ? "animate-spin" : ""}`} />
-                  Tạo lại bản nháp bằng AI
-                </Button>
-              </div>
-            </div>
+  const submitMenu: ActionMenuItem[] = [
+    {
+      label: "Lưu nháp",
+      description: "Giữ lại chỉnh sửa, chưa gửi duyệt.",
+      icon: Save,
+      onSelect: () => editor.save(),
+      disabled: !editor.dirty || busy,
+    },
+    {
+      label: "Xoá nội dung",
+      description: "Xoá hẳn bài này, không khôi phục được.",
+      icon: Trash2,
+      destructive: true,
+      onSelect: () => setConfirmDelete(true),
+      disabled: busy,
+    },
+  ];
 
-            {/* Middle Column: Text Editor & Quick Polish Actions (5 cols) */}
-            <div className="lg:col-span-5 bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-5">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                  Trình biên tập văn bản & AI Polish
-                </h3>
-                <span className="text-[11px] text-slate-400">Đã lưu tự động</span>
-              </div>
+  return (
+    <div className="space-y-5">
+      <MarketingHeader
+        title={content.title || "Nội dung chưa có tiêu đề"}
+        icon={<Sparkles className="size-7 shrink-0 text-primary" aria-hidden />}
+        crumbs={[{ label: "Thư viện nội dung", href: "/staff/marketing/content" }, { label: "Chi tiết" }]}
+        description={STATUS_HINT[content.status]}
+      />
 
-              {/* Quick AI Polish Action Pills */}
-              <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
-                <button
-                  onClick={() => handleAiPolish("short")}
-                  className="px-3 py-1.5 rounded-lg bg-amber-50 text-amber-900 border border-amber-200 font-semibold hover:bg-amber-100 transition shrink-0 flex items-center gap-1"
-                >
-                  <Zap className="w-3.5 h-3.5 text-amber-600" /> ✨ Rút ngắn bài viết
-                </button>
-                <button
-                  onClick={() => handleAiPolish("engaging")}
-                  className="px-3 py-1.5 rounded-lg bg-purple-50 text-purple-900 border border-purple-200 font-semibold hover:bg-purple-100 transition shrink-0 flex items-center gap-1"
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-purple-600" /> ✨ Tăng sức thuyết phục
-                </button>
-                <button
-                  onClick={() => handleAiPolish("emoji")}
-                  className="px-3 py-1.5 rounded-lg bg-blue-50 text-blue-900 border border-blue-200 font-semibold hover:bg-blue-100 transition shrink-0 flex items-center gap-1"
-                >
-                  ✨ Thêm Emoji & Hashtag
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="text-xs font-bold text-slate-700 block mb-1">Tiêu đề bài viết (Headline):</label>
-                  <Input
-                    value={contentTitle}
-                    onChange={(e) => setContentTitle(e.target.value)}
-                    className="h-10 text-xs font-bold bg-slate-50 border-slate-200"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-xs font-bold text-slate-700 block mb-1">Nội dung chi tiết (Caption):</label>
-                  <textarea
-                    rows={12}
-                    value={contentBody}
-                    onChange={(e) => setContentBody(e.target.value)}
-                    className="w-full rounded-xl border border-slate-200 p-3.5 text-xs text-slate-800 font-medium leading-relaxed bg-slate-50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#934a33]"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Right Column: Live Device Social Preview (4 cols) */}
-            <div className="lg:col-span-4 space-y-5">
-              <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                    <Eye className="w-4 h-4 text-[#934a33]" /> Xem trước hiển thị trên Facebook
-                  </h3>
-                  <Badge className="bg-amber-100 text-amber-800 text-[10px]">Độ dài lý tưởng</Badge>
-                </div>
-
-                {/* Facebook Post Card Simulation */}
-                <div className="border border-slate-200 rounded-xl p-4 space-y-3 bg-white shadow-2xs text-xs">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-full bg-[#934a33] text-white font-bold text-xs flex items-center justify-center">
-                      AN
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-slate-900">An Nhiên Riverside Hotel</h4>
-                      <span className="text-[10px] text-slate-400">Được tài trợ • 🌐</span>
-                    </div>
-                  </div>
-
-                  <p className="text-slate-800 whitespace-pre-line leading-relaxed text-xs">
-                    {contentBody}
-                  </p>
-
-                  <div className="relative h-44 w-full rounded-lg overflow-hidden border border-slate-200">
-                    <Image
-                      src="https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=600&q=80"
-                      alt="Preview"
-                      fill
-                      className="object-cover"
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between text-[11px] text-slate-500 pt-2 border-t border-slate-100 font-semibold">
-                    <span className="flex items-center gap-1 text-[#934a33]"><ThumbsUp className="w-3.5 h-3.5" /> 142 Thích</span>
-                    <span className="flex items-center gap-1"><MessageCircle className="w-3.5 h-3.5" /> 28 Bình luận</span>
-                    <span className="flex items-center gap-1"><Share2 className="w-3.5 h-3.5" /> 12 Chia sẻ</span>
-                  </div>
-                </div>
-
-                <div className="pt-2">
-                  <Link href="/staff/marketing/calendar">
-                    <Button className="w-full h-10 bg-[#934a33] hover:bg-[#7b3e2b] text-white font-semibold text-xs shadow-md">
-                      <Calendar className="w-4 h-4 mr-2" /> Duyệt Nội Dung & Đưa Vào Lịch Đăng Bài
-                    </Button>
-                  </Link>
-                </div>
-              </div>
-            </div>
+      {generated && content.status === "DRAFT" && (
+        <p className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-semibold text-emerald-800">
+          <CheckCircle2 className="size-4 shrink-0" aria-hidden /> AI đã viết xong bản nháp. Đọc lại, chỉnh sửa và thêm ảnh
+          trước khi gửi duyệt.
+        </p>
+      )}
+      {content.status === "REJECTED" && (
+        <div role="alert" className="flex items-start gap-3 rounded-xl border-2 border-destructive/40 bg-destructive/5 px-4 py-4">
+          <XCircle className="mt-0.5 size-5 shrink-0 text-destructive" aria-hidden />
+          <div className="min-w-0 space-y-1">
+            <p className="text-sm font-bold text-destructive">Chủ khách sạn đã từ chối bài này</p>
+            <p className="whitespace-pre-line text-sm text-foreground">
+              {content.rejectedReason || "Chủ khách sạn không ghi lý do. Hãy đọc lại bài và liên hệ chủ nếu cần."}
+            </p>
+            <p className="text-xs text-muted-foreground">Sửa theo góp ý rồi gửi duyệt lại.</p>
           </div>
         </div>
-      </main>
+      )}
+      {!editable && (
+        <p className="flex items-start gap-2 rounded-xl border border-border bg-muted/50 px-4 py-3 text-xs text-muted-foreground">
+          <Lock className="mt-0.5 size-4 shrink-0" aria-hidden /> {lockedReason}
+        </p>
+      )}
+
+      <div className="grid items-start gap-5 lg:grid-cols-3">
+        <section className="space-y-4 rounded-xl border border-border bg-card p-4 shadow-2xs sm:p-5 lg:col-span-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <ContentStatusPill status={content.status} />
+            <span className="text-xs font-semibold uppercase text-primary">{contentTypeLabels[content.contentType]}</span>
+            <span className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
+              <Clock className="size-3" aria-hidden /> {content.authorName ?? "Chủ khách sạn"} · {formatDateTime(content.createdAt)}
+            </span>
+          </div>
+
+          {editable ? (
+            <>
+              <div className="space-y-1.5">
+                <Label htmlFor="title" className="text-xs font-semibold">
+                  Tiêu đề
+                </Label>
+                <Input
+                  id="title"
+                  value={editor.title}
+                  maxLength={255}
+                  disabled={busy}
+                  onChange={(event) => editor.setTitle(event.target.value)}
+                  aria-invalid={!!editor.errors.title}
+                  className="h-10"
+                />
+                {editor.errors.title && <p className="text-xs text-destructive">{editor.errors.title}</p>}
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="body" className="text-xs font-semibold">
+                  Nội dung bài đăng <span className="text-destructive">*</span>
+                </Label>
+                <Textarea
+                  id="body"
+                  rows={12}
+                  value={editor.body}
+                  maxLength={10_000}
+                  disabled={busy}
+                  onChange={(event) => editor.setBody(event.target.value)}
+                  aria-invalid={!!editor.errors.body}
+                  className="min-h-64 text-sm leading-relaxed"
+                />
+                <div className="flex justify-between gap-3 text-xs">
+                  <span className={editor.errors.body ? "text-destructive" : "text-muted-foreground"}>
+                    {editor.errors.body ?? "AI không tự thêm giá, ngày hay ưu đãi. Kiểm tra lại mọi con số trước khi gửi."}
+                  </span>
+                  <span className="shrink-0 text-muted-foreground">{editor.body.trim().length}/10.000</span>
+                </div>
+              </div>
+            </>
+          ) : (
+            <article className="space-y-2">
+              {content.title && <h2 className="text-lg font-bold text-foreground">{content.title}</h2>}
+              <p className="whitespace-pre-line text-sm leading-relaxed text-foreground">{content.body}</p>
+            </article>
+          )}
+
+          <div className="space-y-2 border-t border-border pt-4">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold text-foreground">Ảnh minh hoạ</p>
+              {editable && <ActionMenu items={imageMenu} label="Ảnh" />}
+            </div>
+            <input
+              ref={fileRef}
+              type="file"
+              accept={IMAGE_TYPES.join(",")}
+              className="sr-only"
+              aria-label="Chọn ảnh minh hoạ"
+              tabIndex={-1}
+              onChange={(event) => {
+                editor.pickImage(event.target.files?.[0]);
+                event.target.value = "";
+              }}
+            />
+            {content.mediaUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={content.mediaUrl} alt="Ảnh minh hoạ bài đăng" className="max-h-72 w-full rounded-lg object-cover" />
+            ) : (
+              <div className="flex h-32 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-border bg-muted/40 text-xs text-muted-foreground">
+                <ImageIcon className="size-6" aria-hidden /> Chưa có ảnh. Instagram bắt buộc phải có ảnh.
+              </div>
+            )}
+            {(editor.upload.isPending || editor.removeImage.isPending || drawImage.isPending) && (
+              <p className="flex items-center gap-1.5 text-xs text-muted-foreground" role="status">
+                <Loader2 className="size-3.5 animate-spin" aria-hidden /> Đang xử lý ảnh…
+              </p>
+            )}
+            {editor.imageError && <p className="text-xs text-destructive">{editor.imageError}</p>}
+          </div>
+
+          {actionError && (
+            <p className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive" role="alert">
+              {getMarketingErrorMessage(actionError)}
+            </p>
+          )}
+
+          {/* The backend deletes only what may still be edited (DRAFT, REJECTED). */}
+          {editable && (
+            <div className="flex items-center gap-2 border-t border-border pt-4">
+              <p className="mr-auto min-w-0 text-xs" role="status">
+                {dirty ? (
+                  <span className="font-semibold text-amber-700">Có thay đổi chưa lưu. Gửi duyệt sẽ lưu luôn.</span>
+                ) : editor.saved ? (
+                  <span className="flex items-center gap-1 font-semibold text-emerald-700">
+                    <CheckCircle2 className="size-3.5" aria-hidden /> Đã lưu
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground">Gửi duyệt xong, chữ và ảnh sẽ khoá đến khi chủ quyết định.</span>
+                )}
+              </p>
+              <ActionBar
+                primary={
+                  <Button className="h-10 gap-1.5 whitespace-nowrap" disabled={busy || !editor.body.trim()} onClick={sendForApproval}>
+                    {submit.isPending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" aria-hidden />}
+                    Gửi chủ duyệt
+                  </Button>
+                }
+                menu={submitMenu}
+              />
+            </div>
+          )}
+          {content.status === "PENDING_APPROVAL" && (
+            <p className="flex items-center gap-2 border-t border-border pt-4 text-xs text-muted-foreground">
+              <Clock className="size-4 shrink-0" aria-hidden /> Không cần làm gì thêm: bạn sẽ thấy trạng thái đổi khi chủ khách
+              sạn duyệt hoặc từ chối.
+            </p>
+          )}
+        </section>
+
+        <aside className="space-y-4">
+          {hotelId && <SchedulePanel hotelId={hotelId} content={content} />}
+          <div className="rounded-xl border border-border bg-card p-4 text-xs text-muted-foreground shadow-2xs">
+            <p className="mb-1 font-semibold text-foreground">Quy trình</p>
+            <ol className="list-decimal space-y-0.5 pl-4">
+              <li>AI viết bản nháp, nhân viên chỉnh sửa và thêm ảnh</li>
+              <li>Gửi chủ khách sạn duyệt (chủ có thể từ chối kèm góp ý)</li>
+              <li>Bài đã duyệt được lên lịch đăng lên trang đã kết nối</li>
+              <li>Sau khi đăng, theo dõi hiệu quả ở mục Hiệu quả tiếp thị</li>
+            </ol>
+          </div>
+        </aside>
+      </div>
+
+      {editable && <AiImagePanel content={content} draw={drawImage} hotelId={hotelId} open={aiOpen} onOpenChange={setAiOpen} />}
+      <ConfirmDialog
+        open={confirmDelete}
+        onOpenChange={setConfirmDelete}
+        title="Xoá nội dung này?"
+        description="Bài viết và ảnh sẽ bị xoá hẳn, không khôi phục được."
+        confirmLabel="Xoá nội dung"
+        pending={remove.isPending}
+        onConfirm={() => remove.mutate(content.id, { onSuccess: onDeleted, onSettled: () => setConfirmDelete(false) })}
+      />
     </div>
+  );
+}
+
+export default function StaffMarketingContentDetailPage() {
+  const { id } = useParams<{ id: string }>();
+  return (
+    <Suspense fallback={<Skeleton className="h-96 rounded-xl" />}>
+      <ContentDetail contentId={id} />
+    </Suspense>
   );
 }

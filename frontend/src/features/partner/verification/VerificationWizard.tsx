@@ -223,10 +223,16 @@ export function VerificationWizard({
   function validateStep(index: number): boolean {
     const body = buildBody();
     let stepErrors: FieldErrors = {};
+    // The schema is strict and `pick` keeps it strict: pass only the picked keys, or the other groups are reported as
+    // unrecognized keys on the root, an error no field shows, and the step silently refuses to advance.
     if (index === 0) {
-      stepErrors = validateWith(submitVerificationSchema.pick({ legal: true, beneficiary: true }), body).errors ?? {};
+      stepErrors =
+        validateWith(submitVerificationSchema.pick({ legal: true, beneficiary: true }), {
+          legal: body.legal,
+          beneficiary: body.beneficiary,
+        }).errors ?? {};
     } else if (index === 1) {
-      stepErrors = validateWith(submitVerificationSchema.pick({ property: true }), body).errors ?? {};
+      stepErrors = validateWith(submitVerificationSchema.pick({ property: true }), { property: body.property }).errors ?? {};
     } else if (index === 2) {
       for (const type of REQUIRED_VERIFICATION_DOCUMENTS) {
         if (!documents[type]?.fileId) stepErrors[`document.${type}`] = "Tài liệu bắt buộc.";

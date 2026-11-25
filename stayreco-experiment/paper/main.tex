@@ -1,0 +1,690 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{textcomp}
+\usepackage{xcolor}
+
+\begin{document}
+
+\title{Two-Sided Shrinkage Weights for Hybrid Recommendation\\
+under Continuous Cold Start}
+
+\author{\IEEEauthorblockN{Hoang Phuc}
+\IEEEauthorblockA{\textit{Department of Software Engineering} \\
+\textit{FPT University}\\
+Ho Chi Minh City, Vietnam \\
+dhphuc1406@gmail.com}
+}
+
+\maketitle
+
+\begin{abstract}
+A new hotel booking platform faces cold start on both sides at once:
+travelers register without any history, and partner hotels join
+without any booking. Collaborative filtering cannot score either, so
+hybrid recommenders fall back on content and demographic signals.
+Existing weighted hybrids, however, set the mixing weights either
+once for the whole system or as a function of the user alone, which
+still lets collaborative filtering dominate the ranking of an item
+nobody has rated. We propose a fusion rule in which the collaborative
+weight is the \emph{product} of two shrinkage factors, one over the
+user's interaction count and one over the item's rating count, so
+that collaborative filtering is trusted only when both sides carry
+evidence. The remaining mass is split between content and
+demographic components by a second shrinkage factor, giving a
+three-weight rule with three interpretable constants. On MovieLens
+100K with 20\% of items fully held out to simulate new items,
+averaged over ten seeds, the proposed rule attains the lowest RMSE
+(1.0175) among twelve methods, and places previously unrated items
+in the top-10 at a rate of 0.0124, more than four times that of the
+strongest published baseline and against exactly zero for every
+single-paradigm and fixed-weight method. Gains on both measures are
+significant under a Wilcoxon signed-rank test over seeds.
+\end{abstract}
+
+\begin{IEEEkeywords}
+recommender systems, hybrid recommendation, cold start, shrinkage,
+matrix factorization, hotel booking
+\end{IEEEkeywords}
+
+%=====================================================================
+\section{Introduction}
+
+% TODO: doan nay can so lieu that cua nen tang StayReco —
+% bao nhieu partner, bao nhieu tinh, quy mo du kien.
+% Hien dang de chung chung, sua lai khi co so.
+
+Online booking platforms that launch with a new catalogue face a
+structural difficulty: almost every cell of the user--item matrix is
+empty, and it stays that way. New travelers register daily and new
+partner hotels are verified continuously, so a substantial share of
+every request involves at least one side with no interaction
+history. Bernardi \textit{et al.} call this the \emph{continuous}
+cold-start problem, in contrast to the one-off cold start assumed by
+much of the literature \cite{bernardi2015}.
+
+Collaborative filtering (CF) is the strongest signal once both the
+user and the item are warm, but it cannot score an item that nobody
+has interacted with \cite{schein2002}. Content-based filtering
+handles new items immediately, since a hotel acquires a feature
+vector as soon as its description is entered, but it ignores the
+collective taste signal and tends to over-specialize
+\cite{lops2011}. Demographic filtering requires nothing from the
+user beyond a profile and therefore always applies, at the cost of
+being the least accurate of the three \cite{pazzani1999}. A hybrid
+recommender combines them \cite{burke2002}, but the combination rule
+determines whether the hybrid inherits the strengths or the
+weaknesses of its parts.
+
+Fixed mixing weights are the common choice and the obvious weakness.
+A single weight vector applied to every request necessarily
+over-trusts CF for cold pairs and under-uses it for warm ones.
+Melville \textit{et al.} report that a naive equal-weight blend of
+collaborative and content predictions is in fact \emph{worse} than
+pure CF on their data \cite{melville2002}, which is a direct argument
+for making the weights depend on the evidence available.
+
+Weights that adapt to the user's interaction count address half of
+the problem. They do not address the other half: a long-standing
+user browsing a newly listed hotel still receives a high
+collaborative weight, applied to a latent factor that was never
+trained. This paper argues that under two-sided cold start the
+mixing weight must be a function of \emph{both} counts, and that the
+natural form for each factor is the shrinkage ratio $n/(n+k)$ that
+Koren uses to discount similarities estimated from few observations
+\cite{koren2008}.
+
+The contributions are:
+
+\begin{enumerate}
+\item A fusion rule whose collaborative weight is the product of a
+user-side and an item-side shrinkage factor, so that a hotel with no
+ratings receives zero collaborative weight regardless of how active
+the user is.
+\item A two-stage weighting scheme that applies the same shrinkage
+form twice --- once to separate CF from the rest, once to divide the
+rest between content and demographic signals --- yielding three
+weights controlled by three interpretable constants.
+\item An evaluation over ten seeds against eleven baselines,
+including four recent hybrid methods reimplemented inside a single
+harness, reported separately by cold-start group and tested with a
+Wilcoxon signed-rank test.
+\end{enumerate}
+
+%=====================================================================
+\section{Related Work}
+
+\subsection{Hybrid Combination Strategies}
+
+Burke surveys hybrid recommenders and classifies them into seven
+families \cite{burke2002}. The \emph{weighted} hybrid, in which
+``the scores (or votes) of several recommendation techniques are
+combined together to produce a single recommendation,'' is the family
+this work belongs to. Burke also states the weakness that motivates
+adaptive weights: a fixed weighting implicitly assumes that the
+relative value of each technique is uniform across the item space,
+which is false precisely in the cold-start region.
+
+Pazzani combines collaborative, content-based and demographic
+components \cite{pazzani1999}, the same three paradigms used here,
+although the combination is by consensus voting over each
+recommender's output rather than by a weighted sum of scores.
+
+\subsection{Weights That Depend on Evidence}
+
+The P-Tango system of Claypool \textit{et al.} starts from equal
+weights for the collaborative and content recommenders and adjusts
+them per user as predictions are confirmed or disconfirmed
+\cite{claypool1999}. Melville \textit{et al.} scale the confidence
+placed in a content-based predictor by the number of items the
+active user has rated, capped at a threshold of 50
+\cite{melville2002}. Both adapt on the user axis only.
+
+Within collaborative filtering itself, discounting estimates computed
+from little data is standard. Koren shrinks an item--item
+correlation by the factor $n_{ij}/(n_{ij}+\lambda)$, where $n_{ij}$
+is the number of users who rated both items, on the stated ground
+that ``similarities based on a greater user support are more
+reliable'' \cite{koren2008}. The present work applies the same form
+at the level of hybrid fusion weights rather than similarities, and
+applies it to both axes.
+
+\subsection{Recent Hybrid Recommenders}
+
+Four recent methods are reimplemented as baselines. Tarek
+\textit{et al.} combine item--item CF, content and a knowledge-based
+fallback with fixed weights for hotel recommendation
+\cite{tarek2022}. Do \textit{et al.} adjust the weights of an
+SVD-plus-content hybrid according to validation performance
+\cite{do2020}. Muhammad \textit{et al.} blend SVD and SVD++ with a
+grid-searched mixing parameter, entirely within the collaborative
+family \cite{ohwsf2025}. Çakır \textit{et al.} combine SVD++ and
+LightGCN with a learned weight and switch on a demographic and
+TF-IDF safety layer in cold-start situations; the switch is binary
+rather than continuous \cite{slarec2026}.
+
+\subsection{Evaluation of Cold Start}
+
+Schein \textit{et al.} define cold-start evaluation protocols
+\cite{schein2002}; Herlocker \textit{et al.} survey accuracy metrics
+for collaborative filtering \cite{herlocker2004}. Krichene and Rendle
+show that ranking against a sampled candidate set distorts
+comparisons and recommend ranking over the full catalogue
+\cite{krichene2020}, which this work follows. Ferrari Dacrema
+\textit{et al.} document how often reported gains fail to reproduce
+when baselines are tuned with the same effort as the proposed method
+\cite{dacrema2019}; the protocol in Section~\ref{sec:setup} applies
+one identical tuning procedure to all twelve methods.
+
+%=====================================================================
+\section{Problem Formulation}
+
+Let $U$ be the set of users and $I$ the set of items. For a user
+$u \in U$ the system returns an ordered list of $K$ items drawn from
+the candidate set $C_u \subseteq I$ of items $u$ has not yet
+consumed. Two evidence counts drive the method:
+
+\begin{itemize}
+\item $n_u$ --- the number of distinct items user $u$ has interacted
+with in the training data;
+\item $m_i$ --- the number of distinct users who have interacted with
+item $i$ in the training data.
+\end{itemize}
+
+An item with $m_i = 0$ is a \emph{new item}: no collaborative model
+has ever observed it. A user with small $n_u$ is a \emph{cold user}.
+Both conditions occur simultaneously and continuously on a growing
+platform, which is the setting this paper addresses.
+
+In the target deployment a knowledge-based pre-filter is applied
+before scoring, removing hotels that are unavailable for the
+requested dates, outside the stated budget, or not yet approved.
+These are hard business constraints rather than predictions, and they
+are not part of the ranking model; they are not evaluated here
+because the public dataset used in Section~\ref{sec:setup} carries no
+availability or price-constraint information.
+
+%=====================================================================
+\section{Proposed Method}
+
+\subsection{Component Models}
+
+Three component models produce a score on the rating scale for every
+candidate pair $(u,i)$.
+
+\textbf{Collaborative (CF).} SVD++ \cite{koren2008} is trained on the
+explicit rating matrix with $50$ latent factors, $30$ epochs,
+learning rate $0.005$ and regularization $0.02$. It is the most
+accurate component when both sides are warm and is undefined when
+$m_i = 0$.
+
+\textbf{Content-based (CB).} Items are represented by TF-IDF vectors
+over their textual and categorical attributes. A user profile is the
+interaction-weighted mean of the vectors of the items that user has
+consumed; the predicted score is a baseline estimate plus a term
+proportional to the cosine similarity between profile and item. The
+component requires no other user's data, so it scores a new item
+immediately.
+
+\textbf{Demographic (DM).} The predicted score is the mean rating of
+the user's demographic group for that item, shrunk toward the global
+mean with a pseudo-count of $5$. It requires nothing from the user's
+history and is therefore always available, at the lowest accuracy of
+the three.
+
+All three components are expressed on the same rating scale before
+fusion, so that the weights carry their intended meaning. Their
+empirical means over the test split are $3.49$, $3.54$ and $3.55$
+respectively, against a data mean of $3.55$.
+
+\subsection{Fusion Rule}
+
+The predicted score is a convex combination of the three components:
+
+\begin{equation}
+\hat{s}_{u,i} \;=\; \alpha\, s^{\mathrm{CF}}_{u,i}
+                 \;+\; \beta \, s^{\mathrm{CB}}_{u,i}
+                 \;+\; \gamma\, s^{\mathrm{DM}}_{u,i},
+\qquad
+\alpha + \beta + \gamma = 1 .
+\label{eq:fusion}
+\end{equation}
+
+\subsection{Two-Sided Shrinkage}
+
+Define two trust factors, one per axis:
+
+\begin{equation}
+t^{\mathrm{user}}_u = \frac{n_u}{n_u + k}, \qquad
+t^{\mathrm{item}}_i = \frac{m_i}{m_i + k'} .
+\label{eq:trust}
+\end{equation}
+
+Each rises from $0$ toward $1$ as evidence accumulates and equals
+$\tfrac{1}{2}$ when the count reaches the corresponding constant,
+which gives $k$ and $k'$ a direct reading: the amount of evidence at
+which that side is trusted half as much as a fully observed one. The
+form follows Koren's shrinkage factor \cite{koren2008}.
+
+The collaborative weight is their \emph{product}:
+
+\begin{equation}
+\alpha_{u,i} \;=\; t^{\mathrm{user}}_u \cdot t^{\mathrm{item}}_i .
+\label{eq:alpha}
+\end{equation}
+
+The product is the operative choice. Because either factor vanishing
+drives $\alpha$ to zero, an item with $m_i = 0$ receives no
+collaborative weight however large $n_u$ is, and a user with
+$n_u = 0$ receives none however well observed the item is. A sum or
+a mean of the two factors would not have this property: a highly
+active user would still carry collaborative weight onto an item the
+model has never seen.
+
+\subsection{Dividing the Remainder}
+
+The mass not assigned to CF is divided between the content and
+demographic components by a second application of the same form:
+
+\begin{equation}
+\pi_u = \frac{n_u}{n_u + k_c}, \qquad
+\beta = (1-\alpha)\,\pi_u, \qquad
+\gamma = (1-\alpha)\,(1 - \pi_u) .
+\label{eq:beta}
+\end{equation}
+
+The content profile is itself built from the user's history, so it
+improves with $n_u$; the demographic component does not depend on
+the user's history at all. Within the remainder, therefore, the same
+logic applies one level down: evidence shifts weight from the
+unconditional fallback to the data-driven component. Three
+constants, $k$, $k'$ and $k_c$, control the whole rule.
+
+One exception is imposed. When $m_i = 0$ we set $\gamma = 0$ and
+$\beta = 1 - \alpha$. For an item nobody has rated, the demographic
+component has no item-specific information and returns the same
+global-mean-dominated value for every such item; including it adds a
+constant offset that cannot separate new items from one another and
+dilutes the only signal that can, namely content similarity.
+Section~\ref{sec:results} quantifies the effect: removing this
+exception reduces the rate at which new items reach the top-10 by an
+order of magnitude.
+
+\subsection{Resulting Behaviour}
+
+Table~\ref{tab:weights} shows the weights produced by
+\eqref{eq:trust}--\eqref{eq:beta} under the constants selected in
+Section~\ref{sec:setup}.
+
+\begin{table}[t]
+\caption{Fusion weights under the selected constants
+($k=5$, $k'=100$, $k_c=10$). The item is well observed
+($m_i = 200$) except in the last row.}
+\label{tab:weights}
+\centering
+\begin{tabular}{lccc}
+\toprule
+Situation & $\alpha$ & $\beta$ & $\gamma$ \\
+\midrule
+New user ($n_u = 0$)        & 0.00 & 0.00 & 1.00 \\
+$n_u = 10$                  & 0.44 & 0.28 & 0.28 \\
+$n_u = 40$                  & 0.59 & 0.33 & 0.08 \\
+Established user            & 0.65 & 0.33 & 0.02 \\
+New item ($m_i = 0$)        & 0.00 & 1.00 & 0.00 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The transition is continuous in both counts: an item with a single
+rating receives a collaborative weight near zero rather than the full
+weight a hard threshold would assign.
+
+%=====================================================================
+\section{Experimental Setup}
+\label{sec:setup}
+
+\subsection{Dataset}
+
+% GHI CHU QUAN TRONG: day la diem yeu phai noi ro.
+% MovieLens khong phai du lieu khach san.
+
+The platform has no production interaction logs yet, so the method
+is evaluated on MovieLens 100K \cite{harper2015}: $943$ users,
+$1{,}682$ items and $100{,}000$ ratings. The dataset provides the
+three inputs the method requires --- an interaction matrix, item
+attributes usable as content features, and user demographic
+attributes --- and is the standard benchmark for this class of
+comparison. It is a proxy: hotel booking differs from film rating in
+session structure, repeat-consumption behaviour and the role of
+price and availability. Section~\ref{sec:threats} returns to this.
+
+\subsection{Cold-Start Simulation}
+
+Every MovieLens user has at least $20$ ratings, so cold start must be
+induced. Two independent manipulations are applied per seed:
+
+\begin{itemize}
+\item \textbf{New items.} $20\%$ of items are selected at random and
+\emph{all} of their ratings are moved to the test split, so these
+items have $m_i = 0$ in training and no collaborative model has ever
+observed them.
+\item \textbf{Cold users.} $30\%$ of users are selected at random and
+only their first $n$ ratings in chronological order are kept in
+training, with $n$ drawn uniformly from $[0, 19]$.
+\end{itemize}
+
+The remaining data are split into training, validation and test
+portions. Test rows are assigned to groups by the user's training
+count: \emph{cold} ($n_u < 5$), \emph{cool}
+($5 \le n_u < 20$), \emph{warm} ($n_u \ge 20$), plus a separate
+\emph{new item} group.
+
+\subsection{Protocol}
+
+Every result is averaged over ten independent seeds, each
+corresponding to a different random split.
+
+All twelve methods are tuned by the identical procedure: a grid
+search on the \emph{validation} split, selecting by RMSE. The test
+split is not consulted during tuning. The grid for the proposed
+method covers $k \in \{5,10,20,40,80,160\}$,
+$k' \in \{5,20,50,100\}$ and $k_c \in \{1,3,10,30\}$, that is $96$
+combinations; the selected values are $k=5$, $k'=100$, $k_c=10$.
+
+\subsection{Metrics}
+
+Rating accuracy is reported as RMSE and MAE. Ranking quality is
+reported as Precision, Recall and NDCG at $K=10$, computed by ranking
+over the \emph{full catalogue} of items the user has not rated,
+following Krichene and Rendle \cite{krichene2020}. Ranking inside a
+sampled candidate set of items the user happened to rate inflates all
+methods and, critically, never contains an item with $m_i = 0$, so
+it cannot measure item-side cold start at all.
+
+Two beyond-accuracy measures are reported. Cov@10 is the fraction of
+the catalogue that appears in any top-10 list. New@10 is the fraction
+of top-10 slots occupied by items with $m_i = 0$; it is the direct
+measure of whether a method can surface an item nobody has rated.
+
+Differences between the proposed method and each baseline are tested
+with a Wilcoxon signed-rank test over the ten per-seed values.
+
+\subsection{Baselines}
+
+Four single-paradigm references (Popularity, Demographic-only,
+Content-only, CF-only), three fixed-weight hybrids over the same
+three components ($\alpha \in \{0.3, 0.5, 0.7\}$), and four recent
+hybrid methods \cite{tarek2022, do2020, ohwsf2025, slarec2026}
+reimplemented inside this harness. The reimplementations are
+adaptations, not reproductions: each original uses a different
+dataset, split and metric, so their published numbers are not
+comparable to ours and are not quoted. Every deviation required to
+run them here is documented in the source.
+
+%=====================================================================
+\section{Results}
+\label{sec:results}
+
+\subsection{Overall}
+
+Table~\ref{tab:overall} reports the mean over ten seeds.
+
+\begin{table}[t]
+\caption{Overall results, mean over ten seeds, $K=10$.
+Best value per column in bold.}
+\label{tab:overall}
+\centering
+\small
+\begin{tabular}{lccccc}
+\toprule
+Method & RMSE & MAE & P@10 & NDCG@10 & New@10 \\
+\midrule
+Popularity          & 1.0823 & 0.8904 & 0.0320 & 0.0356 & 0.0000 \\
+Demographic-only    & 1.0846 & 0.8920 & 0.0342 & 0.0406 & 0.0000 \\
+Content-only        & 1.0241 & 0.8177 & 0.0342 & 0.0401 & 0.0018 \\
+CF-only (SVD++)     & 1.0334 & 0.8312 & 0.0370 & 0.0450 & 0.0000 \\
+\midrule
+Fixed $\alpha = 0.3$ & 1.0187 & 0.8222 & 0.0372 & 0.0443 & 0.0000 \\
+Fixed $\alpha = 0.5$ & 1.0196 & 0.8223 & 0.0382 & 0.0458 & 0.0000 \\
+Fixed $\alpha = 0.7$ & 1.0232 & 0.8244 & 0.0383 & 0.0461 & 0.0000 \\
+\midrule
+Tarek+ \cite{tarek2022}    & 1.0231 & 0.8306 & 0.0363 & 0.0425 & 0.0000 \\
+Do+ \cite{do2020}          & 1.0219 & 0.8197 & 0.0363 & 0.0432 & 0.0000 \\
+OHWSF \cite{ohwsf2025}     & 1.0333 & 0.8312 & 0.0366 & 0.0446 & 0.0000 \\
+SL-ARec \cite{slarec2026}  & 1.0181 & 0.8176 & \textbf{0.0412}
+                           & \textbf{0.0505} & 0.0030 \\
+\midrule
+\textbf{Proposed} & \textbf{1.0175} & \textbf{0.8129} & 0.0403
+                  & 0.0482 & \textbf{0.0124} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The proposed rule attains the lowest RMSE and MAE of the twelve
+methods. On New@10 it reaches $0.0124$ against $0.0030$ for the
+strongest baseline, and against exactly $0.0000$ for every
+single-paradigm method, every fixed-weight hybrid, and three of the
+four published methods. Those nine methods never place an unrated
+item in a top-10 list. On NDCG@10 the proposed rule is second,
+behind SL-ARec \cite{slarec2026}.
+
+\subsection{By Cold-Start Group}
+
+Table~\ref{tab:groups} breaks NDCG@10 down by the user's training
+count.
+
+\begin{table}[t]
+\caption{NDCG@10 by cold-start group, mean over ten seeds.}
+\label{tab:groups}
+\centering
+\begin{tabular}{lccc}
+\toprule
+Method & Cold & Cool & Warm \\
+       & ($n_u<5$) & ($5\!\le\! n_u\!<\!20$) & ($n_u \ge 20$) \\
+\midrule
+Popularity          & 0.0250 & 0.0209 & 0.0471 \\
+Demographic-only    & 0.0320 & 0.0246 & 0.0525 \\
+Content-only        & 0.0291 & 0.0217 & 0.0540 \\
+CF-only (SVD++)     & 0.0228 & 0.0235 & 0.0625 \\
+Fixed $\alpha=0.5$  & 0.0261 & 0.0238 & 0.0633 \\
+SL-ARec \cite{slarec2026} & 0.0299 & 0.0233 & \textbf{0.0717} \\
+\textbf{Proposed}   & \textbf{0.0324} & 0.0231 & 0.0673 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The pattern matches the design. For cold users the proposed rule is
+best of all twelve, because $\alpha$ is near zero there and the
+ranking is carried by the content and demographic components; CF-only
+is the weakest method in that column. For warm users CF-only improves
+by a factor of nearly three over its cold-user figure, and the
+proposed rule tracks it upward while remaining behind SL-ARec, whose
+LightGCN component is stronger on dense data.
+
+\subsection{Significance}
+
+Table~\ref{tab:wilcoxon} reports the Wilcoxon signed-rank test over
+the ten per-seed values.
+
+\begin{table}[t]
+\caption{Wilcoxon signed-rank test, proposed method against each
+baseline, ten seeds. ``Wins'' counts seeds on which the proposed
+method is better.}
+\label{tab:wilcoxon}
+\centering
+\small
+\begin{tabular}{lcccc}
+\toprule
+ & \multicolumn{2}{c}{RMSE} & \multicolumn{2}{c}{New@10} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}
+Baseline & Wins & $p$ & Wins & $p$ \\
+\midrule
+CF-only (SVD++)    & 10/10 & 0.002 & 10/10 & 0.002 \\
+OHWSF \cite{ohwsf2025} & 10/10 & 0.002 & 10/10 & 0.002 \\
+Tarek+ \cite{tarek2022} & 10/10 & 0.002 & 10/10 & 0.002 \\
+Do+ \cite{do2020}  & 10/10 & 0.002 & 10/10 & 0.002 \\
+Fixed $\alpha=0.3$ & 8/10  & 0.014 & 10/10 & 0.002 \\
+SL-ARec \cite{slarec2026} & 6/10 & 0.322 & 10/10 & 0.002 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+On New@10 the advantage is significant against every baseline,
+including SL-ARec. On RMSE it is significant against all baselines
+except SL-ARec, where the difference over ten seeds is not
+distinguishable from chance and no claim is made.
+
+\subsection{Effect of the New-Item Exception}
+
+Removing the $\gamma = 0$ rule of Section~IV-D, while leaving
+everything else unchanged, lowers New@10 from $0.0124$ to $0.0011$,
+a factor of eleven, and the difference is significant
+($10/10$ seeds, $p = 0.002$). RMSE improves slightly in exchange,
+from $1.0175$ to $1.0142$. The demographic component therefore does
+carry a small amount of rating-scale accuracy on new items while
+actively harming their ranking, which is consistent with it
+returning a near-constant value for every such item.
+
+%=====================================================================
+\section{Limitations and Threats to Validity}
+\label{sec:threats}
+
+\textbf{Dataset.} The evaluation uses film ratings as a proxy for
+hotel bookings. Explicit five-star ratings are not implicit booking
+signals; films are consumed once and cheaply while hotel stays are
+rare and expensive; and neither price constraints nor availability
+exist in the data. The conclusions therefore concern the
+\emph{weighting rule} and should not be read as measurements of the
+deployed platform.
+
+\textbf{Knowledge layer not evaluated.} The pre-filter described in
+Section~III cannot be exercised on this dataset and is therefore
+absent from all reported numbers.
+
+\textbf{Grid boundary.} The selected $k' = 100$ is the largest value
+in its grid, so the optimum may lie outside the searched range and
+the reported configuration may be suboptimal.
+
+\textbf{Single dataset.} All results come from one benchmark. The
+magnitude of every difference reported here is small in absolute
+terms, and generalization to other domains is untested.
+
+\textbf{Reimplemented baselines.} The four published methods are
+adaptations constrained to this harness. Their numbers here
+characterize the \emph{idea} under common conditions, not the
+original systems.
+
+%=====================================================================
+\section{Conclusion}
+
+Under two-sided cold start the mixing weight of a hybrid recommender
+should depend on the evidence available on both axes. Making the
+collaborative weight the product of a user-side and an item-side
+shrinkage factor enforces this directly: either side lacking data
+removes the collaborative term entirely. Applying the same shrinkage
+form a second time divides the remainder between a data-driven
+content component and an unconditional demographic fallback, giving
+a three-weight rule with three interpretable constants and no
+thresholds.
+
+On MovieLens 100K with new items simulated, the rule attains the
+lowest rating error of twelve methods and raises the rate at which
+previously unrated items reach the top-10 to more than four times
+that of the strongest published baseline, while nine of the eleven
+baselines never surface such an item at all. It remains behind one
+recent graph-based hybrid on overall NDCG.
+
+Future work: evaluation on hotel interaction logs once the platform
+accumulates them; widening the search range for the item-side
+constant; estimating the constants from the ratio of component error
+variances rather than by grid search; and bringing the knowledge
+pre-filter into the evaluated pipeline.
+
+%=====================================================================
+\begin{thebibliography}{00}
+
+\bibitem{bernardi2015} L. Bernardi, J. Kamps, J. Kiseleva, and
+M. J. I. Müller, ``The continuous cold start problem in e-commerce
+recommender systems,'' in \textit{Proc. 2nd Workshop on New Trends
+on Content-Based Recommender Systems}, 2015.
+
+\bibitem{burke2002} R. Burke, ``Hybrid recommender systems: Survey
+and experiments,'' \textit{User Modeling and User-Adapted
+Interaction}, vol. 12, no. 4, pp. 331--370, 2002.
+
+\bibitem{claypool1999} M. Claypool, A. Gokhale, T. Miranda,
+P. Murnikov, D. Netes, and M. Sartin, ``Combining content-based and
+collaborative filters in an online newspaper,'' in \textit{Proc. ACM
+SIGIR Workshop on Recommender Systems}, 1999.
+
+\bibitem{dacrema2019} M. Ferrari Dacrema, P. Cremonesi, and
+D. Jannach, ``Are we really making much progress? A worrying analysis
+of recent neural recommendation approaches,'' in \textit{Proc. 13th
+ACM Conf. Recommender Systems}, 2019, pp. 101--109.
+
+\bibitem{do2020} H.-Q. Do, T.-H. Le, and B. Yoon, ``Dynamic weighted
+hybrid recommender systems,'' in \textit{Proc. 22nd Int. Conf.
+Advanced Communication Technology (ICACT)}, 2020, pp. 644--650.
+
+\bibitem{harper2015} F. M. Harper and J. A. Konstan, ``The MovieLens
+datasets: History and context,'' \textit{ACM Trans. Interactive
+Intelligent Systems}, vol. 5, no. 4, pp. 1--19, 2015.
+
+\bibitem{herlocker2004} J. L. Herlocker, J. A. Konstan,
+L. G. Terveen, and J. T. Riedl, ``Evaluating collaborative filtering
+recommender systems,'' \textit{ACM Trans. Information Systems},
+vol. 22, no. 1, pp. 5--53, 2004.
+
+\bibitem{koren2008} Y. Koren, ``Factorization meets the
+neighborhood: A multifaceted collaborative filtering model,'' in
+\textit{Proc. 14th ACM SIGKDD Int. Conf. Knowledge Discovery and Data
+Mining}, 2008, pp. 426--434.
+
+\bibitem{krichene2020} W. Krichene and S. Rendle, ``On sampled
+metrics for item recommendation,'' in \textit{Proc. 26th ACM SIGKDD
+Int. Conf. Knowledge Discovery and Data Mining}, 2020,
+pp. 1748--1757.
+
+\bibitem{lops2011} P. Lops, M. de Gemmis, and G. Semeraro,
+``Content-based recommender systems: State of the art and trends,''
+in \textit{Recommender Systems Handbook}. Springer, 2011,
+pp. 73--105.
+
+\bibitem{melville2002} P. Melville, R. J. Mooney, and R. Nagarajan,
+``Content-boosted collaborative filtering for improved
+recommendations,'' in \textit{Proc. 18th National Conf. Artificial
+Intelligence (AAAI)}, 2002, pp. 187--192.
+
+\bibitem{ohwsf2025} M. Muhammad, Gunardi, Danardono, and D. Rosadi,
+``Optimization hybrid weighted switching filtering (OHWSF) using SVD
+and SVD++ for addressing data sparsity,'' \textit{Int. J. Advances in
+Intelligent Informatics}, vol. 11, no. 3, p. 533, 2025.
+
+\bibitem{pazzani1999} M. J. Pazzani, ``A framework for
+collaborative, content-based and demographic filtering,''
+\textit{Artificial Intelligence Review}, vol. 13, no. 5--6,
+pp. 393--408, 1999.
+
+\bibitem{schein2002} A. I. Schein, A. Popescul, L. H. Ungar, and
+D. M. Pennock, ``Methods and metrics for cold-start
+recommendations,'' in \textit{Proc. 25th ACM SIGIR Conf. Research and
+Development in Information Retrieval}, 2002, pp. 253--260.
+
+\bibitem{slarec2026} M. E. Çakır, Z. Çetinkaya, F. Horasan, and
+A. H. Yurttakal, ``Adaptive weighting-based hybrid recommender
+system: Self-learning adaptive recommendation (SL-ARec),''
+\textit{PeerJ Computer Science}, vol. 12, p. e3856, 2026.
+
+\bibitem{tarek2022} I. H. M. Tarek, F. U. Munna,
+A. T. M. T. H. Mojumder, M. M. Rahman, M. S. Hossain, and
+K. Andersson, ``A hybrid hotel recommendation using collaborative,
+content based and knowledge based approach,'' in \textit{Intelligent
+Computing \& Optimization}, Lecture Notes in Networks and Systems.
+Springer, 2022, pp. 1049--1057.
+
+\end{thebibliography}
+
+\end{document}

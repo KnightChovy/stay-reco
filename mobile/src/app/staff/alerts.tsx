@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
 import { Icon } from '@/components/ui/icon';
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
-import { colors, radius } from '@/constants/theme';
+import { colors } from '@/constants/theme';
 import { alerts as initialAlerts, type IncidentAlert, type Priority, type Tone } from '@/features/staff/data';
 import { Card, FilterChips, Sheet, StaffScreen, accent, s } from '@/features/staff/ui';
 
@@ -67,8 +67,8 @@ export default function StaffAlertsScreen() {
       />
       {list.map((a) => (
         <Card key={a.id}>
-          <View style={s.between}>
-            <View style={s.wrap}>
+          <View className={s.between}>
+            <View className={s.wrap}>
               <Chip label={`Ưu tiên ${a.priority}`} tone={priorityTone[a.priority]} />
               <Chip label={a.status} tone={statusTone[a.status]} />
             </View>
@@ -85,14 +85,14 @@ export default function StaffAlertsScreen() {
           <Text variant="caption" color={colors.onSurfaceVariant}>
             Phòng: {a.roomNum} · Khách: {a.guestName} · {a.category}
           </Text>
-          <View style={styles.ai}>
+          <View className="flex-row gap-2 rounded-md bg-[#fff6ee] p-2.5">
             <Icon name="auto_awesome" size={16} color={accent} />
-            <Text variant="caption" color="#3a2118" style={s.flex}>
+            <Text variant="caption" color="#3a2118" className={s.flex}>
               {a.aiSuggestedFix}
             </Text>
           </View>
-          <View style={s.between}>
-            <Text variant="caption" color={colors.onSurfaceVariant} style={s.flex}>
+          <View className={s.between}>
+            <Text variant="caption" color={colors.onSurfaceVariant} className={s.flex}>
               Phân công: {a.assignedDept}
             </Text>
             {a.status !== 'Đã giải quyết' && <Button label="Đã giải quyết" leadingIcon="check" variant="muted" size="sm" onPress={() => resolve(a.id)} />}
@@ -103,11 +103,11 @@ export default function StaffAlertsScreen() {
       <Sheet visible={creating} onClose={() => setCreating(false)} title="Báo sự cố mới">
         <Input label="Tiêu đề sự cố" value={title} onChangeText={setTitle} placeholder="Ví dụ: Rò nước bồn rửa phòng tắm" />
         <Input label="Số phòng ảnh hưởng" value={room} onChangeText={setRoom} placeholder="Ví dụ: P.402" />
-        <View style={styles.field}>
+        <View className="gap-2">
           <Text variant="label" weight="semibold">
             Mức độ ưu tiên
           </Text>
-          <View style={s.row}>
+          <View className={s.row}>
             {priorities.map((p) => {
               const on = p === priority;
               return (
@@ -116,7 +116,7 @@ export default function StaffAlertsScreen() {
                   accessibilityRole="radio"
                   accessibilityState={{ selected: on }}
                   onPress={() => setPriority(p)}
-                  style={[styles.prio, on && styles.prioOn]}
+                  className={`min-h-11 flex-1 items-center justify-center rounded-md ${on ? 'border-2 border-[#8c0009] bg-error-container' : 'border border-outline-variant'}`}
                 >
                   <Text variant="small" weight="semibold" color={on ? '#8c0009' : colors.onSurface}>
                     {p[0].toUpperCase() + p.slice(1)}
@@ -131,26 +131,11 @@ export default function StaffAlertsScreen() {
             {error}
           </Text>
         )}
-        <View style={s.row}>
-          <Button label="Hủy" variant="secondary" style={s.flex} onPress={() => setCreating(false)} />
-          <Button label="Phát cảnh báo" leadingIcon="send" style={[s.flex, { backgroundColor: colors.error }]} onPress={create} />
+        <View className={s.row}>
+          <Button label="Hủy" variant="secondary" className={s.flex} onPress={() => setCreating(false)} />
+          <Button label="Phát cảnh báo" leadingIcon="send" className={s.flex} style={{ backgroundColor: colors.error }} onPress={create} />
         </View>
       </Sheet>
     </StaffScreen>
   );
 }
-
-const styles = StyleSheet.create({
-  ai: { flexDirection: 'row', gap: 8, padding: 10, borderRadius: radius.md, backgroundColor: '#fff6ee' },
-  field: { gap: 8 },
-  prio: {
-    flex: 1,
-    minHeight: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.outlineVariant,
-  },
-  prioOn: { borderWidth: 2, borderColor: '#8c0009', backgroundColor: colors.errorContainer },
-});

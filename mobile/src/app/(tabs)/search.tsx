@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Modal, Pressable, ScrollView, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HOTEL_SORTS } from '@stayreco/shared';
 import { HotelCard, HotelCardSkeleton } from '@/components/common/card/HotelCard';
@@ -10,9 +10,10 @@ import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
 import { Icon } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
-import { colors, radius, shadow } from '@/constants/theme';
+import { colors } from '@/constants/theme';
 import { formatDate, nightsBetween, stayFromParams } from '@/lib/stay';
 import { searchHotels } from '@/services/stays.service';
+import { useAuthStore } from '@/stores/auth.store';
 
 type Sort = (typeof HOTEL_SORTS)[number];
 
@@ -26,6 +27,8 @@ const sortLabels: Record<Sort, string> = {
 const STARS = [5, 4, 3];
 
 export default function SearchScreen() {
+  const accountId = useAuthStore((state) => state.account?.id);
+  const hydrating = useAuthStore((state) => state.hydrating);
   const insets = useSafeAreaInsets();
   const stay = stayFromParams(useLocalSearchParams());
   const nights = nightsBetween(stay.checkIn, stay.checkOut);
@@ -44,9 +47,10 @@ export default function SearchScreen() {
   };
   // shortcut: chỉ lấy trang đầu 20 kết quả, thêm tải tiếp khi điểm đến có nhiều khách sạn hơn.
   const { data, isPending, isPlaceholderData, isError, refetch } = useQuery({
-    queryKey: ['stays', 'search', query],
+    enabled: !hydrating,
+    queryKey: ['stays', 'search', accountId, query],
     queryFn: () => searchHotels(query),
-    placeholderData: keepPreviousData,
+    placeholderData: (previous, source) => source?.queryKey[2] === accountId ? previous : undefined,
   });
   // Đổi bộ lọc thì vẫn giữ số kết quả cũ ở tiêu đề, nhưng danh sách hiện skeleton tới khi có kết quả mới.
   const loading = isPending || isPlaceholderData;
@@ -57,13 +61,13 @@ export default function SearchScreen() {
   const filterCount = starRating.length + (freeCancellation ? 1 : 0);
 
   return (
-    <View style={styles.screen}>
+    <View className="flex-1 bg-surface">
       <AppHeader />
-      <View style={styles.summary}>
-        <View style={styles.pinIcon}>
+      <View className="mx-4 flex-row items-center gap-2.5 rounded-lg bg-surface-container-lowest p-3 shadow-card">
+        <View className="h-10 w-10 items-center justify-center rounded-full bg-primary-fixed">
           <Icon name="location_on" size={20} color={colors.primaryContainer} />
         </View>
-        <View style={styles.flex}>
+        <View className="flex-1">
           <Text variant="label" weight="bold">
             {stay.destination} · {formatDate(stay.checkIn).slice(0, 5)} - {formatDate(stay.checkOut).slice(0, 5)}
           </Text>
@@ -74,14 +78,14 @@ export default function SearchScreen() {
         <Button label="Sửa" leadingIcon="tune" variant="secondary" size="sm" onPress={() => router.back()} />
       </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.toolbar} style={styles.toolbarWrap}>
-        <Pressable onPress={() => setFilterOpen(true)} style={styles.filterBtn}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="items-center gap-2 px-4 py-3.5" className="shrink-0 grow-0">
+        <Pressable onPress={() => setFilterOpen(true)} className="flex-row items-center gap-1.5 rounded-full bg-primary-container px-3.5 py-2">
           <Icon name="filter_list" size={18} color={colors.onPrimary} />
           <Text variant="label" weight="semibold" color={colors.onPrimary}>
             Bộ lọc
           </Text>
           {filterCount > 0 && (
-            <View style={styles.badge}>
+            <View className="h-5 min-w-5 items-center justify-center rounded-full bg-secondary">
               <Text variant="caption" weight="bold" color={colors.white}>
                 {filterCount}
               </Text>
@@ -97,8 +101,8 @@ export default function SearchScreen() {
         />
       </ScrollView>
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.resultHead}>
+      <ScrollView contentContainerClassName="gap-5 px-4 pb-[120px]" showsVerticalScrollIndicator={false}>
+        <View className="flex-row items-center justify-between">
           <Text variant="label" weight="bold">
             {data ? `${data.meta.total} chỗ nghỉ phù hợp · ` : ''}
             <Text variant="label" color={colors.onSurfaceVariant}>
@@ -108,7 +112,7 @@ export default function SearchScreen() {
         </View>
         {loading && [0, 1, 2].map((i) => <HotelCardSkeleton key={i} />)}
         {isError && (
-          <View style={styles.state}>
+          <View className="items-center gap-2.5">
             <Text variant="small" color={colors.onSurfaceVariant} center>
               Không tải được kết quả. Vui lòng kiểm tra kết nối.
             </Text>
@@ -127,25 +131,25 @@ export default function SearchScreen() {
       </ScrollView>
 
       <Modal visible={filterOpen} transparent animationType="slide" onRequestClose={() => setFilterOpen(false)}>
-        <Pressable style={styles.backdrop} onPress={() => setFilterOpen(false)} />
-        <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
-          <View style={styles.sheetHead}>
-            <View style={styles.flex}>
+        <Pressable className="flex-1 bg-scrim" onPress={() => setFilterOpen(false)} />
+        <View className="max-h-[85%] rounded-t-xl bg-surface" style={{ paddingBottom: insets.bottom + 16 }}>
+          <View className="flex-row items-start gap-3 p-5 pb-2">
+            <View className="flex-1">
               <Text variant="h2">Bộ lọc tìm kiếm</Text>
               <Text variant="small" color={colors.onSurfaceVariant}>
                 Tùy chỉnh theo phong cách nghỉ dưỡng của bạn
               </Text>
             </View>
-            <Pressable accessibilityLabel="Đóng" onPress={() => setFilterOpen(false)} style={styles.close}>
+            <Pressable accessibilityLabel="Đóng" onPress={() => setFilterOpen(false)} className="h-10 w-10 items-center justify-center">
               <Icon name="close" color={colors.onSurface} />
             </Pressable>
           </View>
-          <ScrollView contentContainerStyle={styles.sheetBody}>
-            <View style={styles.group}>
+          <ScrollView contentContainerClassName="gap-6 p-5">
+            <View className="gap-2.5">
               <Text variant="label" weight="bold">
                 Hạng sao
               </Text>
-              <View style={styles.chips}>
+              <View className="flex-row flex-wrap gap-2">
                 {STARS.map((star) => (
                   <Chip
                     key={star}
@@ -156,11 +160,11 @@ export default function SearchScreen() {
                 ))}
               </View>
             </View>
-            <View style={styles.group}>
+            <View className="gap-2.5">
               <Text variant="label" weight="bold">
                 Chính sách hủy
               </Text>
-              <View style={styles.chips}>
+              <View className="flex-row flex-wrap gap-2">
                 <Chip
                   label="Miễn phí hủy phòng"
                   icon="event_available"
@@ -169,22 +173,22 @@ export default function SearchScreen() {
                 />
               </View>
             </View>
-            <View style={styles.group}>
+            <View className="gap-2.5">
               <Text variant="label" weight="bold">
                 Sắp xếp
               </Text>
-              <View style={styles.chips}>
+              <View className="flex-row flex-wrap gap-2">
                 {HOTEL_SORTS.map((s) => (
                   <Chip key={s} label={sortLabels[s]} tone={s === sort ? 'selected' : 'outline'} onPress={() => setSort(s)} />
                 ))}
               </View>
             </View>
           </ScrollView>
-          <View style={styles.sheetActions}>
+          <View className="flex-row gap-3 px-5 pt-3">
             <Button
               label="Thiết lập lại"
               variant="secondary"
-              style={styles.flex}
+              className="flex-1"
               onPress={() => {
                 setStarRating([]);
                 setFreeCancellation(false);
@@ -193,7 +197,7 @@ export default function SearchScreen() {
             />
             <Button
               label={data ? `Xem ${data.meta.total} chỗ nghỉ` : 'Áp dụng'}
-              style={styles.flex2}
+              className="flex-[2]"
               onPress={() => setFilterOpen(false)}
             />
           </View>
@@ -202,62 +206,3 @@ export default function SearchScreen() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.surface },
-  flex: { flex: 1 },
-  flex2: { flex: 2 },
-  summary: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginHorizontal: 16,
-    padding: 12,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surfaceContainerLowest,
-    ...shadow.card,
-  },
-  pinIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.primaryFixed,
-  },
-  toolbarWrap: { flexGrow: 0, flexShrink: 0 },
-  toolbar: { gap: 8, paddingHorizontal: 16, paddingVertical: 14, alignItems: 'center' },
-  filterBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: radius.full,
-    backgroundColor: colors.primaryContainer,
-  },
-  badge: {
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.secondary,
-  },
-  content: { paddingHorizontal: 16, paddingBottom: 120, gap: 20 },
-  resultHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  state: { alignItems: 'center', gap: 10 },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  backdrop: { flex: 1, backgroundColor: colors.scrim },
-  sheet: {
-    maxHeight: '85%',
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
-    backgroundColor: colors.surface,
-  },
-  sheetHead: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, padding: 20, paddingBottom: 8 },
-  close: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  sheetBody: { padding: 20, gap: 24 },
-  group: { gap: 10 },
-  sheetActions: { flexDirection: 'row', gap: 12, paddingHorizontal: 20, paddingTop: 12 },
-});

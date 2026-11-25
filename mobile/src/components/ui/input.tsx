@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
-import { StyleSheet, TextInput, View, type TextInputProps } from 'react-native';
-import { colors, fonts, radius, shadow } from '@/constants/theme';
+import { TextInput, View, type TextInputProps } from 'react-native';
+import { colors } from '@/constants/theme';
 import { Icon, type IconName } from './icon';
 import { Text } from './text';
 
@@ -10,13 +10,14 @@ type Props = TextInputProps & {
   icon?: IconName;
   left?: ReactNode;
   right?: ReactNode;
+  className?: string;
 };
 
-export function Input({ label, labelRight, icon, left, right, style, ...props }: Props) {
+export function Input({ label, labelRight, icon, left, right, className = '', ...props }: Props) {
   return (
-    <View style={styles.wrap}>
+    <View className="gap-2">
       {(label || labelRight) && (
-        <View style={styles.labelRow}>
+        <View className="flex-row items-center justify-between">
           {label && (
             <Text variant="label" weight="semibold">
               {label}
@@ -25,13 +26,13 @@ export function Input({ label, labelRight, icon, left, right, style, ...props }:
           {labelRight}
         </View>
       )}
-      <View style={styles.field}>
+      <View className="min-h-[52px] flex-row items-center gap-2.5 rounded-md border border-surface-container-high bg-surface-container-lowest px-3.5 shadow-card">
         {icon && <Icon name={icon} size={20} color={colors.outline} />}
         {left}
         <TextInput
           placeholderTextColor={colors.outline}
           accessibilityLabel={label}
-          style={[styles.input, style]}
+          className={`flex-1 py-3 font-be-regular text-[15px] text-on-surface ${className}`}
           {...props}
         />
         {right}
@@ -39,21 +40,3 @@ export function Input({ label, labelRight, icon, left, right, style, ...props }:
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  wrap: { gap: 8 },
-  labelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  field: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    minHeight: 52,
-    paddingHorizontal: 14,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceContainerLowest,
-    borderWidth: 1,
-    borderColor: colors.surfaceContainerHigh,
-    ...shadow.card,
-  },
-  input: { flex: 1, fontFamily: fonts.regular, fontSize: 15, color: colors.onSurface, paddingVertical: 12 },
-});

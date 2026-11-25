@@ -5,6 +5,8 @@ import type { Env } from '../../config/env';
 import type { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditAction } from '../audit/audit.service';
+import { LoyaltyService } from '../loyalty/loyalty.service';
+import { DiscountService } from '../promotions/discount.service';
 import { recordBookingEvent } from './booking-history';
 
 const EVERY_MINUTE = 60_000;
@@ -19,6 +21,8 @@ export class HoldExpiryService extends PeriodicJob {
   constructor(
     private readonly prisma: PrismaService,
     config: ConfigService<Env, true>,
+    private readonly discounts: DiscountService,
+    private readonly loyalty: LoyaltyService,
   ) {
     super('HoldExpiry', EVERY_MINUTE, config);
   }
@@ -28,7 +32,10 @@ export class HoldExpiryService extends PeriodicJob {
     return this.expireDue();
   }
 
-  /** Expires the due holds, of one room type when given; resolves to the number of bookings expired. */
+  /**
+   * Expires the due holds, of the bookings with a given room type when one is given; resolves to the number of
+   * bookings expired. Releasing a hold only frees rooms, so the other room types of such a booking need no lock.
+   */
   async expireDue(
     roomTypeId?: string,
     tx?: Prisma.TransactionClient,
@@ -37,7 +44,7 @@ export class HoldExpiryService extends PeriodicJob {
     const due = await db.booking.findMany({
       where: {
         status: 'PENDING',
-        roomTypeId,
+        items: roomTypeId ? { some: { roomTypeId } } : undefined,
         roomCalendars: {
           some: { status: 'HELD', holdExpiresAt: { lte: new Date() } },
         },
@@ -69,6 +76,9 @@ export class HoldExpiryService extends PeriodicJob {
     await tx.roomCalendars.deleteMany({
       where: { bookingId, status: 'HELD' },
     });
+    // The hold was never paid, so the discount was never really spent: the code goes back to the customer.
+    await this.discounts.release(tx, bookingId);
+    await this.loyalty.refund(tx, bookingId);
     await recordBookingEvent(tx, {
       action: AuditAction.BOOKING_EXPIRED,
       bookingId,

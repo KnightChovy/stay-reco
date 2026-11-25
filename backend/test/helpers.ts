@@ -1,4 +1,4 @@
-import { INestApplication } from '@nestjs/common';
+import { ForbiddenException, INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import * as argon2 from 'argon2';
 import request from 'supertest';
@@ -8,6 +8,15 @@ import { configureApp } from '../src/app.setup';
 import { UserRole } from '../src/generated/prisma/client';
 import { BookingMailer } from '../src/modules/bookings/booking-mailer';
 import { MailMessage, MailService } from '../src/modules/mail/mail.service';
+import { PayoutMailer } from '../src/modules/payouts/payout-mailer';
+import { AccountMailer } from '../src/modules/admin/account-mailer';
+import { AiService } from '../src/modules/marketing/ai.service';
+import { PublisherRegistry } from '../src/modules/marketing/publishers/publisher.registry';
+import {
+  publishFailed,
+  type PublishablePost,
+  type PublishTarget,
+} from '../src/modules/marketing/publishers/social-publisher';
 import { StorageService } from '../src/modules/storage/storage.service';
 import { PLATFORM_WALLET_ID } from '../src/modules/wallets/wallet-ledger';
 import { PrismaService } from '../src/prisma/prisma.service';
@@ -20,12 +29,16 @@ export class FakeStorage extends StorageService {
   deleted: string[] = [];
   private seq = 0;
 
+  /** What the next upload reports as its size; a test sets it to try a shape the rules refuse. */
+  nextSize = { width: 1600, height: 1200 };
+
   uploadImage(_file: Buffer, folder: string) {
     this.uploads.push({ folder, private: false });
     const storageKey = `${folder}/img${++this.seq}`;
     return Promise.resolve({
       storageKey,
       url: `https://cdn.test/${storageKey}.png`,
+      ...this.nextSize,
     });
   }
   uploadPrivate(_file: Buffer, folder: string) {
@@ -50,6 +63,7 @@ export class FakeStorage extends StorageService {
   clear() {
     this.uploads = [];
     this.deleted = [];
+    this.nextSize = { width: 1600, height: 1200 };
   }
 }
 
@@ -66,10 +80,188 @@ export const FILES = {
   text: Buffer.from('not really an image'),
 };
 
+/**
+ * Stands in for the model. Tests set `answer` to whatever the real call would have returned and read `calls` to
+ * check what was asked; `budgetLeft` lets a test put a hotel over its cap without spending anything.
+ */
+export class FakeAi {
+  calls: { purpose: string; system: string; prompt: string }[] = [];
+  /** Prompts sent to the picture model. */
+  images: { purpose: string; prompt: string }[] = [];
+  answer: unknown = {
+    summary: 'Ấm áp, xưng "mình", câu ngắn.',
+    audience: 'Gia đình trẻ đi nghỉ cuối tuần',
+    highlights: 'hướng biển, bữa sáng, gần chợ đêm',
+  };
+  budgetLeft = 5;
+  available = true;
+
+  budget() {
+    return Promise.resolve({
+      spentUsd: 5 - this.budgetLeft,
+      limitUsd: 5,
+      remainingUsd: this.budgetLeft,
+    });
+  }
+
+  ask(
+    context: { purpose: string },
+    _schema: unknown,
+    system: string,
+    prompt: string,
+  ) {
+    if (this.budgetLeft <= 0) {
+      return Promise.reject(
+        new ForbiddenException({
+          code: 'AI_BUDGET_EXCEEDED',
+          message: 'This hotel has used its $5 of AI for this month',
+        }),
+      );
+    }
+    this.calls.push({ purpose: context.purpose, system, prompt });
+    return Promise.resolve(this.answer);
+  }
+
+  image(context: { purpose: string }, prompt: string) {
+    if (this.budgetLeft <= 0) {
+      return Promise.reject(
+        new ForbiddenException({
+          code: 'AI_BUDGET_EXCEEDED',
+          message: 'This hotel has used its $5 of AI for this month',
+        }),
+      );
+    }
+    this.images.push({ purpose: context.purpose, prompt });
+    return Promise.resolve(FILES.png);
+  }
+
+  /**
+   * The assistant's turns, scripted. Each entry answers one `chat` call: either tools to run (`calls`) or the final
+   * text. `chats` keeps what each call was sent, so a test can read the tool results the model would have seen.
+   */
+  script: (
+    | { calls: { name: string; args: Record<string, unknown> }[] }
+    | { text: string }
+  )[] = [];
+  chats: {
+    system: string;
+    contents: { role?: string; parts?: Record<string, unknown>[] }[];
+  }[] = [];
+
+  chat(
+    _context: unknown,
+    request: {
+      system: string;
+      contents: { role?: string; parts?: Record<string, unknown>[] }[];
+    },
+  ) {
+    if (this.budgetLeft <= 0) {
+      return Promise.reject(
+        new ForbiddenException({
+          code: 'AI_BUDGET_EXCEEDED',
+          message: "You have used this month's $0.5 of assistant chat",
+        }),
+      );
+    }
+    // A copy: the service keeps appending to the same array.
+    this.chats.push({
+      system: request.system,
+      contents: structuredClone(request.contents),
+    });
+    const step = this.script.shift() ?? { text: '(no script left)' };
+    if ('calls' in step) {
+      const functionCalls = step.calls.map((c, i) => ({
+        id: `call-${i}`,
+        ...c,
+      }));
+      return Promise.resolve({
+        functionCalls,
+        text: undefined,
+        candidates: [
+          {
+            content: {
+              role: 'model',
+              parts: functionCalls.map((f) => ({ functionCall: f })),
+            },
+          },
+        ],
+      });
+    }
+    return Promise.resolve({
+      functionCalls: undefined,
+      text: step.text,
+      candidates: [
+        { content: { role: 'model', parts: [{ text: step.text }] } },
+      ],
+    });
+  }
+
+  /** What the tools answered in the last `chat` call: the function responses the model was sent. */
+  lastToolResults() {
+    const last = this.chats.at(-1)?.contents.at(-1)?.parts ?? [];
+    return last.map(
+      (p) =>
+        (p as { functionResponse: { name: string; response: unknown } })
+          .functionResponse,
+    );
+  }
+
+  clear() {
+    this.calls = [];
+    this.images = [];
+    this.budgetLeft = 5;
+    this.script = [];
+    this.chats = [];
+  }
+}
+
+/**
+ * Stands in for every social platform. Tests read `posts` to see what would have gone out, set `failWith` to make
+ * the platform refuse, and set `metricsAnswer` to whatever the insights call would have returned.
+ */
+export class FakePublisherRegistry {
+  posts: (PublishablePost & { platform: string; accountName: string })[] = [];
+  metricsCalls = 0;
+  nextPostId = 'post_1';
+  /** When set, the platform refuses with this message instead of accepting the post. */
+  failWith: string | null = null;
+  metricsAnswer = { views: 120, likes: 9, shares: 2, comments: 3 };
+
+  for(platform: string) {
+    return {
+      platform,
+      publish: (target: PublishTarget, post: PublishablePost) => {
+        if (this.failWith) {
+          return Promise.reject(publishFailed(platform, this.failWith));
+        }
+        this.posts.push({
+          ...post,
+          platform,
+          accountName: target.accountName,
+        });
+        return Promise.resolve(this.nextPostId);
+      },
+      metrics: () => {
+        this.metricsCalls++;
+        return Promise.resolve(this.metricsAnswer);
+      },
+    };
+  }
+
+  clear() {
+    this.posts = [];
+    this.metricsCalls = 0;
+    this.nextPostId = 'post_1';
+    this.failWith = null;
+  }
+}
+
 /** App with emails captured in `outbox` and Cloudinary replaced by `storage`. */
 export async function createTestApp() {
   const outbox: MailMessage[] = [];
   const storage = new FakeStorage();
+  const ai = new FakeAi();
+  const publisher = new FakePublisherRegistry();
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(MailService)
     .useValue({
@@ -80,6 +272,10 @@ export async function createTestApp() {
     })
     .overrideProvider(StorageService)
     .useValue(storage)
+    .overrideProvider(AiService)
+    .useValue(ai)
+    .overrideProvider(PublisherRegistry)
+    .useValue(publisher)
     .compile();
 
   const app: INestApplication<App> = moduleRef.createNestApplication();
@@ -92,8 +288,12 @@ export async function createTestApp() {
   const reset = async () => {
     // Emails and notifications of the previous test still being written would hit the accounts removed below.
     await app.get(BookingMailer).idle();
+    await app.get(PayoutMailer).idle();
+    await app.get(AccountMailer).idle();
     outbox.length = 0;
     storage.clear();
+    ai.clear();
+    publisher.clear();
     await prisma.$executeRawUnsafe(
       'TRUNCATE TABLE user_account, audit_log RESTART IDENTITY CASCADE',
     );
@@ -105,7 +305,7 @@ export async function createTestApp() {
 
   /** Creates an ACTIVE account directly and signs in; returns its id and access token. */
   const signIn = async (
-    role: 'CUSTOMER' | 'HOTEL_PARTNER' | 'PLATFORM_MANAGER',
+    role: 'CUSTOMER' | 'HOTEL_PARTNER' | 'PLATFORM_MANAGER' | 'ADMIN',
     email: string,
   ) => {
     const account = await prisma.userAccount.create({
@@ -117,6 +317,7 @@ export async function createTestApp() {
         emailVerifiedAt: new Date(),
         ...(role === 'CUSTOMER' && { customer: { create: {} } }),
         ...(role === 'PLATFORM_MANAGER' && { platformManager: { create: {} } }),
+        ...(role === 'ADMIN' && { admin: { create: {} } }),
         ...(role === 'HOTEL_PARTNER' && {
           hotelPartner: {
             create: {
@@ -163,5 +364,16 @@ export async function createTestApp() {
     return (res.body.data as { accessToken: string }).accessToken;
   };
 
-  return { app, prisma, api, outbox, storage, reset, signIn, signInStaff };
+  return {
+    app,
+    prisma,
+    api,
+    outbox,
+    storage,
+    ai,
+    publisher,
+    reset,
+    signIn,
+    signInStaff,
+  };
 }

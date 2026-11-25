@@ -328,9 +328,21 @@ describe('Hotel operations: front desk, settlement, change requests (e2e)', () =
         .set(auth(desk.token))
         .expect(200);
       expect(res.body.data).toEqual({
-        held: [{ id: h.rooms['101'], roomNumber: '101', status: 'AVAILABLE' }],
+        held: [
+          {
+            id: h.rooms['101'],
+            roomNumber: '101',
+            status: 'AVAILABLE',
+            roomTypeId: h.roomTypeId,
+          },
+        ],
         available: [
-          { id: h.rooms['103'], roomNumber: '103', status: 'AVAILABLE' },
+          {
+            id: h.rooms['103'],
+            roomNumber: '103',
+            status: 'AVAILABLE',
+            roomTypeId: h.roomTypeId,
+          },
         ],
       });
 
@@ -353,6 +365,78 @@ describe('Hotel operations: front desk, settlement, change requests (e2e)', () =
   });
 
   describe('POST /bookings/:id/check-in', () => {
+    it('gives each room type of a booking as many rooms of its type as it booked', async () => {
+      const h = await hotel();
+      const suiteId = await roomType(h.token, h.hotelId, 'Suite');
+      const suite = {
+        '201': await room(h.token, h.hotelId, suiteId, '201'),
+        '202': await room(h.token, h.hotelId, suiteId, '202'),
+      };
+      const me = await t.signIn('CUSTOMER', 'guest@mail.test');
+      const res = await t
+        .api()
+        .post('/api/v1/bookings')
+        .set(auth(me.token))
+        .send({
+          items: [
+            { roomTypeId: h.roomTypeId, rooms: 1 },
+            { roomTypeId: suiteId, rooms: 1 },
+          ],
+          checkIn: day(0),
+          checkOut: day(2),
+          guests: 2,
+          guestName: 'Nguyễn Văn A',
+          contactPhone: '0905123456',
+          expectedTotal: 4000000,
+        })
+        .expect(201);
+      const booking = res.body.data as { id: string; code: string };
+      await t.app.get(PaymentConfirmationService).confirm({
+        code: booking.code,
+        amount: 4000000,
+        transactionId: `txn-${booking.code}`,
+        paidAt: new Date(),
+      });
+
+      const options = await t
+        .api()
+        .get(`/api/v1/bookings/${booking.id}/room-options`)
+        .set(auth(h.token))
+        .expect(200);
+      expect(options.body.data.held).toEqual([
+        expect.objectContaining({
+          roomNumber: '101',
+          roomTypeId: h.roomTypeId,
+        }),
+        expect.objectContaining({ roomNumber: '201', roomTypeId: suiteId }),
+      ]);
+      expect(
+        (options.body.data.available as { roomNumber: string }[]).map(
+          (r) => r.roomNumber,
+        ),
+      ).toEqual(['102', '103', '104', '202']);
+
+      // Two Deluxe rooms leave the Suite without a room.
+      const wrong = await checkIn(h.token, booking.id, {
+        roomIds: [h.rooms['101'], h.rooms['102']],
+      }).expect(409);
+      expect(wrong.body.code).toBe('ROOM_NOT_ASSIGNABLE');
+
+      const done = await checkIn(h.token, booking.id, {
+        roomIds: [h.rooms['103'], suite['202']],
+      }).expect(200);
+      expect(done.body.data.assignedRooms).toEqual([
+        { id: h.rooms['103'], roomNumber: '103', roomTypeId: h.roomTypeId },
+        { id: suite['202'], roomNumber: '202', roomTypeId: suiteId },
+      ]);
+      expect(await nights(booking.id)).toEqual([
+        { date: day(0), room: '103', status: 'BOOKED', price: 1000000 },
+        { date: day(0), room: '202', status: 'BOOKED', price: 1000000 },
+        { date: day(1), room: '103', status: 'BOOKED', price: 1000000 },
+        { date: day(1), room: '202', status: 'BOOKED', price: 1000000 },
+      ]);
+    });
+
     it('checks in with the held rooms by default', async () => {
       const h = await hotel();
       const me = await t.signIn('CUSTOMER', 'guest@mail.test');
@@ -371,8 +455,8 @@ describe('Hotel operations: front desk, settlement, change requests (e2e)', () =
       ]);
       const res = await checkIn(desk.token, booking.id).expect(200);
       const assigned = [
-        { id: h.rooms['101'], roomNumber: '101' },
-        { id: h.rooms['102'], roomNumber: '102' },
+        { id: h.rooms['101'], roomNumber: '101', roomTypeId: h.roomTypeId },
+        { id: h.rooms['102'], roomNumber: '102', roomTypeId: h.roomTypeId },
       ];
       expect(res.body.data).toMatchObject({
         status: 'CHECKED_IN',
@@ -436,7 +520,7 @@ describe('Hotel operations: front desk, settlement, change requests (e2e)', () =
         roomIds: [h.rooms['103']],
       }).expect(200);
       expect(res.body.data.assignedRooms).toEqual([
-        { id: h.rooms['103'], roomNumber: '103' },
+        { id: h.rooms['103'], roomNumber: '103', roomTypeId: h.roomTypeId },
       ]);
       expect(await nights(booking.id)).toEqual([
         { date: day(0), room: '103', status: 'BOOKED', price: 1000000 },

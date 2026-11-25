@@ -194,6 +194,11 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorInfo> = {
     status: 404,
     description: "Booking doesn't exist or the caller cannot see it",
   },
+  ADD_ON_NOT_FOUND: {
+    status: 404,
+    description:
+      "Add-on doesn't exist, belongs to another hotel, is off sale or cannot be booked in advance",
+  },
   BOOKING_STATUS_CONFLICT: {
     status: 409,
     description: "The booking's status does not allow the action",
@@ -240,9 +245,233 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorInfo> = {
     status: 409,
     description: 'No change request is waiting',
   },
+  REVIEW_NOT_FOUND: {
+    status: 404,
+    description: "Review doesn't exist or belongs to another customer",
+  },
+  REVIEW_NOT_ALLOWED: {
+    status: 409,
+    description: 'The stay is not completed, so it cannot be reviewed yet',
+  },
+  REVIEW_ALREADY_EXISTS: {
+    status: 409,
+    description: 'The booking already has a review; one review per stay',
+  },
+  REVIEW_WINDOW_CLOSED: {
+    status: 409,
+    description:
+      'The review window closed (REVIEW_WINDOW_DAYS after check-out)',
+  },
+  RATING_CRITERION_NOT_FOUND: {
+    status: 404,
+    description: 'A sub-rating names a criterion that does not exist',
+  },
+  REVIEW_IMAGE_NOT_FOUND: {
+    status: 404,
+    description: "Review photo doesn't exist or belongs to another review",
+  },
+  REPORT_ALREADY_RAISED: {
+    status: 409,
+    description: 'You have already flagged this review or photo',
+  },
+  REPORT_NOT_FOUND: { status: 404, description: "Report doesn't exist" },
+  REPORT_STATUS_CONFLICT: {
+    status: 409,
+    description: 'The report is already resolved or dismissed',
+  },
+  VOUCHER_NOT_FOUND: {
+    status: 404,
+    description: "Discount code doesn't exist or belongs to another customer",
+  },
+  VOUCHER_ALREADY_USED: {
+    status: 409,
+    description: 'The voucher was already used on another booking',
+  },
+  VOUCHER_EXPIRED: {
+    status: 409,
+    description: 'The voucher, or the campaign behind it, is past its end date',
+  },
+  VOUCHER_NOT_APPLICABLE: {
+    status: 409,
+    description:
+      "The stay is below the campaign's minimum amount, or is at another hotel",
+  },
+  PROMOTION_NOT_FOUND: {
+    status: 404,
+    description: "Promotion doesn't exist or belongs to another hotel",
+  },
+  PROMOTION_NOT_ACTIVE: {
+    status: 409,
+    description:
+      'The campaign is switched off, outside its dates, or has run out of uses',
+  },
+  ONBOARDING_ALREADY_COMPLETED: {
+    status: 409,
+    description:
+      'Onboarding was already completed; the picks are changed with PUT /me/preferences',
+  },
+  LOYALTY_PROGRAM_NOT_FOUND: {
+    status: 404,
+    description: 'No loyalty programme is running, so points cannot be used',
+  },
+  LOYALTY_POINTS_INSUFFICIENT: {
+    status: 409,
+    description: 'Spending more points than the customer holds',
+  },
+  LOYALTY_POINTS_NOT_ACCEPTED: {
+    status: 409,
+    description:
+      'The hotel of the stay does not take loyalty points as payment',
+  },
+  WALLET_INSUFFICIENT: {
+    status: 409,
+    description:
+      'The wallet balance does not cover the whole booking; paying from it is all or nothing',
+  },
+  AI_UNAVAILABLE: {
+    status: 503,
+    description: 'The AI writer is not configured, or answered unusably',
+  },
+  AI_BUDGET_EXCEEDED: {
+    status: 403,
+    description:
+      "The hotel, or the customer's assistant chat, has used its AI budget for this calendar month",
+  },
+  AI_REFUSED: {
+    status: 403,
+    description: 'The model declined to write what was asked for',
+  },
+  CONVERSATION_NOT_FOUND: {
+    status: 404,
+    description:
+      "The conversation doesn't exist or belongs to another customer",
+  },
+  BOOKING_PROPOSAL_NOT_FOUND: {
+    status: 404,
+    description: 'No booking proposal with this id in the conversation',
+  },
+  BOOKING_PROPOSAL_INVALID: {
+    status: 409,
+    description:
+      'The proposal was already confirmed or has expired; ask the assistant again',
+  },
+  SOCIAL_ACCOUNT_NOT_FOUND: {
+    status: 404,
+    description: "A connected page doesn't exist or belongs to another hotel",
+  },
+  SCHEDULE_NOT_FOUND: {
+    status: 404,
+    description: "A scheduled post doesn't exist or belongs to another hotel",
+  },
+  SCHEDULE_STATUS_CONFLICT: {
+    status: 409,
+    description:
+      'Cancelling or reading figures for a post whose status does not allow it',
+  },
+  CONTENT_NOT_APPROVED: {
+    status: 409,
+    description: 'Scheduling content the owner has not approved',
+  },
+  SOCIAL_PUBLISH_FAILED: {
+    status: 502,
+    description:
+      'The platform refused the post or could not be reached; its own message is passed through',
+  },
+  SOCIAL_PLATFORM_UNSUPPORTED: {
+    status: 501,
+    description:
+      'Posting to this platform is not built yet (TikTok takes video only)',
+  },
+  SOCIAL_OAUTH_DISABLED: {
+    status: 503,
+    description:
+      'No Meta app is configured on this server, so the owner cannot be sent to Facebook; a page token can still be pasted',
+  },
+  SOCIAL_OAUTH_INVALID: {
+    status: 400,
+    description:
+      'The `state` or `connectionToken` handed back is not ours, is for another hotel, or has expired',
+  },
+  SOCIAL_OAUTH_FAILED: {
+    status: 502,
+    description:
+      'Facebook refused the exchange, or granted no page we can post to; its own message is passed through',
+  },
+  CONTENT_NOT_FOUND: {
+    status: 404,
+    description: "Marketing content doesn't exist or belongs to another hotel",
+  },
+  CONTENT_STATUS_CONFLICT: {
+    status: 409,
+    description: 'The content status does not allow that action',
+  },
   NOTIFICATION_NOT_FOUND: {
     status: 404,
     description: "Notification doesn't exist or belongs to someone else",
+  },
+  PAYOUT_NOT_FOUND: {
+    status: 404,
+    description: "Withdrawal doesn't exist or belongs to another hotel",
+  },
+  PAYOUT_PENDING: {
+    status: 409,
+    description:
+      'The hotel already has a withdrawal waiting for a platform manager',
+  },
+  PAYOUT_EXCEEDS_BALANCE: {
+    status: 409,
+    description:
+      'More than the available balance (MSG30); `details[0].message` holds the available balance',
+  },
+  BENEFICIARY_MISSING: {
+    status: 409,
+    description:
+      'The hotel has no approved verification with a beneficiary account',
+  },
+  VIOLATION_NOT_FOUND: {
+    status: 404,
+    description: "Compliance case doesn't exist",
+  },
+  VIOLATION_STATUS_CONFLICT: {
+    status: 409,
+    description:
+      'The case is closed, or the change does not follow OPEN → INVESTIGATING → RESOLVED / DISMISSED',
+  },
+  SUSPENSION_REQUEST_PENDING: {
+    status: 409,
+    description:
+      'The partner already has a suspension request waiting for the admin',
+  },
+  PARTNER_STATUS_CONFLICT: {
+    status: 409,
+    description:
+      "The partner's status does not allow it (reinstating a partner that is not suspended)",
+  },
+  SUSPENSION_REQUEST_NOT_FOUND: {
+    status: 404,
+    description: "Suspension request doesn't exist",
+  },
+  SUSPENSION_STATUS_CONFLICT: {
+    status: 409,
+    description: 'The suspension request was already decided',
+  },
+  USER_NOT_FOUND: {
+    status: 404,
+    description: "Account doesn't exist",
+  },
+  ACCOUNT_STATUS_CONFLICT: {
+    status: 409,
+    description:
+      "The account's status does not allow it (locking a locked account, unlocking an active one)",
+  },
+  PARTNER_NOT_FOUND: {
+    status: 404,
+    description: "Hotel partner doesn't exist",
+  },
+  PAYOUT_STATUS_CONFLICT: {
+    status: 409,
+    description:
+      'The withdrawal is no longer pending (paid, rejected or cancelled in the meantime)',
   },
   INVALID_API_KEY: {
     status: 401,

@@ -5,11 +5,20 @@ Each endpoint is described **once**, on the page of the role that uses it most; 
 | Page | Used by | Content |
 |---|---|---|
 | [auth.md](./auth.md) | Every role | Sign-up, sign-in, OTP, refresh, sessions, passwords, invitations |
-| [partner.md](./partner.md) | Partner (`HOTEL_PARTNER`) | Catalog, hotels, images, room types, rooms, staff, verification requests |
+| [partner.md](./partner.md) | Partner (`HOTEL_PARTNER`) | Catalog, hotels, images, room types, rooms, staff, verification requests, wallet, withdrawals |
 | [staff.md](./staff.md) | Hotel staff (`HOTEL_STAFF`) | What staff can read, front desk (check-in, check-out, no-show, rooms), change requests; the 5 permission groups |
-| [manager.md](./manager.md) | Platform manager (`PLATFORM_MANAGER`) | Verification queue, decisions, re-verification |
+| [manager.md](./manager.md) | Platform manager (`PLATFORM_MANAGER`) | Verification queue, decisions, re-verification; withdrawal queue, platform figures, hotels, compliance cases (draft) |
+| [admin.md](./admin.md) | Admin (`ADMIN`) | Dashboard, users, account suspension, partners' commission rate, suspension requests, system logs, transactions, payment settings (draft) |
 | [customer.md](./customer.md) | Customer (`CUSTOMER`) | Search, booking, cancellation, change requests, notifications (every role) |
 | [partner-dashboard.md](./partner-dashboard.md) | Partner, hotel staff | Dashboard: action items, today, KPIs, chart, occupancy forecast (draft) |
+| [reviews.md](./reviews.md) | Customer, partner, hotel staff, public | Post-stay reviews: rating criteria, writing and editing a review, a hotel's reviews and rating figures, hiding a review |
+| [promotions.md](./promotions.md) | Customer, partner, hotel staff | Discount campaigns, personal voucher codes, the discount quote and what a booking is charged |
+| [loyalty.md](./loyalty.md) | Customer | Loyalty points: the balance and tier, earning at check-out, spending on a booking, the points history |
+| [customer-wallet.md](./customer-wallet.md) | Customer | The customer wallet: balance, movements, paying a whole booking from it, and saved preferences |
+| [onboarding.md](./onboarding.md) | Customer | First-login preferences (destinations, hotels, views, styles, budget) and the platform's welcome voucher |
+| [add-ons.md](./add-ons.md) | Partner, hotel staff, customer | Services sold on top of the room: the catalogue, booking them with the stay, front-desk add-ons collected at check-out |
+| [marketing.md](./marketing.md) | Partner, hotel staff | AI marketing: the brand voice, drafts the owner approves, the posting calendar, publishing to Facebook and Instagram, and what it all cost |
+| [assistant.md](./assistant.md) | Customer, public | Personal hotel recommendations from the trained model, and the chat assistant that searches, recommends and proposes bookings the customer confirms |
 
 How to read each endpoint table:
 

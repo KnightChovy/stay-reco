@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, View } from 'react-native';
+import { useState } from 'react';
+import { ScrollView, View } from 'react-native';
+import { alert } from '@/lib/alert';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
@@ -9,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
-import { colors, radius, shadow } from '@/constants/theme';
+import { colors } from '@/constants/theme';
 import { formatDate } from '@/lib/stay';
 import { getBooking, requestChange } from '@/services/bookings.service';
 
@@ -42,15 +43,17 @@ export default function ChangeBookingScreen() {
   const [submitting, setSubmitting] = useState(false);
   const b = booking.data;
 
-  useEffect(() => {
-    if (b)
-      setForm({
-        guestName: b.guestName,
-        contactPhone: b.contactPhone,
-        arrivalTime: b.arrivalTime ?? '',
-        specialRequests: b.specialRequests ?? '',
-      });
-  }, [b]);
+  // Điền sẵn mỗi khi đơn được tải lại (cập nhật state lúc render, không cần effect).
+  const [filledFrom, setFilledFrom] = useState<typeof b>();
+  if (b && filledFrom !== b) {
+    setFilledFrom(b);
+    setForm({
+      guestName: b.guestName,
+      contactPhone: b.contactPhone,
+      arrivalTime: b.arrivalTime ?? '',
+      specialRequests: b.specialRequests ?? '',
+    });
+  }
 
   const set = (key: keyof typeof form) => (value: string) => setForm((f) => ({ ...f, [key]: value }));
 
@@ -80,7 +83,7 @@ export default function ChangeBookingScreen() {
     try {
       await requestChange(id, input.data);
       void queryClient.invalidateQueries({ queryKey: ['bookings'] });
-      Alert.alert('Đã gửi yêu cầu', 'Khách sạn sẽ xem xét và báo lại cho bạn qua email và thông báo.', [
+      alert('Đã gửi yêu cầu', 'Khách sạn sẽ xem xét và báo lại cho bạn qua email và thông báo.', [
         { text: 'OK', onPress: () => router.back() },
       ]);
     } catch (err) {
@@ -94,9 +97,9 @@ export default function ChangeBookingScreen() {
 
   if (!b) {
     return (
-      <View style={styles.screen}>
+      <View className="flex-1 bg-surface">
         <ScreenHeader title="Đổi thông tin đơn" />
-        <View style={styles.state}>
+        <View className="flex-1 items-center justify-center p-6">
           <Text variant="small" color={colors.onSurfaceVariant} center>
             {booking.isError || !id ? 'Không tải được thông tin đơn.' : 'Đang tải...'}
           </Text>
@@ -109,10 +112,10 @@ export default function ChangeBookingScreen() {
   const rejected = b.changeRequest?.status === 'REJECTED' ? b.changeRequest : null;
 
   return (
-    <View style={styles.screen}>
+    <View className="flex-1 bg-surface">
       <ScreenHeader title="Đổi thông tin đơn" />
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <View style={styles.card}>
+      <ScrollView contentContainerClassName="gap-4 p-4 pb-8" keyboardShouldPersistTaps="handled">
+        <View className="gap-1.5 rounded-lg bg-surface-container-lowest p-4 shadow-card">
           <Text variant="caption" weight="semibold" color={colors.onSurfaceVariant}>
             MÃ ĐƠN: {b.code}
           </Text>
@@ -123,17 +126,17 @@ export default function ChangeBookingScreen() {
         </View>
 
         {pending && (
-          <View style={[styles.banner, styles.row]}>
+          <View className="rounded-lg bg-surface-container-high p-3.5 flex-row items-start gap-2">
             <Icon name="hourglass_top" size={20} color={colors.secondary} />
-            <Text variant="small" style={styles.flex}>
+            <Text variant="small" className="flex-1">
               Yêu cầu gửi lúc {new Date(b.changeRequest!.requestedAt).toLocaleString('vi-VN')} đang chờ khách sạn duyệt.
             </Text>
           </View>
         )}
         {rejected && (
-          <View style={[styles.banner, styles.row]}>
+          <View className="rounded-lg bg-surface-container-high p-3.5 flex-row items-start gap-2">
             <Icon name="info" size={20} color={colors.error} />
-            <Text variant="small" style={styles.flex}>
+            <Text variant="small" className="flex-1">
               Khách sạn đã từ chối yêu cầu trước{rejected.reason ? `: ${rejected.reason}` : '.'}
             </Text>
           </View>
@@ -183,13 +186,3 @@ export default function ChangeBookingScreen() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.surface },
-  content: { padding: 16, gap: 16, paddingBottom: 32 },
-  state: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
-  flex: { flex: 1 },
-  row: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
-  card: { padding: 16, gap: 6, borderRadius: radius.lg, backgroundColor: colors.surfaceContainerLowest, ...shadow.card },
-  banner: { padding: 14, borderRadius: radius.lg, backgroundColor: colors.surfaceContainerHigh },
-});

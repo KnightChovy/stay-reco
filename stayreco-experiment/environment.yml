@@ -1,0 +1,47 @@
+# Môi trường cho thực nghiệm StayReco.
+#
+#   conda env create -f environment.yml
+#   conda activate stayreco        # ⚠️ BẮT BUỘC — xem README
+#   pytest tests/ -q
+#
+# Vì sao ghim phiên bản chặt: Dacrema et al. (2019) và Bellogín & Said (2021) đều
+# chỉ ra rằng kết quả recommender không tái lập được phần lớn vì môi trường không
+# được khai báo. Phiên bản BLAS/MKL còn đổi được chữ số thập phân thứ 4-5 của RMSE.
+#
+# ⚠️ scikit-surprise 1.1.4 cần numpy < 2 → KHÔNG nâng numpy lên 2.x.
+# ⚠️ matplotlib phải <= 3.9.x: bản 3.11.x build cho numpy 2 ABI.
+# ⚠️ mkl ghim 2024.2.2 vì đó là bản đã sinh ra số trong báo cáo. (mkl 2026 cũng
+#    chạy được, nhưng đổi phiên bản BLAS là đổi chữ số cuối của RMSE.)
+
+name: stayreco
+
+channels:
+  - conda-forge
+  - defaults
+
+dependencies:
+  - python=3.11.16
+
+  # Nền tính toán
+  - numpy=1.26.4
+  - scipy=1.17.1
+  - pandas=2.2.2
+  - mkl=2024.2.2
+
+  # Model
+  - scikit-surprise=1.1.4        # SVD, SVD++
+  - scikit-learn=1.5.2           # TF-IDF, cosine_similarity
+
+  # Biểu đồ
+  - matplotlib=3.9.2
+  - seaborn=0.13.2
+
+  # Test — bắt buộc chạy trước mỗi lần chạy thí nghiệm
+  - pytest=8.*
+
+  - pip
+  - pip:
+      # LightGCN (tầng 2 của SL-ARec 2026). Bản CPU là đủ cho MovieLens 100K.
+      - torch==2.14.0
+      # Notebook phân tích (không cần cho run_experiment.py)
+      - jupyter==1.0.0

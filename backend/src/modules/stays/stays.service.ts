@@ -1,3 +1,4 @@
+import { toHotelAddOn } from '../add-ons/add-on.mapper';
 import { Injectable, NotFoundException } from '@nestjs/common';
 import type {
   CancellationPolicy,
@@ -23,6 +24,7 @@ import {
   hotelInclude,
   toHotel,
 } from '../hotels/hotel.mapper';
+import { RecommendationsService } from '../recommendations/recommendations.service';
 import { PriceEngine } from '../pricing/price-engine';
 import { roomTypeNotFound } from '../rooms/room-types.service';
 import {
@@ -54,14 +56,19 @@ export class StaysService {
     private readonly prisma: PrismaService,
     private readonly availability: AvailabilityService,
     private readonly engine: PriceEngine,
+    private readonly recommendations: RecommendationsService,
   ) {}
 
   /**
    * Hotels matching the destination with at least one room type that takes the whole booking. Prices and
    * availability depend on the stay, so filtering, sorting and paging happen after pricing every candidate.
    */
-  async search(query: HotelSearchQuery): Promise<Paginated<HotelSearchResult>> {
+  async search(
+    query: HotelSearchQuery,
+    customerId?: string,
+  ): Promise<Paginated<HotelSearchResult>> {
     assertBookableDates(query.checkIn);
+    const personalized = query.sort === 'recommended' && customerId;
     const hotels = await this.prisma.hotel.findMany({
       where: {
         ...bookableHotel,
@@ -133,8 +140,21 @@ export class StaysService {
       .filter(
         (r) => query.priceMax === undefined || r.fromTotal <= query.priceMax,
       )
-      .filter((r) => !query.freeCancellation || r.freeCancellation)
-      .sort(compareBy(query.sort));
+      .filter((r) => !query.freeCancellation || r.freeCancellation);
+    const scores = personalized
+      ? await this.recommendations.personalScores(
+          personalized,
+          matching.map((hotel) => hotel.id),
+        )
+      : null;
+    const compare = compareBy(query.sort);
+    // The recommender's published rank (it already weighs the customer's budget); unranked hotels after, by default order.
+    // Hotels the customer booked stay searchable: the recommender only leaves them out of its own list.
+    matching.sort((a, b) => {
+      const left = scores?.get(a.id)?.rank ?? Infinity;
+      const right = scores?.get(b.id)?.rank ?? Infinity;
+      return left === right ? compare(a, b) : left - right;
+    });
     const start = (query.page - 1) * query.pageSize;
     return Paginated.of(matching.slice(start, start + query.pageSize), {
       ...query,
@@ -153,6 +173,10 @@ export class StaysService {
               where: sellableRoomType,
               include: roomTypeInclude,
               orderBy: { createdAt: 'asc' },
+            },
+            addOns: {
+              where: { isActive: true },
+              orderBy: [{ name: 'asc' }, { hotelAddOnId: 'asc' }],
             },
           },
         })
@@ -189,6 +213,7 @@ export class StaysService {
         policies: details.policies,
         cancellationPolicy: details.cancellationPolicy,
         lateCheckoutPolicy: details.lateCheckoutPolicy,
+        addOns: hotel.addOns.map(toHotelAddOn),
       },
       roomTypes: hotel.roomTypes.map((rt) =>
         toRoomTypeListing(rt, offers?.get(rt.roomTypeId) ?? null),
@@ -305,8 +330,7 @@ function toRoomTypeListing(
 }
 
 /**
- * `recommended` and `star-desc`: star rating (unrated last), then the cheapest; `recommended` will weigh guest ratings
- * once reviews exist (phase 4). Every order ends on the price, then the name, so pages stay stable.
+ * Default order for ties and hotels without a personalized score.
  */
 function compareBy(sort: HotelSearchQuery['sort']) {
   const stars = (r: HotelSearchResult) => r.starRating ?? 0;

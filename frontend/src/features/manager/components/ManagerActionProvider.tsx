@@ -49,10 +49,12 @@ export function ManagerActionProvider({ children }: { children: ReactNode }) {
       {children}
       <OperationDialog
         action={action}
-        scope="Platform Operations · StayReco"
+        scope="Vận hành nền tảng · StayReco"
+        demo
         onClose={() => setAction("")}
         onComplete={() => {
-          showNotice(`${action} đã được ghi nhận.`);
+          // Nothing is stored: saying "recorded" would mislead a manager into thinking the action took effect.
+          showNotice(`Bản minh hoạ: "${action}" chưa được lưu vì tính năng đang hoàn thiện.`, "info");
           setAction("");
         }}
       />

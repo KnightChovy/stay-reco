@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Building2, Eye, Search } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { Building2, Eye, Search, X } from "lucide-react";
 import {
   VERIFICATION_SORTS,
   VerificationStatus,
@@ -36,11 +37,21 @@ const sortLabels: Record<VerificationSort, string> = {
 type QueueTab = "pending" | "all";
 
 export default function ManagerVerifications() {
-  const [tab, setTab] = useState<QueueTab>("pending");
-  const [search, setSearch] = useState("");
+  // `?search=` comes from the header search box: a hotel looked up by name is shown with all its requests, and a
+  // new header search replaces the box's text.
+  const searchParam = useSearchParams().get("search") ?? "";
+  const [tab, setTab] = useState<QueueTab>(searchParam ? "all" : "pending");
+  const [search, setSearch] = useState(searchParam);
+  const [shownSearchParam, setShownSearchParam] = useState(searchParam);
   const [status, setStatus] = useState("");
   const [sort, setSort] = useState<VerificationSort>("submitted-asc");
   const [page, setPage] = useState(1);
+  if (shownSearchParam !== searchParam) {
+    setShownSearchParam(searchParam);
+    setSearch(searchParam);
+    setPage(1);
+    if (searchParam) setTab("all");
+  }
   const [openId, setOpenId] = useState<string>();
   const debouncedSearch = useDebounce(search.trim());
   const pending = usePendingVerificationCount();
@@ -117,6 +128,12 @@ export default function ManagerVerifications() {
 
   const filtered = !!(debouncedSearch || (tab === "all" && status));
 
+  function clearFilters() {
+    setSearch("");
+    setStatus("");
+    setPage(1);
+  }
+
   return (
     <div className="space-y-6">
       <ManagerTitle
@@ -141,30 +158,29 @@ export default function ManagerVerifications() {
           </Tabs>
         </div>
 
-        <div className="grid gap-3 border-b px-5 py-4 sm:grid-cols-2 lg:grid-cols-4">
-          <label className="grid gap-1.5 text-xs font-semibold text-foreground lg:col-span-2">
-            <span>Tìm kiếm</span>
-            <span className="relative">
-              <Search
-                size={15}
-                className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
-              />
-              <Input
-                value={search}
-                onChange={(event) => update(setSearch)(event.target.value)}
-                placeholder="Tên khách sạn"
-                className="pl-8"
-                maxLength={100}
-              />
-            </span>
+        {/* The search is the main control, so it gets the widest slot; sorting sits with the result count below. */}
+        <div className="flex flex-col gap-3 border-b px-5 py-4 sm:flex-row sm:items-end">
+          <label className="relative block flex-1">
+            <span className="sr-only">Tìm hồ sơ theo tên khách sạn</span>
+            <Search
+              size={16}
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+            />
+            <Input
+              value={search}
+              onChange={(event) => update(setSearch)(event.target.value)}
+              placeholder="Tìm theo tên khách sạn"
+              className="h-10 pl-9"
+              maxLength={100}
+            />
           </label>
-          {tab === "all" ? (
-            <label className="grid gap-1.5 text-xs font-semibold text-foreground">
+          {tab === "all" && (
+            <label className="grid gap-1.5 text-xs font-semibold text-foreground sm:w-52">
               <span>Trạng thái</span>
               <NativeSelect
                 value={status}
                 onChange={(event) => update(setStatus)(event.target.value)}
-                className="w-full"
+                className="h-10 w-full"
               >
                 <NativeSelectOption value="">Tất cả</NativeSelectOption>
                 {Object.values(VerificationStatus).map((value) => (
@@ -174,15 +190,33 @@ export default function ManagerVerifications() {
                 ))}
               </NativeSelect>
             </label>
-          ) : (
-            <div className="hidden lg:block" />
           )}
-          <label className="grid gap-1.5 text-xs font-semibold text-foreground">
-            <span>Sắp xếp</span>
+        </div>
+
+        <div className="flex flex-col gap-2 border-b px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3 text-sm">
+            <span className="text-muted-foreground" aria-live="polite">
+              {meta ? (
+                <>
+                  <strong className="text-foreground">{meta.total}</strong> hồ sơ
+                </>
+              ) : (
+                "Đang tải..."
+              )}
+            </span>
+            {filtered && (
+              <Button type="button" variant="ghost" size="sm" onClick={clearFilters}>
+                <X />
+                Xoá bộ lọc
+              </Button>
+            )}
+          </div>
+          <label className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+            Sắp xếp
             <NativeSelect
               value={sort}
               onChange={(event) => update(setSort)(event.target.value as VerificationSort)}
-              className="w-full"
+              className="min-w-56"
             >
               {VERIFICATION_SORTS.map((value) => (
                 <NativeSelectOption key={value} value={value}>

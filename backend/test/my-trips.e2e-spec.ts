@@ -214,6 +214,7 @@ describe('My trips and vouchers (e2e)', () => {
       expect(res.body.data).toEqual({
         code: booking.code,
         hotelName: 'Riverside',
+        items: [{ roomTypeName: 'Deluxe', rooms: 1 }],
         roomTypeName: 'Deluxe',
         checkIn: day(30),
         checkOut: day(32),

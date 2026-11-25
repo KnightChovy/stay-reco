@@ -28,6 +28,8 @@ import { AuditAction } from '../audit/audit.service';
 import { fromTime } from '../hotels/hotel.mapper';
 import { DEFAULT_CHECK_IN_TIME } from '../stays/offer';
 import { WalletLedger } from '../wallets/wallet-ledger';
+import { LoyaltyService } from '../loyalty/loyalty.service';
+import { DiscountService } from '../promotions/discount.service';
 import { bookingNotFound } from './booking-access';
 import {
   closePendingChange,
@@ -63,6 +65,8 @@ export class RefundDecisionsService extends PeriodicJob {
     private readonly bookings: BookingsService,
     private readonly mailer: BookingMailer,
     config: ConfigService<Env, true>,
+    private readonly discounts: DiscountService,
+    private readonly loyalty: LoyaltyService,
   ) {
     super('RefundDecisions', EVERY_MINUTE, config);
   }
@@ -155,7 +159,7 @@ export class RefundDecisionsService extends PeriodicJob {
       select: {
         bookingId: true,
         checkInDate: true,
-        roomType: { select: { hotel: { select: { checkInTime: true } } } },
+        hotel: { select: { checkInTime: true } },
       },
     });
 
@@ -163,7 +167,7 @@ export class RefundDecisionsService extends PeriodicJob {
     for (const booking of pending) {
       const checkInAt = vietnamDateTime(
         toCalendarDate(booking.checkInDate),
-        fromTime(booking.roomType.hotel.checkInTime) ?? DEFAULT_CHECK_IN_TIME,
+        fromTime(booking.hotel.checkInTime) ?? DEFAULT_CHECK_IN_TIME,
       );
       if (now < checkInAt) continue;
       const { cancelRequest } = await loadBookingHistory(
@@ -218,17 +222,17 @@ export class RefundDecisionsService extends PeriodicJob {
       select: {
         customerId: true,
         invoice: { select: { invoiceNumber: true } },
-        roomType: { select: { hotelId: true } },
+        hotelId: true,
       },
     });
     await tx.roomCalendars.deleteMany({ where: { bookingId } });
     await closePendingChange(tx, bookingId, now);
+    // The stay never happened, so the campaign got no business: the code goes back to the customer.
+    await this.discounts.release(tx, bookingId);
+    await this.loyalty.refund(tx, bookingId);
 
     const code = booking.invoice!.invoiceNumber;
-    const hotelWallet = await this.ledger.hotelWallet(
-      tx,
-      booking.roomType.hotelId,
-    );
+    const hotelWallet = await this.ledger.hotelWallet(tx, booking.hotelId);
     const customerWallet = await this.ledger.customerWallet(
       tx,
       booking.customerId,
@@ -272,12 +276,12 @@ export class RefundDecisionsService extends PeriodicJob {
     const booking = isUuid(bookingId)
       ? await this.prisma.booking.findUnique({
           where: { bookingId },
-          select: { roomType: { select: { hotelId: true } } },
+          select: { hotelId: true },
         })
       : null;
     const access = await this.access.assertResource(
       user,
-      booking?.roomType.hotelId,
+      booking?.hotelId,
       level,
       bookingNotFound,
     );

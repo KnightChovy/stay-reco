@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { KeyRound, MailX, Power, PowerOff, UserPlus, UsersRound } from "lucide-react";
 import type { StaffMember } from "@stayreco/shared";
 import { TableCommon, type CommonTableColumn } from "@/components/common/table";
 import { Button } from "@/components/ui/button";
 import * as partnerService from "@/services/partner.service";
-import { partnerKeys, useHotelStaff, usePartnerMutation } from "../api/partner-queries";
+import { partnerKeys, useActionItem, useHotelStaff, usePartnerMutation } from "../api/partner-queries";
 import {
   ConfirmDialog,
   EmptyPanel,
@@ -83,6 +83,8 @@ export default function PartnerStaff() {
 
 function StaffTable({ hotelId, canEdit, onInvite }: { hotelId: string; canEdit: boolean; onInvite: () => void }) {
   const staffQuery = useHotelStaff(hotelId);
+  const staleInvites = useActionItem(hotelId, "STAFF_INVITES_PENDING");
+  const staleInviteIds = useMemo(() => new Set(staleInvites?.params.staffIds), [staleInvites]);
   const [permissionsFor, setPermissionsFor] = useState<StaffMember>();
   const [action, setAction] = useState<StaffAction>();
 
@@ -116,7 +118,13 @@ function StaffTable({ hotelId, canEdit, onInvite }: { hotelId: string; canEdit: 
       header: "Trạng thái",
       cell: (staff) => {
         const status = staffStatusLabels[staff.status] ?? { label: staff.status, tone: "muted" as const };
-        return <StatusBadge tone={status.tone}>{status.label}</StatusBadge>;
+        return (
+          <div className="flex flex-col gap-1">
+            <StatusBadge tone={status.tone}>{status.label}</StatusBadge>
+            {/* Invitations the dashboard's "lời mời chưa được nhận" item is about (still INVITED after 3 days). */}
+            {staleInviteIds.has(staff.id) && <StatusBadge tone="warning">Mời hơn 3 ngày</StatusBadge>}
+          </div>
+        );
       },
     },
     {

@@ -131,7 +131,7 @@ export class RoomTypesService {
 
   /**
    * Only an unused room type can be deleted: no physical rooms and no bookings (bookings keep their room type,
-   * see `booking.room_type_id`). Its beds, amenities, prices, images and recommendations go with it.
+   * see `booking_item.room_type_id`). Its beds, amenities, prices, images and recommendations go with it.
    */
   async remove(user: AuthUser, roomTypeId: string): Promise<void> {
     const { hotelId } = await this.findForAccess(user, roomTypeId, 'owner');
@@ -141,7 +141,7 @@ export class RoomTypesService {
       // And the image upload lock, so an upload in progress either finishes first or sees the type gone.
       await lockRoomType(tx, roomTypeId);
       const rooms = await tx.room.count({ where: { roomTypeId } });
-      const bookings = await tx.booking.count({ where: { roomTypeId } });
+      const bookings = await tx.bookingItem.count({ where: { roomTypeId } });
       if (rooms > 0 || bookings > 0) {
         throw new ConflictException({
           code: ErrorCode.ROOM_TYPE_IN_USE,

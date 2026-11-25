@@ -138,6 +138,19 @@ enum BookingStatus {
   @@map("booking_status")
 }
 
+/// When a hotel add-on is delivered; a label for the catalogue, it does not limit when it can be booked.
+enum AddOnTiming {
+  BEFORE_STAY
+  DURING_STAY
+  AFTER_STAY
+}
+
+/// PREPAID: booked with the stay and paid in its transfer. FRONT_DESK: added by staff, collected at the desk.
+enum AddOnPayment {
+  PREPAID
+  FRONT_DESK
+}
+
 enum PaymentMethod {
   VNPAY
   SEPAY
@@ -294,6 +307,8 @@ enum ContentStatus {
 
 enum ScheduleStatus {
   SCHEDULED
+  /// Claimed by the publisher job: Meta is being called. Never picked up twice (review of #127).
+  PUBLISHING
   PUBLISHED
   FAILED
   CANCELLED
@@ -424,7 +439,8 @@ model BedType {
 model Booking {
   bookingId          String              @id @default(dbgenerated("gen_random_uuid()")) @map("booking_id") @db.Uuid
   customerId         String              @map("customer_id") @db.Uuid
-  roomTypeId         String              @map("room_type_id") @db.Uuid
+  /// The hotel of every item; kept even after the nights are released.
+  hotelId            String              @map("hotel_id") @db.Uuid
   hotelStaffId       String?             @map("hotel_staff_id") @db.Uuid
   voucherId          String?             @unique @map("voucher_id") @db.Uuid
   promotionId        String?             @map("promotion_id") @db.Uuid
@@ -433,10 +449,7 @@ model Booking {
   checkInDate        DateTime            @map("check_in_date") @db.Date
   checkOutDate       DateTime            @map("check_out_date") @db.Date
   numGuests          Int?                @map("num_guests")
-  /// Rooms of the one room type held or booked; kept after the nights are released.
-  numRooms           Int                 @map("num_rooms")
-  /// [{ date, price }] per room, fixed at booking time (BR-09); kept after the nights are released.
-  nightlyPrices      Json                @map("nightly_prices")
+  /// Sum of the item subtotals (minus discounts once promotions exist).
   totalAmount        Decimal             @map("total_amount") @db.Decimal(14, 2)
   currency           String              @default("VND") @db.VarChar(10)
   status             BookingStatus       @default(PENDING)
@@ -454,8 +467,8 @@ model Booking {
   createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
   customer           Customer            @relation(fields: [customerId], references: [customerId])
-  // Kept even after room_calendars rows are released (cancel / no-show), so the booking never loses its hotel.
-  roomType           RoomType            @relation(fields: [roomTypeId], references: [roomTypeId])
+  hotel              Hotel               @relation(fields: [hotelId], references: [hotelId])
+  items              BookingItem[]
   hotelStaff         HotelStaff?         @relation(fields: [hotelStaffId], references: [hotelStaffId])
   voucher            Voucher?            @relation(fields: [voucherId], references: [voucherId])
   promotion          Promotion?          @relation(fields: [promotionId], references: [promotionId])
@@ -467,12 +480,33 @@ model Booking {
   review             Review?
   conversations      Conversation[]
   aiFunctionCalls    AiFunctionCall[]
+  addOns             BookingAddOn[]
 
-  // Hotel-scoped reads reach bookings through the room type: by stay date (bookings list, arrivals, dashboard
-  // figures) and by booking date (bookings created in a period).
-  @@index([roomTypeId, checkInDate])
-  @@index([roomTypeId, createdAt])
+  // Hotel-scoped reads: by stay date (bookings list, arrivals, dashboard figures) and by booking date (bookings
+  // created in a period).
+  @@index([hotelId, checkInDate])
+  @@index([hotelId, createdAt])
   @@map("booking")
+}
+
+/// One room type of a booking (docs/design/booking-items.md): 1–5 per booking, all of the booking's hotel.
+model BookingItem {
+  bookingItemId String   @id @default(dbgenerated("gen_random_uuid()")) @map("booking_item_id") @db.Uuid
+  bookingId     String   @map("booking_id") @db.Uuid
+  /// Kept even after room_calendars rows are released (cancel / no-show), so the item never loses its type.
+  roomTypeId    String   @map("room_type_id") @db.Uuid
+  /// Rooms of this type held or booked (1–8, at most 8 over the booking).
+  numRooms      Int      @map("num_rooms")
+  /// [{ date, price }] per room, fixed at booking time (BR-09).
+  nightlyPrices Json     @map("nightly_prices")
+  /// Sum of the nightly prices × num_rooms, fixed at booking time.
+  subtotal      Decimal  @db.Decimal(14, 2)
+  booking       Booking  @relation(fields: [bookingId], references: [bookingId], onDelete: Cascade)
+  roomType      RoomType @relation(fields: [roomTypeId], references: [roomTypeId])
+
+  @@unique([bookingId, roomTypeId])
+  @@index([roomTypeId])
+  @@map("booking_item")
 }
 
 model ContentEmbedding {
@@ -508,10 +542,18 @@ model ContentSchedule {
   scheduledAt        DateTime?        @map("scheduled_at") @db.Timestamptz(6)
   publishedAt        DateTime?        @map("published_at") @db.Timestamptz(6)
   status             ScheduleStatus   @default(SCHEDULED)
+  /// The platform's own id for the post. The metrics of a post can only be read back against it.
+  externalPostId     String?          @map("external_post_id") @db.VarChar(255)
+  /// Why the platform refused it, so the calendar can say rather than only log (M13).
+  failureReason      String?          @map("failure_reason") @db.VarChar(1000)
+  /// When the publisher claimed the row (SCHEDULED -> PUBLISHING); lets the job give up on a run that never finished.
+  claimedAt          DateTime?        @map("claimed_at") @db.Timestamptz(6)
   marketingContent   MarketingContent @relation(fields: [marketingContentId], references: [marketingContentId])
   socialAccount      SocialAccount    @relation(fields: [socialAccountId], references: [socialAccountId])
   contentMetrics     ContentMetric[]
 
+  /// The publishing job asks for exactly this every minute: what is SCHEDULED and already due.
+  @@index([status, scheduledAt])
   @@map("content_schedule")
 }
 
@@ -552,6 +594,7 @@ model Customer {
   ratingPredictions   RatingPrediction[]
   recommendations     Recommendation[]
   conversations       Conversation[]
+  aiUsages            AiUsage[]
 
   @@map("customer")
 }
@@ -591,6 +634,7 @@ model Hotel {
   hotelRoomConfig      HotelRoomConfig?
   hotelStaffs          HotelStaff[]
   roomTypes            RoomType[]
+  bookings             Booking[]
   hotelAmenities       HotelAmenity[]
   promotions           Promotion[]
   wallet               Wallet?
@@ -606,6 +650,9 @@ model Hotel {
   knowledgeArticles    KnowledgeArticle[]
   verificationRequests HotelVerificationRequest[]
   hotelImages          HotelImage[]
+  addOns               HotelAddOn[]
+
+  aiUsages AiUsage[]
 
   @@map("hotel")
 }
@@ -699,6 +746,8 @@ model HotelStaff {
   marketingContents MarketingContent[]
   conversations     Conversation[]
 
+  aiUsages AiUsage[]
+
   @@map("hotel_staff")
 }
 
@@ -784,6 +833,8 @@ model LoyaltyAccount {
   customerId       String         @map("customer_id") @db.Uuid
   loyaltyProgramId String         @map("loyalty_program_id") @db.Uuid
   pointsBalance    Int            @default(0) @map("points_balance")
+  /// Every point ever earned; never lowered by spending, so the tier cannot fall when a customer uses their points.
+  lifetimePoints   Int            @default(0) @map("lifetime_points")
   tier             LoyaltyTier?
   joinedAt         DateTime       @default(now()) @map("joined_at") @db.Timestamptz(6)
   updatedAt        DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -796,15 +847,28 @@ model LoyaltyAccount {
 
 model LoyaltyProgram {
   loyaltyProgramId  String           @id @default(dbgenerated("gen_random_uuid()")) @map("loyalty_program_id") @db.Uuid
-  hotelId           String           @map("hotel_id") @db.Uuid
+  /// Null for the platform-wide programme every hotel earns into; set for one hotel's own rules on top of it, which
+  /// change the earning rate and the redemption conditions at that hotel but never the value of a point.
+  hotelId           String?          @map("hotel_id") @db.Uuid
   name              String           @db.VarChar(200)
+  /// Points earned per dong spent, e.g. 0.001 = 1 point per 1,000 d.
   pointsPerCurrency Decimal          @map("points_per_currency") @db.Decimal(8, 4)
+  /// What one point is worth in dong when it is spent.
+  pointValue        Decimal          @default(0) @map("point_value") @db.Decimal(14, 2)
+  /// False when stays at the hotel cannot be paid with points. On the platform row: the rule for hotels without their own.
+  acceptsPoints     Boolean          @default(true) @map("accepts_points")
+  /// The share of a stay, after the discount, that points may pay (1-100).
+  maxRedeemPercent  Decimal          @default(100) @map("max_redeem_percent") @db.Decimal(5, 2)
   isActive          Boolean          @default(true) @map("is_active")
   createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
-  hotel             Hotel            @relation(fields: [hotelId], references: [hotelId])
+  hotel             Hotel?           @relation(fields: [hotelId], references: [hotelId], onDelete: Cascade)
   bookings          Booking[]
   loyaltyAccounts   LoyaltyAccount[]
 
+  /// A hotel has at most one set of its own rules; the platform programme rows have no hotel.
+  /// At most one platform row too: partial index "loyalty_program_one_platform_row" (WHERE hotel_id IS NULL), created
+  /// in migration 20261118090000 because Prisma cannot declare it. Remove any DROP INDEX for it from a new migration.
+  @@unique([hotelId])
   @@map("loyalty_program")
 }
 
@@ -815,6 +879,11 @@ model MarketingContent {
   title              String?           @db.VarChar(255)
   body               String
   mediaUrl           String?           @map("media_url") @db.VarChar(500)
+  /**
+   * Cloudinary's id for `mediaUrl`, so replacing or removing the picture deletes the file too. Null when the URL
+   * was set by hand rather than uploaded - we only delete what we uploaded (M18).
+   */
+  mediaStorageKey    String?           @map("media_storage_key") @db.VarChar(255)
   contentType        ContentType       @map("content_type")
   status             ContentStatus     @default(DRAFT)
   createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -887,6 +956,8 @@ model PlatformManager {
   policyViolations          PolicyViolation[]
   walletTransactions        WalletTransaction[]
 
+  contentReports ContentReport[]
+
   @@map("platform_manager")
 }
 
@@ -947,6 +1018,8 @@ model Promotion {
   validFrom        DateTime?    @map("valid_from") @db.Date
   validTo          DateTime?    @map("valid_to") @db.Date
   isActive         Boolean      @default(true) @map("is_active")
+  /// Only through a personal code (a voucher); never applied to a stay by itself. Issuing a voucher turns it on.
+  requiresCode     Boolean      @default(false) @map("requires_code")
   createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
   hotel            Hotel?       @relation(fields: [hotelId], references: [hotelId])
   bookings         Booking[]
@@ -1000,6 +1073,8 @@ model Recommendation {
   roomType         RoomType? @relation(fields: [roomTypeId], references: [roomTypeId])
   bookings         Booking[]
 
+  @@unique([modelRunId, customerId, hotelId])
+  @@index([customerId, modelRunId])
   @@map("recommendation")
 }
 
@@ -1018,8 +1093,107 @@ model Review {
   hotel           Hotel            @relation(fields: [hotelId], references: [hotelId])
   booking         Booking          @relation(fields: [bookingId], references: [bookingId])
   userItemRatings UserItemRating[]
+  images          ReviewImage[]
+  reports         ContentReport[]
 
   @@map("review")
+}
+
+/// One call to the language model: what it was for, what it cost, and who it was for.
+/// Phase 5 requires every call to be logged and the spend per hotel to be capped.
+model AiUsage {
+  aiUsageId       String      @id @default(dbgenerated("gen_random_uuid()")) @map("ai_usage_id") @db.Uuid
+  /// The hotel the call was for (marketing); null for a customer's assistant chat.
+  hotelId         String?     @map("hotel_id") @db.Uuid
+  /// The customer whose assistant chat made the call; null for hotel work.
+  customerId      String?     @map("customer_id") @db.Uuid
+  /// Who asked for it; null when a job did.
+  hotelStaffId    String?     @map("hotel_staff_id") @db.Uuid
+  /// What it was for, e.g. "brand-voice" or "marketing-content".
+  purpose         String      @db.VarChar(50)
+  model           String      @db.VarChar(100)
+  inputTokens     Int         @map("input_tokens")
+  outputTokens    Int         @map("output_tokens")
+  cacheReadTokens Int         @default(0) @map("cache_read_tokens")
+  /// US dollars, at the model's published rate when the call was made.
+  costUsd         Decimal     @map("cost_usd") @db.Decimal(12, 6)
+  createdAt       DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  hotel           Hotel?      @relation(fields: [hotelId], references: [hotelId], onDelete: Cascade)
+  customer        Customer?   @relation(fields: [customerId], references: [customerId], onDelete: Cascade)
+  hotelStaff      HotelStaff? @relation(fields: [hotelStaffId], references: [hotelStaffId])
+
+  /// The monthly spend of one hotel is read off this index.
+  @@index([hotelId, createdAt])
+  /// The monthly spend of one customer's assistant is read off this index.
+  @@index([customerId, createdAt])
+  @@map("ai_usage")
+}
+
+/// A photo a guest attached to their review; hidden with the review it belongs to.
+model ReviewImage {
+  reviewImageId String          @id @default(dbgenerated("gen_random_uuid()")) @map("review_image_id") @db.Uuid
+  reviewId      String          @map("review_id") @db.Uuid
+  imageUrl      String          @map("image_url") @db.VarChar(500)
+  /// Cloudinary public id, used to delete the file.
+  storageKey    String          @map("storage_key") @db.VarChar(255)
+  /// Kept so the aspect ratio a photo was accepted with can be read back.
+  width         Int
+  height        Int
+  sortOrder     Int             @default(0) @map("sort_order")
+  /// A manager hides a photo rather than deleting it, so the evidence behind the decision survives.
+  isVisible     Boolean         @default(true) @map("is_visible")
+  createdAt     DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  review        Review          @relation(fields: [reviewId], references: [reviewId], onDelete: Cascade)
+  reports       ContentReport[]
+
+  @@index([reviewId])
+  @@map("review_image")
+}
+
+/// Anyone signed in may flag a review, or one of its photos, for a platform manager to look at.
+model ContentReport {
+  contentReportId   String           @id @default(dbgenerated("gen_random_uuid()")) @map("content_report_id") @db.Uuid
+  /// Who raised it: any signed-in account, whatever their role.
+  reporterId        String           @map("reporter_id") @db.Uuid
+  reviewId          String           @map("review_id") @db.Uuid
+  /// Set when one photo was flagged rather than the whole review; null again once the author removes that photo.
+  reviewImageId     String?          @map("review_image_id") @db.Uuid
+  /// The flagged photo as it was reported, kept after its author removes it: the evidence a manager decides on. Both
+  /// set for a photo report, both null for a report of the whole review. The file stays in storage while it is kept.
+  imageUrl          String?          @map("image_url") @db.VarChar(500)
+  imageStorageKey   String?          @map("image_storage_key") @db.VarChar(255)
+  reason            ReportReason
+  note              String?
+  status            ViolationStatus  @default(OPEN)
+  /// The manager who decided, and what they wrote; null while the report is waiting.
+  platformManagerId String?          @map("platform_manager_id") @db.Uuid
+  resolution        String?
+  resolvedAt        DateTime?        @map("resolved_at") @db.Timestamptz(6)
+  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  reporter          UserAccount      @relation(fields: [reporterId], references: [userAccountId], onDelete: Cascade)
+  review            Review           @relation(fields: [reviewId], references: [reviewId], onDelete: Cascade)
+  /// SetNull, not Cascade: removing a photo must not delete the reports on it, open or decided.
+  reviewImage       ReviewImage?     @relation(fields: [reviewImageId], references: [reviewImageId], onDelete: SetNull)
+  platformManager   PlatformManager? @relation(fields: [platformManagerId], references: [platformManagerId])
+
+  /// One open report per person per review; the queue is for distinct complaints, not repeat clicks. The whole-review
+  /// case is the partial index "content_report_whole_review_unique" (migrations 20261111170232, 20261118100000).
+  @@unique([reporterId, reviewId, reviewImageId])
+  @@index([status, createdAt])
+  @@map("content_report")
+}
+
+/// Why a review or one of its photos was flagged.
+enum ReportReason {
+  OFFENSIVE
+  NOT_A_STAY
+  PERSONAL_DATA
+  SPAM_OR_ADVERT
+  WRONG_HOTEL
+  AI_GENERATED
+  OTHER
+
+  @@map("report_reason")
 }
 
 model Room {
@@ -1082,7 +1256,7 @@ model RoomType {
   roomTypeBeds      RoomTypeBed[]
   roomTypeAmenities RoomTypeAmenity[]
   recommendations   Recommendation[]
-  bookings          Booking[]
+  bookingItems      BookingItem[]
   roomTypeImages    RoomTypeImage[]
 
   @@map("room_type")
@@ -1139,6 +1313,11 @@ model SocialAccount {
   hotel            Hotel             @relation(fields: [hotelId], references: [hotelId])
   contentSchedules ContentSchedule[]
 
+  /**
+   * One row per page per hotel. Reconnecting a page updates the token on this row instead of adding a second,
+   * which is what keeps a disconnected page's published history pointing at the same account (M11).
+   */
+  @@unique([hotelId, platform, accountName])
   @@map("social_account")
 }
 
@@ -1165,6 +1344,8 @@ model UserAccount {
   customer           Customer?
   authSessions       AuthSession[]
   verificationTokens VerificationToken[]
+
+  contentReports ContentReport[]
 
   @@map("user_account")
 }
@@ -1297,4 +1478,46 @@ model WalletTransaction {
   // A wallet's ledger over a period (dashboard cash figures, statements).
   @@index([walletId, createdAt])
   @@map("wallet_transaction")
+}
+
+/// A service a hotel sells on top of the room (airport pick-up, breakfast, spa…).
+model HotelAddOn {
+  hotelAddOnId  String         @id @default(dbgenerated("gen_random_uuid()")) @map("hotel_add_on_id") @db.Uuid
+  hotelId       String         @map("hotel_id") @db.Uuid
+  name          String         @db.VarChar(200)
+  description   String?
+  /// Price of one unit in dong.
+  price         Decimal        @db.Decimal(14, 2)
+  timing        AddOnTiming
+  /// False: only staff can add it to a stay (paid at the desk), the customer cannot book it in advance.
+  prebookable   Boolean        @default(true)
+  isActive      Boolean        @default(true) @map("is_active")
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  hotel         Hotel          @relation(fields: [hotelId], references: [hotelId], onDelete: Cascade)
+  bookingAddOns BookingAddOn[]
+
+  @@index([hotelId])
+  @@map("hotel_add_on")
+}
+
+/// One add-on line of a booking, with its name and price fixed when it was added.
+model BookingAddOn {
+  bookingAddOnId String       @id @default(dbgenerated("gen_random_uuid()")) @map("booking_add_on_id") @db.Uuid
+  bookingId      String       @map("booking_id") @db.Uuid
+  hotelAddOnId   String       @map("hotel_add_on_id") @db.Uuid
+  name           String       @db.VarChar(200)
+  unitPrice      Decimal      @map("unit_price") @db.Decimal(14, 2)
+  quantity       Int
+  /// unitPrice × quantity.
+  amount         Decimal      @db.Decimal(14, 2)
+  payment        AddOnPayment
+  /// The account that added a FRONT_DESK line; null for lines booked by the customer.
+  addedBy        String?      @map("added_by") @db.Uuid
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  booking        Booking      @relation(fields: [bookingId], references: [bookingId], onDelete: Cascade)
+  hotelAddOn     HotelAddOn   @relation(fields: [hotelAddOnId], references: [hotelAddOnId])
+
+  @@index([bookingId])
+  @@map("booking_add_on")
 }

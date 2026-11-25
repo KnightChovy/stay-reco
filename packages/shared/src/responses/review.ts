@@ -1,0 +1,114 @@
+import { z } from 'zod';
+import { ReportReason, ViolationStatus } from '../enums';
+import { isoDateTime, responseSchemas } from './registry';
+
+/** Post-stay reviews (BR-12): one per completed booking, written by the customer who stayed. */
+
+export const ratingCriterionResponseSchema = z
+  .object({
+    id: z.uuid(),
+    name: z.string(),
+    description: z.string().nullable(),
+    weight: z.number().describe('Share of the overall rating; the weights of all criteria add up to 1.'),
+  })
+  .register(responseSchemas, { id: 'RatingCriterion' });
+export type RatingCriterion = z.infer<typeof ratingCriterionResponseSchema>;
+
+export const subRatingResponseSchema = z
+  .object({
+    criterionId: z.uuid(),
+    name: z.string(),
+    score: z.number(),
+  })
+  .register(responseSchemas, { id: 'SubRating' });
+export type SubRating = z.infer<typeof subRatingResponseSchema>;
+
+export const reviewImageResponseSchema = z
+  .object({
+    id: z.uuid(),
+    url: z.string(),
+    width: z.number().int(),
+    height: z.number().int(),
+  })
+  .register(responseSchemas, { id: 'ReviewImage' });
+export type ReviewImage = z.infer<typeof reviewImageResponseSchema>;
+
+export const reviewResponseSchema = z
+  .object({
+    id: z.uuid(),
+    bookingId: z.uuid(),
+    hotelId: z.uuid(),
+    authorName: z.string().describe('The reviewer\x27s display name, shortened to first name + last initial.'),
+    overallRating: z.number().describe('Weighted average of the sub-ratings, 1.0-5.0, computed by the backend.'),
+    title: z.string().nullable(),
+    content: z.string(),
+    subRatings: z.array(subRatingResponseSchema),
+    images: z.array(reviewImageResponseSchema).describe('Photos the guest attached, in the order they were added.'),
+    isVisible: z.boolean().describe('Hidden reviews are only returned to their author and to the hotel.'),
+    stayedAt: z.string().describe('Check-out date of the reviewed stay, "YYYY-MM-DD".'),
+    createdAt: isoDateTime(),
+    updatedAt: isoDateTime(),
+  })
+  .register(responseSchemas, { id: 'Review' });
+export type Review = z.infer<typeof reviewResponseSchema>;
+
+export const ratingSummaryResponseSchema = z
+  .object({
+    average: z.number().describe('Average overall rating of the visible reviews; 0 when there are none.'),
+    count: z.number().int(),
+    distribution: z
+      .array(z.object({ star: z.number().int(), count: z.number().int() }))
+      .describe('How many reviews fall in each star bucket, 1 to 5 (an overall of 4.4 counts as 4).'),
+    criteria: z
+      .array(z.object({ criterionId: z.uuid(), name: z.string(), average: z.number() }))
+      .describe('Average score per criterion across the visible reviews.'),
+  })
+  .register(responseSchemas, { id: 'RatingSummary' });
+export type RatingSummary = z.infer<typeof ratingSummaryResponseSchema>;
+
+/** `GET /bookings/:id/reviews/eligibility`: whether this stay can still be reviewed, for the "Write a review" button. */
+export const reviewEligibilityResponseSchema = z
+  .object({
+    canReview: z.boolean(),
+    reason: z
+      .string()
+      .nullable()
+      .describe(
+        'Why not, as an error code (REVIEW_NOT_ALLOWED, REVIEW_ALREADY_EXISTS, REVIEW_WINDOW_CLOSED); null when it can.',
+      ),
+    reviewId: z.uuid().nullable().describe('The review already written for this stay, when there is one.'),
+    closesAt: isoDateTime().nullable().describe('When the review window closes; null when the stay is not completed.'),
+  })
+  .register(responseSchemas, { id: 'ReviewEligibility' });
+export type ReviewEligibility = z.infer<typeof reviewEligibilityResponseSchema>;
+
+/** One flag raised against a review or a photo, as the platform manager's queue shows it. */
+export const contentReportResponseSchema = z
+  .object({
+    id: z.uuid(),
+    reviewId: z.uuid(),
+    reviewImageId: z
+      .uuid()
+      .nullable()
+      .describe(
+        'The flagged photo while it is still on the review; null for the whole review, or once the author removed it.',
+      ),
+    imageUrl: z
+      .string()
+      .nullable()
+      .describe(
+        'The flagged photo as it was reported, kept after its author removes it. Set for every photo report, null for a report of the whole review.',
+      ),
+    hotelId: z.uuid(),
+    hotelName: z.string(),
+    reason: z.enum(ReportReason),
+    note: z.string().nullable(),
+    status: z.enum(ViolationStatus),
+    reporterName: z.string(),
+    reporterRole: z.string().describe('The role of whoever raised it, so a hotel flagging its own page is visible.'),
+    resolution: z.string().nullable(),
+    resolvedAt: isoDateTime().nullable(),
+    createdAt: isoDateTime(),
+  })
+  .register(responseSchemas, { id: 'ContentReport' });
+export type ContentReport = z.infer<typeof contentReportResponseSchema>;

@@ -33,7 +33,23 @@
           "imageWidth": 76
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-image",
+      "expo-web-browser",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "StayReco cần truy cập thư viện ảnh để bạn chọn ảnh đại diện và ảnh đánh giá.",
+          "cameraPermission": false
+        }
+      ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "StayReco cần micro để bạn nói câu hỏi với Trợ lý AI thay vì gõ.",
+          "speechRecognitionPermission": "StayReco chuyển lời bạn nói thành chữ để gửi cho Trợ lý AI."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

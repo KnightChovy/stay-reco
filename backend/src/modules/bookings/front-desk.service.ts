@@ -1,3 +1,5 @@
+import { addOnsOf } from './booking-invoice';
+import { addOnNotFound, AddOnsService } from '../add-ons/add-ons.service';
 import {
   BadRequestException,
   ConflictException,
@@ -11,12 +13,13 @@ import type {
   CheckInInput,
   CheckOutInput,
   CheckOutQuote,
+  AddBookingAddOnInput,
   RoomOption,
   Room,
   RoomOptions,
 } from '@stayreco/shared';
 import type { AuthUser } from '../../common/decorators/current-user.decorator';
-import { lockRoomType } from '../../common/db/locks';
+import { lockRoomTypes } from '../../common/db/locks';
 import { ErrorCode } from '../../common/errors/error-code';
 import {
   addDays,
@@ -56,8 +59,9 @@ import {
   loadBookingHistory,
   recordBookingEvent,
 } from './booking-history';
-import type { NightlyPrices } from './booking.mapper';
+import { type NightlyPrices, roomsOf } from './booking.mapper';
 import { BookingsService } from './bookings.service';
+import { LoyaltyService } from '../loyalty/loyalty.service';
 import { chargeCommission } from './commission';
 import { lateCheckout } from './late-checkout';
 import { NoShowService } from './no-show.service';
@@ -78,27 +82,45 @@ const CODE = /^SR(\d{6})(\d{4})$/;
 /** What check-in needs to know about the booking. */
 const stayRowSelect = {
   bookingId: true,
-  roomTypeId: true,
+  hotelId: true,
+  customerId: true,
   status: true,
-  numRooms: true,
   checkInDate: true,
   checkOutDate: true,
-  nightlyPrices: true,
+  items: {
+    select: { roomTypeId: true, numRooms: true, nightlyPrices: true },
+  },
   invoice: { select: { paymentStatus: true, totalAmount: true } },
-  roomType: {
+  addOns: { select: { payment: true, amount: true } },
+  hotel: {
     select: {
-      hotelId: true,
-      hotel: {
-        select: {
-          checkOutTime: true,
-          hotelProperties: lateCheckoutRowsSelect,
-        },
-      },
+      checkOutTime: true,
+      hotelProperties: lateCheckoutRowsSelect,
     },
   },
 } satisfies Prisma.BookingSelect;
 
 type StayRow = Prisma.BookingGetPayload<{ select: typeof stayRowSelect }>;
+
+/** Front-desk add-ons go on a paid stay that has not checked out: CONFIRMED and PAID, or CHECKED_IN. */
+const addOnsOpenWhere = {
+  OR: [
+    { status: 'CHECKED_IN' },
+    { status: 'CONFIRMED', invoice: { paymentStatus: 'PAID' } },
+  ],
+} satisfies Prisma.BookingWhereInput;
+
+function assertAddOnsOpen(booking: StayRow) {
+  const open =
+    booking.status === 'CHECKED_IN' ||
+    (booking.status === 'CONFIRMED' &&
+      booking.invoice?.paymentStatus === 'PAID');
+  if (!open) {
+    throw bookingStatusConflict(
+      'Add-ons can be added to a paid stay until check-out',
+    );
+  }
+}
 
 /**
  * The front desk (staff.md "Front desk", decisions O2–O9): finding the guest's booking by code or voucher QR, the
@@ -112,7 +134,9 @@ export class FrontDeskService {
     private readonly access: HotelAccessService,
     private readonly bookings: BookingsService,
     private readonly ledger: WalletLedger,
+    private readonly loyalty: LoyaltyService,
     private readonly noShows: NoShowService,
+    private readonly addOns: AddOnsService,
     private readonly config: ConfigService<Env, true>,
   ) {}
 
@@ -130,7 +154,7 @@ export class FrontDeskService {
       ? await this.prisma.invoice.findFirst({
           where: {
             invoiceNumber: code,
-            booking: { roomType: { hotelId: access.hotelId } },
+            booking: { hotelId: access.hotelId },
           },
           select: { bookingId: true },
         })
@@ -167,21 +191,22 @@ export class FrontDeskService {
   ): Promise<Booking> {
     const booking = await this.findForFrontDesk(user, bookingId);
     assertCheckInOpen(booking);
-    if (input.roomIds && input.roomIds.length !== booking.numRooms) {
+    const total = roomsOf(booking.items);
+    if (input.roomIds && input.roomIds.length !== total) {
       throw new BadRequestException({
         code: ErrorCode.VALIDATION_ERROR,
         message: 'Validation failed',
         details: [
           {
             field: 'roomIds',
-            message: `the booking has ${booking.numRooms} rooms`,
+            message: `the booking has ${total} rooms`,
           },
         ],
       });
     }
 
     await this.prisma.$transaction(async (tx) => {
-      await lockRoomType(tx, booking.roomTypeId);
+      await lockRoomTypes(tx, typesOf(booking));
       // Read again under the lock: a cancellation or another check-in may have landed meanwhile.
       const current = await tx.booking.findUniqueOrThrow({
         where: { bookingId },
@@ -195,16 +220,30 @@ export class FrontDeskService {
         : await this.defaultRooms(tx, current, nights, free);
       if (chosen.some((r) => !r)) {
         throw notAssignable(
-          'Every room must be of the booked room type, AVAILABLE and free on the remaining nights',
+          'Every room must be of a booked room type, AVAILABLE and free on the remaining nights',
         );
       }
       const rooms = (chosen as RoomOption[]).sort((a, b) =>
         byRoomNumber(a.roomNumber, b.roomNumber),
       );
+      // Each item gets as many rooms of its own type as it booked (BR-10).
+      for (const item of current.items) {
+        const given = rooms.filter((r) => r.roomTypeId === item.roomTypeId);
+        if (given.length !== item.numRooms) {
+          throw notAssignable(
+            'Each booked room type must get as many rooms as it booked',
+          );
+        }
+      }
       const roomIds = rooms.map((r) => r.id);
       const dates = nights.map(fromCalendarDate);
       const prices = new Map(
-        (current.nightlyPrices as NightlyPrices).map((n) => [n.date, n.price]),
+        current.items.map((i) => [
+          i.roomTypeId,
+          new Map(
+            (i.nightlyPrices as NightlyPrices).map((n) => [n.date, n.price]),
+          ),
+        ]),
       );
 
       await tx.roomCalendars.deleteMany({
@@ -215,13 +254,13 @@ export class FrontDeskService {
         where: { roomId: { in: roomIds }, date: { in: dates } },
       });
       await tx.roomCalendars.createMany({
-        data: roomIds.flatMap((roomId) =>
+        data: rooms.flatMap((room) =>
           nights.map((date) => ({
-            roomId,
+            roomId: room.id,
             bookingId,
             date: fromCalendarDate(date),
             status: 'BOOKED' as const,
-            priceOverride: prices.get(date),
+            priceOverride: prices.get(room.roomTypeId)!.get(date),
           })),
         ),
       });
@@ -267,11 +306,105 @@ export class FrontDeskService {
     const booking = await this.findForFrontDesk(user, bookingId);
     assertNoShowAllowed(booking);
     await this.prisma.$transaction(async (tx) => {
-      await lockRoomType(tx, booking.roomTypeId);
+      await lockRoomTypes(tx, typesOf(booking));
       const marked = await this.noShows.markIn(tx, bookingId, hotelActor(user));
       if (!marked) throw bookingStatusConflict('The booking changed meanwhile');
     });
     return this.bookings.findOne(user, bookingId);
+  }
+
+  /**
+   * A service used during the stay, added by the front desk and collected there at check-out (FRONT_DESK): it is not
+   * in the booking total and carries no commission. Any active add-on of the hotel, prebookable or not, while the
+   * booking is paid and not yet checked out. Name and price are fixed on the line.
+   */
+  async addAddOn(
+    user: AuthUser,
+    bookingId: string,
+    input: AddBookingAddOnInput,
+  ): Promise<Booking> {
+    const booking = await this.findForFrontDesk(user, bookingId);
+    assertAddOnsOpen(booking);
+    const {
+      lines: [line],
+    } = await this.addOns.price(booking.hotelId, [input], 'staff', 'body');
+    const now = new Date();
+    await this.prisma.$transaction(async (tx) => {
+      // The lock check-out takes, so a line is never added to a stay that has just been closed.
+      await lockRoomTypes(tx, typesOf(booking));
+      await this.assertStillOpen(tx, bookingId);
+      const created = await tx.bookingAddOn.create({
+        data: {
+          bookingId,
+          hotelAddOnId: line.hotelAddOnId,
+          name: line.name,
+          unitPrice: line.unitPrice,
+          quantity: line.quantity,
+          amount: line.amount,
+          payment: 'FRONT_DESK',
+          addedBy: user.accountId,
+          createdAt: now,
+        },
+      });
+      await recordBookingEvent(tx, {
+        action: AuditAction.BOOKING_ADD_ON_ADDED,
+        bookingId,
+        actor: hotelActor(user),
+        at: now,
+        value: {
+          lineId: created.bookingAddOnId,
+          name: line.name,
+          quantity: line.quantity,
+          amount: line.amount.toNumber(),
+        },
+      });
+    });
+    return this.bookings.findOne(user, bookingId);
+  }
+
+  /** Takes back a FRONT_DESK line entered by mistake, before check-out. Prepaid lines were paid and stay. */
+  async removeAddOn(
+    user: AuthUser,
+    bookingId: string,
+    lineId: string,
+  ): Promise<Booking> {
+    const booking = await this.findForFrontDesk(user, bookingId);
+    assertAddOnsOpen(booking);
+    const now = new Date();
+    await this.prisma.$transaction(async (tx) => {
+      await lockRoomTypes(tx, typesOf(booking));
+      await this.assertStillOpen(tx, bookingId);
+      const line = isUuid(lineId)
+        ? await tx.bookingAddOn.findFirst({
+            where: { bookingAddOnId: lineId, bookingId, payment: 'FRONT_DESK' },
+          })
+        : null;
+      if (!line) throw addOnNotFound();
+      await tx.bookingAddOn.delete({ where: { bookingAddOnId: lineId } });
+      await recordBookingEvent(tx, {
+        action: AuditAction.BOOKING_ADD_ON_REMOVED,
+        bookingId,
+        actor: hotelActor(user),
+        at: now,
+        value: {
+          lineId,
+          name: line.name,
+          quantity: line.quantity,
+          amount: line.amount.toNumber(),
+        },
+      });
+    });
+    return this.bookings.findOne(user, bookingId);
+  }
+
+  private async assertStillOpen(
+    tx: Prisma.TransactionClient,
+    bookingId: string,
+  ) {
+    const still = await tx.booking.count({
+      where: { bookingId, ...addOnsOpenWhere },
+    });
+    if (!still) throw bookingStatusConflict('The booking changed meanwhile');
   }
 
   /** What checking out now means, for the check-out screen (UC39, L6): nights released, delay, late check-out fee. */
@@ -294,6 +427,7 @@ export class FrontDeskService {
         nightPrice: toNumber(late.fee.nightPrice),
       },
       amountPaid: toNumber(booking.invoice!.totalAmount),
+      addOnsDue: toNumber(addOnsOf(booking, 'FRONT_DESK')),
     };
   }
 
@@ -332,7 +466,7 @@ export class FrontDeskService {
       : null;
 
     await this.prisma.$transaction(async (tx) => {
-      await lockRoomType(tx, booking.roomTypeId);
+      await lockRoomTypes(tx, typesOf(booking));
       const { count } = await tx.booking.updateMany({
         where: { bookingId, status: 'CHECKED_IN' },
         data: { status: 'COMPLETED' },
@@ -352,6 +486,14 @@ export class FrontDeskService {
         data: { status: 'CLEANING' },
       });
       const commission = await chargeCommission(tx, this.ledger, bookingId);
+      // Loyalty points on what the stay was actually paid (BR-11): a discount lowers them too, because a customer
+      // earns on money spent. The conditional status change above makes a second check-out credit them once.
+      const points = await this.loyalty.earn(tx, {
+        customerId: booking.customerId,
+        bookingId,
+        hotelId: booking.hotelId,
+        amountPaid: booking.invoice!.totalAmount,
+      });
       await recordBookingEvent(tx, {
         action: AuditAction.BOOKING_CHECKED_OUT,
         bookingId,
@@ -360,6 +502,7 @@ export class FrontDeskService {
         value: {
           commission: commission.toNumber(),
           releasedNights: released,
+          ...(points && { loyaltyPoints: points }),
           ...(lateFee && { lateFee }),
         },
       });
@@ -405,7 +548,7 @@ export class FrontDeskService {
     free: RoomOption[],
   ): Promise<(RoomOption | undefined)[]> {
     const held = await this.heldRooms(db, booking, nights);
-    if (held.length !== booking.numRooms) {
+    if (held.length !== roomsOf(booking.items)) {
       throw notAssignable(
         'The held rooms change during the stay; choose the rooms with roomIds',
       );
@@ -428,12 +571,17 @@ export class FrontDeskService {
           },
         },
       },
-      select: { roomId: true, roomNumber: true, status: true },
+      select: {
+        roomId: true,
+        roomNumber: true,
+        status: true,
+        roomTypeId: true,
+      },
     });
     return rooms.map(toOption).sort(compareOptions);
   }
 
-  /** AVAILABLE rooms of the booked type with no other stay, hold or closure on any of `nights`. */
+  /** AVAILABLE rooms of the booked types with no other stay, hold or closure on any of `nights`. */
   private async freeRooms(
     db: Prisma.TransactionClient,
     booking: StayRow,
@@ -441,7 +589,7 @@ export class FrontDeskService {
   ): Promise<RoomOption[]> {
     const rooms = await db.room.findMany({
       where: {
-        roomTypeId: booking.roomTypeId,
+        roomTypeId: { in: typesOf(booking) },
         status: 'AVAILABLE',
         roomCalendars: {
           none: {
@@ -454,7 +602,12 @@ export class FrontDeskService {
           },
         },
       },
-      select: { roomId: true, roomNumber: true, status: true },
+      select: {
+        roomId: true,
+        roomNumber: true,
+        status: true,
+        roomTypeId: true,
+      },
     });
     return rooms.map(toOption).sort(compareOptions);
   }
@@ -472,7 +625,7 @@ export class FrontDeskService {
       : null;
     const access = await this.access.assertResource(
       user,
-      booking?.roomType.hotelId,
+      booking?.hotelId,
       'member',
       bookingNotFound,
     );
@@ -526,14 +679,18 @@ function assertCheckedIn(booking: StayRow) {
 
 /** The delay and the fee of checking out `now`, under the hotel's current late check-out policy (L1–L3). */
 function lateCheckoutOf(booking: StayRow, now = new Date()) {
-  const nights = booking.nightlyPrices as NightlyPrices;
-  const hotel = booking.roomType.hotel;
+  const hotel = booking.hotel;
+  // The last night of every room, over the items.
+  const lastNights = booking.items.reduce((sum, i) => {
+    const nights = i.nightlyPrices as NightlyPrices;
+    return sum + nights[nights.length - 1].price * i.numRooms;
+  }, 0);
   return lateCheckout(
     {
       checkOut: toCalendarDate(booking.checkOutDate),
       checkOutTime: fromTime(hotel.checkOutTime) ?? DEFAULT_CHECK_OUT_TIME,
-      lastNightPrice: nights[nights.length - 1].price,
-      rooms: booking.numRooms,
+      lastNightPrice: lastNights,
+      rooms: 1,
     },
     lateCheckoutPolicyOf(hotel.hotelProperties),
     now,
@@ -584,11 +741,15 @@ const toOption = (r: {
   roomId: string;
   roomNumber: string;
   status: RoomOption['status'];
+  roomTypeId: string;
 }): RoomOption => ({
   id: r.roomId,
   roomNumber: r.roomNumber,
   status: r.status,
+  roomTypeId: r.roomTypeId,
 });
+
+const typesOf = (booking: StayRow) => booking.items.map((i) => i.roomTypeId);
 
 const compareOptions = (a: RoomOption, b: RoomOption) =>
   byRoomNumber(a.roomNumber, b.roomNumber);

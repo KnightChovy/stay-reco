@@ -1,4 +1,10 @@
-import { AdminScreen } from '@/features/admin/admin-screen';
+import { Suspense } from 'react';
+import AdminUsers from '@/features/admin/users/AdminUsers';
+// AdminUsers reads `?tab=` with useSearchParams, which needs a Suspense boundary on a prerendered page.
 export default function UsersPage() {
-  return <AdminScreen mode="users" />;
+  return (
+    <Suspense>
+      <AdminUsers />
+    </Suspense>
+  );
 }

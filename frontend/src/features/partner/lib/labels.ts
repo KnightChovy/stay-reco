@@ -118,6 +118,12 @@ export const bookingEventLabels: Record<string, string> = {
   REFUND_APPROVED: "Duyệt hoàn tiền",
   REFUND_REJECTED: "Từ chối hoàn tiền",
   CANCELLED: "Đã huỷ",
+  CHECKED_IN: "Nhận phòng",
+  COMPLETED: "Trả phòng",
+  NO_SHOW: "Khách không đến",
+  CHANGE_REQUESTED: "Khách yêu cầu đổi thông tin",
+  CHANGE_ACCEPTED: "Chấp nhận đổi thông tin",
+  CHANGE_REJECTED: "Từ chối đổi thông tin",
 };
 
 export const pricingRuleTypeLabels: Record<"SEASON" | "EARLY_BIRD" | "LAST_MINUTE", { label: string; description: string }> = {

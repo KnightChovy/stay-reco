@@ -1,0 +1,10 @@
+,w_cf,ghi_chu,svd,content,svdpp,demo,sigma,theta,sigma1,w_svdpp,n_safe,w_content,alpha_max,n_threshold,gamma_base,alpha_min,k_user,k_item,k_c
+Tarek 2023 (ItemCF+CB+KB),0.5,trọng số cố định theo bài gốc,,,,,,,,,,,,,,,,,
+Do & Le 2020 (SVD+CB),,,0.49970484844937924,0.5002951515506209,,,,,,,,,,,,,,,
+Do & Le 2020 (mở rộng 3 TP),,,,0.34212599144262934,0.33920437518545227,0.3186696333719184,,,,,,,,,,,,,
+OHWSF 2022 (SVD+SVD++),,,,,,,1.0,0.1,0.75,,,,,,,,,,
+SL-ARec 2026 (SVD+++LightGCN),,,,,,,,,,0.5,20.0,0.75,,,,,,,
+★ StayReco (α tuned),,,,,,,,,,,,,0.6,50.0,0.2,0.2,,,
+★ StayReco (shrinkage n/(n+k)),,,,,,,,,,,,,,,0.2,,40.0,5.0,
+★ StayReco (2 tang),,,,,,,,,,,,,,,,,40.0,5.0,1.0
+★ StayReco (2 tang + gamma=0 hotel moi),,,,,,,,,,,,,,,,,40.0,5.0,1.0

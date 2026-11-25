@@ -1,177 +1,286 @@
 'use client';
 
-import React, { useState } from 'react';
-import Header from '@/components/layout/Header';
-import Footer from '@/components/layout/Footer';
-import AppBreadcrumb from '@/components/common/breadcrumb/AppBreadcrumb';
-import AccountSubNav from '@/features/account/AccountSubNav';
-import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { useState, type FormEvent } from 'react';
+import Link from 'next/link';
 import {
+  Check,
   Compass,
-  Sparkles,
-  CheckCircle2,
+  Loader2,
+  MapPin,
   Save,
-  Coffee,
-  Trees,
-  Palmtree,
-  Utensils,
-  Briefcase,
-  Users,
-  Check
+  Sparkles,
+  Wallet,
 } from 'lucide-react';
+import AppBreadcrumb from '@/components/common/breadcrumb/AppBreadcrumb';
+import { ErrorState, LoadingState } from '@/components/common/StateViews';
+import { Button, buttonVariants } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { cn } from '@/lib/utils';
+import { getApiErrorMessage } from '@/lib/api-error';
+import { AccountPageHeader, accountContainer, notify } from '@/features/account/AccountShell';
+import { useMyPreferences, useUpdatePreferences } from '@/features/account/api/rewards-queries';
+import type { Preferences } from '@/services/rewards.service';
+import { AMENITIES, BUDGETS, STYLES } from '@/features/account/lib/preference-options';
+import { OnboardingOffer } from '@/features/recommendations/components/OnboardingGate';
 
-export default function PreferencesPage() {
-  const [selectedStyles, setSelectedStyles] = useState<string[]>(['resort', 'nature', 'foodie']);
-  const [selectedAmenities, setSelectedAmenities] = useState<string[]>(['pool', 'view', 'breakfast']);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+/**
+ * Keys this screen owns in `customer_preference` (docs/api/customer-wallet.md "Preferences"). The backend does not
+ * interpret them; the phase 5 recommender reads the same names. Lists are stored comma-separated.
+ */
+const KEYS = {
+  styles: 'travelStyles',
+  amenities: 'roomAmenities',
+  city: 'favouriteCity',
+  budget: 'budgetPerNight',
+} as const;
 
-  const toggleStyle = (id: string) => {
-    setSelectedStyles((prev) =>
-      prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]
-    );
+type FormState = { styles: string[]; amenities: string[]; city: string; budget: string };
+
+const splitList = (value: string | undefined) => (value ? value.split(',').filter(Boolean) : []);
+
+function toForm(preferences: Preferences): FormState {
+  return {
+    styles: splitList(preferences[KEYS.styles]),
+    amenities: splitList(preferences[KEYS.amenities]),
+    city: preferences[KEYS.city] ?? '',
+    budget: preferences[KEYS.budget] ?? '',
+  };
+}
+
+/** Empty values are sent as `null`, which removes the key instead of storing an empty string. */
+function toPayload(form: FormState): Record<string, string | null> {
+  return {
+    [KEYS.styles]: form.styles.length ? form.styles.join(',') : null,
+    [KEYS.amenities]: form.amenities.length ? form.amenities.join(',') : null,
+    [KEYS.city]: form.city.trim() || null,
+    [KEYS.budget]: form.budget || null,
+  };
+}
+
+const toggle = (list: string[], id: string) => (list.includes(id) ? list.filter((item) => item !== id) : [...list, id]);
+
+function SectionTitle({ id, icon: Icon, title, hint }: { id: string; icon: typeof Compass; title: string; hint: string }) {
+  return (
+    <div>
+      <h2 id={id} className="flex items-center gap-2 text-lg font-bold text-foreground">
+        <Icon className="size-5 text-primary" aria-hidden /> {title}
+      </h2>
+      <p className="mt-0.5 text-sm text-muted-foreground">{hint}</p>
+    </div>
+  );
+}
+
+function PreferencesForm({ initial }: { initial: FormState }) {
+  const [form, setForm] = useState<FormState>(initial);
+  const [justSaved, setJustSaved] = useState(false);
+  const update = useUpdatePreferences();
+  // Lists compared as sets: picking the same items in another order is not a change.
+  const sameList = (a: string[], b: string[]) => a.length === b.length && a.every((item) => b.includes(item));
+  const dirty =
+    !sameList(form.styles, initial.styles) ||
+    !sameList(form.amenities, initial.amenities) ||
+    form.city.trim() !== initial.city ||
+    form.budget !== initial.budget;
+
+  const edit = (next: (prev: FormState) => FormState) => {
+    setJustSaved(false);
+    setForm(next);
   };
 
-  const toggleAmenity = (id: string) => {
-    setSelectedAmenities((prev) =>
-      prev.includes(id) ? prev.filter((a) => a !== id) : [...prev, id]
-    );
-  };
-
-  const handleSave = (e: React.FormEvent) => {
-    e.preventDefault();
-    setToastMessage('Sở thích du lịch AI đã được lưu thành công! Gợi ý phòng sẽ cập nhật tự động.');
-    setTimeout(() => setToastMessage(null), 3500);
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    update.mutate(toPayload(form), {
+      onSuccess: () => {
+        setJustSaved(true);
+        notify.success('Đã lưu sở thích du lịch', 'Gợi ý khách sạn sẽ theo các lựa chọn mới của bạn.');
+      },
+    });
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-background font-sans antialiased text-foreground">
-      <Header />
-
-      <main className="flex-1 w-full bg-[#f7f9ff]">
-        <AccountSubNav activeTab="preferences" />
-
-        <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-          <AppBreadcrumb
-            items={[
-              { label: 'Trang chủ', href: '/' },
-              { label: 'Tài khoản', href: '/account/profile' },
-              { label: 'Sở thích du lịch', active: true },
-            ]}
-          />
-
-          <div className="space-y-1">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-semibold">
-              <Sparkles className="size-3.5" /> Cá nhân hóa AI StayReco
-            </span>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-              Sở thích du lịch cá nhân hóa
-            </h1>
-            <p className="text-xs sm:text-sm text-muted-foreground max-w-2xl">
-              Hệ thống AI đề xuất StayReco phân tích gu du lịch của bạn để gợi ý khách sạn & phòng nghỉ hoàn hảo nhất.
-            </p>
-          </div>
-
-          <form onSubmit={handleSave} className="space-y-6">
-            {/* Travel Styles */}
-            <Card className="p-6 sm:p-8 bg-white border border-border shadow-xs rounded-2xl space-y-6">
-              <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
-                <Compass className="size-5 text-primary" /> Phong cách du lịch yêu thích
-              </h2>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {[
-                  { id: 'resort', title: 'Nghỉ dưỡng & Relax', icon: Palmtree, desc: 'Resort yên tĩnh, view biển/sông' },
-                  { id: 'nature', title: 'Thiên nhiên & Eco', icon: Trees, desc: 'Lodge rừng thông, khu sinh thái' },
-                  { id: 'foodie', title: 'Ẩm thực & Văn hóa', icon: Utensils, desc: 'Boutique gần phố cổ & quán ngon' },
-                  { id: 'business', title: 'Công tác Sang trọng', icon: Briefcase, desc: 'Khách sạn trung tâm, bàn làm việc' },
-                  { id: 'family', title: 'Gia đình & Trẻ nhỏ', icon: Users, desc: 'Phòng rộng, hồ bơi & khu vui chơi' },
-                  { id: 'chill', title: 'Coffee & Check-in', icon: Coffee, desc: 'Homestay thiết kế gu, góc chụp đẹp' },
-                ].map((item) => {
-                  const Icon = item.icon;
-                  const active = selectedStyles.includes(item.id);
-                  return (
-                    <div
-                      key={item.id}
-                      onClick={() => toggleStyle(item.id)}
-                      className={`p-4 rounded-xl border-2 cursor-pointer transition-all space-y-2 relative ${
-                        active
-                          ? 'border-primary bg-primary/5 shadow-xs'
-                          : 'border-border bg-slate-50 hover:bg-white'
-                      }`}
-                    >
-                      {active && (
-                        <span className="absolute top-3 right-3 size-5 rounded-full bg-primary text-white flex items-center justify-center text-xs">
-                          <Check className="size-3" />
-                        </span>
-                      )}
-                      <Icon className={`size-6 ${active ? 'text-primary' : 'text-slate-500'}`} />
-                      <h4 className="text-sm font-bold text-foreground">{item.title}</h4>
-                      <p className="text-xs text-muted-foreground leading-relaxed">{item.desc}</p>
-                    </div>
-                  );
-                })}
-              </div>
-            </Card>
-
-            {/* Amenities */}
-            <Card className="p-6 sm:p-8 bg-white border border-border shadow-xs rounded-2xl space-y-6">
-              <h2 className="text-lg font-bold text-foreground">Tiện nghi phòng ưu tiên</h2>
-
-              <div className="flex flex-wrap gap-2.5">
-                {[
-                  { id: 'pool', label: 'Hồ bơi bơi vô cực' },
-                  { id: 'view', label: 'View sông / view biển' },
-                  { id: 'breakfast', label: 'Bữa sáng buffet bao gồm' },
-                  { id: 'spa', label: 'Dịch vụ Spa & Massage' },
-                  { id: 'quiet', label: 'Phòng kính cách âm tầng cao' },
-                  { id: 'tub', label: 'Bồn tắm ngâm thư giãn' },
-                  { id: 'shuttle', label: 'Xe đưa đón sân bay' },
-                ].map((item) => {
-                  const active = selectedAmenities.includes(item.id);
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => toggleAmenity(item.id)}
-                      className={`px-4 py-2 rounded-full text-xs font-semibold border transition-all flex items-center gap-1.5 ${
-                        active
-                          ? 'bg-primary text-primary-foreground border-primary shadow-2xs'
-                          : 'bg-slate-50 text-muted-foreground border-border hover:bg-slate-100'
-                      }`}
-                    >
-                      {active && <Check className="size-3.5" />} {item.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </Card>
-
-            <div className="flex justify-end pt-2">
-              <Button
-                type="submit"
-                className="h-11 px-8 bg-primary text-primary-foreground hover:bg-[#193b56] font-bold text-xs sm:text-sm gap-2 shadow-sm"
-              >
-                <Save className="size-4" /> <span>Lưu sở thích du lịch AI</span>
-              </Button>
-            </div>
-          </form>
-        </div>
-      </main>
-
-      {/* Toast */}
-      {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-primary text-primary-foreground px-5 py-3.5 rounded-xl shadow-xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5">
-          <CheckCircle2 className="size-5 text-emerald-400 shrink-0" />
-          <div>
-            <h4 className="text-xs sm:text-sm font-bold">Cập nhật thành công!</h4>
-            <p className="text-[11px] text-white/80">{toastMessage}</p>
-          </div>
+    <form onSubmit={submit} className="space-y-6 pb-24">
+      {justSaved && !dirty && (
+        <div
+          role="status"
+          className="flex flex-col gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <span className="flex items-center gap-2 font-semibold">
+            <Check className="size-4" aria-hidden /> Đã lưu. Gợi ý cho bạn đã được cập nhật theo sở thích mới.
+          </span>
+          <Link
+            href="/recommendations"
+            className={cn(buttonVariants({ variant: 'outline' }), 'h-10 shrink-0 gap-1.5 px-4')}
+          >
+            <Sparkles className="size-4" aria-hidden /> Xem gợi ý cho bạn
+          </Link>
         </div>
       )}
 
-      <Footer />
+      <Card className="space-y-5 rounded-2xl border border-border bg-card p-6 shadow-xs sm:p-8">
+        <SectionTitle id="styles-title" icon={Compass} title="Phong cách du lịch yêu thích" hint="Chọn nhiều." />
+        <div role="group" aria-labelledby="styles-title" className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          {STYLES.map((item) => {
+            const Icon = item.icon;
+            const active = form.styles.includes(item.id);
+            return (
+              <button
+                key={item.id}
+                type="button"
+                aria-pressed={active}
+                onClick={() => edit((prev) => ({ ...prev, styles: toggle(prev.styles, item.id) }))}
+                className={cn(
+                  'relative min-h-10 space-y-2 rounded-xl border-2 p-4 text-left transition-all',
+                  active ? 'border-primary bg-primary/5 shadow-xs' : 'border-border bg-muted/40 hover:bg-card',
+                )}
+              >
+                {active && (
+                  <span className="absolute top-3 right-3 flex size-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                    <Check className="size-3" aria-hidden />
+                  </span>
+                )}
+                <Icon className={cn('size-6', active ? 'text-primary' : 'text-muted-foreground')} aria-hidden />
+                <span className="block text-sm font-bold text-foreground">{item.title}</span>
+                <span className="block text-xs leading-relaxed text-muted-foreground">{item.desc}</span>
+              </button>
+            );
+          })}
+        </div>
+      </Card>
+
+      <Card className="space-y-5 rounded-2xl border border-border bg-card p-6 shadow-xs sm:p-8">
+        <SectionTitle id="amenities-title" icon={Sparkles} title="Tiện nghi ưu tiên" hint="Chọn nhiều." />
+        <div role="group" aria-labelledby="amenities-title" className="flex flex-wrap gap-2.5">
+          {AMENITIES.map((item) => {
+            const active = form.amenities.includes(item.id);
+            return (
+              <button
+                key={item.id}
+                type="button"
+                aria-pressed={active}
+                onClick={() => edit((prev) => ({ ...prev, amenities: toggle(prev.amenities, item.id) }))}
+                className={cn(
+                  'flex min-h-10 items-center gap-1.5 rounded-full border px-4 text-sm font-semibold transition-all',
+                  active
+                    ? 'border-primary bg-primary text-primary-foreground shadow-2xs'
+                    : 'border-border bg-muted/40 text-muted-foreground hover:bg-muted',
+                )}
+              >
+                {active && <Check className="size-3.5" aria-hidden />} {item.label}
+              </button>
+            );
+          })}
+        </div>
+      </Card>
+
+      <Card className="grid grid-cols-1 gap-6 rounded-2xl border border-border bg-card p-6 shadow-xs sm:grid-cols-2 sm:p-8">
+        <div className="space-y-2">
+          <Label htmlFor="favouriteCity" className="flex items-center gap-1.5 text-sm font-bold text-foreground">
+            <MapPin className="size-4 text-primary" aria-hidden /> Điểm đến hay đi
+          </Label>
+          <Input
+            id="favouriteCity"
+            value={form.city}
+            maxLength={100}
+            onChange={(event) => edit((prev) => ({ ...prev, city: event.target.value }))}
+            placeholder="Ví dụ: Đà Nẵng"
+            aria-describedby="favouriteCity-hint"
+            className="h-11 text-base sm:text-sm"
+          />
+          <p id="favouriteCity-hint" className="text-xs text-muted-foreground">
+            Ghi tên tỉnh hoặc thành phố, ví dụ &ldquo;Đà Nẵng&rdquo;, &ldquo;Hà Nội&rdquo;.
+          </p>
+        </div>
+        <div className="space-y-2">
+          <span id="budget-title" className="flex items-center gap-1.5 text-sm font-bold text-foreground">
+            <Wallet className="size-4 text-primary" aria-hidden /> Ngân sách mỗi đêm
+          </span>
+          <div className="flex flex-wrap gap-2" role="radiogroup" aria-labelledby="budget-title">
+            {BUDGETS.map((item) => (
+              <button
+                key={item.id || 'none'}
+                type="button"
+                role="radio"
+                aria-checked={form.budget === item.id}
+                onClick={() => edit((prev) => ({ ...prev, budget: item.id }))}
+                className={cn(
+                  'min-h-10 rounded-full border px-3.5 text-sm font-semibold transition-all',
+                  form.budget === item.id
+                    ? 'border-primary bg-primary text-primary-foreground'
+                    : 'border-border bg-muted/40 text-muted-foreground hover:bg-muted',
+                )}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </Card>
+
+      {update.error && (
+        <Alert variant="destructive" className="bg-red-50">
+          <AlertDescription className="text-sm">{getApiErrorMessage(update.error)}</AlertDescription>
+        </Alert>
+      )}
+
+      {/* The save bar follows the page only while something changed, so it is always one tap away. */}
+      {dirty && (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 shadow-[0_-4px_16px_rgb(40_48_54/8%)] backdrop-blur">
+          <div className="mx-auto flex max-w-4xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
+            <p className="hidden text-sm text-muted-foreground sm:block">Bạn có thay đổi chưa lưu.</p>
+            <div className="flex w-full shrink-0 items-center gap-2 sm:w-auto">
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={update.isPending}
+                onClick={() => setForm(initial)}
+                className="h-10 px-4 whitespace-nowrap"
+              >
+                Huỷ thay đổi
+              </Button>
+              <Button type="submit" disabled={update.isPending} className="h-10 flex-1 gap-2 px-6 whitespace-nowrap sm:flex-none">
+                {update.isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+                Lưu sở thích
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </form>
+  );
+}
+
+export default function PreferencesPage() {
+  const query = useMyPreferences();
+
+  return (
+    <div className={cn(accountContainer.narrow, 'space-y-6')}>
+      <AppBreadcrumb
+        items={[
+          { label: 'Tài khoản', href: '/account/profile' },
+          { label: 'Sở thích du lịch', active: true },
+        ]}
+      />
+
+      <AccountPageHeader
+        eyebrow="Cá nhân hoá gợi ý"
+        title="Sở thích du lịch"
+        description="StayReco dùng các lựa chọn này để gợi ý khách sạn và phòng nghỉ hợp gu của bạn. Bạn có thể đổi bất cứ lúc nào."
+      />
+
+      <OnboardingOffer />
+
+      {query.isLoading ? (
+        <LoadingState rows={3} label="Đang tải sở thích…" />
+      ) : query.error || !query.data ? (
+        <ErrorState title="Không tải được sở thích" error={query.error} onRetry={() => void query.refetch()} />
+      ) : (
+        // A save writes the stored values back to the cache, so `initial` then equals the form and it is clean.
+        // Keyed by the stored values: finishing onboarding here rewrites them, and the form starts again from those.
+        <PreferencesForm key={JSON.stringify(query.data)} initial={toForm(query.data)} />
+      )}
     </div>
   );
 }

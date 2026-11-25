@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Alert, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { ScrollView, TextInput, View } from 'react-native';
+import { alert } from '@/lib/alert';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -9,23 +10,25 @@ import { createBookingSchema, type ErrorDetail } from '@stayreco/shared';
 import { ScreenHeader } from '@/components/layout/AppHeader';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Chip } from '@/components/ui/chip';
 import { Icon, type IconName } from '@/components/ui/icon';
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
-import { colors, fonts, radius, shadow } from '@/constants/theme';
+import { colors } from '@/constants/theme';
 import { BookingProgress } from '@/features/booking/BookingProgress';
 import { PriceLine } from '@/features/booking/PriceLine';
 import { images } from '@/lib/mock-data';
 import { formatDate, formatVnd, nightsBetween, stayFromParams } from '@/lib/stay';
 import { createBooking } from '@/services/bookings.service';
+import { getDiscountQuote, getMyVouchers } from '@/services/rewards.service';
 import { hotelListingQuery } from '@/services/stays.service';
 import { useAuthStore } from '@/stores/auth.store';
 
 function CardTitle({ icon, title }: { icon: IconName; title: string }) {
   return (
-    <View style={styles.row}>
+    <View className="flex-row items-center gap-2">
       <Icon name={icon} size={20} color={colors.primaryContainer} />
-      <Text variant="label" weight="bold" style={styles.cardTitle}>
+      <Text variant="label" weight="bold" style={{ fontSize: 16, flexShrink: 1 }}>
         {title}
       </Text>
     </View>
@@ -33,6 +36,13 @@ function CardTitle({ icon, title }: { icon: IconName; title: string }) {
 }
 
 type ApiError = AxiosError<{ code?: string; message?: string; details?: ErrorDetail[] }>;
+
+const codeErrors: Record<string, string> = {
+  VOUCHER_NOT_FOUND: 'Mã giảm giá không tồn tại.',
+  VOUCHER_ALREADY_USED: 'Mã này đã được dùng cho một đơn khác.',
+  VOUCHER_EXPIRED: 'Mã này đã hết hạn.',
+  VOUCHER_NOT_APPLICABLE: 'Mã không áp dụng cho khách sạn hoặc giá trị đơn này.',
+};
 
 export default function BookingInfoScreen() {
   const insets = useSafeAreaInsets();
@@ -42,7 +52,8 @@ export default function BookingInfoScreen() {
   const account = useAuthStore((s) => s.account);
   const hydrating = useAuthStore((s) => s.hydrating);
   const queryClient = useQueryClient();
-  const { data, isError, refetch } = useQuery(hotelListingQuery(params.hotelId, stay));
+  const missing = !params.hotelId || !params.roomTypeId;
+  const { data, isError, refetch } = useQuery({ ...hotelListingQuery(params.hotelId, stay), enabled: !missing });
   const room = data?.roomTypes.find((r) => r.roomType.id === params.roomTypeId);
   const offer = room?.offer;
 
@@ -55,6 +66,70 @@ export default function BookingInfoScreen() {
   const [agreed, setAgreed] = useState(false);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [codeInput, setCodeInput] = useState('');
+  const [code, setCode] = useState<string>();
+  const [codeError, setCodeError] = useState('');
+  const [applying, setApplying] = useState(false);
+  const [usePoints, setUsePoints] = useState(false);
+
+  // Backend tính giảm giá và điểm (BR-06, BR-11); app chỉ hiển thị và gửi lại đúng expectedTotal.
+  const quoteQuery = (pointsToUse: number, withCode = code) => ({
+    queryKey: ['discount-quote', params.roomTypeId, stay.checkIn, stay.checkOut, stay.rooms, withCode ?? null, pointsToUse],
+    queryFn: () =>
+      getDiscountQuote({
+        roomTypeId: params.roomTypeId,
+        checkIn: stay.checkIn,
+        checkOut: stay.checkOut,
+        rooms: stay.rooms,
+        ...(withCode ? { code: withCode } : {}),
+        ...(pointsToUse ? { pointsToUse } : {}),
+      }),
+  });
+  const baseQuote = useQuery({ ...quoteQuery(0), enabled: !!account && !!offer });
+  const maxPoints = baseQuote.data?.points?.maxPointsUsable ?? 0;
+  // Mặc định dùng tối đa; khách gõ số khác thì giữ số đó nhưng không vượt mức tối đa của báo giá hiện tại.
+  const [chosenPoints, setChosenPoints] = useState<number>();
+  const [pointsInput, setPointsInput] = useState<string>();
+  const pointsToUse = usePoints ? Math.min(chosenPoints ?? maxPoints, maxPoints) : 0;
+  const pointsQuote = useQuery({ ...quoteQuery(pointsToUse), enabled: !!account && pointsToUse > 0 });
+  const quote = pointsToUse > 0 ? pointsQuote.data : baseQuote.data;
+  const total = quote?.expectedTotal ?? offer?.total ?? 0;
+  const commitPoints = () => {
+    if (pointsInput === undefined) return;
+    const n = Number.parseInt(pointsInput.replace(/\D/g, ''), 10);
+    setChosenPoints(Number.isNaN(n) ? undefined : Math.max(0, Math.min(n, maxPoints)));
+    setPointsInput(undefined);
+  };
+
+  // shortcut: gợi ý 20 voucher còn dùng được đầu tiên, đủ cho màn đặt phòng; danh sách đầy đủ ở Điểm thưởng.
+  const myVouchers = useQuery({
+    queryKey: ['vouchers', 'active', 'suggest'],
+    queryFn: () => getMyVouchers({ active: true, page: 1, pageSize: 20 }),
+    enabled: !!account,
+  });
+  // Voucher của khách sạn khác sẽ bị từ chối (VOUCHER_NOT_APPLICABLE), nên chỉ gợi ý voucher dùng được ở đây.
+  const suggestions = myVouchers.data?.vouchers.filter((v) => v.hotelId === null || v.hotelId === params.hotelId) ?? [];
+
+  const applyCode = async (raw = codeInput) => {
+    const typed = raw.trim().toUpperCase();
+    if (!typed) return;
+    setCodeError('');
+    setApplying(true);
+    try {
+      await queryClient.fetchQuery(quoteQuery(0, typed));
+      setCode(typed);
+    } catch (err) {
+      const body = (err as ApiError).response?.data;
+      setCodeError((body?.code && codeErrors[body.code]) || body?.message || 'Không kiểm tra được mã. Vui lòng thử lại.');
+    } finally {
+      setApplying(false);
+    }
+  };
+  const removeCode = () => {
+    setCode(undefined);
+    setCodeInput('');
+    setCodeError('');
+  };
 
   const submit = async (expectedTotal: number) => {
     const input = createBookingSchema.safeParse({
@@ -66,6 +141,8 @@ export default function BookingInfoScreen() {
       guestName: name,
       contactPhone: phone,
       ...(requests.trim() ? { specialRequests: requests } : {}),
+      ...(code ? { code } : {}),
+      ...(usePoints && quote?.points?.pointsUsed ? { pointsToUse: quote.points.pointsUsed } : {}),
       expectedTotal,
     });
     if (!input.success) {
@@ -85,10 +162,19 @@ export default function BookingInfoScreen() {
         const newTotal = Number(body.details?.find((d) => d.field === 'expectedTotal')?.message);
         // Tải lại giá để chi tiết giá và tổng tiền trên màn hiện theo giá mới.
         void queryClient.invalidateQueries({ queryKey: ['stays', 'hotel', params.hotelId] });
-        Alert.alert('Giá phòng đã thay đổi', `Tổng tiền mới là ${formatVnd(newTotal)}. Bạn có muốn tiếp tục đặt phòng?`, [
+        void queryClient.invalidateQueries({ queryKey: ['discount-quote'] });
+        alert('Giá phòng đã thay đổi', `Tổng tiền mới là ${formatVnd(newTotal)}. Bạn có muốn tiếp tục đặt phòng?`, [
           { text: 'Hủy', style: 'cancel' },
           { text: 'Đặt với giá mới', onPress: () => void submit(newTotal) },
         ]);
+      } else if (body?.code && codeErrors[body.code]) {
+        // Mã vừa hết lượt / hết hạn giữa lúc báo giá và lúc đặt.
+        removeCode();
+        setCodeError(codeErrors[body.code]);
+      } else if (body?.code === 'LOYALTY_POINTS_INSUFFICIENT') {
+        setUsePoints(false);
+        void queryClient.invalidateQueries({ queryKey: ['discount-quote'] });
+        setError('Số điểm StayMiles không còn đủ. Vui lòng kiểm tra lại tổng tiền.');
       } else if (body?.code === 'ROOM_SOLD_OUT') {
         setError('Rất tiếc, hạng phòng này vừa hết phòng cho ngày bạn chọn. Vui lòng chọn phòng khác.');
         void queryClient.invalidateQueries({ queryKey: ['stays', 'hotel', params.hotelId] });
@@ -102,9 +188,9 @@ export default function BookingInfoScreen() {
 
   if (!account) {
     return (
-      <View style={styles.screen}>
+      <View className="flex-1 bg-surface">
         <ScreenHeader title="Thông Tin Đặt Phòng" />
-        <View style={styles.state}>
+        <View className="flex-1 items-center justify-center gap-3 p-6">
           <Text variant="small" color={colors.onSurfaceVariant} center>
             {hydrating ? 'Đang tải...' : 'Vui lòng đăng nhập để đặt phòng.'}
           </Text>
@@ -116,15 +202,17 @@ export default function BookingInfoScreen() {
 
   if (!data || !room || !offer) {
     return (
-      <View style={styles.screen}>
+      <View className="flex-1 bg-surface">
         <ScreenHeader title="Thông Tin Đặt Phòng" />
-        <View style={styles.state}>
+        <View className="flex-1 items-center justify-center gap-3 p-6">
           <Text variant="small" color={colors.onSurfaceVariant} center>
-            {data
-              ? 'Hạng phòng này không còn mở bán cho ngày bạn chọn.'
-              : isError
-                ? 'Không tải được giá phòng. Vui lòng kiểm tra kết nối.'
-                : 'Đang tải...'}
+            {missing
+              ? 'Thiếu thông tin phòng cần đặt, bạn hãy chọn phòng từ trang khách sạn.'
+              : data
+                ? 'Hạng phòng này không còn mở bán cho ngày bạn chọn.'
+                : isError
+                  ? 'Không tải được giá phòng. Vui lòng kiểm tra kết nối.'
+                  : 'Đang tải...'}
           </Text>
           {!data && isError && (
             <Button label="Thử lại" leadingIcon="refresh" variant="secondary" size="sm" onPress={() => refetch()} />
@@ -137,36 +225,36 @@ export default function BookingInfoScreen() {
   const { hotel } = data;
 
   return (
-    <View style={styles.screen}>
+    <View className="flex-1 bg-surface">
       <ScreenHeader title="Thông Tin Đặt Phòng" />
       <BookingProgress current={1} />
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.card}>
-          <View style={styles.row}>
+      <ScrollView contentContainerClassName="gap-4 p-4 pb-8" showsVerticalScrollIndicator={false}>
+        <View className="gap-3 rounded-lg bg-surface-container-lowest p-4 shadow-card">
+          <View className="flex-row items-center gap-2">
             <View>
               <Image
                 source={room.roomType.images[0]?.url ?? hotel.images[0]?.url ?? images.bookingThumb}
-                style={styles.thumb}
+                className="h-[84px] w-[84px] rounded-md"
                 contentFit="cover"
               />
               {hotel.starRating != null && (
-                <View style={styles.thumbTag}>
+                <View className="absolute left-1.5 top-1.5 rounded-sm bg-primary-container px-1.5 py-0.5">
                   <Text variant="caption" weight="bold" color={colors.white}>
                     {hotel.starRating} Sao
                   </Text>
                 </View>
               )}
             </View>
-            <View style={[styles.flex, styles.gap4]}>
-              <View style={styles.row}>
+            <View className="flex-1 gap-1">
+              <View className="flex-row items-center gap-2">
                 <Icon name="location_on" size={14} color={colors.secondary} />
-                <Text variant="caption" color={colors.secondary} style={styles.flex}>
+                <Text variant="caption" color={colors.secondary} className="flex-1">
                   {hotel.city}
                 </Text>
               </View>
               <Text variant="h3">{hotel.name}</Text>
-              <View style={styles.row}>
+              <View className="flex-row items-center gap-2">
                 <Icon name="bed" size={14} color={colors.onSurfaceVariant} />
                 <Text variant="caption" color={colors.onSurfaceVariant}>
                   {room.roomType.name}
@@ -174,8 +262,8 @@ export default function BookingInfoScreen() {
               </View>
             </View>
           </View>
-          <View style={styles.dates}>
-            <View style={styles.flex}>
+          <View className="flex-row gap-3 rounded-md bg-surface-container-low p-3">
+            <View className="flex-1">
               <Text variant="caption" color={colors.onSurfaceVariant}>
                 Nhận phòng
               </Text>
@@ -184,7 +272,7 @@ export default function BookingInfoScreen() {
                 {formatDate(stay.checkIn)}
               </Text>
             </View>
-            <View style={styles.flex}>
+            <View className="flex-1">
               <Text variant="caption" color={colors.onSurfaceVariant}>
                 Trả phòng
               </Text>
@@ -197,8 +285,8 @@ export default function BookingInfoScreen() {
               </Text>
             </View>
           </View>
-          <View style={styles.between}>
-            <View style={styles.row}>
+          <View className="flex-row items-center justify-between gap-2">
+            <View className="flex-row items-center gap-2">
               <Icon name="group" size={18} color={colors.onSurfaceVariant} />
               <Text variant="small" color={colors.onSurfaceVariant}>
                 Số lượng khách:
@@ -210,7 +298,7 @@ export default function BookingInfoScreen() {
           </View>
         </View>
 
-        <View style={styles.card}>
+        <View className="gap-3 rounded-lg bg-surface-container-lowest p-4 shadow-card">
           <CardTitle icon="person_pin" title="Thông tin người liên hệ" />
           <Input label="Họ và tên khách" placeholder="Nhập họ và tên có dấu" value={name} onChangeText={setName} />
           <Input
@@ -225,7 +313,7 @@ export default function BookingInfoScreen() {
           </Text>
         </View>
 
-        <View style={styles.card}>
+        <View className="gap-3 rounded-lg bg-surface-container-lowest p-4 shadow-card">
           <CardTitle icon="hotel_class" title="Yêu cầu đặc biệt" />
           <TextInput
             multiline
@@ -235,11 +323,11 @@ export default function BookingInfoScreen() {
             placeholderTextColor={colors.outline}
             value={requests}
             onChangeText={setRequests}
-            style={styles.textarea}
+            className="min-h-20 rounded-md bg-surface-container-low p-3 font-be-regular text-sm text-on-surface"
           />
         </View>
 
-        <View style={styles.card}>
+        <View className="gap-3 rounded-lg bg-surface-container-lowest p-4 shadow-card">
           <Text variant="h3">Chi tiết giá</Text>
           {offer.nightlyPrices.map((n) => (
             <PriceLine
@@ -249,20 +337,122 @@ export default function BookingInfoScreen() {
             />
           ))}
           <PriceLine label="Thuế VAT & Phí phục vụ" value="Đã bao gồm" />
-          <View style={styles.divider} />
-          <View style={styles.between}>
+          {quote?.discount && (
+            <PriceLine
+              icon="sell"
+              tone={colors.tertiary}
+              label={quote.discount.code ? `Mã ${quote.discount.code}` : quote.discount.name}
+              value={`-${formatVnd(quote.discount.amount)}`}
+            />
+          )}
+          {usePoints && !!quote?.points?.amount && (
+            <PriceLine
+              icon="stars"
+              tone={colors.tertiary}
+              label={`${quote.points.pointsUsed.toLocaleString('vi-VN')} điểm StayMiles`}
+              value={`-${formatVnd(quote.points.amount)}`}
+            />
+          )}
+          <View className="h-px bg-surface-container-high" />
+          <View className="flex-row items-center justify-between gap-2">
             <Text variant="label" weight="bold">
               Tổng tiền thanh toán
             </Text>
             <Text variant="price" color={colors.primary}>
-              {formatVnd(offer.total)}
+              {formatVnd(total)}
             </Text>
           </View>
         </View>
 
-        <View style={[styles.policy, styles.row]}>
+        <View className="gap-3 rounded-lg bg-surface-container-lowest p-4 shadow-card">
+          <CardTitle icon="sell" title="Ưu đãi" />
+          {code ? (
+            <View className="flex-row items-center justify-between gap-2 rounded-md bg-surface-container-low p-3">
+              <Text variant="small" weight="bold" className="flex-1">
+                Đã áp dụng mã {code}
+              </Text>
+              <Button label="Bỏ mã" variant="ghost" size="sm" onPress={removeCode} />
+            </View>
+          ) : (
+            <View className="flex-row items-end gap-2">
+              <View className="flex-1">
+                <Input
+                  placeholder="Nhập mã giảm giá"
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  value={codeInput}
+                  onChangeText={setCodeInput}
+                />
+              </View>
+              <Button
+                label={applying ? 'Đang kiểm tra...' : 'Áp dụng'}
+                variant="secondary"
+                style={{ minHeight: 52 }}
+                disabled={applying || !codeInput.trim()}
+                onPress={() => void applyCode()}
+              />
+            </View>
+          )}
+          {!code && suggestions.length > 0 && (
+            <View className="gap-2">
+              <Text variant="caption" color={colors.onSurfaceVariant}>
+                Voucher của bạn dùng được ở đây:
+              </Text>
+              <View className="flex-row flex-wrap gap-2">
+                {suggestions.map((v) => (
+                  <Chip
+                    key={v.id}
+                    icon="confirmation_number"
+                    label={`${v.code} • ${v.discountType === 'PERCENTAGE' ? `${v.discountValue}%` : formatVnd(v.discountValue)}`}
+                    tone="outline"
+                    onPress={
+                      applying
+                        ? undefined
+                        : () => {
+                            setCodeInput(v.code);
+                            void applyCode(v.code);
+                          }
+                    }
+                  />
+                ))}
+              </View>
+            </View>
+          )}
+          {!!codeError && (
+            <Text variant="caption" color={colors.error}>
+              {codeError}
+            </Text>
+          )}
+          {!code && quote?.discount?.kind === 'PROMOTION' && (
+            <Text variant="caption" color={colors.onSurfaceVariant}>
+              Đang tự áp dụng khuyến mãi {quote.discount.name}. Mã giảm giá chỉ được dùng khi giảm nhiều hơn.
+            </Text>
+          )}
+          {maxPoints > 0 && (
+            <View className="flex-row items-center gap-2">
+              <Checkbox checked={usePoints} onChange={setUsePoints} />
+              <Text variant="small" className="flex-1">
+                Dùng điểm StayMiles (đang có {baseQuote.data!.points!.pointsBalance.toLocaleString('vi-VN')} điểm, dùng tối đa{' '}
+                {maxPoints.toLocaleString('vi-VN')})
+              </Text>
+            </View>
+          )}
+          {usePoints && maxPoints > 0 && (
+            <Input
+              label="Số điểm muốn dùng"
+              keyboardType="number-pad"
+              returnKeyType="done"
+              value={pointsInput ?? String(pointsToUse)}
+              onChangeText={setPointsInput}
+              onEndEditing={commitPoints}
+              onSubmitEditing={commitPoints}
+            />
+          )}
+        </View>
+
+        <View className="flex-row items-center gap-2 rounded-lg bg-tertiary-fixed p-4">
           <Icon name="event_available" size={22} color={colors.tertiaryContainer} />
-          <View style={styles.flex}>
+          <View className="flex-1">
             <Text variant="small" weight="bold" color={colors.tertiary}>
               Chính sách hủy
             </Text>
@@ -274,9 +464,9 @@ export default function BookingInfoScreen() {
           </View>
         </View>
 
-        <View style={[styles.row, styles.terms]}>
+        <View className="flex-row items-center gap-2" style={{ alignItems: 'flex-start' }}>
           <Checkbox checked={agreed} onChange={setAgreed} />
-          <Text variant="caption" color={colors.onSurfaceVariant} style={styles.flex}>
+          <Text variant="caption" color={colors.onSurfaceVariant} className="flex-1">
             Tôi đã đọc và đồng ý với Điều khoản dịch vụ, chính sách lưu trú của {hotel.name} và quy chuẩn bảo mật StayReco.
           </Text>
         </View>
@@ -287,71 +477,25 @@ export default function BookingInfoScreen() {
         )}
       </ScrollView>
 
-      <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
+      <View className="flex-row items-center gap-3 border-t border-surface-container-high bg-surface-container-lowest px-4 pt-3" style={{ paddingBottom: insets.bottom + 12 }}>
         <View>
           <Text variant="caption" color={colors.onSurfaceVariant}>
             Tổng tiền ({nights} đêm)
           </Text>
           <Text variant="h3" weight="bold" color={colors.primary}>
-            {formatVnd(offer.total)}
+            {formatVnd(total)}
           </Text>
         </View>
         <Button
           label={submitting ? 'Đang giữ phòng...' : 'Giữ phòng & thanh toán'}
           leadingIcon="lock"
           size="sm"
-          style={[styles.flex, styles.cta]}
-          disabled={!agreed || submitting}
-          onPress={() => void submit(offer.total)}
+          className="flex-1" style={{ minHeight: 52 }}
+          // Chờ báo giá để không gửi tổng chưa trừ khuyến mãi tự áp dụng.
+          disabled={!agreed || submitting || baseQuote.isPending || (pointsToUse > 0 && pointsQuote.isPending) || pointsInput !== undefined}
+          onPress={() => void submit(total)}
         />
       </View>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  state: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 24 },
-  screen: { flex: 1, backgroundColor: colors.surface },
-  content: { padding: 16, gap: 16, paddingBottom: 32 },
-  flex: { flex: 1 },
-  gap4: { gap: 4 },
-  cta: { minHeight: 52 },
-  cardTitle: { fontSize: 16, flexShrink: 1 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  between: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  card: { padding: 16, gap: 12, borderRadius: radius.lg, backgroundColor: colors.surfaceContainerLowest, ...shadow.card },
-  thumb: { width: 84, height: 84, borderRadius: radius.md },
-  thumbTag: {
-    position: 'absolute',
-    top: 6,
-    left: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: radius.sm,
-    backgroundColor: colors.primaryContainer,
-  },
-  dates: { flexDirection: 'row', padding: 12, gap: 12, borderRadius: radius.md, backgroundColor: colors.surfaceContainerLow },
-  textarea: {
-    minHeight: 80,
-    padding: 12,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceContainerLow,
-    fontFamily: fonts.regular,
-    fontSize: 14,
-    color: colors.onSurface,
-    textAlignVertical: 'top',
-  },
-  divider: { height: 1, backgroundColor: colors.surfaceContainerHigh },
-  policy: { padding: 16, borderRadius: radius.lg, backgroundColor: colors.tertiaryFixed, alignItems: 'flex-start' },
-  terms: { alignItems: 'flex-start' },
-  bottomBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    backgroundColor: colors.surfaceContainerLowest,
-    borderTopWidth: 1,
-    borderTopColor: colors.surfaceContainerHigh,
-  },
-});

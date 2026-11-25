@@ -1,4 +1,4 @@
-import { AdminScreen } from '@/features/admin/admin-screen';
+import AdminDashboard from '@/features/admin/dashboard/AdminDashboard';
 export default function DashboardPage() {
-  return <AdminScreen mode="dashboard" />;
+  return <AdminDashboard />;
 }

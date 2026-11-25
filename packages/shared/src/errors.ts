@@ -96,6 +96,8 @@ export const ErrorCode = {
   BOOKING_STATUS_CONFLICT: 'BOOKING_STATUS_CONFLICT',
   /** Cancelling after check-in (BR-09). */
   CANCELLATION_NOT_ALLOWED: 'CANCELLATION_NOT_ALLOWED',
+  /** Add-on does not exist, belongs to another hotel, is off sale or (for a customer) not prebookable. */
+  ADD_ON_NOT_FOUND: 'ADD_ON_NOT_FOUND',
   /** Deciding a refund that is not pending. */
   REFUND_STATUS_CONFLICT: 'REFUND_STATUS_CONFLICT',
 
@@ -120,6 +122,128 @@ export const ErrorCode = {
   // Notifications
   /** Notification does not exist or belongs to someone else. */
   NOTIFICATION_NOT_FOUND: 'NOTIFICATION_NOT_FOUND',
+
+  // Reviews (BR-12)
+  /** The review does not exist, or belongs to another customer. */
+  REVIEW_NOT_FOUND: 'REVIEW_NOT_FOUND',
+  /** Writing a review for a stay that is not COMPLETED yet. */
+  REVIEW_NOT_ALLOWED: 'REVIEW_NOT_ALLOWED',
+  /** The booking already has a review; one review per stay. */
+  REVIEW_ALREADY_EXISTS: 'REVIEW_ALREADY_EXISTS',
+  /** The review window closed (REVIEW_WINDOW_DAYS after check-out). */
+  REVIEW_WINDOW_CLOSED: 'REVIEW_WINDOW_CLOSED',
+  /** A sub-rating names a criterion that does not exist. */
+  RATING_CRITERION_NOT_FOUND: 'RATING_CRITERION_NOT_FOUND',
+  /** The review photo does not exist, or belongs to another customer's review. */
+  REVIEW_IMAGE_NOT_FOUND: 'REVIEW_IMAGE_NOT_FOUND',
+  /** Flagging the same review, or the same photo, twice. */
+  REPORT_ALREADY_RAISED: 'REPORT_ALREADY_RAISED',
+  /** The report does not exist. */
+  REPORT_NOT_FOUND: 'REPORT_NOT_FOUND',
+  /** Deciding a report that is already resolved or dismissed. */
+  REPORT_STATUS_CONFLICT: 'REPORT_STATUS_CONFLICT',
+
+  // Promotions and vouchers (BR-06)
+  /** The discount code does not exist, or belongs to another customer. */
+  VOUCHER_NOT_FOUND: 'VOUCHER_NOT_FOUND',
+  /** The voucher was already used on another booking. */
+  VOUCHER_ALREADY_USED: 'VOUCHER_ALREADY_USED',
+  /** The voucher, or the campaign behind it, is past its end date. */
+  VOUCHER_EXPIRED: 'VOUCHER_EXPIRED',
+  /** The stay is below the campaign's minimum amount, or is at another hotel. */
+  VOUCHER_NOT_APPLICABLE: 'VOUCHER_NOT_APPLICABLE',
+  /** The promotion does not exist, or belongs to another hotel. */
+  PROMOTION_NOT_FOUND: 'PROMOTION_NOT_FOUND',
+  /** The campaign is switched off, outside its dates, or has run out of uses. */
+  PROMOTION_NOT_ACTIVE: 'PROMOTION_NOT_ACTIVE',
+
+  // First-login preferences and the welcome voucher
+  /** Onboarding was already completed; change the picks with PUT /me/preferences instead. */
+  ONBOARDING_ALREADY_COMPLETED: 'ONBOARDING_ALREADY_COMPLETED',
+
+  // Loyalty (BR-11)
+  /** No loyalty programme is running, so points cannot be earned or spent. */
+  LOYALTY_PROGRAM_NOT_FOUND: 'LOYALTY_PROGRAM_NOT_FOUND',
+  /** Spending more points than the customer holds. */
+  LOYALTY_POINTS_INSUFFICIENT: 'LOYALTY_POINTS_INSUFFICIENT',
+  /** The hotel of the stay does not take points as payment (decision L10). */
+  LOYALTY_POINTS_NOT_ACCEPTED: 'LOYALTY_POINTS_NOT_ACCEPTED',
+
+  // Customer wallet
+  /** The wallet balance does not cover the whole booking; paying from it is all or nothing (decision W1). */
+  WALLET_INSUFFICIENT: 'WALLET_INSUFFICIENT',
+
+  // Withdrawals (BR-22, decisions M1–M3)
+  /** The withdrawal doesn't exist, or belongs to another hotel. */
+  PAYOUT_NOT_FOUND: 'PAYOUT_NOT_FOUND',
+  /** The hotel already has a withdrawal waiting for a platform manager; one at a time. */
+  PAYOUT_PENDING: 'PAYOUT_PENDING',
+  /** More than the available balance (MSG30); `details[0].message` holds the available balance. */
+  PAYOUT_EXCEEDS_BALANCE: 'PAYOUT_EXCEEDS_BALANCE',
+  /** The hotel has no approved verification with a beneficiary account to pay to. */
+  BENEFICIARY_MISSING: 'BENEFICIARY_MISSING',
+  /** The withdrawal is no longer pending (paid, rejected or cancelled in the meantime). */
+  PAYOUT_STATUS_CONFLICT: 'PAYOUT_STATUS_CONFLICT',
+
+  // Compliance (BR-15, decision M8)
+  /** The compliance case doesn't exist. */
+  VIOLATION_NOT_FOUND: 'VIOLATION_NOT_FOUND',
+  /** The case is closed, or the status change does not follow OPEN → INVESTIGATING → RESOLVED / DISMISSED. */
+  VIOLATION_STATUS_CONFLICT: 'VIOLATION_STATUS_CONFLICT',
+  /** The partner already has a suspension request waiting for the admin. */
+  SUSPENSION_REQUEST_PENDING: 'SUSPENSION_REQUEST_PENDING',
+  /** The hotel partner doesn't exist. */
+  PARTNER_NOT_FOUND: 'PARTNER_NOT_FOUND',
+  /** The partner's status does not allow it (reinstating a partner that is not suspended). */
+  PARTNER_STATUS_CONFLICT: 'PARTNER_STATUS_CONFLICT',
+  /** The suspension request doesn't exist. */
+  SUSPENSION_REQUEST_NOT_FOUND: 'SUSPENSION_REQUEST_NOT_FOUND',
+  /** The suspension request was already decided. */
+  SUSPENSION_STATUS_CONFLICT: 'SUSPENSION_STATUS_CONFLICT',
+
+  // Administration
+  /** The account doesn't exist. */
+  USER_NOT_FOUND: 'USER_NOT_FOUND',
+  /** The account's status does not allow it (locking a locked account, unlocking an active one). */
+  ACCOUNT_STATUS_CONFLICT: 'ACCOUNT_STATUS_CONFLICT',
+
+  // AI marketing (phase 5)
+  /** The AI writer is not configured, or answered in a shape we cannot use. */
+  AI_UNAVAILABLE: 'AI_UNAVAILABLE',
+  /** The hotel, or the customer's assistant chat, has used its AI budget for this calendar month. */
+  AI_BUDGET_EXCEEDED: 'AI_BUDGET_EXCEEDED',
+  /** The model declined to write what was asked for. */
+  AI_REFUSED: 'AI_REFUSED',
+
+  // Assistant (phase 5)
+  /** The conversation doesn't exist, or belongs to another customer. */
+  CONVERSATION_NOT_FOUND: 'CONVERSATION_NOT_FOUND',
+  /** No booking proposal with this id in the conversation. */
+  BOOKING_PROPOSAL_NOT_FOUND: 'BOOKING_PROPOSAL_NOT_FOUND',
+  /** The proposal was already confirmed, or has expired; ask the assistant for a new one. */
+  BOOKING_PROPOSAL_INVALID: 'BOOKING_PROPOSAL_INVALID',
+  /** The content does not exist, or belongs to another hotel. */
+  CONTENT_NOT_FOUND: 'CONTENT_NOT_FOUND',
+  /** Editing, submitting, approving or deleting content whose status does not allow it. */
+  CONTENT_STATUS_CONFLICT: 'CONTENT_STATUS_CONFLICT',
+  /** The connected social account does not exist, or belongs to another hotel. */
+  SOCIAL_ACCOUNT_NOT_FOUND: 'SOCIAL_ACCOUNT_NOT_FOUND',
+  /** The scheduled post does not exist, or belongs to another hotel. */
+  SCHEDULE_NOT_FOUND: 'SCHEDULE_NOT_FOUND',
+  /** Cancelling or publishing a scheduled post whose status does not allow it. */
+  SCHEDULE_STATUS_CONFLICT: 'SCHEDULE_STATUS_CONFLICT',
+  /** Scheduling content the owner has not approved (decision M10). */
+  CONTENT_NOT_APPROVED: 'CONTENT_NOT_APPROVED',
+  /** The platform refused the post, or could not be reached. Nothing about our request was wrong. */
+  SOCIAL_PUBLISH_FAILED: 'SOCIAL_PUBLISH_FAILED',
+  /** Posting to this platform is not built yet (TikTok: decision M12). */
+  SOCIAL_PLATFORM_UNSUPPORTED: 'SOCIAL_PLATFORM_UNSUPPORTED',
+  /** The server has no Meta app configured, so the owner cannot be sent to Facebook to connect a page. */
+  SOCIAL_OAUTH_DISABLED: 'SOCIAL_OAUTH_DISABLED',
+  /** The `state` or `connectionToken` handed back is not ours, is for another hotel, or has expired. Start again. */
+  SOCIAL_OAUTH_INVALID: 'SOCIAL_OAUTH_INVALID',
+  /** Facebook refused the exchange, or the owner granted no page we can post to. */
+  SOCIAL_OAUTH_FAILED: 'SOCIAL_OAUTH_FAILED',
 
   // Payments
   /** A webhook call (SePay) with a missing or wrong API key; nothing is processed. Not a client error to refresh. */

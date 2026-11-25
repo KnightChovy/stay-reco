@@ -1,7 +1,7 @@
 # API: Customer (`CUSTOMER`)
 
 > FE screens: home page, `search`, `hotels/[id]`, `hotels/[id]/rooms/[roomId]`, `booking/*`, `account/bookings/*`.
-> **Status: Agreed** (phase 2, backend built; becomes `Integrated` once FE uses it). Business rules behind these endpoints (prices, holds, payment, cancellation, refunds): [money-rules.md](../money-rules.md) and [phases/phase-2-search-booking.md](../phases/phase-2-search-booking.md).
+> **Status: BE Done** (backend built and merged into `develop`; becomes `Integrated` once FE uses it). Business rules behind these endpoints (prices, holds, payment, cancellation, refunds): [money-rules.md](../money-rules.md) and [phases/phase-2-search-booking.md](../phases/phase-2-search-booking.md).
 
 ## Available now
 
@@ -25,7 +25,7 @@ Stay parameters used by several endpoints (`stayQuerySchema`):
 |---|---|
 | `checkIn`, `checkOut` | `YYYY-MM-DD`. `checkIn` from today (Asia/Ho_Chi_Minh) up to 365 days ahead; `checkOut` after `checkIn`; 1 to 30 nights |
 | `guests` | 1 to 30, at least one per room, and at most `rooms` × the room type's `maxOccupancy` |
-| `rooms` | 1 to 8, default 1. One booking holds several rooms of **one** room type |
+| `rooms` | 1 to 8, default 1, for one room type. A booking can hold 1–5 room types of one hotel, 8 rooms in total (see "Create a booking") |
 
 ## Search and hotel pages (public, no token)
 
@@ -36,11 +36,11 @@ Stay parameters used by several endpoints (`stayQuerySchema`):
 | GET | `/room-types/:id/listing` | stay params, all optional | `RoomTypeListing` |
 
 - **Only bookable hotels appear**: `ACTIVE` hotels of partners that are not suspended (BR-01). Any other hotel returns `404 HOTEL_NOT_FOUND`, even if it exists.
-- **Search** lists only hotels with at least one room type that fits the guests and has enough rooms free on **every night** (BR-02). `destination` (at most 100 characters) matches the city, hotel name or address, ignoring case and Vietnamese accents ("da nang" finds "Đà Nẵng"). `priceMin` / `priceMax` filter on the total of the stay; `amenityIds` takes at most 20 ids. `freeCancellation=true` keeps hotels whose policy has a free-cancellation period. `sort` is one of `HOTEL_SORTS`: `recommended` (default: star rating, then price), `price-asc`, `price-desc`, `star-desc`. Guest ratings arrive with reviews (phase 4); until then `rating` is `null`.
+- **Search** lists only hotels with at least one room type that fits the guests and has enough rooms free on **every night** (BR-02). `destination` (at most 100 characters) matches the city, hotel name or address, ignoring case and Vietnamese accents ("da nang" finds "Đà Nẵng"). `priceMin` / `priceMax` filter on the total of the stay; `amenityIds` takes at most 20 ids. `freeCancellation=true` keeps hotels whose policy has a free-cancellation period. `sort` is one of `HOTEL_SORTS`: `recommended` (default: personalized when signed in), `price-asc`, `price-desc`, `star-desc`. Guest ratings arrive with reviews (phase 4); until then `rating` is `null`.
 - **Listing without dates** returns the hotel and its room types without prices (`offer: null`). With dates, each room type carries an `offer`: rooms still available, the price of each night and the total for the requested rooms, and the cancellation terms the booking would get. A room type that is full or too small for the guests comes back with `offer.available: 0` or `fitsGuests: false` (show "sold out"), not left out.
 - Prices are final prices (VAT and service fee included, BR-05), computed by the backend from the partner's pricing rules.
 - `checkIn` in the past or more than 365 days ahead (Vietnam time) answers `400 VALIDATION_ERROR` on `checkIn`.
-- `amenityIds` keeps hotels that have **all** the given hotel amenities. `freeCancellation=false` (or omitted) does not filter. Until reviews exist, `recommended` orders like `star-desc` (stars, then the cheapest).
+- `amenityIds` keeps hotels that have **all** the given hotel amenities. `freeCancellation=false` (or omitted) does not filter. For a signed-in customer, `recommended` orders the hotels that pass the filters by the recommender's rank for them (which already ranks hotels well over their budget last) before pagination; hotels outside their list come after, by stars, price and name, as in the public order. Hotels they booked before are not hidden. A request with an expired or revoked token answers `401` (refresh it); only a request with no token is served the public order.
 - `freeCancellationUntil` is `null` when the policy has no free period **or** the deadline has already passed for this stay (e.g. check-in tomorrow with 3 free days): the booking would get no free cancellation. `freeCancellation` in search results follows the same rule for the cheapest offer.
 - Room types without a base price are not sold and do not appear.
 
@@ -59,18 +59,23 @@ Stay parameters used by several endpoints (`stayQuerySchema`):
 
 ```jsonc
 {
-  "roomTypeId": "uuid",
-  "checkIn": "2026-11-20", "checkOut": "2026-11-22", "guests": 2, "rooms": 1,
+  "items": [                              // 1–5 room types of one hotel, each once; 8 rooms in total at most
+    { "roomTypeId": "uuid", "rooms": 2 },
+    { "roomTypeId": "uuid", "rooms": 1 }
+  ],
+  "checkIn": "2026-11-20", "checkOut": "2026-11-22", "guests": 5,
   "guestName": "Nguyễn Văn A",          // required, max 100; prefilled with the account name
   "contactPhone": "0905123456",          // required, same rule as hotel phones (max 20)
   "arrivalTime": "14:00",                // optional "HH:mm", start of the 1-hour arrival window
   "specialRequests": "Phòng tầng cao",   // optional, max 500
-  "expectedTotal": 3600000               // the total the customer saw
+  "expectedTotal": 3600000               // the total the customer saw: sum of offer.total for each item's rooms
 }
 ```
 
-- The backend checks availability again and prices the stay again (UC19). Not enough rooms → `409 ROOM_SOLD_OUT` (MSG12). A total different from `expectedTotal` → `409 BOOKING_PRICE_CHANGED` with the new total in `details` (MSG13): `[{ "field": "expectedTotal", "message": "4000000" }]`, the `message` being the new total as a number string; show it and send the request again with the new `expectedTotal` once the customer agrees.
-- `guests` above `rooms` × the room type's `maxOccupancy` → `400 VALIDATION_ERROR` on `guests`. A room type that is not on sale (hotel not bookable, no base price) → `404 ROOM_TYPE_NOT_FOUND`. Only `CUSTOMER` accounts book (`403 FORBIDDEN` otherwise).
+The older form `"roomTypeId": "uuid", "rooms": 1` (one room type) is still accepted instead of `items` while the apps switch; sending both answers `400 VALIDATION_ERROR` on `items`. Every item has the same dates; cancelling, check-in and check-out apply to the whole booking ([design/booking-items.md](../design/booking-items.md)).
+
+- The backend checks availability again and prices the stay again (UC19). Not enough rooms of one item → `409 ROOM_SOLD_OUT` (MSG12) with `details: [{ "field": "items.1.rooms", … }]` naming the item (index in the request); nothing is held then. A total different from `expectedTotal` → `409 BOOKING_PRICE_CHANGED` with the new total in `details` (MSG13): `[{ "field": "expectedTotal", "message": "4000000" }]`, the `message` being the new total as a number string; show it and send the request again with the new `expectedTotal` once the customer agrees.
+- `guests` above the sum of `rooms` × `maxOccupancy` over the items → `400 VALIDATION_ERROR` on `guests`. A room type twice or more than 8 rooms in total → `400 VALIDATION_ERROR` on `items`. A room type that is not on sale (hotel not bookable, no base price), or room types of two hotels → `404 ROOM_TYPE_NOT_FOUND`. Only `CUSTOMER` accounts book (`403 FORBIDDEN` otherwise).
 - On success the rooms are held for **15 minutes** (BR-03), the booking is `PENDING`, its invoice is `UNPAID`, and the booking code (`SR-YYMMDD-XXXX`) is the transfer content. The price, the cancellation terms and the commission rate are fixed on the booking from now on (BR-07, BR-09).
 - Two customers booking the last room at the same time: one gets the hold, the other `ROOM_SOLD_OUT`.
 - A hold not paid in time: the booking becomes `EXPIRED`, its invoice `FAILED`, and the rooms are released (a job runs every minute).
@@ -177,13 +182,31 @@ Changing dates, room type or guests is not offered: cancel and book again (BR-09
 // BookingSummary
 { "id": "uuid", "code": "SR-261022-0842", "status": "CONFIRMED", "paymentStatus": "PAID",
   "hotel": { "id": "uuid", "name": "…", "city": "…", "coverImageUrl": "https://…" },
-  "roomType": { "id": "uuid", "name": "…" },
-  "checkIn": "2026-11-20", "checkOut": "2026-11-22", "nights": 2, "rooms": 1, "guests": 2,
+  "items": [                              // in room type name order
+    { "roomType": { "id": "uuid", "name": "Deluxe" }, "rooms": 1, "subtotal": 3600000,
+      "nightlyPrices": [ { "date": "2026-11-20", "price": 1800000 } ] }   // one room, fixed at booking time
+  ],
+  "roomType": { "id": "uuid", "name": "…" },   // deprecated: the first item, until the apps read items
+  "checkIn": "2026-11-20", "checkOut": "2026-11-22", "nights": 2, "rooms": 1, "guests": 2,   // rooms: over every item
+  "guestName": "Trần Thị B", "contactPhone": "0905123456",   // who is staying
+  "bookedBy": { "name": "Nguyễn Văn A", "phone": null },     // the account that booked; differs when booked for someone
   "totalAmount": 3600000, "createdAt": "…" }
 
 // Booking = BookingSummary +
-{ "guestName": "…", "contactPhone": "…", "arrivalTime": "14:00", "specialRequests": null,
-  "nightlyPrices": [ { "date": "2026-11-20", "price": 1800000 } ],   // prices fixed at booking time
+{ "arrivalTime": "14:00", "specialRequests": null,
+  "invoice": {
+    "number": "SR-261022-0842",           // same as code
+    "paymentMethod": "SEPAY",             // WALLET once paid from the wallet
+    "subtotal": 4000000,                  // rooms + prepaid add-ons
+    "addOnsTotal": 0,                     // prepaid add-ons inside subtotal, never discounted
+    "discount": { "kind": "VOUCHER", "name": "Giảm 10%", "code": "SUMMER10", "amount": 400000 },   // null: none; code null for a PROMOTION
+    "points": null,                       // { "used": 5000, "amount": 500000 } when points were spent
+    "tax": 0,                             // always 0 for now: prices include tax
+    "total": 3600000,                     // subtotal − discount − points + tax
+    "frontDeskDue": 0,                    // front-desk add-ons, collected at check-out, not in total
+    "currency": "VND" },
+  "addOns": [],                           // BookingAddOn[], see api/add-ons.md
+  "nightlyPrices": [ { "date": "2026-11-20", "price": 1800000 } ],   // deprecated: the first item's
   "cancellation": { "freeUntil": "…", "feePercent": 50 },
   "holdExpiresAt": null,                  // set while PENDING
   "paidAt": "…",
@@ -191,7 +214,7 @@ Changing dates, room type or guests is not offered: cancel and book again (BR-09
   "refund": null,                         // { "status": "REFUND_PENDING" | "REFUNDED" | …, "amount": 1800000 }
   "refundRejection": null,                // { "reason": "…", "at": "…" } when the hotel rejected the latest request
   "cancelReason": null, "cancelledAt": null,
-  "assignedRooms": [ { "id": "uuid", "roomNumber": "501" } ],   // phase 3: rooms of the stay; [] for the customer before check-in
+  "assignedRooms": [ { "id": "uuid", "roomNumber": "501", "roomTypeId": "uuid" } ],   // rooms of the stay; [] for the customer before check-in
   "changeRequest": null,                  // phase 3: { "status": "PENDING", "changes": { "arrivalTime": "20:00" },
                                           //   "requestedAt": "…", "decidedAt": null, "reason": null }
   "timeline": [ { "at": "…", "event": "CREATED" }, { "at": "…", "event": "PAID" } ] }
@@ -212,7 +235,9 @@ Changing dates, room type or guests is not offered: cancel and book again (BR-09
   "needsApproval": true }                 // false when refund = 0 (cancelled at once)
 
 // BookingVoucher
-{ "code": "SR-261022-0842", "hotelName": "…", "roomTypeName": "…", "checkIn": "…", "checkOut": "…",
+{ "code": "SR-261022-0842", "hotelName": "…", "items": [ { "roomTypeName": "Deluxe", "rooms": 1 } ],
+  "roomTypeName": "…",                    // deprecated: the first item
+  "checkIn": "…", "checkOut": "…",
   "rooms": 1, "guests": 2, "guestName": "…", "amountPaid": 3600000, "qrToken": "…" }
 ```
 

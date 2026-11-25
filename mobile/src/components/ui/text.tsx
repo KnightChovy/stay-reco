@@ -1,36 +1,29 @@
 import { Text as RNText, type TextProps } from 'react-native';
-import { colors, fonts } from '@/constants/theme';
+import { colors } from '@/constants/theme';
 
 const variants = {
-  hero: { fontSize: 28, lineHeight: 36, fontFamily: fonts.bold },
-  h1: { fontSize: 24, lineHeight: 32, fontFamily: fonts.bold },
-  h2: { fontSize: 20, lineHeight: 28, fontFamily: fonts.bold },
-  h3: { fontSize: 17, lineHeight: 24, fontFamily: fonts.semibold },
-  body: { fontSize: 15, lineHeight: 22, fontFamily: fonts.regular },
-  label: { fontSize: 14, lineHeight: 20, fontFamily: fonts.medium },
-  small: { fontSize: 13, lineHeight: 18, fontFamily: fonts.regular },
-  caption: { fontSize: 12, lineHeight: 16, fontFamily: fonts.regular },
-  price: { fontSize: 20, lineHeight: 28, fontFamily: fonts.bold, fontVariant: ['tabular-nums' as const] },
+  hero: 'text-[28px] leading-9 font-be-bold',
+  h1: 'text-2xl font-be-bold',
+  h2: 'text-xl font-be-bold',
+  h3: 'text-[17px] leading-6 font-be-semibold',
+  body: 'text-[15px] leading-[22px] font-be-regular',
+  label: 'text-sm font-be-medium',
+  small: 'text-[13px] leading-[18px] font-be-regular',
+  caption: 'text-xs font-be-regular',
+  price: 'text-xl font-be-bold tabular-nums',
 };
+const weights = { regular: 'font-be-regular', medium: 'font-be-medium', semibold: 'font-be-semibold', bold: 'font-be-bold' };
 
 type Props = TextProps & {
   variant?: keyof typeof variants;
-  weight?: keyof typeof fonts;
+  weight?: keyof typeof weights;
   color?: string;
   center?: boolean;
+  className?: string;
 };
 
-export function Text({ variant = 'body', weight, color = colors.onSurface, center, style, ...props }: Props) {
-  return (
-    <RNText
-      style={[
-        variants[variant],
-        { color },
-        weight && { fontFamily: fonts[weight] },
-        center && { textAlign: 'center' },
-        style,
-      ]}
-      {...props}
-    />
-  );
+export function Text({ variant = 'body', weight, color = colors.onSurface, center, className = '', style, ...props }: Props) {
+  // `weight` thay font của variant: bỏ font-be-* của variant để không có hai class cùng thuộc tính.
+  const base = weight ? variants[variant].replace(/font-be-\w+/, weights[weight]) : variants[variant];
+  return <RNText className={`${base} ${center ? 'text-center' : ''} ${className}`} style={[{ color }, style]} {...props} />;
 }

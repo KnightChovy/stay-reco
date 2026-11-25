@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { BedDouble, Calculator, Pencil, Plus, Tags, Trash2 } from "lucide-react";
 import type { PricingRule, RoomType } from "@stayreco/shared";
 import { TableCommon, type CommonTableColumn } from "@/components/common/table";
@@ -243,8 +244,12 @@ function PricingWorkspace({ hotelId }: { hotelId: string }) {
 /** The backend computes the price (the FE never does); this asks it for one night. */
 function PricePreviewPanel({ roomTypes }: { roomTypes: RoomType[] }) {
   const today = todayInVietnam();
+  // `?date=` comes from the dashboard's "ngày tới công suất cao" item: show the current price of that night.
+  const linkedDate = useSearchParams().get("date");
   const [roomTypeId, setRoomTypeId] = useState(roomTypes[0]?.id ?? "");
-  const [date, setDate] = useState(today);
+  const [date, setDate] = useState(() =>
+    linkedDate && /^\d{4}-\d{2}-\d{2}$/.test(linkedDate) && linkedDate >= today ? linkedDate : today,
+  );
   const [bookedOn, setBookedOn] = useState(today);
   const preview = usePricePreview(roomTypeId || undefined, date, bookedOn);
 

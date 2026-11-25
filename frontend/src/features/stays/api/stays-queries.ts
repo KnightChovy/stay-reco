@@ -2,21 +2,25 @@
 
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import type { HotelSearchQuery, StayQuery } from "@stayreco/shared";
+import { useAuthStore } from "@/lib/auth-store";
 import * as staysService from "@/services/stays.service";
 
 export const staysKeys = {
   all: ["stays"] as const,
-  search: (query: HotelSearchQuery) => [...staysKeys.all, "search", query] as const,
+  search: (query: HotelSearchQuery, customerId?: string) => [...staysKeys.all, "search", customerId, query] as const,
   hotel: (hotelId: string, query: StayQuery) => [...staysKeys.all, "hotel", hotelId, query] as const,
   roomType: (roomTypeId: string, query: StayQuery) => [...staysKeys.all, "room-type", roomTypeId, query] as const,
   amenities: ["stays", "amenities"] as const,
 };
 
 export function useHotelSearch(query: HotelSearchQuery) {
+  const customerId = useAuthStore((state) => state.user?.role === "customer" ? state.user.id : undefined);
+  const hasHydrated = useAuthStore((state) => state.hasHydrated);
   return useQuery({
-    queryKey: staysKeys.search(query),
+    queryKey: staysKeys.search(query, customerId),
     queryFn: () => staysService.searchHotels(query),
-    placeholderData: keepPreviousData,
+    enabled: hasHydrated,
+    placeholderData: (previous, source) => source?.queryKey[2] === customerId ? previous : undefined,
   });
 }
 
@@ -24,6 +28,8 @@ export function useHotelListing(hotelId: string | undefined, query: StayQuery) {
   return useQuery({
     queryKey: staysKeys.hotel(hotelId ?? "", query),
     queryFn: () => staysService.getHotelListing(hotelId!, query),
+    // Changing the stay keeps the page on screen while the new prices load.
+    placeholderData: keepPreviousData,
     enabled: !!hotelId,
   });
 }
@@ -32,6 +38,8 @@ export function useRoomTypeListing(roomTypeId: string | undefined, query: StayQu
   return useQuery({
     queryKey: staysKeys.roomType(roomTypeId ?? "", query),
     queryFn: () => staysService.getRoomTypeListing(roomTypeId!, query),
+    // Changing the stay keeps the page on screen while the new prices load.
+    placeholderData: keepPreviousData,
     enabled: !!roomTypeId,
   });
 }

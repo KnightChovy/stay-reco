@@ -3,6 +3,9 @@ import { ApiExtension } from '@nestjs/swagger';
 import { EXT } from '../swagger/api-docs.decorators';
 
 export const IS_PUBLIC_KEY = 'isPublic';
+export const OPTIONAL_AUTH_KEY = 'optionalAuth';
+
+export const OptionalAuth = () => SetMetadata(OPTIONAL_AUTH_KEY, true);
 
 /** Skips JwtAuthGuard for this route or controller (and drops the lock in Swagger). */
 export const Public = () =>

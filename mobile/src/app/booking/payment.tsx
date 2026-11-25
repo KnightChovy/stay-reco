@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -9,16 +9,18 @@ import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
 import { Icon } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
-import { colors, radius, shadow } from '@/constants/theme';
+import { colors } from '@/constants/theme';
 import { BookingProgress } from '@/features/booking/BookingProgress';
 import { PriceLine } from '@/features/booking/PriceLine';
 import { images } from '@/lib/mock-data';
 import { bookingStatusLabel, formatDate, formatVnd } from '@/lib/stay';
+import { apiErrorMessage } from '@/services/ApiService';
 import { getBooking, simulatePayment } from '@/services/bookings.service';
+import { getMyWallet, payWithWallet } from '@/services/rewards.service';
 
 /** Giây còn lại tới `expiresAt`, cập nhật mỗi giây. */
 function useSecondsLeft(expiresAt: string | null | undefined) {
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
@@ -34,6 +36,7 @@ export default function PaymentScreen() {
   const { data: booking, refetch } = useQuery({
     queryKey: ['bookings', id],
     queryFn: () => getBooking(id),
+    enabled: !!id,
     refetchInterval: (q) => (q.state.data?.status === 'PENDING' ? 4000 : false),
   });
   const secondsLeft = useSecondsLeft(booking?.payment?.expiresAt);
@@ -53,6 +56,25 @@ export default function PaymentScreen() {
       .finally(() => setSimulating(false));
   };
 
+  const wallet = useQuery({ queryKey: ['wallet'], queryFn: getMyWallet });
+  const [payingWallet, setPayingWallet] = useState(false);
+  const [walletError, setWalletError] = useState('');
+  const payFromWallet = () => {
+    setPayingWallet(true);
+    setWalletError('');
+    void payWithWallet(id)
+      .then(() => {
+        void queryClient.invalidateQueries({ queryKey: ['wallet'] });
+        return refetch();
+      })
+      .catch((err: unknown) => {
+        setWalletError(apiErrorMessage(err, 'Không thanh toán được bằng ví. Vui lòng thử lại.'));
+        void wallet.refetch();
+        void refetch();
+      })
+      .finally(() => setPayingWallet(false));
+  };
+
   useEffect(() => {
     if (booking?.status === 'CONFIRMED') {
       void queryClient.invalidateQueries({ queryKey: ['bookings'] });
@@ -62,11 +84,11 @@ export default function PaymentScreen() {
 
   if (!booking) {
     return (
-      <View style={styles.screen}>
+      <View className="flex-1 bg-surface">
         <ScreenHeader title="Thanh Toán" />
-        <View style={styles.state}>
+        <View className="flex-1 items-center justify-center gap-3 p-6">
           <Text variant="small" color={colors.onSurfaceVariant}>
-            Đang tải đơn đặt phòng...
+            {id ? 'Đang tải đơn đặt phòng...' : 'Không tìm thấy đơn đặt phòng cần thanh toán.'}
           </Text>
         </View>
       </View>
@@ -76,9 +98,9 @@ export default function PaymentScreen() {
   const payment = booking.payment;
   if (booking.status !== 'PENDING' || !payment) {
     return (
-      <View style={styles.screen}>
+      <View className="flex-1 bg-surface">
         <ScreenHeader title="Thanh Toán" />
-        <View style={styles.state}>
+        <View className="flex-1 items-center justify-center gap-3 p-6">
           <Icon name="info" size={36} color={colors.secondary} />
           <Text variant="h3" center>
             {booking.status === 'EXPIRED' ? 'Hết thời gian giữ phòng' : bookingStatusLabel[booking.status]}
@@ -94,18 +116,21 @@ export default function PaymentScreen() {
     );
   }
 
+  const subtotal = booking.items.reduce((sum, i) => sum + i.subtotal, 0);
+  // W1: ví chỉ trả được cả đơn, không trả một phần.
+  const walletCovers = (wallet.data?.balanceAvailable ?? 0) >= payment.amount;
   const mm = `${Math.floor(secondsLeft / 60)}`.padStart(2, '0');
   const ss = `${secondsLeft % 60}`.padStart(2, '0');
 
   return (
-    <View style={styles.screen}>
+    <View className="flex-1 bg-surface">
       <ScreenHeader title="Thanh Toán" />
       <BookingProgress current={2} />
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.timer}>
+      <ScrollView contentContainerClassName="gap-4 p-4 pb-6" showsVerticalScrollIndicator={false}>
+        <View className="flex-row items-center gap-3 rounded-lg bg-secondary-fixed p-3.5">
           <Icon name="timer" size={24} color={colors.secondary} />
-          <View style={styles.flex}>
+          <View className="flex-1">
             <Text variant="small" color={colors.onSecondaryContainer}>
               Phòng đang được giữ cho bạn
             </Text>
@@ -115,10 +140,10 @@ export default function PaymentScreen() {
           </View>
         </View>
 
-        <View style={[styles.card, styles.gap12]}>
-          <View style={styles.row}>
-            <Image source={booking.hotel.coverImageUrl ?? images.paymentThumb} style={styles.thumb} contentFit="cover" />
-            <View style={[styles.flex, styles.gap4]}>
+        <View className="rounded-lg bg-surface-container-lowest p-4 shadow-card gap-3">
+          <View className="flex-row items-center gap-2">
+            <Image source={booking.hotel.coverImageUrl ?? images.paymentThumb} className="h-[84px] w-[84px] rounded-md" contentFit="cover" />
+            <View className="flex-1 gap-1">
               <Text variant="h3">{booking.hotel.name}</Text>
               <Text variant="caption" color={colors.onSurfaceVariant}>
                 {booking.roomType.name} • {booking.rooms} phòng • {booking.guests} khách
@@ -134,11 +159,19 @@ export default function PaymentScreen() {
               </Text>
             </View>
           </View>
-          <View style={styles.summary}>
-            <PriceLine label={`Tiền phòng (${booking.nights} đêm)`} value={formatVnd(booking.totalAmount)} />
+          <View className="gap-2 rounded-md bg-surface-container-low p-3">
+            <PriceLine label={`Tiền phòng (${booking.nights} đêm)`} value={formatVnd(subtotal)} />
+            {subtotal > booking.totalAmount && (
+              <PriceLine
+                label="Ưu đãi & điểm StayMiles"
+                icon="sell"
+                tone={colors.tertiary}
+                value={`-${formatVnd(subtotal - booking.totalAmount)}`}
+              />
+            )}
             <PriceLine label="Thuế VAT & Phí dịch vụ" value="Đã bao gồm" />
-            <View style={styles.divider} />
-            <View style={styles.between}>
+            <View className="h-px bg-surface-container-high" />
+            <View className="flex-row items-center justify-between gap-2">
               <Text variant="label" weight="bold">
                 Tổng tiền thanh toán
               </Text>
@@ -149,19 +182,45 @@ export default function PaymentScreen() {
           </View>
         </View>
 
-        <View style={styles.card}>
-          <View style={styles.between}>
-            <Text variant="label" weight="bold" style={styles.sectionTitle}>
+        {walletCovers && (
+          <View className="gap-3 rounded-lg bg-surface-container-lowest p-4 shadow-card">
+            <View className="flex-row items-center gap-2">
+              <Icon name="account_balance_wallet" size={20} color={colors.primaryContainer} />
+              <Text variant="label" weight="bold" style={{ fontSize: 16, flexShrink: 1 }}>
+                Thanh toán bằng ví StayReco
+              </Text>
+            </View>
+            <Text variant="caption" color={colors.onSurfaceVariant}>
+              Số dư {formatVnd(wallet.data!.balanceAvailable)} đủ trả cả đơn. Đơn được xác nhận ngay, không cần chuyển khoản.
+            </Text>
+            <Button
+              label={payingWallet ? 'Đang thanh toán...' : `Trả ${formatVnd(payment.amount)} bằng ví`}
+              leadingIcon="account_balance_wallet"
+              variant="secondary"
+              disabled={payingWallet}
+              onPress={payFromWallet}
+            />
+          </View>
+        )}
+        {!!walletError && (
+          <Text variant="small" color={colors.error}>
+            {walletError}
+          </Text>
+        )}
+
+        <View className="rounded-lg bg-surface-container-lowest p-4 shadow-card">
+          <View className="flex-row items-center justify-between gap-2">
+            <Text variant="label" weight="bold" style={{ fontSize: 16, flexShrink: 1 }}>
               Chuyển khoản qua VietQR
             </Text>
             <Chip label="SePay" tone="neutral" />
           </View>
-          <View style={styles.qrBox}>
-            <Image source={payment.qrImageUrl} style={styles.qr} contentFit="contain" accessibilityLabel="Mã VietQR" />
+          <View className="mt-3.5 gap-3 rounded-md border border-surface-container-high p-3.5">
+            <Image source={payment.qrImageUrl} className="h-60 w-60 self-center rounded-lg bg-surface-container-lowest p-3 shadow-card" contentFit="contain" accessibilityLabel="Mã VietQR" />
             <PriceLine label="Ngân hàng" value={payment.bankName} />
             <PriceLine label="Số tài khoản" value={payment.accountNumber} />
             <PriceLine label="Chủ tài khoản" value={payment.accountName} />
-            <View style={styles.transfer}>
+            <View className="rounded-md bg-surface-container-low p-3">
               <Text variant="caption" color={colors.onSurfaceVariant}>
                 Nội dung chuyển khoản (ghi chính xác)
               </Text>
@@ -176,7 +235,7 @@ export default function PaymentScreen() {
         </View>
       </ScrollView>
 
-      <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
+      <View className="gap-2.5 border-t border-surface-container-high bg-surface-container-lowest px-4 pt-3" style={{ paddingBottom: insets.bottom + 12 }}>
         <Button
           label={checking ? 'Đang kiểm tra...' : 'Kiểm tra trạng thái thanh toán'}
           leadingIcon="refresh"
@@ -196,53 +255,3 @@ export default function PaymentScreen() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  state: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 24 },
-  screen: { flex: 1, backgroundColor: colors.surface },
-  content: { padding: 16, gap: 16, paddingBottom: 24 },
-  flex: { flex: 1 },
-  sectionTitle: { fontSize: 16, flexShrink: 1 },
-  gap4: { gap: 4 },
-  gap12: { gap: 12 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  between: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  timer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    padding: 14,
-    borderRadius: radius.lg,
-    backgroundColor: colors.secondaryFixed,
-  },
-  card: { padding: 16, borderRadius: radius.lg, backgroundColor: colors.surfaceContainerLowest, ...shadow.card },
-  thumb: { width: 84, height: 84, borderRadius: radius.md },
-  summary: { padding: 12, gap: 8, borderRadius: radius.md, backgroundColor: colors.surfaceContainerLow },
-  divider: { height: 1, backgroundColor: colors.surfaceContainerHigh },
-  qrBox: {
-    marginTop: 14,
-    padding: 14,
-    gap: 12,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.surfaceContainerHigh,
-  },
-  qr: {
-    alignSelf: 'center',
-    width: 240,
-    height: 240,
-    padding: 12,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surfaceContainerLowest,
-    ...shadow.card,
-  },
-  transfer: { padding: 12, borderRadius: radius.md, backgroundColor: colors.surfaceContainerLow },
-  bottomBar: {
-    gap: 10,
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    backgroundColor: colors.surfaceContainerLowest,
-    borderTopWidth: 1,
-    borderTopColor: colors.surfaceContainerHigh,
-  },
-});

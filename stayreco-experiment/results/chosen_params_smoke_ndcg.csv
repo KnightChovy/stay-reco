@@ -1,0 +1,13 @@
+,w_cf,ghi_chu,svd,content,svdpp,demo,sigma,theta,sigma1,w_svdpp,n_safe,w_content,alpha_max,n_threshold,gamma_base,alpha_min,k_user,k_item,k_c
+Tarek 2023 (ItemCF+CB+KB),0.5,trọng số cố định theo bài gốc,,,,,,,,,,,,,,,,,
+Do & Le 2020 (SVD+CB),,,0.4931035873745025,0.5068964126254976,,,,,,,,,,,,,,,
+Do & Le 2020 (mở rộng 3 TP),,,,0.35200522575446674,0.3442761093354293,0.303718664910104,,,,,,,,,,,,,
+OHWSF 2022 (SVD+SVD++),,,,,,,0.0,0.1,0.5,,,,,,,,,,
+SL-ARec 2026 (SVD+++LightGCN),,,,,,,,,,0.25,10.0,0.25,,,,,,,
+★ StayReco (α tuned),,,,,,,,,,,,,0.7,10.0,0.2,0.0,,,
+★ StayReco (shrinkage n/(n+k)),,,,,,,,,,,,,,,0.2,,5.0,20.0,
+★ StayReco (2 tang),,,,,,,,,,,,,,,,,5.0,50.0,30.0
+★ StayReco (2 tang + gamma=0 hotel moi),,,,,,,,,,,,,,,,,5.0,50.0,30.0
+★ Ablation: alpha = t_user (chi phia user),,,,,,,,,,,,,,,,,20.0,1.0,30.0
+★ Ablation: alpha = (t_user+t_item)/2,,,,,,,,,,,,,,,,,10.0,100.0,10.0
+★ Ablation: alpha = t_user*t_item (luoi k' rong),,,,,,,,,,,,,,,,,5.0,50.0,30.0

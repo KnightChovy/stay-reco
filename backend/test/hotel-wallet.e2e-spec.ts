@@ -31,11 +31,17 @@ describe('Hotel wallet (e2e)', () => {
     const b = await t.prisma.booking.create({
       data: {
         customerId: customer.id,
-        roomTypeId: roomType.roomTypeId,
+        hotelId,
         checkInDate: new Date('2026-10-10T00:00:00Z'),
         checkOutDate: new Date('2026-10-11T00:00:00Z'),
-        numRooms: 1,
-        nightlyPrices: [{ date: '2026-10-10', price: 1000000 }],
+        items: {
+          create: {
+            roomTypeId: roomType.roomTypeId,
+            numRooms: 1,
+            nightlyPrices: [{ date: '2026-10-10', price: 1000000 }],
+            subtotal: 1000000,
+          },
+        },
         totalAmount: 1000000,
         status: 'COMPLETED',
         guestName: 'Khách',

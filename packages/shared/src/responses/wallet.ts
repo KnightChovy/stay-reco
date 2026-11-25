@@ -43,3 +43,17 @@ export const hotelBeneficiaryResponseSchema = z
     description: 'The bank account the hotel is paid out to.',
   });
 export type HotelBeneficiary = z.infer<typeof hotelBeneficiaryResponseSchema>;
+
+/** `GET /me/wallet`: what the customer holds. Only refunds fill it, and only a whole booking may be paid from it. */
+export const customerWalletResponseSchema = z
+  .object({
+    balanceAvailable: z.number().describe('What can be spent on a booking right now.'),
+    balancePending: z.number().describe('Money recorded but not yet usable; always 0 for a customer today.'),
+    currency: z.string(),
+    updatedAt: isoDateTime().nullable().describe('Last movement; null for a wallet that has never moved.'),
+  })
+  .register(responseSchemas, {
+    id: 'CustomerWallet',
+    description: "The signed-in customer's wallet balance.",
+  });
+export type CustomerWallet = z.infer<typeof customerWalletResponseSchema>;

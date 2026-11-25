@@ -1,11 +1,15 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Controller, Get, Header, Param, Query } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
   hotelListingResponseSchema,
   hotelSearchResultResponseSchema,
   roomTypeListingResponseSchema,
 } from '@stayreco/shared';
-import { Public } from '../../common/decorators/public.decorator';
+import {
+  CurrentUser,
+  type AuthUser,
+} from '../../common/decorators/current-user.decorator';
+import { OptionalAuth, Public } from '../../common/decorators/public.decorator';
 import { ErrorCode } from '../../common/errors/error-code';
 import {
   ApiData,
@@ -27,9 +31,14 @@ export class StaysController {
       'Public. Only bookable hotels (ACTIVE, partner not suspended) with at least one room type free on every night that fits the guests. `destination` matches the city, name or address, ignoring case and Vietnamese accents. `fromTotal` is the cheapest total for the stay and the rooms asked; `priceMin` / `priceMax` filter on it. `freeCancellation` is true when that offer can still be cancelled for free.',
   })
   @ApiPage(hotelSearchResultResponseSchema)
+  @OptionalAuth()
+  @Header('Cache-Control', 'private, no-store')
   @Get('hotels')
-  search(@Query() query: HotelSearchQueryDto) {
-    return this.stays.search(query);
+  search(@Query() query: HotelSearchQueryDto, @CurrentUser() user?: AuthUser) {
+    return this.stays.search(
+      query,
+      user?.role === 'CUSTOMER' ? user.accountId : undefined,
+    );
   }
 
   @ApiOperation({

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { router } from 'expo-router';
 import { otpCodeSchema, registerCustomerSchema } from '@stayreco/shared';
 import { BrandMark, ScreenHeader } from '@/components/layout/AppHeader';
@@ -8,7 +8,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Icon } from '@/components/ui/icon';
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
-import { colors, radius } from '@/constants/theme';
+import { colors } from '@/constants/theme';
 import { useAuthStore } from '@/stores/auth.store';
 
 function Required() {
@@ -96,10 +96,10 @@ export default function RegisterScreen() {
 
   if (pendingEmail) {
     return (
-      <View style={styles.screen}>
+      <View className="flex-1 bg-surface">
         <ScreenHeader title="Xác thực email" />
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          <View style={styles.gap8}>
+        <ScrollView contentContainerClassName="gap-[18px] p-4 pb-10" keyboardShouldPersistTaps="handled">
+          <View className="gap-2">
             <Text variant="hero">Nhập mã xác thực</Text>
             <Text variant="body" color={colors.onSurfaceVariant}>
               Chúng tôi đã gửi mã 6 chữ số tới{' '}
@@ -144,16 +144,16 @@ export default function RegisterScreen() {
   }
 
   return (
-    <View style={styles.screen}>
+    <View className="flex-1 bg-surface">
       <ScreenHeader title="Đăng ký" />
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-        <View style={styles.row}>
+      <ScrollView contentContainerClassName="gap-[18px] p-4 pb-10" keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        <View className="flex-row items-center gap-1.5">
           <BrandMark size={36} />
           <Text variant="h2" color={colors.primary}>
             StayReco
           </Text>
         </View>
-        <View style={styles.gap8}>
+        <View className="gap-2">
           <Text variant="hero">Tạo tài khoản StayReco</Text>
           <Text variant="body" color={colors.onSurfaceVariant}>
             Tham gia cộng đồng du khách tinh tế và tận hưởng kỳ nghỉ trọn vẹn tại Việt Nam.
@@ -169,7 +169,7 @@ export default function RegisterScreen() {
           value={fullName}
           onChangeText={setFullName}
         />
-        <View style={styles.gap8}>
+        <View className="gap-2">
           <Input
             label="Email nhận vé & hóa đơn"
             labelRight={<Required />}
@@ -181,7 +181,7 @@ export default function RegisterScreen() {
             value={email}
             onChangeText={setEmail}
           />
-          <View style={styles.row}>
+          <View className="flex-row items-center gap-1.5">
             <Icon name="info" size={14} color={colors.onSurfaceVariant} />
             <Text variant="caption" color={colors.onSurfaceVariant}>
               Chúng tôi sẽ gửi E-Voucher và xác nhận đến hòm thư này.
@@ -223,12 +223,12 @@ export default function RegisterScreen() {
           right={<EyeToggle visible={showConfirm} onToggle={() => setShowConfirm(!showConfirm)} />}
         />
 
-        <View style={styles.rules}>
+        <View className="gap-2 rounded-md bg-surface-container-low p-3.5">
           <Text variant="small" weight="bold" color={colors.onSurfaceVariant}>
             Yêu cầu bảo mật:
           </Text>
           {rules.map((r) => (
-            <View key={r.label} style={styles.row}>
+            <View key={r.label} className="flex-row items-center gap-1.5">
               <Icon
                 name={r.ok ? 'check_circle' : 'radio_button_unchecked'}
                 size={16}
@@ -242,7 +242,7 @@ export default function RegisterScreen() {
         </View>
 
         <Checkbox checked={agreed} onChange={setAgreed}>
-          <Text variant="small" style={styles.shrink}>
+          <Text variant="small" className="shrink">
             Tôi đã đọc và đồng ý với{' '}
             <Text variant="small" weight="bold" color={colors.primary}>
               Điều khoản dịch vụ
@@ -255,7 +255,7 @@ export default function RegisterScreen() {
           </Text>
         </Checkbox>
         <Checkbox checked={newsletter} onChange={setNewsletter}>
-          <Text variant="small" style={styles.shrink}>
+          <Text variant="small" className="shrink">
             Nhận gợi ý lưu trú cá nhân hóa, điểm đến bí mật và mã ưu đãi boutique định kỳ qua email.
           </Text>
         </Checkbox>
@@ -273,22 +273,22 @@ export default function RegisterScreen() {
           disabled={loading}
         />
 
-        <View style={[styles.row, styles.center]}>
+        <View className="flex-row items-center gap-1.5 justify-center">
           <Text variant="small" color={colors.onSurfaceVariant}>
             Đã có tài khoản StayReco?
           </Text>
           <Pressable onPress={() => router.replace('/login')}>
-            <Text variant="small" weight="bold" color={colors.primary} style={styles.underline}>
+            <Text variant="small" weight="bold" color={colors.primary} className="underline">
               Đăng nhập ngay
             </Text>
           </Pressable>
         </View>
 
-        <View style={styles.partner}>
-          <View style={styles.partnerIcon}>
+        <View className="flex-row items-center gap-3 rounded-lg bg-surface-container-low p-3.5">
+          <View className="h-11 w-11 items-center justify-center rounded-md bg-surface-container-high">
             <Icon name="corporate_fare" size={22} color={colors.primaryContainer} />
           </View>
-          <View style={styles.flex}>
+          <View className="flex-1">
             <Text variant="small" weight="bold">
               Chủ khách sạn & resort boutique?
             </Text>
@@ -299,7 +299,7 @@ export default function RegisterScreen() {
           <Button label="StayReco Partner" variant="secondary" size="sm" />
         </View>
 
-        <View style={[styles.row, styles.center]}>
+        <View className="flex-row items-center gap-1.5 justify-center">
           <Icon name="lock" size={14} color={colors.onSurfaceVariant} />
           <Text variant="caption" color={colors.onSurfaceVariant}>
             Mã hóa SSL 256-bit
@@ -319,31 +319,3 @@ export default function RegisterScreen() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.surface },
-  content: { padding: 16, gap: 18, paddingBottom: 40 },
-  flex: { flex: 1 },
-  shrink: { flexShrink: 1 },
-  gap8: { gap: 8 },
-  center: { justifyContent: 'center' },
-  underline: { textDecorationLine: 'underline' },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  rules: { padding: 14, gap: 8, borderRadius: radius.md, backgroundColor: colors.surfaceContainerLow },
-  partner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    padding: 14,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surfaceContainerLow,
-  },
-  partnerIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surfaceContainerHigh,
-  },
-});
