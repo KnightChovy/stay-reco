@@ -23,6 +23,7 @@ import type {
   CreateRoomTypeInput,
   Hotel,
   HotelImage,
+  HotelStatsBreakdown,
   HotelStatsOverview,
   HotelStatsSeries,
   HotelSummary,
@@ -31,6 +32,7 @@ import type {
   InviteStaffInput,
   LockRoomInput,
   OccupancyForecast,
+  PartnerPortfolio,
   Room,
   RoomConfigInput,
   RoomListQuery,
@@ -599,6 +601,16 @@ export async function getStatsSeries(
     `/hotels/${hotelId}/stats/series`,
     { params },
   );
+  return data.data;
+}
+
+export async function getStatsBreakdown(hotelId: string, params: StatsRangeParams) {
+  const { data } = await api.get<APIResponse<HotelStatsBreakdown>>(`/hotels/${hotelId}/stats/breakdown`, { params });
+  return data.data;
+}
+
+export async function getPortfolioStats(params: StatsRangeParams) {
+  const { data } = await api.get<APIResponse<PartnerPortfolio>>("/me/hotels/stats", { params });
   return data.data;
 }
 

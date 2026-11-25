@@ -21,7 +21,9 @@ import { addDays, todayInVietnam } from "../lib/dates";
 import { formatDate, formatMoney } from "../lib/labels";
 import { ExportExcelButton } from "./ExportExcelButton";
 import { Delta, formatNumber, formatPercent } from "./format";
+import { PortfolioStats } from "./PortfolioStats";
 import { barMetrics, StatsChart, type BarMetric } from "./StatsChart";
+import { StatsBreakdown } from "./StatsBreakdown";
 
 type Preset = "today" | "7d" | "30d" | "month" | "custom";
 
@@ -253,6 +255,9 @@ export function PeriodStats({
           )}
         </PartnerPanel>
       )}
+
+      {range && <StatsBreakdown hotelId={hotelId} range={range} />}
+      {range && <PortfolioStats range={range} />}
     </section>
   );
 }
