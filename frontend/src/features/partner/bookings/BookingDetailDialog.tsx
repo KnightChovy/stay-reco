@@ -7,12 +7,15 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { BookingInvoice } from "@/features/booking/components/BookingInvoice";
+import { BookingTimeline } from "@/features/booking/components/BookingTimeline";
+import { FrontDeskAddOns } from "@/features/booking/components/FrontDeskAddOns";
 import { validateWith } from "@/lib/api-error";
 import * as partnerService from "@/services/partner.service";
 import { partnerKeys, useBooking, useCheckOutQuote, usePartnerMutation } from "../api/partner-queries";
 import { ConfirmDialog, ErrorPanel, FormField, StatusBadge, usePartnerHotel } from "../components";
+import { CheckInPanel, frontDeskQueries } from "./CheckInPanel";
 import {
-  bookingEventLabels,
   bookingStatusLabels,
   formatDate,
   formatDateTime,
@@ -179,6 +182,10 @@ function BookingDetail({ booking, hotelId, onDecided }: { booking: Booking; hote
         </div>
       )}
 
+      {booking.status === "CONFIRMED" && booking.paymentStatus === "PAID" && isOwner && canEdit && (
+        <CheckInPanel booking={booking} hotelId={hotelId} onDone={onDecided} />
+      )}
+
       {booking.status === "CHECKED_IN" && isOwner && (
         <CheckOutPanel booking={booking} hotelId={hotelId} canEdit={canEdit} onDone={onDecided} />
       )}
@@ -220,40 +227,26 @@ function BookingDetail({ booking, hotelId, onDecided }: { booking: Booking; hote
       </section>
 
       <section>
-        <h3 className="mb-1 text-sm font-bold text-primary">Giá & thanh toán</h3>
-        <div className="divide-y rounded-xl border px-3">
-          {booking.nightlyPrices.map((night) => (
-            <Row key={night.date} label={`Đêm ${formatDate(night.date)}`}>
-              {formatMoney(night.price)}
-              {booking.rooms > 1 ? ` × ${booking.rooms}` : ""}
-            </Row>
-          ))}
-          <Row label="Tổng tiền">
-            <strong className="text-primary">{formatMoney(booking.totalAmount)}</strong>
-          </Row>
-          <Row label="Thanh toán lúc">{formatDateTime(booking.paidAt)}</Row>
+        <h3 className="mb-2 text-sm font-bold text-primary">Hoá đơn</h3>
+        <BookingInvoice booking={booking} />
+        <div className="mt-2 divide-y rounded-xl border px-3">
           <Row label="Huỷ miễn phí đến">
             {booking.cancellation.freeUntil ? formatDateTime(booking.cancellation.freeUntil) : "Không có"}
           </Row>
           <Row label="Phí huỷ sau hạn">{booking.cancellation.feePercent}%</Row>
-          {booking.refund && (
-            <Row label="Hoàn tiền">
-              {formatMoney(booking.refund.amount)} · {paymentStatusLabels[booking.refund.status].label}
-            </Row>
-          )}
         </div>
       </section>
 
+      {isOwner && canEdit && (
+        <section>
+          <h3 className="mb-2 text-sm font-bold text-primary">Dịch vụ thêm</h3>
+          <FrontDeskAddOns booking={booking} />
+        </section>
+      )}
+
       <section>
         <h3 className="mb-2 text-sm font-bold text-primary">Lịch sử</h3>
-        <ol className="space-y-2 border-l-2 pl-4">
-          {booking.timeline.map((entry) => (
-            <li key={`${entry.event}-${entry.at}`} className="text-sm">
-              <strong>{bookingEventLabels[entry.event] ?? entry.event}</strong>
-              <span className="ml-2 text-xs text-muted-foreground">{formatDateTime(entry.at)}</span>
-            </li>
-          ))}
-        </ol>
+        <BookingTimeline timeline={booking.timeline} />
       </section>
 
       <ConfirmDialog
@@ -275,17 +268,6 @@ function formatMinutes(minutes: number) {
   const rest = minutes % 60;
   if (hours === 0) return `${rest} phút`;
   return rest === 0 ? `${hours} giờ` : `${hours} giờ ${rest} phút`;
-}
-
-/** Bookings, rooms, calendar and the dashboard figures (action items, today) all move with a check-out or a change. */
-function frontDeskQueries(hotelId: string, bookingId: string) {
-  return [
-    partnerKeys.bookingsOf(hotelId),
-    partnerKeys.booking(bookingId),
-    partnerKeys.availabilityOf(hotelId),
-    partnerKeys.roomsOf(hotelId),
-    partnerKeys.statsOf(hotelId),
-  ];
 }
 
 /**

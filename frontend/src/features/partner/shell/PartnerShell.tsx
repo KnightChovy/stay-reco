@@ -98,7 +98,6 @@ const navigation: Omit<SidebarItem, "isActive">[] = [
     label: "Giọng thương hiệu AI",
     icon: Sparkles,
     section: "Tiếp thị & khách hàng",
-    comingSoon: true,
   },
   {
     href: "/partner/staff",

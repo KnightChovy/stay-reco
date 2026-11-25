@@ -8,20 +8,27 @@ import type {
   ContentSchedule,
   ContentVariant,
   CreateContentInput,
+  FacebookAuthorize,
+  FacebookConnectInput,
+  FacebookExchange,
+  FacebookExchangeInput,
   GenerateContentInput,
   GenerateImageInput,
+  LearnBrandVoiceInput,
   MarketingContent,
+  RejectContentInput,
   ScheduleContentInput,
   ScheduleListQuery,
   SocialAccount,
+  UpdateBrandVoiceInput,
   UpdateContentInput,
 } from "@stayreco/shared";
 import type { APIResponse, PageMeta } from "@/types/response.type";
 
 /**
- * Phase 5 AI marketing endpoints a hotel staff member uses (docs/api/marketing.md): ideas, the AI writer, editing and
- * submitting a draft, its picture, scheduling approved content and reading how a post did. Approving, connecting a
- * page and learning the brand voice belong to the owner and are not called from here.
+ * Phase 5 AI marketing endpoints (docs/api/marketing.md): ideas, the AI writer, editing and submitting a draft, its
+ * picture, scheduling approved content and reading how a post did for staff; the brand voice, approval and connecting
+ * pages for the owner (the "Owner" section, called from the partner portal only).
  */
 
 export type ContentListParams = Partial<ContentListQuery>;
@@ -189,4 +196,57 @@ export async function getScheduleMetrics(scheduleId: string) {
 export async function refreshScheduleMetrics(scheduleId: string) {
   const { data } = await api.post<APIResponse<ContentMetric>>(`/content-schedules/${scheduleId}/metrics/refresh`);
   return data.data;
+}
+
+// ── Owner ───────────────────────────────────────────────────
+
+export async function updateBrandVoice(hotelId: string, input: UpdateBrandVoiceInput) {
+  const { data } = await api.patch<APIResponse<BrandVoice>>(`/hotels/${hotelId}/brand-voice`, input);
+  return data.data;
+}
+
+export async function learnBrandVoice(hotelId: string, input: LearnBrandVoiceInput) {
+  const { data } = await api.post<APIResponse<BrandVoice>>(`/hotels/${hotelId}/brand-voice/learn`, input, {
+    timeout: 90_000,
+  });
+  return data.data;
+}
+
+export async function approveContent(contentId: string) {
+  const { data } = await api.post<APIResponse<MarketingContent>>(`/marketing-content/${contentId}/approve`);
+  return clean(data.data);
+}
+
+export async function rejectContent(contentId: string, input: RejectContentInput) {
+  const { data } = await api.post<APIResponse<MarketingContent>>(`/marketing-content/${contentId}/reject`, input);
+  return clean(data.data);
+}
+
+export async function getFacebookAuthorizeUrl(hotelId: string) {
+  const { data } = await api.get<APIResponse<FacebookAuthorize>>(
+    `/hotels/${hotelId}/social-accounts/facebook/authorize`,
+  );
+  return data.data;
+}
+
+export async function exchangeFacebookCode(hotelId: string, input: FacebookExchangeInput) {
+  const { data } = await api.post<APIResponse<FacebookExchange>>(
+    `/hotels/${hotelId}/social-accounts/facebook/exchange`,
+    input,
+    { timeout: 30_000 },
+  );
+  return data.data;
+}
+
+export async function connectFacebookPages(hotelId: string, input: FacebookConnectInput) {
+  const { data } = await api.post<APIResponse<SocialAccount[]>>(
+    `/hotels/${hotelId}/social-accounts/facebook/connect`,
+    input,
+    { timeout: 30_000 },
+  );
+  return data.data;
+}
+
+export async function disconnectSocialAccount(accountId: string) {
+  await api.delete(`/social-accounts/${accountId}`);
 }

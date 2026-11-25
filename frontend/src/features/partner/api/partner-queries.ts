@@ -34,6 +34,7 @@ export const partnerKeys = {
     [...partnerKeys.bookingsOf(hotelId), params] as const,
   booking: (bookingId: string) => [...partnerKeys.all, "booking", bookingId] as const,
   checkOutQuote: (bookingId: string) => [...partnerKeys.booking(bookingId), "check-out-quote"] as const,
+  roomOptions: (bookingId: string) => [...partnerKeys.booking(bookingId), "room-options"] as const,
   /** Every dashboard figure of a hotel, so the refresh button can refetch them together. */
   statsOf: (hotelId: string) => [...partnerKeys.all, "stats", hotelId] as const,
   actionItems: (hotelId: string) => [...partnerKeys.statsOf(hotelId), "action-items"] as const,
@@ -177,6 +178,16 @@ export function useCheckOutQuote(bookingId: string, enabled: boolean) {
     queryFn: () => partnerService.getCheckOutQuote(bookingId),
     enabled,
     staleTime: 0,
+  });
+}
+
+export function useRoomOptions(bookingId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: partnerKeys.roomOptions(bookingId),
+    queryFn: () => partnerService.getRoomOptions(bookingId),
+    enabled,
+    staleTime: 0,
+    retry: false,
   });
 }
 
