@@ -9,7 +9,10 @@ import { JwtService } from '@nestjs/jwt';
 import { AccountStatus, UserRole } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuthenticatedRequest } from '../decorators/current-user.decorator';
-import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
+import {
+  IS_PUBLIC_KEY,
+  OPTIONAL_AUTH_KEY,
+} from '../decorators/public.decorator';
 
 export interface AccessTokenPayload {
   sub: string;
@@ -30,11 +33,19 @@ export class JwtAuthGuard implements CanActivate {
       context.getHandler(),
       context.getClass(),
     ]);
-    if (isPublic) return true;
+    const optional =
+      isPublic &&
+      this.reflector.get<boolean>(OPTIONAL_AUTH_KEY, context.getHandler());
+    if (isPublic && !optional) return true;
 
     const req = context.switchToHttp().getRequest<AuthenticatedRequest>();
     const [scheme, token] = req.headers.authorization?.split(' ') ?? [];
-    if (scheme !== 'Bearer' || !token) throw new UnauthorizedException();
+    // Optional auth only means "no token sent". A token that is sent but expired or revoked still answers 401, so
+    // the client refreshes it instead of silently getting the signed-out results.
+    if (scheme !== 'Bearer' || !token) {
+      if (optional) return true;
+      throw new UnauthorizedException();
+    }
 
     let payload: AccessTokenPayload;
     try {

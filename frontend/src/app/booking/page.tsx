@@ -20,6 +20,7 @@ import {
   X,
 } from 'lucide-react';
 import { createBookingSchema } from '@stayreco/shared';
+import { z } from 'zod';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -108,6 +109,7 @@ function CenteredState({ title, children, action }: { title: string; children?: 
 function BookingContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const recommendationId = z.uuid().safeParse(searchParams.get('recommendationId')).data;
   const user = useAuthStore((state) => state.user);
 
   const roomTypeId = searchParams.get('roomTypeId') ?? '';
@@ -318,6 +320,7 @@ function BookingContent() {
         rooms,
         guestName: payload.guestName,
         contactPhone: payload.contactPhone,
+        recommendationId,
         arrivalTime: payload.arrivalTime,
         specialRequests: payload.specialRequests,
         code: appliedCode,

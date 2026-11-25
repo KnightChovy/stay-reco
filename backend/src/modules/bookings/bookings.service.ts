@@ -258,10 +258,23 @@ export class BookingsService {
           });
         }
 
+        const recommendation = input.recommendationId
+          ? (
+              await tx.$queryRaw<{ id: string }[]>`
+              SELECT r.recommendation_id AS id
+              FROM recommendation r JOIN model_run m USING (model_run_id)
+              WHERE r.recommendation_id = ${input.recommendationId}::uuid
+                AND r.customer_id = ${user.accountId}::uuid AND r.hotel_id = ${hotelId}::uuid
+                AND m.status = 'COMPLETED'
+              FOR KEY SHARE OF r
+            `
+            )[0]
+          : undefined;
         const booking = await tx.booking.create({
           data: {
             customerId: user.accountId,
             hotelId,
+            recommendationId: recommendation?.id,
             loyaltyProgramId: points?.pointsUsed ? points.programId : null,
             promotionId: discount?.promotionId ?? null,
             voucherId: discount?.voucherId ?? null,

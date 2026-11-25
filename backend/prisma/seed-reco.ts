@@ -1009,7 +1009,11 @@ async function main() {
   const reviews: Prisma.ReviewCreateManyInput[] = [];
   const scores: Prisma.UserItemRatingCreateManyInput[] = [];
   const taken = new Set<string>();
-  const codes = new Set<string>();
+  const codes = new Set(
+    (await prisma.invoice.findMany({ select: { invoiceNumber: true } })).map(
+      ({ invoiceNumber }) => invoiceNumber,
+    ),
+  );
   const established = hotels.filter((h) => !h.isNew);
   const totalWeight = criteria.reduce((n, c) => n + Number(c.weight), 0);
 

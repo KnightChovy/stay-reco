@@ -72,7 +72,7 @@ describe('Recommendations and assistant (e2e)', () => {
   const run = async (customerId: string, hotelIds: string[]) => {
     const r = await t.prisma.modelRun.create({
       data: {
-        algorithm: 'stayreco-two-sided',
+        algorithm: 'two-sided-shrinkage',
         version: '1.0',
         status: 'COMPLETED',
         startedAt: new Date(),
@@ -165,6 +165,118 @@ describe('Recommendations and assistant (e2e)', () => {
         .set(auth(me.token))
         .expect(200);
       expect(elsewhere.body.data.items).toEqual([]);
+    });
+
+    it('ranks by score before pagination and falls back for anonymous and unrated customers', async () => {
+      const a = await hotel('An Bình', 'a@hotel.test');
+      const b = await hotel('Bình An', 'b@hotel.test');
+      const me = await t.signIn('CUSTOMER', 'me@guest.test');
+      const newcomer = await t.signIn('CUSTOMER', 'new@guest.test');
+      const modelRunId = await run(me.id, [a.hotelId, b.hotelId]);
+      // The published rank decides, not the raw score: b is ranked first despite the lower predicted rating.
+      await t.prisma.recommendation.updateMany({
+        where: { modelRunId, customerId: me.id, hotelId: b.hotelId },
+        data: { rank: 1 },
+      });
+      await t.prisma.recommendation.updateMany({
+        where: { modelRunId, customerId: me.id, hotelId: a.hotelId },
+        data: { rank: 2 },
+      });
+      await t.prisma.modelRun.createMany({
+        data: [
+          {
+            algorithm: 'two-sided-shrinkage',
+            version: 'test',
+            status: 'FAILED',
+            startedAt: new Date(),
+          },
+          {
+            algorithm: 'unrelated',
+            version: 'test',
+            status: 'COMPLETED',
+            startedAt: new Date(),
+            finishedAt: new Date(),
+          },
+        ],
+      });
+      const query = {
+        checkIn: day(2),
+        checkOut: day(4),
+        destination: 'Da Nang',
+        guests: 2,
+        sort: 'recommended',
+        page: 1,
+        pageSize: 1,
+      };
+      const publicResult = await t
+        .api()
+        .get('/api/v1/hotels')
+        .query(query)
+        .expect(200);
+      expect(publicResult.body.data[0]).toMatchObject({ id: a.hotelId });
+      const personal = await t
+        .api()
+        .get('/api/v1/hotels')
+        .query(query)
+        .set(auth(me.token))
+        .expect(200);
+      expect(personal.body.data[0]).toMatchObject({ id: b.hotelId });
+      const fallback = await t
+        .api()
+        .get('/api/v1/hotels')
+        .query(query)
+        .set(auth(newcomer.token))
+        .expect(200);
+      expect(fallback.body.data).toEqual(publicResult.body.data);
+      const suggestion = await t.prisma.recommendation.findFirstOrThrow({
+        where: { modelRunId, customerId: me.id, hotelId: b.hotelId },
+      });
+      const book = (token: string) =>
+        t
+          .api()
+          .post('/api/v1/bookings')
+          .set(auth(token))
+          .send({
+            checkIn: query.checkIn,
+            checkOut: query.checkOut,
+            guests: 2,
+            items: [{ roomTypeId: b.roomTypeId, rooms: 1 }],
+            guestName: 'Guest Demo',
+            contactPhone: '0901234567',
+            expectedTotal: 2000000,
+            recommendationId: suggestion.recommendationId,
+          })
+          .expect(201);
+      const foreignBooking = await book(newcomer.token);
+      const ownBooking = await book(me.token);
+      const linked = await t.prisma.booking.findMany({
+        where: { bookingId: { in: [idOf(foreignBooking), idOf(ownBooking)] } },
+      });
+      expect(
+        linked.find((booking) => booking.customerId === newcomer.id)
+          ?.recommendationId,
+      ).toBeNull();
+      expect(
+        linked.find((booking) => booking.customerId === me.id)
+          ?.recommendationId,
+      ).toBe(suggestion.recommendationId);
+      // A hotel the customer booked stays searchable, so they can book it again.
+      const afterBooking = await t
+        .api()
+        .get('/api/v1/hotels')
+        .query({
+          ...query,
+          // Other nights: both rooms of these were just booked.
+          checkIn: day(6),
+          checkOut: day(8),
+          destination: 'Bình An',
+          pageSize: 10,
+        })
+        .set(auth(me.token))
+        .expect(200);
+      expect(
+        (afterBooking.body.data as { id: string }[]).map((h) => h.id),
+      ).toContain(b.hotelId);
     });
 
     it('gives a customer the run did not know the signed-out list, and never a suspended hotel', async () => {
@@ -271,6 +383,8 @@ describe('Recommendations and assistant (e2e)', () => {
         guests: 2,
       };
       t.ai.script = [
+        { calls: [{ name: 'recommend_hotels', args: {} }] },
+
         {
           calls: [
             {

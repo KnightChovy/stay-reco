@@ -17,6 +17,7 @@ Two features on one model:
 - `items[]` (`RecommendedHotel`): card fields (`name`, `city`, `starRating`, `coverImageUrl`, `rating`, `reviewCount`, `pricePerNightFrom`), plus `rank`, `score` (predicted rating 1-5), `reason` (Vietnamese, show it under the card) and `isNew` (nobody has reviewed it yet; worth a "Mới" badge).
 - `personalized: false` on `/me/...` means the last training run did not know this customer yet (they signed up after it); they get the signed-out list until the next run.
 - `city` matches ignoring case and accents: `da lat`, `Đà Lạt` and `ĐÀ LẠT` are the same.
+- A personal card includes its `recommendationId`. Carry it through hotel and room links to `POST /bookings` for attribution. A public card has no personal recommendation ID.
 - `items` is empty and `modelRun` null until the recommender has run once. Hide the section rather than showing an empty one.
 - Prices are base prices per night. Whether a hotel has rooms on given dates is answered by the search and the hotel page, as everywhere else.
 
@@ -72,7 +73,7 @@ The model is given four tools, all read-only, each going through the same servic
 
 | Tool | Does | Same as |
 |---|---|---|
-| `search_hotels` | Hotels with free rooms for a stay, **the customer's recommendations first**, then by guest rating | `GET /hotels` |
+| `search_hotels` | Hotels with free rooms for a stay, **the customer's recommendations first**, then by stars, price and name | `GET /hotels` |
 | `recommend_hotels` | The customer's recommendation list, optionally for one city | `GET /me/recommendations` |
 | `get_hotel_rooms` | A hotel's description, amenities, cancellation policy and room types, priced when dates are given | `GET /hotels/:id/listing` |
 | `propose_booking` | Prices one room type for a stay and checks it could be booked; makes the proposal | the checks of `POST /bookings` |

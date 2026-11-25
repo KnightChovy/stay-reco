@@ -34,17 +34,19 @@ const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1566073771259-6a850609
 export function RoomTypeDetail({
   hotelId,
   roomTypeId,
+  recommendationId,
   query,
 }: {
   hotelId: string;
   roomTypeId: string;
+  recommendationId?: string;
   query: StayQuery;
 }) {
   const router = useRouter();
   const roomQuery = useRoomTypeListing(roomTypeId, query);
   const hotelQuery = useHotelListing(hotelId, query);
-  const roomHref = (next: StayQuery) => `/hotels/${hotelId}/rooms/${roomTypeId}?${staySearch(next)}`;
-  const hotelHref = `/hotels/${hotelId}?${staySearch(query)}`;
+  const roomHref = (next: StayQuery) => `/hotels/${hotelId}/rooms/${roomTypeId}?${staySearch(next, recommendationId)}`;
+  const hotelHref = `/hotels/${hotelId}?${staySearch(query, recommendationId)}`;
 
   if (roomQuery.isLoading) {
     return (
@@ -100,7 +102,7 @@ export function RoomTypeDetail({
   const blocker = offerBlocker(offer, query);
   const maxRooms = Math.max(1, Math.min(BOOKING_LIMITS.maxRooms, offer?.available ?? BOOKING_LIMITS.maxRooms));
   const canBook = !!offer && !blocker && !updating;
-  const bookingHref = `/booking?roomTypeId=${roomType.id}&hotelId=${hotelId}&${staySearch(query)}`;
+  const bookingHref = `/booking?roomTypeId=${roomType.id}&hotelId=${hotelId}&${staySearch(query, recommendationId)}`;
   const prebookable = hotel?.addOns.filter((addOn) => addOn.prebookable) ?? [];
 
   // The room count lives in the URL: the listing then prices that many rooms, so the total is the backend's.

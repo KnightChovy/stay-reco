@@ -1,0 +1,14 @@
+[project]
+name = "stayreco-recommender"
+version = "2.0.0"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "numpy==1.26.4",
+    "pandas==2.2.3",
+    "scikit-learn==1.5.2",
+    "scikit-surprise==1.1.4",
+    "psycopg[binary]>=3.2,<4",
+]
+
+[tool.setuptools]
+py-modules = ["components", "reco_db", "reco_pipeline", "train", "weights"]

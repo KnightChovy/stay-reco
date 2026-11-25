@@ -11,8 +11,8 @@ import { formatDateTime, formatMoney } from "../lib/format";
 import { nightsBetween } from "../lib/params";
 
 /** The stay part of a hotel or room URL, so moving between them keeps the dates, guests and rooms. */
-export function staySearch(query: StayQuery) {
-  return `checkIn=${query.checkIn ?? ""}&checkOut=${query.checkOut ?? ""}&guests=${query.guests}&rooms=${query.rooms}`;
+export function staySearch(query: StayQuery, recommendationId?: string) {
+  return `checkIn=${query.checkIn ?? ""}&checkOut=${query.checkOut ?? ""}&guests=${query.guests}&rooms=${query.rooms}${recommendationId ? `&recommendationId=${encodeURIComponent(recommendationId)}` : ""}`;
 }
 
 export function stayNights(query: StayQuery) {

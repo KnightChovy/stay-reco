@@ -81,13 +81,16 @@ function SectionTitle({ title, subtitle, action }: { title: string; subtitle: st
 const featuredStay = defaultStay();
 
 export default function HomeScreen() {
+  const accountId = useAuthStore((state) => state.account?.id);
+  const hydrating = useAuthStore((state) => state.hydrating);
   const [stay, setStay] = useState<Stay>(defaultStay);
   const nights = nightsBetween(stay.checkIn, stay.checkOut);
   const personal = useAuthStore((st) => st.account?.role === 'CUSTOMER');
   // Ẩn hẳn khi chưa có gợi ý (recommender chưa chạy).
   const recommended = useQuery(recommendationsQuery({ limit: 4 }, personal)).data?.items ?? [];
   const featured = useQuery({
-    queryKey: ['stays', 'search', 'featured', featuredStay],
+    enabled: !hydrating,
+    queryKey: ['stays', 'search', accountId, 'featured', featuredStay],
     queryFn: () => searchHotels({ ...featuredStay, sort: 'recommended', page: 1, pageSize: 3 }),
   });
 

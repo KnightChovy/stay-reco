@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Modal, Pressable, ScrollView, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HOTEL_SORTS } from '@stayreco/shared';
 import { HotelCard, HotelCardSkeleton } from '@/components/common/card/HotelCard';
@@ -13,6 +13,7 @@ import { Text } from '@/components/ui/text';
 import { colors } from '@/constants/theme';
 import { formatDate, nightsBetween, stayFromParams } from '@/lib/stay';
 import { searchHotels } from '@/services/stays.service';
+import { useAuthStore } from '@/stores/auth.store';
 
 type Sort = (typeof HOTEL_SORTS)[number];
 
@@ -26,6 +27,8 @@ const sortLabels: Record<Sort, string> = {
 const STARS = [5, 4, 3];
 
 export default function SearchScreen() {
+  const accountId = useAuthStore((state) => state.account?.id);
+  const hydrating = useAuthStore((state) => state.hydrating);
   const insets = useSafeAreaInsets();
   const stay = stayFromParams(useLocalSearchParams());
   const nights = nightsBetween(stay.checkIn, stay.checkOut);
@@ -44,9 +47,10 @@ export default function SearchScreen() {
   };
   // shortcut: chỉ lấy trang đầu 20 kết quả, thêm tải tiếp khi điểm đến có nhiều khách sạn hơn.
   const { data, isPending, isPlaceholderData, isError, refetch } = useQuery({
-    queryKey: ['stays', 'search', query],
+    enabled: !hydrating,
+    queryKey: ['stays', 'search', accountId, query],
     queryFn: () => searchHotels(query),
-    placeholderData: keepPreviousData,
+    placeholderData: (previous, source) => source?.queryKey[2] === accountId ? previous : undefined,
   });
   // Đổi bộ lọc thì vẫn giữ số kết quả cũ ở tiêu đề, nhưng danh sách hiện skeleton tới khi có kết quả mới.
   const loading = isPending || isPlaceholderData;
