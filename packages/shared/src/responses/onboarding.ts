@@ -28,6 +28,25 @@ export const onboardingHotelSchema = z
   })
   .register(responseSchemas, { id: 'OnboardingHotel' });
 
+/**
+ * A hotel offered on the hotel step after the customer said where and how they travel (`GET /me/onboarding/hotels`):
+ * the card, why it was offered, and its cheapest night.
+ */
+export const onboardingHotelSuggestionSchema = onboardingHotelSchema
+  .extend({
+    matches: z
+      .array(z.string())
+      .describe('What of the answers it fits, in words for the card: "Nghỉ dưỡng & thư giãn", "Hồ bơi", a view name.'),
+    pricePerNightFrom: z.number().nullable().describe('Base price of its cheapest sellable room type; null with none.'),
+    overBudget: z
+      .boolean()
+      .describe('Its cheapest night is more than 20% over the budget given; such hotels come last.'),
+  })
+  .register(responseSchemas, { id: 'OnboardingHotelSuggestion' });
+export type OnboardingHotelSuggestion = z.infer<typeof onboardingHotelSuggestionSchema>;
+/** `GET /me/onboarding/hotels`: best fit first, at most `ONBOARDING_LIMITS.hotelsOffered`. */
+export const onboardingHotelSuggestionsResponseSchema = z.array(onboardingHotelSuggestionSchema);
+
 /** `GET /me/onboarding` and the answer of `POST /me/onboarding` and `/skip`. */
 export const onboardingResponseSchema = z
   .object({

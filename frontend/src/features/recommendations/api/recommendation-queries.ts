@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { CompleteOnboardingInput, Onboarding } from "@stayreco/shared";
+import type { CompleteOnboardingInput, Onboarding, OnboardingHotelsQuery } from "@stayreco/shared";
 import { useAuthStore } from "@/lib/auth-store";
 import * as service from "@/services/recommendations.service";
 import type { RecommendationParams } from "@/services/recommendations.service";
@@ -14,6 +14,7 @@ export const recommendationKeys = {
     [...recommendationKeys.all, customerId ?? "public", params] as const,
   /** Per account: kept for ever (`staleTime: Infinity`), so a shared key would show one account's answer to the next one signing in on the same tab. */
   onboarding: (customerId: string | undefined) => [...recommendationKeys.all, "onboarding", customerId ?? "none"] as const,
+  onboardingHotels: (query: OnboardingHotelsQuery) => [...recommendationKeys.all, "onboarding-hotels", query] as const,
 };
 
 /**
@@ -42,6 +43,19 @@ export function useOnboarding(enabled: boolean) {
     enabled: enabled && Boolean(customerId),
     staleTime: Infinity,
     retry: false,
+  });
+}
+
+/**
+ * The hotels offered on the last onboarding step, for the answers given on the earlier ones. Asked only once the
+ * customer reaches that step, and again whenever they go back and change an answer (the answers are the key).
+ */
+export function useOnboardingHotels(query: OnboardingHotelsQuery, enabled: boolean) {
+  return useQuery({
+    queryKey: recommendationKeys.onboardingHotels(query),
+    queryFn: () => service.getOnboardingHotels(query),
+    enabled,
+    staleTime: 5 * 60 * 1000,
   });
 }
 

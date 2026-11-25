@@ -1,4 +1,12 @@
-import type { APIResponse, CompleteOnboardingInput, Onboarding, Preferences, Recommendations } from "@stayreco/shared";
+import type {
+  APIResponse,
+  CompleteOnboardingInput,
+  Onboarding,
+  OnboardingHotelSuggestion,
+  OnboardingHotelsQuery,
+  Preferences,
+  Recommendations,
+} from "@stayreco/shared";
 import { apiService } from "./ApiService";
 
 /** Sở thích đã lưu: cặp key-value tự do, `{}` khi chưa lưu gì. */
@@ -27,6 +35,18 @@ export const recommendationsQuery = (params: RecommendationParams, personal: boo
 
 export const getOnboarding = async () => {
   const { data } = await apiService.get<APIResponse<Onboarding>>("/me/onboarding");
+  return data.data;
+};
+
+/**
+ * Bước chọn khách sạn: khách sạn ở các điểm đến đã chọn, hợp phong cách, tiện nghi và tầm nhìn đã chọn, hợp nhất trước.
+ * Danh sách gửi dạng key lặp lại (`?cities=Đà Lạt&cities=Hà Nội`), không phải `cities[]`.
+ */
+export const getOnboardingHotels = async (query: OnboardingHotelsQuery) => {
+  const { data } = await apiService.get<APIResponse<OnboardingHotelSuggestion[]>>("/me/onboarding/hotels", {
+    params: query,
+    paramsSerializer: { indexes: null },
+  });
   return data.data;
 };
 

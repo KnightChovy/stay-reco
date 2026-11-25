@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { repeatedQuery } from './common';
 
 /** What onboarding asks for, and the least a customer must pick to finish it (docs/design/onboarding-welcome-voucher.md, W2). */
 export const ONBOARDING_LIMITS = {
@@ -49,3 +50,21 @@ export const completeOnboardingSchema = z
     `pick at least ${ONBOARDING_LIMITS.minPicks}`,
   );
 export type CompleteOnboardingInput = z.infer<typeof completeOnboardingSchema>;
+
+const atMost = (n: number) => (v: unknown[]) => v.length <= n;
+const tooMany = `at most ${ONBOARDING_LIMITS.maxPerList}`;
+
+/**
+ * `GET /me/onboarding/hotels`: the answers given so far (the earlier steps of the screen), so the hotel step offers
+ * only hotels that fit them. Every field is optional; lists may be repeated (`?cities=Đà Lạt&cities=Hà Nội`).
+ */
+export const onboardingHotelsQuerySchema = z.object({
+  cities: repeatedQuery(z.string().trim().min(1).max(100))
+    .refine(atMost(ONBOARDING_LIMITS.maxPerList), tooMany)
+    .optional(),
+  travelStyles: repeatedQuery(listId).refine(atMost(ONBOARDING_LIMITS.maxPerList), tooMany).optional(),
+  roomAmenities: repeatedQuery(listId).refine(atMost(ONBOARDING_LIMITS.maxPerList), tooMany).optional(),
+  viewIds: repeatedQuery(z.uuid()).refine(atMost(ONBOARDING_LIMITS.maxPerList), tooMany).optional(),
+  budgetPerNight: z.coerce.number().int().positive().max(1_000_000_000).optional(),
+});
+export type OnboardingHotelsQuery = z.infer<typeof onboardingHotelsQuerySchema>;

@@ -5,10 +5,13 @@ import {
   HttpCode,
   HttpStatus,
   Post,
+  Query,
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
   completeOnboardingSchema,
+  onboardingHotelSuggestionsResponseSchema,
+  onboardingHotelsQuerySchema,
   onboardingResponseSchema,
 } from '@stayreco/shared';
 import {
@@ -23,6 +26,7 @@ import { UserRole } from '../../generated/prisma/client';
 import { OnboardingService } from './onboarding.service';
 
 class CompleteOnboardingDto extends zodDto(completeOnboardingSchema) {}
+class OnboardingHotelsQueryDto extends zodDto(onboardingHotelsQuerySchema) {}
 
 /** First-login preferences and the welcome voucher (docs/design/onboarding-welcome-voucher.md). */
 @ApiTags('onboarding')
@@ -40,6 +44,18 @@ export class OnboardingController {
   @Get()
   get(@CurrentUser() user: AuthUser) {
     return this.onboarding.get(user.accountId);
+  }
+
+  @ApiOperation({
+    summary: 'Hotels that fit the answers I gave so far',
+    description:
+      "The hotel step, asked after the destinations and taste steps with their answers: bookable hotels in the cities picked (every city when none) that fit a chosen travel style, ranked by how much of the style, amenities and views they share, at most 12. A hotel fits a style when its name, description, amenities and room types use at least two of that style's phrases, the recommender's own vocabulary. `matches` says what it fits; a hotel whose cheapest night is more than 20% over the budget comes last with `overBudget`. Empty when nothing fits: let the customer finish without a hotel.",
+  })
+  @ApiData(onboardingHotelSuggestionsResponseSchema)
+  @Roles(UserRole.CUSTOMER)
+  @Get('hotels')
+  hotels(@Query() query: OnboardingHotelsQueryDto) {
+    return this.onboarding.suggestHotels(query);
   }
 
   @ApiOperation({

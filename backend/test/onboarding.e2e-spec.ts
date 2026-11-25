@@ -128,6 +128,134 @@ describe('Onboarding and the welcome voucher (e2e)', () => {
     ]);
   });
 
+  describe('GET /me/onboarding/hotels: hotels that fit the answers so far', () => {
+    /** A hotel of the helper, renamed and described as a hotel of one style. */
+    const styled = async (
+      email: string,
+      city: string,
+      name: string,
+      description: string,
+    ) => {
+      const h = await hotel(email, city);
+      await t.prisma.hotel.update({
+        where: { hotelId: h.hotelId },
+        data: { name, description },
+      });
+      return h;
+    };
+    const suggest = (token: string, query: string) =>
+      t.api().get(`/api/v1/me/onboarding/hotels?${query}`).set(auth(token));
+    const RESORT =
+      'Khu nghỉ dưỡng ven biển với bãi biển riêng và hồ bơi vô cực. Spa trị liệu để thư giãn.';
+    // A business hotel that mentions the beach once: it must not pass for a resort.
+    const BUSINESS =
+      'Khách sạn trung tâm, phòng họp, bàn làm việc và wifi tốc độ cao cho khách công tác, gần bãi biển.';
+
+    it('offers only hotels of the chosen style in the chosen cities', async () => {
+      const resort = await styled(
+        'a@h.test',
+        'Đà Nẵng',
+        'Sơn Trà Resort & Spa',
+        RESORT,
+      );
+      await styled('b@h.test', 'Đà Nẵng', 'Hàn Executive Hotel', BUSINESS);
+      await styled('c@h.test', 'Huế', 'Hương Resort & Spa', RESORT);
+      const guest = await t.signIn('CUSTOMER', 'guest@mail.test');
+
+      const res = await suggest(
+        guest.token,
+        'cities=Đà Nẵng&travelStyles=resort',
+      ).expect(200);
+
+      expect(res.body.data).toEqual([
+        expect.objectContaining({
+          id: resort.hotelId,
+          city: 'Đà Nẵng',
+          matches: ['Nghỉ dưỡng & thư giãn'],
+          pricePerNightFrom: 1000000,
+          overBudget: false,
+        }),
+      ]);
+    });
+
+    it('ranks the hotels with the amenities and views picked first, and says so', async () => {
+      const plain = await styled(
+        'a@h.test',
+        'Đà Nẵng',
+        'Mỹ Khê Beach Resort',
+        RESORT.replace('hồ bơi vô cực', 'quầy bar'),
+      );
+      const withView = await styled(
+        'b@h.test',
+        'Đà Nẵng',
+        'Sơn Trà Resort & Spa',
+        RESORT,
+      );
+      await t.prisma.hotelAmenity.create({
+        data: { hotelId: withView.hotelId, amenityId: seaView },
+      });
+      const guest = await t.signIn('CUSTOMER', 'guest@mail.test');
+
+      const res = await suggest(
+        guest.token,
+        `travelStyles=resort&roomAmenities=pool&viewIds=${seaView}`,
+      ).expect(200);
+
+      const data = res.body.data as { id: string; matches: string[] }[];
+      expect(data.map((h) => h.id)).toEqual([withView.hotelId, plain.hotelId]);
+      expect(data[0].matches).toEqual([
+        'Nghỉ dưỡng & thư giãn',
+        'Hồ bơi',
+        'Hướng biển',
+      ]);
+    });
+
+    it('puts a hotel well over the budget last and marks it', async () => {
+      await styled('a@h.test', 'Đà Nẵng', 'Sơn Trà Resort & Spa', RESORT);
+      const guest = await t.signIn('CUSTOMER', 'guest@mail.test');
+
+      const res = await suggest(
+        guest.token,
+        'travelStyles=resort&budgetPerNight=500000',
+      ).expect(200);
+
+      expect(res.body.data).toEqual([
+        expect.objectContaining({
+          overBudget: true,
+          pricePerNightFrom: 1000000,
+        }),
+      ]);
+    });
+
+    it('answers an empty list when nothing fits, and every hotel when nothing was said', async () => {
+      const resort = await styled(
+        'a@h.test',
+        'Đà Nẵng',
+        'Sơn Trà Resort & Spa',
+        RESORT,
+      );
+      const guest = await t.signIn('CUSTOMER', 'guest@mail.test');
+
+      await suggest(guest.token, 'travelStyles=family').expect(200, {
+        success: true,
+        message: 'OK',
+        data: [],
+      });
+      const all = await suggest(guest.token, '').expect(200);
+      expect(all.body.data).toEqual([
+        expect.objectContaining({ id: resort.hotelId, matches: [] }),
+      ]);
+    });
+
+    it('checks the answers and is for customers only', async () => {
+      const guest = await t.signIn('CUSTOMER', 'guest@mail.test');
+      await suggest(guest.token, 'travelStyles=Not A Style').expect(400);
+      await suggest(guest.token, 'viewIds=nope').expect(400);
+      const partner = await t.signIn('HOTEL_PARTNER', 'p@h.test');
+      await suggest(partner.token, '').expect(403);
+    });
+  });
+
   it('saves the picks as preferences and issues the welcome code', async () => {
     const h = await hotel();
     const guest = await t.signIn('CUSTOMER', 'guest@mail.test');

@@ -20,6 +20,7 @@ Nothing here adds a table. One new kind of campaign, the platform's own, which u
 | W8 | **Views** become a catalog category, **Tầm nhìn**: Hướng biển, Hướng sông, Hướng núi, Hướng phố, Hướng vườn, Hướng hồ bơi. Partners attach them to room types through the existing room-type amenities. They are seeded, not migrated. |
 | W9 | **The customer is told** in an in-app notification with the code and its expiry, and the onboarding answer returns the voucher, so the screen can show it at once. No email. |
 | W10 | **The recommender** reads the picks as the paper's knowledge-based pre-filter and boost: destination, budget and views filter or lift hotels; it does not change the scoring model. Whether liked hotels also feed the content component is Phúc's call, because that departs from the paper. |
+| W11 | **Hotels are picked last, from hotels that fit the earlier answers** (2026-11-25). Offered first, out of the 12 best reviewed hotels anywhere, the hotel step contradicted the rest: customers tick hotels by photo, not by style, and a customer who chose "Nghỉ dưỡng" ticked two homestays, which then outweighed the style for the recommender. The screen now asks destinations, then taste, then hotels, and `GET /me/onboarding/hotels` offers only hotels in the cities picked that fit the style picked, ranked by the amenities and views picked. `options.hotels` stays for older apps. |
 
 ## 2. API
 

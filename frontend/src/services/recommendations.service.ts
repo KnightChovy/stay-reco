@@ -1,5 +1,11 @@
 import { api } from "@/lib/axios";
-import type { CompleteOnboardingInput, Onboarding, Recommendations } from "@stayreco/shared";
+import type {
+  CompleteOnboardingInput,
+  Onboarding,
+  OnboardingHotelSuggestion,
+  OnboardingHotelsQuery,
+  Recommendations,
+} from "@stayreco/shared";
 import type { APIResponse } from "@/types/response.type";
 
 /**
@@ -19,6 +25,18 @@ export async function getRecommendations(params: RecommendationParams, personal:
 
 export async function getOnboarding() {
   const { data } = await api.get<APIResponse<Onboarding>>("/me/onboarding");
+  return data.data;
+}
+
+/**
+ * The hotel step: hotels in the cities picked that fit the style, amenities and views picked, best fit first.
+ * Lists go as repeated keys (`?cities=Đà Lạt&cities=Hà Nội`), not `cities[]`.
+ */
+export async function getOnboardingHotels(query: OnboardingHotelsQuery) {
+  const { data } = await api.get<APIResponse<OnboardingHotelSuggestion[]>>("/me/onboarding/hotels", {
+    params: query,
+    paramsSerializer: { indexes: null },
+  });
   return data.data;
 }
 

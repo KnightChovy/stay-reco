@@ -4,7 +4,7 @@ import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ONBOARDING_LIMITS, type CompleteOnboardingInput, type Voucher } from '@stayreco/shared';
+import { ONBOARDING_LIMITS, type CompleteOnboardingInput, type OnboardingHotelsQuery, type Voucher } from '@stayreco/shared';
 import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
 import { Icon } from '@/components/ui/icon';
@@ -14,13 +14,25 @@ import { AMENITIES, BUDGETS, STYLES, toggle } from '@/features/recommendations/p
 import { images } from '@/lib/mock-data';
 import { formatVnd } from '@/lib/stay';
 import { apiErrorMessage } from '@/services/ApiService';
-import { completeOnboarding, getOnboarding, skipOnboarding } from '@/services/recommendations.service';
+import { completeOnboarding, getOnboarding, getOnboardingHotels, skipOnboarding } from '@/services/recommendations.service';
 
 type Picks = { cities: string[]; hotelIds: string[]; viewIds: string[]; travelStyles: string[]; roomAmenities: string[]; budget: string };
 const EMPTY: Picks = { cities: [], hotelIds: [], viewIds: [], travelStyles: [], roomAmenities: [], budget: '' };
 
 const countPicks = (p: Picks) =>
   p.cities.length + p.hotelIds.length + p.viewIds.length + p.travelStyles.length + p.roomAmenities.length + (p.budget ? 1 : 0);
+
+/** Các câu trả lời dùng để chọn khách sạn cho bước cuối: mọi thứ trừ chính các khách sạn. */
+function toHotelsQuery(p: Picks): OnboardingHotelsQuery {
+  const list = (items: string[]) => (items.length ? items : undefined);
+  return {
+    cities: list(p.cities),
+    travelStyles: list(p.travelStyles),
+    roomAmenities: list(p.roomAmenities),
+    viewIds: list(p.viewIds),
+    budgetPerNight: p.budget ? Number(p.budget) : undefined,
+  };
+}
 
 /** Danh sách để trống thì bỏ đi, backend giữ nguyên sở thích đã lưu trước đó. */
 function toInput(p: Picks): CompleteOnboardingInput {
@@ -54,7 +66,7 @@ function PickCard({ title, subtitle, image, selected, onPress }: { title: string
         <Text variant="small" weight="semibold" numberOfLines={2}>
           {title}
         </Text>
-        <Text variant="caption" color={colors.onSurfaceVariant} numberOfLines={1}>
+        <Text variant="caption" color={colors.onSurfaceVariant} numberOfLines={4}>
           {subtitle}
         </Text>
       </View>
@@ -104,7 +116,9 @@ function WelcomeDone({ voucher }: { voucher: Voucher | null }) {
 }
 
 /**
- * Sở thích lần đầu đăng nhập (docs/api/onboarding.md): điểm đến, khách sạn, rồi gu, tiện nghi, tầm nhìn và ngân sách.
+ * Sở thích lần đầu đăng nhập (docs/api/onboarding.md): điểm đến, rồi gu, tiện nghi, tầm nhìn và ngân sách, cuối cùng là
+ * khách sạn hợp với các câu trả lời đó (`GET /me/onboarding/hotels`), để khách không chọn khách sạn trái với gu vừa chọn.
+ * Đổi một câu trả lời ở bước trước thì xoá các khách sạn đã chọn, vì chúng được gợi ý cho câu trả lời cũ.
  * Chọn ít nhất `ONBOARDING_LIMITS.minPicks` mục để hoàn tất và nhận voucher chào mừng. "Để sau" ghi nhận bỏ qua;
  * có thể làm lại từ /account/preferences và vẫn nhận mã.
  */
@@ -115,6 +129,14 @@ export default function OnboardingScreen() {
   const [stepIndex, setStepIndex] = useState(0);
   const [picks, setPicks] = useState<Picks>(EMPTY);
   const [voucher, setVoucher] = useState<Voucher | null | undefined>(undefined);
+  const [onHotelStep, setOnHotelStep] = useState(false);
+  const hotelsQuery = toHotelsQuery(picks);
+  const suggestions = useQuery({
+    queryKey: ['onboarding-hotels', hotelsQuery],
+    queryFn: () => getOnboardingHotels(hotelsQuery),
+    enabled: onHotelStep,
+    staleTime: 5 * 60_000,
+  });
 
   const done = (onboarding: unknown) => {
     queryClient.setQueryData(['onboarding'], onboarding);
@@ -162,8 +184,8 @@ export default function OnboardingScreen() {
   const options = onboarding.options;
   const steps = [
     { key: 'destinations' as const, show: !!options?.destinations.length },
-    { key: 'hotels' as const, show: !!options?.hotels.length },
     { key: 'taste' as const, show: true },
+    { key: 'hotels' as const, show: true },
   ].filter((step) => step.show);
   const step = steps[Math.min(stepIndex, steps.length - 1)].key;
   const isLast = stepIndex >= steps.length - 1;
@@ -173,6 +195,12 @@ export default function OnboardingScreen() {
   const edit = (next: (prev: Picks) => Picks) => {
     complete.reset();
     setPicks(next);
+  };
+  /** Đổi câu trả lời ở bước trước: các khách sạn đã chọn được gợi ý cho câu trả lời cũ, nên bỏ đi. */
+  const answer = (next: (prev: Picks) => Picks) => edit((p) => ({ ...next(p), hotelIds: [] }));
+  const goTo = (index: number) => {
+    setStepIndex(index);
+    setOnHotelStep(steps[Math.min(index, steps.length - 1)].key === 'hotels');
   };
   // Bỏ qua lần nữa sau khi đã bỏ qua không đổi gì: chỉ khách NEW mới ghi nhận.
   const later = () => {
@@ -195,10 +223,10 @@ export default function OnboardingScreen() {
           </Pressable>
         </View>
         <Text variant="h2">
-          {step === 'destinations' ? 'Bạn muốn đi đâu?' : step === 'hotels' ? 'Khách sạn nào bạn thấy thích?' : 'Gu nghỉ dưỡng của bạn'}
+          {step === 'destinations' ? 'Bạn muốn đi đâu?' : step === 'hotels' ? 'Khách sạn hợp gu của bạn' : 'Gu nghỉ dưỡng của bạn'}
         </Text>
         <Text variant="small" color={colors.onSurfaceVariant}>
-          Chọn ít nhất {ONBOARDING_LIMITS.minPicks} mục để StayReco gợi ý hợp gu hơn, kèm voucher chào mừng.
+          {step === 'hotels' ? 'Dựa trên điểm đến và gu bạn vừa chọn. ' : ''}Chọn ít nhất {ONBOARDING_LIMITS.minPicks} mục để StayReco gợi ý hợp gu hơn, kèm voucher chào mừng.
         </Text>
       </View>
 
@@ -212,25 +240,48 @@ export default function OnboardingScreen() {
                 subtitle={`${d.hotels} khách sạn`}
                 image={d.imageUrl}
                 selected={picks.cities.includes(d.city)}
-                onPress={() => edit((p) => ({ ...p, cities: toggle(p.cities, d.city) }))}
+                onPress={() => answer((p) => ({ ...p, cities: toggle(p.cities, d.city) }))}
               />
             ))}
           </View>
         )}
-        {step === 'hotels' && options && (
-          <View className="flex-row flex-wrap justify-between gap-y-3">
-            {options.hotels.map((h) => (
-              <PickCard
-                key={h.id}
-                title={h.name}
-                subtitle={`${h.city}${h.rating != null ? ` · ★ ${h.rating.toFixed(1)}` : ''}`}
-                image={h.imageUrl}
-                selected={picks.hotelIds.includes(h.id)}
-                onPress={() => edit((p) => ({ ...p, hotelIds: toggle(p.hotelIds, h.id) }))}
-              />
-            ))}
-          </View>
-        )}
+        {step === 'hotels' &&
+          (suggestions.isPending ? (
+            <Text variant="small" color={colors.onSurfaceVariant} center>
+              Đang tìm khách sạn hợp gu…
+            </Text>
+          ) : suggestions.isError ? (
+            <View className="items-center gap-2">
+              <Text variant="small" color={colors.onSurfaceVariant} center>
+                {apiErrorMessage(suggestions.error, 'Không tải được khách sạn. Vui lòng thử lại.')}
+              </Text>
+              <Button label="Thử lại" variant="secondary" size="sm" onPress={() => void suggestions.refetch()} />
+            </View>
+          ) : !suggestions.data.length ? (
+            <Text variant="small" color={colors.onSurfaceVariant} center>
+              Chưa có khách sạn nào ở điểm đến bạn chọn hợp với gu này. Bạn có thể hoàn tất luôn, hoặc quay lại đổi điểm đến hay
+              phong cách.
+            </Text>
+          ) : (
+            <View className="flex-row flex-wrap justify-between gap-y-3">
+              {suggestions.data.map((h) => (
+                <PickCard
+                  key={h.id}
+                  title={h.name}
+                  subtitle={[
+                    `${h.city}${h.rating != null ? ` · ★ ${h.rating.toFixed(1)}` : ''}`,
+                    h.pricePerNightFrom != null ? `Từ ${formatVnd(h.pricePerNightFrom)}/đêm${h.overBudget ? ' · trên ngân sách' : ''}` : null,
+                    h.matches.length ? `Hợp: ${h.matches.join(' · ')}` : null,
+                  ]
+                    .filter(Boolean)
+                    .join('\n')}
+                  image={h.imageUrl}
+                  selected={picks.hotelIds.includes(h.id)}
+                  onPress={() => edit((p) => ({ ...p, hotelIds: toggle(p.hotelIds, h.id) }))}
+                />
+              ))}
+            </View>
+          ))}
         {step === 'taste' && (
           <>
             <Text variant="label" weight="semibold">
@@ -243,7 +294,7 @@ export default function OnboardingScreen() {
                   label={st.title}
                   icon={st.icon}
                   tone={picks.travelStyles.includes(st.id) ? 'selected' : 'outline'}
-                  onPress={() => edit((p) => ({ ...p, travelStyles: toggle(p.travelStyles, st.id) }))}
+                  onPress={() => answer((p) => ({ ...p, travelStyles: toggle(p.travelStyles, st.id) }))}
                 />
               ))}
             </View>
@@ -256,7 +307,7 @@ export default function OnboardingScreen() {
                   key={a.id}
                   label={a.label}
                   tone={picks.roomAmenities.includes(a.id) ? 'selected' : 'outline'}
-                  onPress={() => edit((p) => ({ ...p, roomAmenities: toggle(p.roomAmenities, a.id) }))}
+                  onPress={() => answer((p) => ({ ...p, roomAmenities: toggle(p.roomAmenities, a.id) }))}
                 />
               ))}
             </View>
@@ -271,7 +322,7 @@ export default function OnboardingScreen() {
                       key={v.id}
                       label={v.name}
                       tone={picks.viewIds.includes(v.id) ? 'selected' : 'outline'}
-                      onPress={() => edit((p) => ({ ...p, viewIds: toggle(p.viewIds, v.id) }))}
+                      onPress={() => answer((p) => ({ ...p, viewIds: toggle(p.viewIds, v.id) }))}
                     />
                   ))}
                 </View>
@@ -282,7 +333,7 @@ export default function OnboardingScreen() {
             </Text>
             <View className="flex-row flex-wrap gap-2">
               {BUDGETS.map((b) => (
-                <Chip key={b.id || 'none'} label={b.label} tone={picks.budget === b.id ? 'selected' : 'outline'} onPress={() => edit((p) => ({ ...p, budget: b.id }))} />
+                <Chip key={b.id || 'none'} label={b.label} tone={picks.budget === b.id ? 'selected' : 'outline'} onPress={() => answer((p) => ({ ...p, budget: b.id }))} />
               ))}
             </View>
           </>
@@ -299,7 +350,7 @@ export default function OnboardingScreen() {
           Đã chọn {picked}/{ONBOARDING_LIMITS.minPicks} mục{enough ? ' · đủ để nhận voucher' : ''}
         </Text>
         <View className="flex-row gap-2">
-          {stepIndex > 0 && <Button label="Quay lại" variant="secondary" className="flex-1" disabled={busy} onPress={() => setStepIndex(stepIndex - 1)} />}
+          {stepIndex > 0 && <Button label="Quay lại" variant="secondary" className="flex-1" disabled={busy} onPress={() => goTo(stepIndex - 1)} />}
           {isLast ? (
             <Button
               label={complete.isPending ? 'Đang lưu…' : 'Hoàn tất & nhận voucher'}
@@ -308,7 +359,7 @@ export default function OnboardingScreen() {
               onPress={() => complete.mutate()}
             />
           ) : (
-            <Button label="Tiếp tục" icon="arrow_forward" className="flex-1" disabled={busy} onPress={() => setStepIndex(stepIndex + 1)} />
+            <Button label="Tiếp tục" icon="arrow_forward" className="flex-1" disabled={busy} onPress={() => goTo(stepIndex + 1)} />
           )}
         </View>
       </View>

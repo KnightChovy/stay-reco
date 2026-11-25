@@ -11,6 +11,8 @@ import {
   type Onboarding,
   type OnboardingDestination,
   type OnboardingHotel,
+  type OnboardingHotelSuggestion,
+  type OnboardingHotelsQuery,
   type OnboardingStatus,
 } from '@stayreco/shared';
 import { lockAccount } from '../../common/db/locks';
@@ -21,11 +23,16 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { toAmenity } from '../catalog/catalog.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { toVoucher } from '../promotions/promotions.mapper';
-import { bookableHotel } from '../stays/bookable';
+import { basePriceWhere } from '../rooms/room.mapper';
+import { bookableHotel, sellableRoomType } from '../stays/bookable';
+import { tasteFit } from './onboarding-taste';
 import {
   type WelcomeVoucherRow,
   WelcomeVoucherService,
 } from './welcome-voucher.service';
+
+/** A hotel whose cheapest night is more than this over the budget is offered last (the recommender's `BUDGET_SLACK`). */
+const BUDGET_SLACK = 1.2;
 
 /** The catalog category whose amenities are the views a customer can pick (W8). */
 export const VIEW_CATEGORY = 'Tầm nhìn';
@@ -149,6 +156,136 @@ export class OnboardingService {
       });
     });
     return this.get(customerId);
+  }
+
+  /**
+   * The hotel step: hotels in the cities picked that fit the style, amenities and views picked, best fit first, so a
+   * customer cannot pick a hotel that contradicts what they just said (docs/api/onboarding.md). With no city picked
+   * every city counts. A chosen style is required to fit; amenities and views only rank. Hotels whose cheapest night
+   * is well over the budget come last, marked. At most `ONBOARDING_LIMITS.hotelsOffered`.
+   */
+  async suggestHotels(
+    query: OnboardingHotelsQuery,
+  ): Promise<OnboardingHotelSuggestion[]> {
+    const answers = {
+      travelStyles: query.travelStyles ?? [],
+      roomAmenities: query.roomAmenities ?? [],
+      viewIds: query.viewIds ?? [],
+    };
+    const [hotels, ratings, views] = await Promise.all([
+      this.prisma.hotel.findMany({
+        where: {
+          ...bookableHotel,
+          ...(query.cities?.length && { city: { in: query.cities } }),
+        },
+        select: {
+          hotelId: true,
+          name: true,
+          city: true,
+          description: true,
+          starRating: true,
+          hotelImages: {
+            orderBy: [
+              { isCover: 'desc' },
+              { sortOrder: 'asc' },
+              { hotelImageId: 'asc' },
+            ],
+            take: 1,
+            select: { imageUrl: true },
+          },
+          hotelAmenities: {
+            select: { amenity: { select: { amenityId: true, name: true } } },
+          },
+          roomTypes: {
+            where: sellableRoomType,
+            select: {
+              name: true,
+              roomTypeAmenities: {
+                select: {
+                  amenity: { select: { amenityId: true, name: true } },
+                },
+              },
+              prices: {
+                where: basePriceWhere,
+                select: { pricePerNight: true },
+              },
+            },
+          },
+        },
+      }),
+      this.prisma.review.groupBy({
+        by: ['hotelId'],
+        where: { isVisible: true, hotel: bookableHotel },
+        _avg: { overallRating: true },
+        _count: true,
+      }),
+      this.prisma.amenity.findMany({
+        where: { category: VIEW_CATEGORY },
+        select: { amenityId: true, name: true },
+      }),
+    ]);
+    const ratingOf = new Map(ratings.map((r) => [r.hotelId, r]));
+    const viewNames = new Map(views.map((v) => [v.amenityId, v.name]));
+
+    const ranked = hotels.flatMap((h) => {
+      const amenities = [
+        ...h.hotelAmenities.map((a) => a.amenity),
+        ...h.roomTypes.flatMap((rt) =>
+          rt.roomTypeAmenities.map((a) => a.amenity),
+        ),
+      ];
+      const fit = tasteFit(
+        {
+          text: [
+            h.name,
+            h.description,
+            ...amenities.map((a) => a.name),
+            ...h.roomTypes.map((rt) => rt.name),
+          ]
+            .filter(Boolean)
+            .join(' '),
+          amenityIds: new Set(amenities.map((a) => a.amenityId)),
+        },
+        answers,
+        viewNames,
+      );
+      if (!fit.fits) return [];
+      const prices = h.roomTypes
+        .flatMap((rt) => rt.prices.map((p) => toNumber(p.pricePerNight)))
+        .filter((p): p is number => p !== null);
+      const from = prices.length ? Math.min(...prices) : null;
+      const r = ratingOf.get(h.hotelId);
+      const avg = r?._avg.overallRating;
+      const suggestion: OnboardingHotelSuggestion = {
+        id: h.hotelId,
+        name: h.name,
+        city: h.city,
+        starRating: h.starRating,
+        imageUrl: h.hotelImages[0]?.imageUrl ?? null,
+        rating: avg ? Math.round(toNumber(avg) * 10) / 10 : null,
+        reviewCount: r?._count ?? 0,
+        // Unique labels: "spa" is both a resort phrase and an amenity, and the card should say it once.
+        matches: [...new Set(fit.matches)],
+        pricePerNightFrom: from,
+        overBudget:
+          query.budgetPerNight !== undefined &&
+          from !== null &&
+          from > query.budgetPerNight * BUDGET_SLACK,
+      };
+      return [{ suggestion, score: fit.score }];
+    });
+
+    return ranked
+      .sort(
+        (a, b) =>
+          Number(a.suggestion.overBudget) - Number(b.suggestion.overBudget) ||
+          b.score - a.score ||
+          (b.suggestion.rating ?? 0) - (a.suggestion.rating ?? 0) ||
+          b.suggestion.reviewCount - a.suggestion.reviewCount ||
+          a.suggestion.name.localeCompare(b.suggestion.name, 'vi'),
+      )
+      .slice(0, ONBOARDING_LIMITS.hotelsOffered)
+      .map((r) => r.suggestion);
   }
 
   private async statusOf(

@@ -4,7 +4,13 @@ import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Check, Copy, Gift, Loader2, MapPin, Star } from "lucide-react";
-import { ONBOARDING_LIMITS, type CompleteOnboardingInput, type Onboarding, type Voucher } from "@stayreco/shared";
+import {
+  ONBOARDING_LIMITS,
+  type CompleteOnboardingInput,
+  type Onboarding,
+  type OnboardingHotelsQuery,
+  type Voucher,
+} from "@stayreco/shared";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -12,7 +18,7 @@ import { getApiErrorMessage } from "@/lib/api-error";
 import { formatMoney } from "@/features/stays/lib/format";
 import { AMENITIES, BUDGETS, STYLES } from "@/features/account/lib/preference-options";
 import { describeVoucherDiscount } from "@/features/account/lib/rewards-labels";
-import { useCompleteOnboarding, useSkipOnboarding } from "../api/recommendation-queries";
+import { useCompleteOnboarding, useOnboardingHotels, useSkipOnboarding } from "../api/recommendation-queries";
 
 const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=600&q=80";
 
@@ -40,6 +46,18 @@ function countPicks(picks: Picks) {
   );
 }
 
+/** The answers the hotel step is chosen from: everything but the hotels themselves. */
+function toHotelsQuery(picks: Picks): OnboardingHotelsQuery {
+  const list = (items: string[]) => (items.length ? items : undefined);
+  return {
+    cities: list(picks.cities),
+    travelStyles: list(picks.travelStyles),
+    roomAmenities: list(picks.roomAmenities),
+    viewIds: list(picks.viewIds),
+    budgetPerNight: picks.budget ? Number(picks.budget) : undefined,
+  };
+}
+
 /** Lists left empty are left out, so the backend keeps whatever the customer had saved before. */
 function toInput(picks: Picks): CompleteOnboardingInput {
   const list = (items: string[]) => (items.length ? items : undefined);
@@ -54,9 +72,11 @@ function toInput(picks: Picks): CompleteOnboardingInput {
 }
 
 /**
- * First-login preferences (docs/api/onboarding.md): destinations, hotels, then style, amenities, views and budget.
- * At least `ONBOARDING_LIMITS.minPicks` picks finish it and earn the platform's welcome voucher, shown at once.
- * "Để sau" records a skip; it can be finished later from /account/preferences and still earns the code.
+ * First-login preferences (docs/api/onboarding.md): destinations, then style, amenities, views and budget, then the
+ * hotels that fit those answers (`GET /me/onboarding/hotels`). Hotels come last so a customer cannot pick one that
+ * contradicts what they just said: changing an earlier answer clears the hotels picked, since they were offered for
+ * the old answers. At least `ONBOARDING_LIMITS.minPicks` picks finish it and earn the platform's welcome voucher,
+ * shown at once. "Để sau" records a skip; it can be finished later from /account/preferences and still earns the code.
  */
 export function OnboardingDialog({
   onboarding,
@@ -70,8 +90,8 @@ export function OnboardingDialog({
   const options = onboarding.options;
   const steps = [
     { key: "destinations", show: !!options?.destinations.length },
-    { key: "hotels", show: !!options?.hotels.length },
     { key: "taste", show: true },
+    { key: "hotels", show: true },
   ].filter((step) => step.show);
 
   const [stepIndex, setStepIndex] = useState(0);
@@ -86,6 +106,7 @@ export function OnboardingDialog({
   const picked = countPicks(picks);
   const enough = picked >= ONBOARDING_LIMITS.minPicks;
   const busy = complete.isPending || skip.isPending;
+  const suggestions = useOnboardingHotels(toHotelsQuery(picks), open && step === "hotels");
 
   const later = () => {
     if (busy) return;
@@ -107,6 +128,8 @@ export function OnboardingDialog({
     complete.reset();
     setPicks(next);
   };
+  /** An earlier answer changed: the hotels picked were offered for the old answers, so they go. */
+  const answer = (next: (prev: Picks) => Picks) => edit((prev) => ({ ...next(prev), hotelIds: [] }));
 
   return (
     <Dialog
@@ -133,10 +156,11 @@ export function OnboardingDialog({
                 {step === "destinations"
                   ? "Bạn muốn đi đâu?"
                   : step === "hotels"
-                    ? "Khách sạn nào bạn thấy thích?"
+                    ? "Khách sạn hợp gu của bạn"
                     : "Gu nghỉ dưỡng của bạn"}
               </DialogTitle>
               <DialogDescription className="text-sm">
+                {step === "hotels" && "Dựa trên điểm đến và gu bạn vừa chọn. Tick những nơi bạn thấy thích. "}
                 Chọn ít nhất {ONBOARDING_LIMITS.minPicks} mục để StayReco gợi ý hợp gu hơn, kèm{" "}
                 <strong className="font-semibold text-foreground">voucher chào mừng</strong>.
               </DialogDescription>
@@ -157,7 +181,7 @@ export function OnboardingDialog({
                       <PickTile
                         key={destination.city}
                         active={active}
-                        onClick={() => edit((prev) => ({ ...prev, cities: toggle(prev.cities, destination.city) }))}
+                        onClick={() => answer((prev) => ({ ...prev, cities: toggle(prev.cities, destination.city) }))}
                         image={destination.imageUrl}
                         title={destination.city}
                         subtitle={`${destination.hotels} khách sạn`}
@@ -167,33 +191,60 @@ export function OnboardingDialog({
                 </div>
               )}
 
-              {step === "hotels" && options && (
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3" role="group" aria-label="Khách sạn">
-                  {options.hotels.map((hotel) => {
-                    const active = picks.hotelIds.includes(hotel.id);
-                    return (
-                      <PickTile
-                        key={hotel.id}
-                        active={active}
-                        onClick={() => edit((prev) => ({ ...prev, hotelIds: toggle(prev.hotelIds, hotel.id) }))}
-                        image={hotel.imageUrl}
-                        title={hotel.name}
-                        subtitle={
-                          <span className="flex items-center gap-1">
-                            <MapPin className="size-3" aria-hidden /> {hotel.city}
-                            {hotel.rating !== null && (
-                              <>
-                                <Star className="ml-1 size-3 fill-amber-400 text-amber-400" aria-hidden />
-                                {hotel.rating.toFixed(1)}
-                              </>
-                            )}
-                          </span>
-                        }
-                      />
-                    );
-                  })}
-                </div>
-              )}
+              {step === "hotels" &&
+                (suggestions.isPending ? (
+                  <div className="flex min-h-40 items-center justify-center gap-2 text-sm text-muted-foreground" role="status">
+                    <Loader2 className="size-4 animate-spin" aria-hidden /> Đang tìm khách sạn hợp gu…
+                  </div>
+                ) : suggestions.isError ? (
+                  <div className="flex min-h-40 flex-col items-center justify-center gap-3 text-center text-sm text-muted-foreground">
+                    <p role="alert">{getApiErrorMessage(suggestions.error)}</p>
+                    <Button type="button" variant="outline" className="h-10 px-4" onClick={() => void suggestions.refetch()}>
+                      Thử lại
+                    </Button>
+                  </div>
+                ) : !suggestions.data.length ? (
+                  <p className="flex min-h-40 items-center justify-center px-4 text-center text-sm text-muted-foreground">
+                    Chưa có khách sạn nào ở điểm đến bạn chọn hợp với gu này. Bạn có thể hoàn tất luôn, hoặc quay lại đổi
+                    điểm đến hay phong cách.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3" role="group" aria-label="Khách sạn hợp gu">
+                    {suggestions.data.map((hotel) => {
+                      const active = picks.hotelIds.includes(hotel.id);
+                      return (
+                        <PickTile
+                          key={hotel.id}
+                          active={active}
+                          onClick={() => edit((prev) => ({ ...prev, hotelIds: toggle(prev.hotelIds, hotel.id) }))}
+                          image={hotel.imageUrl}
+                          title={hotel.name}
+                          subtitle={
+                            <span className="flex flex-col gap-1">
+                              <span className="flex items-center gap-1">
+                                <MapPin className="size-3" aria-hidden /> {hotel.city}
+                                {hotel.rating !== null && (
+                                  <>
+                                    <Star className="ml-1 size-3 fill-amber-400 text-amber-400" aria-hidden />
+                                    {hotel.rating.toFixed(1)}
+                                  </>
+                                )}
+                              </span>
+                              {hotel.pricePerNightFrom !== null && (
+                                <span className={cn(hotel.overBudget && "font-semibold text-amber-700")}>
+                                  Từ {formatMoney(hotel.pricePerNightFrom)}/đêm{hotel.overBudget && " · trên ngân sách"}
+                                </span>
+                              )}
+                              {hotel.matches.length > 0 && (
+                                <span className="line-clamp-2 text-primary">Hợp: {hotel.matches.join(" · ")}</span>
+                              )}
+                            </span>
+                          }
+                        />
+                      );
+                    })}
+                  </div>
+                ))}
 
               {step === "taste" && (
                 <div className="space-y-5">
@@ -201,20 +252,20 @@ export function OnboardingDialog({
                     label="Phong cách du lịch"
                     items={STYLES.map((style) => ({ id: style.id, label: style.title }))}
                     selected={picks.travelStyles}
-                    onToggle={(id) => edit((prev) => ({ ...prev, travelStyles: toggle(prev.travelStyles, id) }))}
+                    onToggle={(id) => answer((prev) => ({ ...prev, travelStyles: toggle(prev.travelStyles, id) }))}
                   />
                   <ChipGroup
                     label="Tiện nghi ưu tiên"
                     items={AMENITIES}
                     selected={picks.roomAmenities}
-                    onToggle={(id) => edit((prev) => ({ ...prev, roomAmenities: toggle(prev.roomAmenities, id) }))}
+                    onToggle={(id) => answer((prev) => ({ ...prev, roomAmenities: toggle(prev.roomAmenities, id) }))}
                   />
                   {!!options?.views.length && (
                     <ChipGroup
                       label="Tầm nhìn yêu thích"
                       items={options.views.map((view) => ({ id: view.id, label: view.name }))}
                       selected={picks.viewIds}
-                      onToggle={(id) => edit((prev) => ({ ...prev, viewIds: toggle(prev.viewIds, id) }))}
+                      onToggle={(id) => answer((prev) => ({ ...prev, viewIds: toggle(prev.viewIds, id) }))}
                     />
                   )}
                   <fieldset className="space-y-2">
@@ -226,7 +277,7 @@ export function OnboardingDialog({
                           type="button"
                           role="radio"
                           aria-checked={picks.budget === budget.id}
-                          onClick={() => edit((prev) => ({ ...prev, budget: budget.id }))}
+                          onClick={() => answer((prev) => ({ ...prev, budget: budget.id }))}
                           className={cn(
                             "min-h-10 rounded-full border px-3.5 text-sm font-semibold transition-colors",
                             picks.budget === budget.id
