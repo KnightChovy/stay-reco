@@ -30,10 +30,31 @@ function inline(text: string, keyPrefix: string): ReactNode[] {
   return nodes;
 }
 
-type Block = { kind: "p"; lines: string[] } | { kind: "ul" | "ol"; items: string[] };
+type Block =
+  | { kind: "p"; lines: string[] }
+  | { kind: "ul"; items: string[] }
+  | { kind: "ol"; items: string[]; start: number };
 
 const BULLET = /^\s*(?:[-*•])\s+(.*)$/;
-const NUMBERED = /^\s*\d+[.)]\s+(.*)$/;
+const NUMBERED = /^\s*(\d+)[.)]\s+(.*)$/;
+
+/**
+ * Where a numbered list that the parser had to split resumes. The assistant often writes "1. Phòng A", a few bullet
+ * details, then "2. Phòng B": that is two `<ol>`s here, and the second must show 2, not 1. When it numbers every item
+ * "1." (lazy Markdown), the count carries on from the previous list as long as only bullet lists stand between them.
+ */
+function startOf(result: Block[], written: number): number {
+  for (let index = result.length - 1; index >= 0; index -= 1) {
+    const block = result[index];
+    if (block.kind === "ul") continue;
+    if (block.kind === "ol") {
+      const next = block.start + block.items.length;
+      return written < next ? next : written;
+    }
+    break;
+  }
+  return written;
+}
 
 function blocks(source: string): Block[] {
   const result: Block[] = [];
@@ -42,11 +63,12 @@ function blocks(source: string): Block[] {
     const bullet = line.match(BULLET);
     const numbered = !bullet ? line.match(NUMBERED) : null;
     const last = result[result.length - 1];
-    if (bullet || numbered) {
-      const kind = bullet ? "ul" : "ol";
-      const item = (bullet ?? numbered)![1];
-      if (last && last.kind === kind) last.items.push(item);
-      else result.push({ kind, items: [item] });
+    if (bullet) {
+      if (last && last.kind === "ul") last.items.push(bullet[1]);
+      else result.push({ kind: "ul", items: [bullet[1]] });
+    } else if (numbered) {
+      if (last && last.kind === "ol") last.items.push(numbered[2]);
+      else result.push({ kind: "ol", items: [numbered[2]], start: startOf(result, Number(numbered[1])) });
     } else if (line.trim() === "") {
       result.push({ kind: "p", lines: [] });
     } else if (last && last.kind === "p" && last.lines.length > 0) {
@@ -74,13 +96,17 @@ export function ChatMarkdown({ content }: { content: string }) {
             </p>
           );
         }
-        const List = block.kind === "ul" ? "ul" : "ol";
-        return (
-          <List key={blockIndex} className={block.kind === "ul" ? "list-disc space-y-1 pl-5" : "list-decimal space-y-1 pl-5"}>
-            {block.items.map((item, itemIndex) => (
-              <li key={itemIndex}>{inline(item, `${blockIndex}-${itemIndex}`)}</li>
-            ))}
-          </List>
+        const items = block.items.map((item, itemIndex) => (
+          <li key={itemIndex}>{inline(item, `${blockIndex}-${itemIndex}`)}</li>
+        ));
+        return block.kind === "ul" ? (
+          <ul key={blockIndex} className="list-disc space-y-1 pl-5">
+            {items}
+          </ul>
+        ) : (
+          <ol key={blockIndex} start={block.start} className="list-decimal space-y-1 pl-5">
+            {items}
+          </ol>
         );
       })}
     </div>
