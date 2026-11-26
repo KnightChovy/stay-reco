@@ -4,6 +4,7 @@ import type {
   ManagerPayoutListQuery,
   PayoutPaidInput,
   PayoutRejectInput,
+  PlatformOverview,
   VerificationFileLink,
   VerificationListQuery,
   VerificationRequest,
@@ -63,6 +64,15 @@ export async function requestVerificationChanges(requestId: string, reason: stri
 /** Active hotels only: creates a `RENEWAL` request in `NEEDS_REVISION`; the hotel stays active meanwhile. */
 export async function requestReverification(hotelId: string, reason: string) {
   const { data } = await api.post<APIResponse<VerificationRequest>>(`/hotels/${hotelId}/reverification`, { reason });
+  return data.data;
+}
+
+// ── Platform figures ────────────────────────────────────────
+
+export type PlatformRangeParams = { from?: string; to?: string };
+
+export async function getPlatformOverview(params: PlatformRangeParams) {
+  const { data } = await api.get<APIResponse<PlatformOverview>>("/platform/stats/overview", { params });
   return data.data;
 }
 

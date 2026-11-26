@@ -20,6 +20,7 @@ export const managerKeys = {
   payoutQueue: () => [...managerKeys.all, "payout-queue"] as const,
   payouts: (params: managerService.PayoutQueueParams) => [...managerKeys.payoutQueue(), params] as const,
   payout: (payoutId: string) => [...managerKeys.all, "payout", payoutId] as const,
+  overview: (params: managerService.PlatformRangeParams) => [...managerKeys.all, "overview", params] as const,
 };
 
 /** Codes whose shared message is written for the partner; the manager reads them from the other side. */
@@ -59,6 +60,14 @@ export function useVerificationRequest(requestId: string | undefined) {
     queryKey: managerKeys.verification(requestId ?? ""),
     queryFn: () => managerService.getVerificationRequest(requestId!),
     enabled: !!requestId,
+  });
+}
+
+export function usePlatformOverview(params: managerService.PlatformRangeParams) {
+  return useQuery({
+    queryKey: managerKeys.overview(params),
+    queryFn: () => managerService.getPlatformOverview(params),
+    placeholderData: keepPreviousData,
   });
 }
 
