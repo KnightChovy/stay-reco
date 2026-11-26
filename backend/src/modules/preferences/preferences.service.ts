@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { Preferences, UpdatePreferencesInput } from '@stayreco/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import { ModelRefreshService } from '../recommendations/model-refresh.service';
 
 /**
  * The key-value preferences of `customer_preference`: what a customer likes, kept for the screens that ask and for
@@ -9,7 +10,10 @@ import { PrismaService } from '../../prisma/prisma.service';
  */
 @Injectable()
 export class PreferencesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly model: ModelRefreshService,
+  ) {}
 
   async get(customerId: string): Promise<Preferences> {
     const rows = await this.prisma.customerPreference.findMany({
@@ -52,6 +56,8 @@ export class PreferencesService {
         });
       }
     });
+    // The recommender reads these keys: the model's list follows them in seconds rather than at the nightly run.
+    this.model.refresh(customerId);
     return this.get(customerId);
   }
 }

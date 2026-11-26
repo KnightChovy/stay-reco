@@ -202,6 +202,46 @@ def finish_run(conn, run_id, algorithm, rows, metrics=None, hyperparameters=None
     conn.commit()
 
 
+def latest_completed_run(conn, algorithm):
+    """The run the API serves (RecommendationsService.latestRun): the newest COMPLETED one, or None."""
+    with conn.cursor() as cur:
+        cur.execute("""
+            SELECT model_run_id::text FROM model_run
+            WHERE algorithm = %s AND status = 'COMPLETED' AND finished_at IS NOT NULL
+            ORDER BY started_at DESC, model_run_id DESC LIMIT 1
+        """, (algorithm,))
+        row = cur.fetchone()
+    return row[0] if row else None
+
+
+def write_customer(conn, run_id, customer_id, rows):
+    """Replace one customer's list inside a published run, leaving everyone else's alone (train.py --customer).
+
+    Upserted on (run, customer, hotel) so a booking already pointing at a row keeps it. A hotel that has dropped out of
+    the list is deleted, unless a booking points at it: that one is kept with no rank, after the rest.
+    """
+    rows = list(rows)
+    with conn.cursor() as cur:
+        cur.executemany("""
+            INSERT INTO recommendation (model_run_id, customer_id, hotel_id, score, rank, reason)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            ON CONFLICT (model_run_id, customer_id, hotel_id)
+            DO UPDATE SET score = EXCLUDED.score, rank = EXCLUDED.rank, reason = EXCLUDED.reason
+        """, [(run_id, *row) for row in rows])
+        kept = [row[1] for row in rows]
+        cur.execute("""
+            DELETE FROM recommendation r
+            WHERE r.model_run_id = %s AND r.customer_id = %s AND NOT (r.hotel_id = ANY(%s::uuid[]))
+              AND NOT EXISTS (SELECT 1 FROM booking b WHERE b.recommendation_id = r.recommendation_id)
+        """, (run_id, customer_id, kept))
+        cur.execute("""
+            UPDATE recommendation SET rank = NULL
+            WHERE model_run_id = %s AND customer_id = %s AND NOT (hotel_id = ANY(%s::uuid[]))
+        """, (run_id, customer_id, kept))
+    conn.commit()
+    return len(rows)
+
+
 def _json_default(value):
     """numpy numbers in the comparison; NaN (nothing to measure) as null."""
     value = float(value)

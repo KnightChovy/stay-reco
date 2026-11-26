@@ -90,6 +90,19 @@ const envSchema = z
      * route: a redirect carries no Authorization header, so that page posts the code back inside the owner's session.
      */
     META_OAUTH_REDIRECT_URI: z.string().url().optional(),
+    /**
+     * Ask Facebook for the Instagram scopes too. Only an app with the Instagram use case added may: without it the
+     * login dialog stops on "Invalid Scopes: instagram_basic, instagram_content_publish". Off: Facebook pages only.
+     */
+    META_INSTAGRAM: booleanString,
+    /**
+     * Python of the recommender (`recommender/`), e.g. the conda env's python.exe. Set, a customer who finishes
+     * onboarding or changes preferences gets the model's own list in seconds (`train.py --customer`); empty, they keep
+     * the list ranked from their preferences until the nightly run.
+     */
+    RECOMMENDER_PYTHON: z.string().optional(),
+    /** `train.py` of the recommender; defaults to ../recommender/train.py from where the API runs. */
+    RECOMMENDER_SCRIPT: z.string().optional(),
     /** Spend cap per hotel per calendar month, in US dollars (phase 5 Definition of Done). */
     AI_MONTHLY_BUDGET_USD: z.preprocess(
       (v) => (v === '' ? undefined : v),

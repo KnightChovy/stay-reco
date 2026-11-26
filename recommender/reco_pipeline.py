@@ -188,8 +188,9 @@ class Scorer:
         return new + "Được khách cùng nhóm tuổi, giới tính và quốc tịch với bạn đánh giá cao."
 
 
-def recommend(scorer, customers, booked, top_k=TOP_K):
-    """Yields (customer, hotel, score, rank, reason): the top-K per customer, then the signed-out list.
+def recommend(scorer, customers, booked, top_k=TOP_K, include_public=True):
+    """Yields (customer, hotel, score, rank, reason): the signed-out list (unless `include_public` is off), then the
+    top-K per customer.
 
     `booked` holds the hotels each customer has a stay coming up or under way at (reco_db.load_booked): those are left
     out, as are hotels they rated below DISLIKED. A hotel they stayed at and liked stays in the list and may come back
@@ -203,7 +204,8 @@ def recommend(scorer, customers, booked, top_k=TOP_K):
         return
     min_price = hotels.set_index("item_id")["min_price"]
     city_of = hotels.set_index("item_id")["city"].map(fold)
-    for user, prefs in [(None, {}), *zip(customers["user_id"], customers["preferences"])]:
+    public = [(None, {})] if include_public else []
+    for user, prefs in [*public, *zip(customers["user_id"], customers["preferences"])]:
         skip = set(booked.get(user, ())) | scorer.disliked.get(user, set())
         items = hotels.loc[~hotels["item_id"].isin(skip), "item_id"].to_numpy()
         if not len(items):

@@ -182,7 +182,18 @@ export function useUpdatePreferences() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (preferences: Record<string, string | null>) => rewardsService.updateMyPreferences(preferences),
-    onSuccess: (preferences) => queryClient.setQueryData(rewardsKeys.preferences(), preferences),
+    onSuccess: (preferences) => {
+      queryClient.setQueryData(rewardsKeys.preferences(), preferences);
+      // Recommendations and the search sorted by fit follow the preferences (keys spelt out: recommendation-queries
+      // imports this file).
+      void queryClient.invalidateQueries({ queryKey: ["recommendations"] });
+      void queryClient.invalidateQueries({ queryKey: ["stays", "search"] });
+      // The model rescores the customer in a few seconds (train.py --customer): read the lists once more after it.
+      setTimeout(() => {
+        void queryClient.invalidateQueries({ queryKey: ["recommendations"] });
+        void queryClient.invalidateQueries({ queryKey: ["stays", "search"] });
+      }, 10_000);
+    },
   });
 }
 

@@ -139,6 +139,16 @@ class RecommenderTest(unittest.TestCase):
         self.assertEqual(len([row for row in rows if row[0] == "guest"]), 5)
         self.assertEqual(len([row for row in rows if row[0] is None]), 5)
 
+    def test_one_customer_alone_gets_the_list_they_get_with_everyone(self):
+        # train.py --customer fits on everyone and scores one: the list must be the one the nightly run writes.
+        hotels = hotels_frame(["resort hồ bơi spa biển", "khách sạn gia đình khu vui chơi trẻ em", "khách sạn công tác"])
+        everyone = pd.concat([customer({"travelStyles": "resort"}, "a"), customer({"travelStyles": "family"}, "b")])
+        scorer = Scorer(NO_RATINGS, hotels, everyone, {})
+        full = [row for row in recommend(scorer, everyone, {}) if row[0] == "b"]
+        alone = list(recommend(scorer, everyone[everyone["user_id"] == "b"], {}, include_public=False))
+        self.assertEqual(alone, full)
+        self.assertTrue(all(row[0] == "b" for row in alone))
+
     def test_evaluate_measures_the_served_formula_against_baselines(self):
         rng = np.random.RandomState(0)
         hotels = hotels_frame([f"{'bien' if i % 2 else 'nui'} hotel {i}" for i in range(20)])

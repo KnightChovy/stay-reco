@@ -25,6 +25,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { toVoucher } from '../promotions/promotions.mapper';
 import { basePriceWhere } from '../rooms/room.mapper';
 import { bookableHotel, sellableRoomType } from '../stays/bookable';
+import { ModelRefreshService } from '../recommendations/model-refresh.service';
 import { tasteFit } from './onboarding-taste';
 import {
   type WelcomeVoucherRow,
@@ -76,6 +77,7 @@ export class OnboardingService {
     private readonly prisma: PrismaService,
     private readonly welcome: WelcomeVoucherService,
     private readonly notifications: NotificationsService,
+    private readonly model: ModelRefreshService,
   ) {}
 
   /** Where the customer is, what to pick from (until they finish), and their welcome code once they have it. */
@@ -135,6 +137,8 @@ export class OnboardingService {
     });
 
     if (voucher && issued) await this.tell(customerId, voucher);
+    // The model's own list in seconds; until then the preferences are ranked on the spot.
+    this.model.refresh(customerId);
     return {
       status: 'COMPLETED',
       options: null,
@@ -296,10 +300,19 @@ export class OnboardingService {
       where: { customerId, preferenceKey: ONBOARDING_KEYS.status },
       select: { preferenceValue: true },
     });
-    return row?.preferenceValue === 'COMPLETED' ||
+    if (
+      row?.preferenceValue === 'COMPLETED' ||
       row?.preferenceValue === 'SKIPPED'
-      ? row.preferenceValue
-      : 'NEW';
+    ) {
+      return row.preferenceValue;
+    }
+    // The screen is for newcomers. A guest who has already stayed (an account from before onboarding existed) is not
+    // stopped by it on sign-in; the account page still offers it, as after a skip.
+    const stayed = await db.booking.count({
+      where: { customerId, status: 'COMPLETED' },
+      take: 1,
+    });
+    return stayed ? 'SKIPPED' : 'NEW';
   }
 
   /**

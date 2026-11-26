@@ -32,6 +32,10 @@ export function useRecommendations(params: RecommendationParams = {}) {
     // Waiting for the stored sign-in avoids asking for the public list and then the personal one.
     enabled: hasHydrated,
     staleTime: 5 * 60 * 1000,
+    // Ranked from the preferences just given: the model's own list follows within seconds (the backend runs the
+    // recommender for this customer), so ask again for a minute, then leave it to the next visit.
+    refetchInterval: (query) =>
+      query.state.data?.source === "PREFERENCES" && query.state.dataUpdateCount < 20 ? 3000 : false,
   });
 }
 
@@ -67,6 +71,12 @@ function useOnboardingSettled() {
     // The picks are now preferences and the welcome code is one of the customer's vouchers.
     void queryClient.invalidateQueries({ queryKey: rewardsKeys.all });
     void queryClient.invalidateQueries({ queryKey: notificationKeys.all });
+    // The backend ranks a customer the last training run does not know from these answers at once: the list kept
+    // from before (the signed-out one) and the search sorted by fit are read again, not left for five minutes.
+    void queryClient.invalidateQueries({ queryKey: [...recommendationKeys.all, customerId ?? "public"] });
+    void queryClient.invalidateQueries({ queryKey: ["stays", "search"] });
+    // And once more when the model has scored them (train.py --customer, a few seconds).
+    setTimeout(() => void queryClient.invalidateQueries({ queryKey: ["stays", "search"] }), 10_000);
   };
 }
 

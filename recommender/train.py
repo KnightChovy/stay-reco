@@ -1,6 +1,13 @@
-"""Evaluate the served formula, then publish a new offline recommendation snapshot. --dry-run writes nothing."""
+"""Evaluate the served formula, then publish a new offline recommendation snapshot. --dry-run writes nothing.
+
+--customer <id> (repeatable) scores only those customers, with the same formula fitted on the same data, and writes
+their lists into the run the API already serves, without evaluating or touching anyone else's list: the backend runs
+it when a customer finishes onboarding or changes their preferences, so the model's own list is there in seconds
+rather than after the next nightly run.
+"""
 
 import argparse
+import sys
 from datetime import datetime, timezone
 
 import reco_db
@@ -12,11 +19,18 @@ VERSION = "2.1"
 
 
 def main():
+    # Run by the backend with a pipe for stdout, which Windows opens as cp1252: the progress lines carry "✓".
+    for stream in (sys.stdout, sys.stderr):
+        stream.reconfigure(encoding="utf-8", errors="replace")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--top-k", type=int, default=reco_pipeline.TOP_K, help="hotels stored per customer")
+    parser.add_argument("--customer", action="append", default=[], metavar="ID",
+                        help="score only this customer into the served run (repeatable)")
     args = parser.parse_args()
+    if args.customer:
+        return score_customers(args.customer, seed=args.seed, top_k=args.top_k, dry_run=args.dry_run)
     with reco_db.connect() as conn:
         if not args.dry_run:
             with conn.cursor() as cur:
@@ -56,6 +70,34 @@ def main():
                 reco_db.fail_run(conn, run_id, error)
             raise
         print(f"Published recommendation run {run_id}.", flush=True)
+
+
+def score_customers(customer_ids, *, seed, top_k, dry_run):
+    """The model's list for these customers now, written into the served run (see the module docstring)."""
+    with reco_db.connect() as conn:
+        run_id = reco_db.latest_completed_run(conn, ALGORITHM)
+        conn.commit()
+        if not run_id:
+            print("No published run yet: the customer keeps the list ranked from their preferences.", flush=True)
+            return
+        conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
+        ratings, hotels, customers, booked, amenities = (
+            reco_db.load_ratings(conn), reco_db.load_hotels(conn), reco_db.load_customers(conn),
+            reco_db.load_booked(conn), reco_db.load_amenities(conn))
+        conn.commit()
+        # Fitted on everyone, exactly as the nightly run: the demographic groups and the CF factors need all of them.
+        scorer = reco_pipeline.Scorer(ratings, hotels, customers, amenities, seed=seed)
+        wanted = customers[customers["user_id"].isin(customer_ids)]
+        for user in sorted(set(customer_ids) - set(wanted["user_id"])):
+            print(f"Customer {user} is not an active customer; skipped.", flush=True)
+        for _, one in wanted.iterrows():
+            rows = [row for row in reco_pipeline.recommend(scorer, wanted[wanted["user_id"] == one["user_id"]], booked,
+                                                           top_k=top_k, include_public=False)]
+            if dry_run:
+                print(f"Dry run scored {len(rows)} hotels for {one['user_id']}.", flush=True)
+                continue
+            written = reco_db.write_customer(conn, run_id, one["user_id"], rows)
+            print(f"Wrote {written} hotels for {one['user_id']} into run {run_id}.", flush=True)
 
 
 def _print_comparison(comparison):
