@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Check, CircleHelp, Heart, MapPin, Sparkles, Star, Users, Wallet } from "lucide-react";
+import { Check, Heart, Lightbulb, MapPin, Sparkles, Star, Users, Wallet } from "lucide-react";
 import type { RecommendedHotel } from "@stayreco/shared";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -94,7 +94,7 @@ function reasonsFor(hotel: RecommendedHotel): Reason[] {
   return reasons;
 }
 
-/** "Vì sao?" on a recommended hotel: a short list of plain reasons why it suits this customer. */
+/** "Hợp với bạn" on a recommended hotel: a short list of plain reasons why it suits this customer. */
 export function WhyRecommendedDialog({ hotel }: { hotel: RecommendedHotel }) {
   const reasons = reasonsFor(hotel);
   if (!reasons.length) return null;
@@ -110,7 +110,7 @@ export function WhyRecommendedDialog({ hotel }: { hotel: RecommendedHotel }) {
           />
         }
       >
-        <CircleHelp className="size-3.5" aria-hidden /> Vì sao?
+        <Lightbulb className="size-3.5 text-amber-500" aria-hidden /> Hợp với bạn
       </DialogTrigger>
       <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-md">
         <DialogHeader>

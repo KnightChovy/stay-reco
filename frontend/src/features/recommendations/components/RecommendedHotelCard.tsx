@@ -13,7 +13,7 @@ const FALLBACK_IMAGE =
   "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=800&q=80";
 
 /**
- * One hotel from the recommender: the card, why it was picked, and the base price per night. "Vì sao?" (when the
+ * One hotel from the recommender: the card, why it was picked, and the base price per night. "Hợp với bạn" (when the
  * recommender explained it) sits over the picture, outside the link, so it opens the explanation instead of the hotel.
  */
 export function RecommendedHotelCard({
