@@ -1,15 +1,23 @@
-import { z } from 'zod';
-import { BookingStatus, DayOfWeek, PaymentMethod, PaymentStatus, PriceAdjustmentType, PriceRuleType, RoomStatus } from '../enums';
-import { CHANGE_REQUEST_STATUSES } from '../schemas/booking';
-import { bookingAddOnResponseSchema, hotelAddOnResponseSchema } from './add-on';
+import { z } from "zod";
+import {
+  BookingStatus,
+  DayOfWeek,
+  PaymentMethod,
+  PaymentStatus,
+  PriceAdjustmentType,
+  PriceRuleType,
+  RoomStatus,
+} from "../enums";
+import { CHANGE_REQUEST_STATUSES } from "../schemas/booking";
+import { bookingAddOnResponseSchema, hotelAddOnResponseSchema } from "./add-on";
 import {
   amenityResponseSchema,
   cancellationPolicyResponseSchema,
   hotelImageResponseSchema,
   lateCheckoutPolicyResponseSchema,
   roomTypeImageResponseSchema,
-} from './hotel';
-import { isoDateTime, responseSchemas } from './registry';
+} from "./hotel";
+import { isoDateTime, responseSchemas } from "./registry";
 
 /**
  * Content of `data` returned by the search, booking and pricing endpoints (the envelope is `APIResponse<T>`).
@@ -38,7 +46,7 @@ export const pricingRuleResponseSchema = z
     isActive: z.boolean(),
     createdAt: isoDateTime(),
   })
-  .register(responseSchemas, { id: 'PricingRule' });
+  .register(responseSchemas, { id: "PricingRule" });
 export type PricingRule = z.infer<typeof pricingRuleResponseSchema>;
 
 export const pricePreviewResponseSchema = z
@@ -49,23 +57,31 @@ export const pricePreviewResponseSchema = z
     rule: z
       .object({ id: z.uuid(), name: z.string() })
       .nullable()
-      .describe('The rule that set the price; null when the base price applies.'),
+      .describe(
+        "The rule that set the price; null when the base price applies.",
+      ),
     price: z.number(),
   })
-  .register(responseSchemas, { id: 'PricePreview' });
+  .register(responseSchemas, { id: "PricePreview" });
 export type PricePreview = z.infer<typeof pricePreviewResponseSchema>;
 
 export const availabilityDayResponseSchema = z
   .object({
     roomTypeId: z.uuid(),
     date: calendarDate(),
-    totalRooms: z.number().int().describe('Physical rooms of the type not locked for maintenance.'),
+    totalRooms: z
+      .number()
+      .int()
+      .describe("Physical rooms of the type not locked for maintenance."),
     booked: z.number().int(),
-    held: z.number().int().describe('Nights held for bookings waiting for payment.'),
-    closed: z.number().int().describe('Rooms taken off sale by the partner.'),
-    onSale: z.number().int().describe('totalRooms − booked − held − closed.'),
+    held: z
+      .number()
+      .int()
+      .describe("Nights held for bookings waiting for payment."),
+    closed: z.number().int().describe("Rooms taken off sale by the partner."),
+    onSale: z.number().int().describe("totalRooms − booked − held − closed."),
   })
-  .register(responseSchemas, { id: 'AvailabilityDay' });
+  .register(responseSchemas, { id: "AvailabilityDay" });
 export type AvailabilityDay = z.infer<typeof availabilityDayResponseSchema>;
 
 // ── Search and listings (public) ────────────────────────────
@@ -83,28 +99,48 @@ export const hotelSearchResultResponseSchema = z
     rating: z
       .number()
       .nullable()
-      .describe('Average overall rating of the visible reviews, one decimal; null while the hotel has none.'),
-    reviewCount: z.number().int().describe('How many visible reviews `rating` is the average of.'),
+      .describe(
+        "Average overall rating of the visible reviews, one decimal; null while the hotel has none.",
+      ),
+    reviewCount: z
+      .number()
+      .int()
+      .describe("How many visible reviews `rating` is the average of."),
     nights: z.number().int(),
-    fromTotal: z.number().describe('Cheapest total for the whole stay and the requested rooms.'),
+    fromTotal: z
+      .number()
+      .describe("Cheapest total for the whole stay and the requested rooms."),
     freeCancellation: z.boolean(),
+    styles: z
+      .array(z.string())
+      .describe(
+        "Travel style ids the hotel is (resort, nature, foodie, business, family, chill), read from its own text by the rule the recommender ranks by; empty when it says too little.",
+      ),
   })
-  .register(responseSchemas, { id: 'HotelSearchResult' });
+  .register(responseSchemas, { id: "HotelSearchResult" });
 export type HotelSearchResult = z.infer<typeof hotelSearchResultResponseSchema>;
 
-const nightlyPriceResponseSchema = z.object({ date: calendarDate(), price: z.number() });
+const nightlyPriceResponseSchema = z.object({
+  date: calendarDate(),
+  price: z.number(),
+});
 
 export const roomTypeOfferResponseSchema = z
   .object({
-    available: z.number().int().describe('Rooms of this type free on every night of the stay.'),
+    available: z
+      .number()
+      .int()
+      .describe("Rooms of this type free on every night of the stay."),
     fitsGuests: z.boolean(),
     nightlyPrices: z.array(nightlyPriceResponseSchema),
     perRoomTotal: z.number(),
-    total: z.number().describe('perRoomTotal × rooms.'),
-    freeCancellationUntil: isoDateTime().nullable().describe('null: no free cancellation.'),
+    total: z.number().describe("perRoomTotal × rooms."),
+    freeCancellationUntil: isoDateTime()
+      .nullable()
+      .describe("null: no free cancellation."),
     cancellationFeePercent: z.number(),
   })
-  .register(responseSchemas, { id: 'RoomTypeOffer' });
+  .register(responseSchemas, { id: "RoomTypeOffer" });
 export type RoomTypeOffer = z.infer<typeof roomTypeOfferResponseSchema>;
 
 export const roomTypeListingResponseSchema = z
@@ -115,13 +151,21 @@ export const roomTypeListingResponseSchema = z
       description: z.string().nullable(),
       maxOccupancy: z.number().int(),
       areaSqm: z.number(),
-      beds: z.array(z.object({ bedTypeId: z.uuid(), name: z.string(), quantity: z.number().int() })),
+      beds: z.array(
+        z.object({
+          bedTypeId: z.uuid(),
+          name: z.string(),
+          quantity: z.number().int(),
+        }),
+      ),
       amenities: z.array(amenityResponseSchema),
       images: z.array(roomTypeImageResponseSchema),
     }),
-    offer: roomTypeOfferResponseSchema.nullable().describe('null when the request has no dates.'),
+    offer: roomTypeOfferResponseSchema
+      .nullable()
+      .describe("null when the request has no dates."),
   })
-  .register(responseSchemas, { id: 'RoomTypeListing' });
+  .register(responseSchemas, { id: "RoomTypeListing" });
 export type RoomTypeListing = z.infer<typeof roomTypeListingResponseSchema>;
 
 export const hotelListingResponseSchema = z
@@ -144,12 +188,18 @@ export const hotelListingResponseSchema = z
       images: z.array(hotelImageResponseSchema),
       policies: z.record(z.string(), z.string()),
       cancellationPolicy: cancellationPolicyResponseSchema,
-      lateCheckoutPolicy: lateCheckoutPolicyResponseSchema.nullable().describe('null: no late check-out fee.'),
-      addOns: z.array(hotelAddOnResponseSchema).describe('Active add-ons, by name; `prebookable` ones can go on POST /bookings.'),
+      lateCheckoutPolicy: lateCheckoutPolicyResponseSchema
+        .nullable()
+        .describe("null: no late check-out fee."),
+      addOns: z
+        .array(hotelAddOnResponseSchema)
+        .describe(
+          "Active add-ons, by name; `prebookable` ones can go on POST /bookings.",
+        ),
     }),
     roomTypes: z.array(roomTypeListingResponseSchema),
   })
-  .register(responseSchemas, { id: 'HotelListing' });
+  .register(responseSchemas, { id: "HotelListing" });
 export type HotelListing = z.infer<typeof hotelListingResponseSchema>;
 
 // ── Bookings ────────────────────────────────────────────────
@@ -158,120 +208,190 @@ export const bookingItemResponseSchema = z
   .object({
     roomType: z.object({ id: z.uuid(), name: z.string() }),
     rooms: z.number().int(),
-    subtotal: z.number().describe('Nightly prices × rooms, fixed at booking time.'),
-    nightlyPrices: z.array(nightlyPriceResponseSchema).describe('Price of one room per night, fixed at booking time.'),
+    subtotal: z
+      .number()
+      .describe("Nightly prices × rooms, fixed at booking time."),
+    nightlyPrices: z
+      .array(nightlyPriceResponseSchema)
+      .describe("Price of one room per night, fixed at booking time."),
   })
-  .register(responseSchemas, { id: 'BookingItem', description: 'One room type of a booking.' });
+  .register(responseSchemas, {
+    id: "BookingItem",
+    description: "One room type of a booking.",
+  });
 export type BookingItem = z.infer<typeof bookingItemResponseSchema>;
 
 export const bookingSummaryResponseSchema = z
   .object({
     id: z.uuid(),
-    code: z.string().describe('SR-YYMMDD-XXXX, also the bank transfer content.'),
+    code: z
+      .string()
+      .describe("SR-YYMMDD-XXXX, also the bank transfer content."),
     status: z.enum(BookingStatus),
     paymentStatus: z.enum(PaymentStatus),
-    hotel: z.object({ id: z.uuid(), name: z.string(), city: z.string(), coverImageUrl: z.url().nullable() }),
-    items: z.array(bookingItemResponseSchema).describe('1–5 room types of the hotel.'),
+    hotel: z.object({
+      id: z.uuid(),
+      name: z.string(),
+      city: z.string(),
+      coverImageUrl: z.url().nullable(),
+    }),
+    items: z
+      .array(bookingItemResponseSchema)
+      .describe("1–5 room types of the hotel."),
     roomType: z
       .object({ id: z.uuid(), name: z.string() })
-      .describe("Deprecated: the first item's room type, until the apps read `items`."),
+      .describe(
+        "Deprecated: the first item's room type, until the apps read `items`.",
+      ),
     checkIn: calendarDate(),
     checkOut: calendarDate(),
     nights: z.number().int(),
-    rooms: z.number().int().describe('Rooms over every item.'),
+    rooms: z.number().int().describe("Rooms over every item."),
     guests: z.number().int(),
-    guestName: z.string().describe('Who is staying; may differ from `bookedBy` when the stay was booked for someone.'),
+    guestName: z
+      .string()
+      .describe(
+        "Who is staying; may differ from `bookedBy` when the stay was booked for someone.",
+      ),
     contactPhone: z.string(),
     bookedBy: z
       .object({ name: z.string(), phone: z.string().nullable() })
-      .describe('The customer account that made the booking.'),
+      .describe("The customer account that made the booking."),
     totalAmount: z.number(),
     createdAt: isoDateTime(),
   })
-  .register(responseSchemas, { id: 'BookingSummary' });
+  .register(responseSchemas, { id: "BookingSummary" });
 export type BookingSummary = z.infer<typeof bookingSummaryResponseSchema>;
 
 export const bookingPaymentResponseSchema = z
   .object({
-    method: z.literal('SEPAY'),
+    method: z.literal("SEPAY"),
     bankName: z.string(),
     accountNumber: z.string(),
     accountName: z.string(),
     amount: z.number(),
-    transferContent: z.string().describe('Must be copied exactly; it is the booking code.'),
-    qrImageUrl: z.url().describe('VietQR image with the amount and the content filled in.'),
-    expiresAt: isoDateTime().describe('End of the 15-minute hold.'),
+    transferContent: z
+      .string()
+      .describe("Must be copied exactly; it is the booking code."),
+    qrImageUrl: z
+      .url()
+      .describe("VietQR image with the amount and the content filled in."),
+    expiresAt: isoDateTime().describe("End of the 15-minute hold."),
   })
   .register(responseSchemas, {
-    id: 'BookingPayment',
-    description: 'What the payment page shows while the booking is PENDING.',
+    id: "BookingPayment",
+    description: "What the payment page shows while the booking is PENDING.",
   });
 export type BookingPayment = z.infer<typeof bookingPaymentResponseSchema>;
 
 export const bookingInvoiceResponseSchema = z
   .object({
-    number: z.string().describe('Same as the booking `code`.'),
+    number: z.string().describe("Same as the booking `code`."),
     paymentMethod: z
       .enum(PaymentMethod)
-      .describe('SEPAY until the booking is paid from the wallet, then WALLET.'),
-    subtotal: z.number().describe('Rooms plus the prepaid add-ons, before any subtraction.'),
-    addOnsTotal: z.number().describe('The PREPAID add-ons inside `subtotal`; the discount and points never touch them.'),
+      .describe(
+        "SEPAY until the booking is paid from the wallet, then WALLET.",
+      ),
+    subtotal: z
+      .number()
+      .describe("Rooms plus the prepaid add-ons, before any subtraction."),
+    addOnsTotal: z
+      .number()
+      .describe(
+        "The PREPAID add-ons inside `subtotal`; the discount and points never touch them.",
+      ),
     discount: z
       .object({
-        kind: z.enum(['PROMOTION', 'VOUCHER']),
-        name: z.string().describe('Name of the campaign.'),
-        code: z.string().nullable().describe('The voucher code; null for a promotion, which has none.'),
+        kind: z.enum(["PROMOTION", "VOUCHER"]),
+        name: z.string().describe("Name of the campaign."),
+        code: z
+          .string()
+          .nullable()
+          .describe("The voucher code; null for a promotion, which has none."),
         amount: z.number(),
       })
       .nullable()
-      .describe('The promotion or the voucher (never both); null when none applied.'),
+      .describe(
+        "The promotion or the voucher (never both); null when none applied.",
+      ),
     points: z
-      .object({ used: z.number().int(), amount: z.number().describe('What the points took off, in dong.') })
+      .object({
+        used: z.number().int(),
+        amount: z.number().describe("What the points took off, in dong."),
+      })
       .nullable()
-      .describe('Loyalty points spent on the stay; null when none.'),
-    tax: z.number().describe('Always 0 for now: prices include tax and no tax line is computed.'),
-    total: z.number().describe('subtotal − discount − points + tax; what was charged.'),
+      .describe("Loyalty points spent on the stay; null when none."),
+    tax: z
+      .number()
+      .describe(
+        "Always 0 for now: prices include tax and no tax line is computed.",
+      ),
+    total: z
+      .number()
+      .describe("subtotal − discount − points + tax; what was charged."),
     frontDeskDue: z
       .number()
-      .describe('FRONT_DESK add-ons, collected at the desk at check-out; not in `total`, no commission.'),
+      .describe(
+        "FRONT_DESK add-ons, collected at the desk at check-out; not in `total`, no commission.",
+      ),
     currency: z.string(),
   })
   .register(responseSchemas, {
-    id: 'BookingInvoice',
-    description: 'The invoice of a booking: what the stay cost and how it was paid (money-rules §2.1).',
+    id: "BookingInvoice",
+    description:
+      "The invoice of a booking: what the stay cost and how it was paid (money-rules §2.1).",
   });
 export type BookingInvoice = z.infer<typeof bookingInvoiceResponseSchema>;
 
 export const bookingResponseSchema = bookingSummaryResponseSchema
   .extend({
-    arrivalTime: z.string().nullable().describe('"HH:mm", start of the one-hour arrival window.'),
+    arrivalTime: z
+      .string()
+      .nullable()
+      .describe('"HH:mm", start of the one-hour arrival window.'),
     specialRequests: z.string().nullable(),
     nightlyPrices: z
       .array(nightlyPriceResponseSchema)
-      .describe("Deprecated: the first item's prices, until the apps read `items`."),
+      .describe(
+        "Deprecated: the first item's prices, until the apps read `items`.",
+      ),
     cancellation: z.object({
-      freeUntil: isoDateTime().nullable().describe('null: no free cancellation.'),
+      freeUntil: isoDateTime()
+        .nullable()
+        .describe("null: no free cancellation."),
       feePercent: z.number(),
     }),
-    holdExpiresAt: isoDateTime().nullable().describe('Set while PENDING.'),
+    holdExpiresAt: isoDateTime().nullable().describe("Set while PENDING."),
     paidAt: isoDateTime().nullable(),
     invoice: bookingInvoiceResponseSchema,
-    addOns: z.array(bookingAddOnResponseSchema).describe('Prepaid and front-desk add-ons, oldest first, then by name.'),
-    payment: bookingPaymentResponseSchema.nullable().describe('Set while PENDING.'),
+    addOns: z
+      .array(bookingAddOnResponseSchema)
+      .describe("Prepaid and front-desk add-ons, oldest first, then by name."),
+    payment: bookingPaymentResponseSchema
+      .nullable()
+      .describe("Set while PENDING."),
     refund: z
       .object({ status: z.enum(PaymentStatus), amount: z.number() })
       .nullable()
-      .describe('Set once the customer has cancelled with money to refund.'),
+      .describe("Set once the customer has cancelled with money to refund."),
     refundRejection: z
       .object({ reason: z.string(), at: isoDateTime() })
       .nullable()
-      .describe('Set when the hotel rejected the latest refund request; the booking stays CONFIRMED.'),
+      .describe(
+        "Set when the hotel rejected the latest refund request; the booking stays CONFIRMED.",
+      ),
     cancelReason: z.string().nullable(),
     cancelledAt: isoDateTime().nullable(),
     assignedRooms: z
-      .array(z.object({ id: z.uuid(), roomNumber: z.string(), roomTypeId: z.uuid() }))
+      .array(
+        z.object({
+          id: z.uuid(),
+          roomNumber: z.string(),
+          roomTypeId: z.uuid(),
+        }),
+      )
       .describe(
-        'Rooms of the stay: held at booking, replaced by the rooms assigned at check-in. Empty for the customer before check-in.',
+        "Rooms of the stay: held at booking, replaced by the rooms assigned at check-in. Empty for the customer before check-in.",
       ),
     changeRequest: z
       .object({
@@ -284,24 +404,38 @@ export const bookingResponseSchema = bookingSummaryResponseSchema
         }),
         requestedAt: isoDateTime(),
         decidedAt: isoDateTime().nullable(),
-        reason: z.string().nullable().describe('Set when the hotel rejected the request.'),
-      })
-      .nullable()
-      .describe('The latest request to change guest details (UC25), null when there was none.'),
-    lateCheckout: z
-      .object({
-        minutesLate: z.number().int().describe('After the check-out time of the check-out date.'),
-        computedFee: z.number().describe('Under the hotel policy at check-out; 0 when it has none.'),
-        fee: z.number().describe('Charged at the front desk; below computedFee when staff lowered it.'),
-        reason: z.string().nullable().describe('Why staff lowered the fee.'),
+        reason: z
+          .string()
+          .nullable()
+          .describe("Set when the hotel rejected the request."),
       })
       .nullable()
       .describe(
-        'Set when the guest checked out after the check-out time and its grace period. The fee is collected at the front desk, not through StayReco (decision L5).',
+        "The latest request to change guest details (UC25), null when there was none.",
+      ),
+    lateCheckout: z
+      .object({
+        minutesLate: z
+          .number()
+          .int()
+          .describe("After the check-out time of the check-out date."),
+        computedFee: z
+          .number()
+          .describe("Under the hotel policy at check-out; 0 when it has none."),
+        fee: z
+          .number()
+          .describe(
+            "Charged at the front desk; below computedFee when staff lowered it.",
+          ),
+        reason: z.string().nullable().describe("Why staff lowered the fee."),
+      })
+      .nullable()
+      .describe(
+        "Set when the guest checked out after the check-out time and its grace period. The fee is collected at the front desk, not through StayReco (decision L5).",
       ),
     timeline: z.array(z.object({ at: isoDateTime(), event: z.string() })),
   })
-  .register(responseSchemas, { id: 'Booking' });
+  .register(responseSchemas, { id: "Booking" });
 export type Booking = z.infer<typeof bookingResponseSchema>;
 
 export const roomOptionResponseSchema = z
@@ -309,44 +443,81 @@ export const roomOptionResponseSchema = z
     id: z.uuid(),
     roomNumber: z.string(),
     status: z.enum(RoomStatus),
-    roomTypeId: z.uuid().describe('Check-in gives each booking item as many rooms of its type as it booked.'),
+    roomTypeId: z
+      .uuid()
+      .describe(
+        "Check-in gives each booking item as many rooms of its type as it booked.",
+      ),
   })
-  .register(responseSchemas, { id: 'RoomOption' });
+  .register(responseSchemas, { id: "RoomOption" });
 export type RoomOption = z.infer<typeof roomOptionResponseSchema>;
 
 export const roomOptionsResponseSchema = z
   .object({
-    held: z.array(roomOptionResponseSchema).describe('Rooms the booking holds now.'),
+    held: z
+      .array(roomOptionResponseSchema)
+      .describe("Rooms the booking holds now."),
     available: z
       .array(roomOptionResponseSchema)
-      .describe('Other rooms of the booked types, AVAILABLE and free on every remaining night.'),
+      .describe(
+        "Other rooms of the booked types, AVAILABLE and free on every remaining night.",
+      ),
   })
-  .register(responseSchemas, { id: 'RoomOptions', description: 'Rooms to assign at check-in (UC38, BR-10).' });
+  .register(responseSchemas, {
+    id: "RoomOptions",
+    description: "Rooms to assign at check-in (UC38, BR-10).",
+  });
 export type RoomOptions = z.infer<typeof roomOptionsResponseSchema>;
 
 export const checkOutQuoteResponseSchema = z
   .object({
-    scheduledAt: isoDateTime().describe('The check-out date at the hotel check-out time (12:00 when not set).'),
-    early: z.boolean().describe('Leaving before the check-out date: the nights from today on are released, no refund.'),
-    releasedNights: z.array(calendarDate()).describe('Nights released by checking out now.'),
-    minutesLate: z.number().int().describe('After `scheduledAt`; 0 when not late.'),
+    scheduledAt: isoDateTime().describe(
+      "The check-out date at the hotel check-out time (12:00 when not set).",
+    ),
+    early: z
+      .boolean()
+      .describe(
+        "Leaving before the check-out date: the nights from today on are released, no refund.",
+      ),
+    releasedNights: z
+      .array(calendarDate())
+      .describe("Nights released by checking out now."),
+    minutesLate: z
+      .number()
+      .int()
+      .describe("After `scheduledAt`; 0 when not late."),
     lateFee: z
       .object({
-        amount: z.number().describe('Whole dong, to collect at the front desk.'),
+        amount: z
+          .number()
+          .describe("Whole dong, to collect at the front desk."),
         percent: z
           .number()
           .int()
-          .describe('Of the night price: the rate of the departure time, plus the full rate for each later day.'),
-        nightPrice: z.number().describe('Last night price × rooms over every item, fixed at booking.'),
+          .describe(
+            "Of the night price: the rate of the departure time, plus the full rate for each later day.",
+          ),
+        nightPrice: z
+          .number()
+          .describe(
+            "Last night price × rooms over every item, fixed at booking.",
+          ),
       })
       .nullable()
-      .describe('null: within the grace period, not late, or the hotel has no late check-out policy.'),
+      .describe(
+        "null: within the grace period, not late, or the hotel has no late check-out policy.",
+      ),
     amountPaid: z.number(),
-    addOnsDue: z.number().describe('FRONT_DESK add-ons to collect at the desk, besides the late fee.'),
+    addOnsDue: z
+      .number()
+      .describe(
+        "FRONT_DESK add-ons to collect at the desk, besides the late fee.",
+      ),
   })
   .register(responseSchemas, {
-    id: 'CheckOutQuote',
-    description: 'What checking out now means (UC39, decisions L2–L6); the fee is computed again at check-out.',
+    id: "CheckOutQuote",
+    description:
+      "What checking out now means (UC39, decisions L2–L6); the fee is computed again at check-out.",
   });
 export type CheckOutQuote = z.infer<typeof checkOutQuoteResponseSchema>;
 
@@ -354,36 +525,51 @@ export const bookingVoucherResponseSchema = z
   .object({
     code: z.string(),
     hotelName: z.string(),
-    items: z.array(z.object({ roomTypeName: z.string(), rooms: z.number().int() })),
-    roomTypeName: z.string().describe("Deprecated: the first item's room type, until the apps read `items`."),
+    items: z.array(
+      z.object({ roomTypeName: z.string(), rooms: z.number().int() }),
+    ),
+    roomTypeName: z
+      .string()
+      .describe(
+        "Deprecated: the first item's room type, until the apps read `items`.",
+      ),
     checkIn: calendarDate(),
     checkOut: calendarDate(),
-    rooms: z.number().int().describe('Rooms over every item.'),
+    rooms: z.number().int().describe("Rooms over every item."),
     guests: z.number().int(),
     guestName: z.string(),
     amountPaid: z.number(),
     qrToken: z
       .string()
-      .describe('Render as a QR code: the booking code plus a signature the hotel checks at check-in.'),
+      .describe(
+        "Render as a QR code: the booking code plus a signature the hotel checks at check-in.",
+      ),
   })
   .register(responseSchemas, {
-    id: 'BookingVoucher',
-    description: 'E-voucher of a confirmed booking (UC23), shown at check-in.',
+    id: "BookingVoucher",
+    description: "E-voucher of a confirmed booking (UC23), shown at check-in.",
   });
 export type BookingVoucher = z.infer<typeof bookingVoucherResponseSchema>;
 
 export const cancellationQuoteResponseSchema = z
   .object({
-    freeUntil: isoDateTime().nullable().describe('End of free cancellation fixed on the booking; null: none.'),
+    freeUntil: isoDateTime()
+      .nullable()
+      .describe("End of free cancellation fixed on the booking; null: none."),
     feePercent: z.number(),
     paid: z.number(),
-    fee: z.number().describe('0 before `freeUntil`, otherwise `feePercent` of `paid`.'),
-    refund: z.number().describe('paid − fee (BR-08).'),
-    needsApproval: z.boolean().describe('false when refund = 0: the booking is cancelled at once.'),
+    fee: z
+      .number()
+      .describe("0 before `freeUntil`, otherwise `feePercent` of `paid`."),
+    refund: z.number().describe("paid − fee (BR-08)."),
+    needsApproval: z
+      .boolean()
+      .describe("false when refund = 0: the booking is cancelled at once."),
   })
   .register(responseSchemas, {
-    id: 'CancellationQuote',
-    description: 'What cancelling now would cost (MSG11), shown before the customer confirms.',
+    id: "CancellationQuote",
+    description:
+      "What cancelling now would cost (MSG11), shown before the customer confirms.",
   });
 export type CancellationQuote = z.infer<typeof cancellationQuoteResponseSchema>;
 
@@ -392,11 +578,16 @@ export type CancellationQuote = z.infer<typeof cancellationQuoteResponseSchema>;
 export const sepayWebhookResultResponseSchema = z
   .object({
     outcome: z
-      .enum(['CONFIRMED', 'DUPLICATE', 'IGNORED_OUTGOING', 'UNMATCHED', 'LATE'])
-      .describe('UNMATCHED and LATE transfers are kept in the audit log for manual handling.'),
+      .enum(["CONFIRMED", "DUPLICATE", "IGNORED_OUTGOING", "UNMATCHED", "LATE"])
+      .describe(
+        "UNMATCHED and LATE transfers are kept in the audit log for manual handling.",
+      ),
   })
   .register(responseSchemas, {
-    id: 'SepayWebhookResult',
-    description: 'What the backend did with one SePay notification; SePay only reads `success`.',
+    id: "SepayWebhookResult",
+    description:
+      "What the backend did with one SePay notification; SePay only reads `success`.",
   });
-export type SepayWebhookResult = z.infer<typeof sepayWebhookResultResponseSchema>;
+export type SepayWebhookResult = z.infer<
+  typeof sepayWebhookResultResponseSchema
+>;

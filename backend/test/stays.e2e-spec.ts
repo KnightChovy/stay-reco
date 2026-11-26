@@ -149,6 +149,8 @@ describe('Search and listings (e2e)', () => {
           fromTotal: 3000000,
           // Default policy: free until the check-in time the day before.
           freeCancellation: true,
+          // "Riverside" says nothing of a style.
+          styles: [],
         },
       ]);
       expect(res.body.meta).toEqual({

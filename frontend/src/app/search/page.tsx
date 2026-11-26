@@ -19,6 +19,8 @@ import { getApiErrorMessage } from '@/lib/api-error';
 import { useAmenities, useHotelSearch } from '@/features/stays/api/stays-queries';
 import { formatDate, formatMoney } from '@/features/stays/lib/format';
 import { buildSearchHref, nightsBetween, parseHotelSearchParams } from '@/features/stays/lib/params';
+import { StyleBadges } from '@/features/stays/components/StyleBadges';
+import { useMyTravelStyles } from '@/features/account/api/rewards-queries';
 
 const FALLBACK_IMAGE = 'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=800&q=80';
 
@@ -30,6 +32,7 @@ const SORT_LABELS: Record<string, string> = {
 };
 
 function SearchContent() {
+  const chosenStyles = useMyTravelStyles();
   const router = useRouter();
   const searchParams = useSearchParams();
   const query = parseHotelSearchParams(new URLSearchParams(searchParams.toString()));
@@ -312,6 +315,7 @@ function SearchContent() {
                 priceNote={`${hotel.nights} đêm · ${query.rooms} phòng`}
                 detailsHref={`/hotels/${hotel.id}?checkIn=${query.checkIn}&checkOut=${query.checkOut}&guests=${query.guests}&rooms=${query.rooms}`}
                 layout="horizontal"
+                badges={<StyleBadges styles={hotel.styles} chosen={chosenStyles} />}
               />
             ))}
 

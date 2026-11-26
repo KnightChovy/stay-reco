@@ -6,6 +6,7 @@ import { Sparkles, Users } from "lucide-react";
 import type { RecommendedHotel } from "@stayreco/shared";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { StyleBadges } from "@/features/stays/components/StyleBadges";
 import * as service from "@/services/recommendations.service";
 import { recommendationKeys } from "../api/recommendation-queries";
 
@@ -18,6 +19,7 @@ function Column({
   items,
   shared,
   personal,
+  chosenStyles,
 }: {
   title: string;
   hint: string;
@@ -25,6 +27,7 @@ function Column({
   items: RecommendedHotel[];
   shared: Set<string>;
   personal: boolean;
+  chosenStyles: string[];
 }) {
   return (
     <div className={cn("rounded-2xl border p-4", personal ? "border-primary/40 bg-primary/5" : "border-border bg-card")}>
@@ -46,6 +49,7 @@ function Column({
                 {hotel.city}
                 {!shared.has(hotel.id) && personal && <span className="font-semibold text-primary"> · chỉ có trong danh sách của bạn</span>}
               </p>
+              <StyleBadges styles={hotel.styles} chosen={chosenStyles} className="mt-1" />
             </div>
           </li>
         ))}
@@ -58,7 +62,7 @@ function Column({
  * The customer's list beside the one everyone signed out sees, top 5 each: what the model changes for this person
  * is what differs between the two columns.
  */
-export function ComparePopular({ mine }: { mine: RecommendedHotel[] }) {
+export function ComparePopular({ mine, chosenStyles = [] }: { mine: RecommendedHotel[]; chosenStyles?: string[] }) {
   const params = { limit: SHOWN };
   const popular = useQuery({
     queryKey: recommendationKeys.list(undefined, params),
@@ -90,6 +94,7 @@ export function ComparePopular({ mine }: { mine: RecommendedHotel[] }) {
               items={mineTop}
               shared={shared}
               personal
+              chosenStyles={chosenStyles}
             />
             <Column
               title="Danh sách phổ biến"
@@ -98,6 +103,7 @@ export function ComparePopular({ mine }: { mine: RecommendedHotel[] }) {
               items={theirs}
               shared={shared}
               personal={false}
+              chosenStyles={chosenStyles}
             />
           </div>
         </>

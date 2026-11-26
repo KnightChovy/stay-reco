@@ -129,6 +129,11 @@ export const recommendedHotelResponseSchema = z
       .describe(
         "Nobody has reviewed it yet: the model picked it from its description alone.",
       ),
+    styles: z
+      .array(z.string())
+      .describe(
+        "Travel style ids the hotel is (resort, nature, foodie, business, family, chill), read from its own text by the rule the recommender ranks by; empty when it says too little.",
+      ),
     explanation: recommendationExplanationResponseSchema.nullable().optional(),
   })
   .register(responseSchemas, { id: "RecommendedHotel" });

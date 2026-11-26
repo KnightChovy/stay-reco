@@ -212,6 +212,11 @@ describe('Recommendations and assistant (e2e)', () => {
         weights: { history: 0, content: 1, group: 0 },
       });
 
+      // Each card says what style the hotel is, read from its own description.
+      expect(
+        res.body.data.items.map((h: { styles: string[] }) => h.styles),
+      ).toEqual([['resort'], ['resort'], ['family']]);
+
       // The search's "Phù hợp nhất" follows the same order for this customer.
       const search = await t
         .api()
@@ -224,6 +229,9 @@ describe('Recommendations and assistant (e2e)', () => {
         resort.hotelId,
         kids.hotelId,
       ]);
+      expect(
+        (search.body.data as { styles: string[] }[]).map((h) => h.styles),
+      ).toEqual([['resort'], ['family']]);
 
       // A customer the run knows keeps the model's list.
       const theirs = await t

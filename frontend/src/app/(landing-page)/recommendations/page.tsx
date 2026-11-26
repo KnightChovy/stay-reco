@@ -37,6 +37,7 @@ export default function RecommendationsPage() {
   const items = query.data?.items ?? [];
   const personalized = !!query.data?.personalized;
   const fromPreferences = query.data?.source === 'PREFERENCES';
+  const chosenStyles = all.data?.profile?.preferences.travelStyles ?? [];
 
   return (
     <div className="flex min-h-screen flex-col bg-background font-sans text-foreground antialiased">
@@ -127,7 +128,7 @@ export default function RecommendationsPage() {
                 <ArrowLeftRight className="size-4 text-primary" aria-hidden />
                 {comparing ? 'Ẩn so sánh' : 'So với danh sách phổ biến'}
               </Button>
-              {comparing && <ComparePopular mine={all.data!.items} />}
+              {comparing && <ComparePopular mine={all.data!.items} chosenStyles={chosenStyles} />}
             </div>
           )}
 
@@ -187,7 +188,7 @@ export default function RecommendationsPage() {
               )}
             >
               {items.map((hotel) => (
-                <RecommendedHotelCard key={hotel.id} hotel={hotel} />
+                <RecommendedHotelCard chosenStyles={chosenStyles} key={hotel.id} hotel={hotel} />
               ))}
             </div>
           )}

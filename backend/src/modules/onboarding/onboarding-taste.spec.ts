@@ -1,4 +1,4 @@
-import { countPhrases, fold, tasteFit } from './onboarding-taste';
+import { countPhrases, fold, hotelStyles, tasteFit } from './onboarding-taste';
 
 const noViews = new Map<string, string>();
 const hotel = (text: string, amenityIds: string[] = []) => ({
@@ -71,5 +71,29 @@ describe('onboarding taste fit', () => {
       matches: [],
       styles: [],
     });
+  });
+});
+
+describe('hotel styles (the badges on a card)', () => {
+  it('reads the styles a hotel is, strongest first, and none from a text that says too little', () => {
+    expect(
+      hotelStyles(
+        'Sơn Trà Resort & Spa: khu nghỉ dưỡng ven biển, bãi biển riêng, hồ bơi vô cực, spa và villa.',
+      ),
+    ).toEqual(['resort']);
+    expect(
+      hotelStyles(
+        'Family Resort: phòng gia đình, kids club, khu vui chơi trẻ em, bãi biển riêng và hồ bơi vô cực.',
+      ),
+    ).toEqual(['family']); // 6 family phrases against 3 resort ones: under 75%, it is a family hotel
+    expect(hotelStyles('Khách sạn Bạch Đằng, 20 phòng.')).toEqual([]);
+  });
+
+  it('does not call a business hotel a resort for mentioning the beach once', () => {
+    expect(
+      hotelStyles(
+        'Executive Hotel ở trung tâm: phòng họp, bàn làm việc, wifi tốc độ cao, gần bãi biển.',
+      ),
+    ).toEqual(['business']);
   });
 });

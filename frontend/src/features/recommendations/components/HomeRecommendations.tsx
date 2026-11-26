@@ -49,7 +49,13 @@ export function HomeRecommendations() {
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
           {query.isLoading
             ? [0, 1, 2, 3].map((item) => <RecommendedHotelSkeleton key={item} />)
-            : items.map((hotel) => <RecommendedHotelCard key={hotel.id} hotel={hotel} />)}
+            : items.map((hotel) => (
+                <RecommendedHotelCard
+                  key={hotel.id}
+                  hotel={hotel}
+                  chosenStyles={query.data?.profile?.preferences.travelStyles}
+                />
+              ))}
         </div>
       </div>
     </section>

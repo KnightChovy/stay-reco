@@ -10,6 +10,7 @@ import { toNumber } from '../../common/http/decimal';
 import { PrismaService } from '../../prisma/prisma.service';
 import { basePriceWhere } from '../rooms/room.mapper';
 import { bookableHotel, sellableRoomType } from '../stays/bookable';
+import { HotelStyles } from './hotel-styles';
 import { PreferenceRanking } from './preference-ranking';
 import { RecommendationProfiles } from './recommendation-profile';
 
@@ -24,6 +25,8 @@ export interface HotelCard {
   rating: number | null;
   reviewCount: number;
   pricePerNightFrom: number | null;
+  /** Travel style ids (HotelStyles): what the recommender ranked it as. */
+  styles: string[];
 }
 
 /** The model's opinion of one hotel for one customer (or, before the model knows them, their preferences'). */
@@ -50,6 +53,7 @@ export class RecommendationsService {
     private readonly prisma: PrismaService,
     private readonly preferences: PreferenceRanking,
     private readonly profiles: RecommendationProfiles,
+    private readonly styles: HotelStyles,
   ) {}
 
   async list(
@@ -242,7 +246,7 @@ export class RecommendationsService {
   /** Card fields of these hotels (bookable ones only), keyed by id. */
   async cards(hotelIds: string[]): Promise<Map<string, HotelCard>> {
     if (!hotelIds.length) return new Map();
-    const [hotels, ratings] = await Promise.all([
+    const [hotels, ratings, styles] = await Promise.all([
       this.prisma.hotel.findMany({
         where: { ...bookableHotel, hotelId: { in: hotelIds } },
         select: {
@@ -273,6 +277,7 @@ export class RecommendationsService {
         _avg: { overallRating: true },
         _count: { _all: true },
       }),
+      this.styles.of(hotelIds),
     ]);
     const ratingOf = new Map(ratings.map((r) => [r.hotelId, r]));
     return new Map(
@@ -294,6 +299,7 @@ export class RecommendationsService {
             rating: avg === null ? null : Math.round(avg * 10) / 10,
             reviewCount: r?._count._all ?? 0,
             pricePerNightFrom: prices.length ? Math.min(...prices) : null,
+            styles: styles.get(h.hotelId) ?? [],
           },
         ];
       }),

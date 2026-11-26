@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { RecommendationsController } from './recommendations.controller';
+import { HotelStyles } from './hotel-styles';
 import { ModelRefreshService } from './model-refresh.service';
 import { PreferenceRanking } from './preference-ranking';
 import { RecommendationProfiles } from './recommendation-profile';
@@ -14,7 +15,8 @@ import { RecommendationsService } from './recommendations.service';
     RecommendationProfiles,
     RecommenderEvaluationService,
     ModelRefreshService,
+    HotelStyles,
   ],
-  exports: [RecommendationsService, ModelRefreshService],
+  exports: [RecommendationsService, ModelRefreshService, HotelStyles],
 })
 export class RecommendationsModule {}

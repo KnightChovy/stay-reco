@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import Link from 'next/link';
 
 export type HotelCardProps = {
@@ -28,6 +29,8 @@ export type HotelCardProps = {
   priceNote?: string;
   detailsHref?: string;
   layout?: 'grid' | 'horizontal';
+  /** Extra row under the tags, e.g. the hotel's travel styles. */
+  badges?: ReactNode;
 };
 
 export default function HotelCard({
@@ -55,6 +58,7 @@ export default function HotelCard({
   priceNote = 'Đã gồm thuế, phí',
   detailsHref = '/hotels/an-nhien-riverside',
   layout = 'grid',
+  badges,
 }: HotelCardProps) {
   if (layout === 'horizontal') {
     return (
@@ -115,10 +119,19 @@ export default function HotelCard({
 
               {/* Rating Badge */}
               <div className="text-right shrink-0">
-                <div className="inline-flex items-center bg-emerald-50 text-emerald-800 text-xs font-bold px-2 py-0.5 rounded border border-emerald-200">
-                  ★ {rating} <span className="text-gray-400 font-normal ml-1">/ 5</span>
-                </div>
-                <div className="text-[10px] text-gray-400 mt-0.5">{reviewCount} {reviewText}</div>
+                {reviewCount > 0 ? (
+                  <>
+                    <div className="inline-flex items-center bg-emerald-50 text-emerald-800 text-xs font-bold px-2 py-0.5 rounded border border-emerald-200">
+                      ★ {rating} <span className="text-gray-400 font-normal ml-1">/ 5</span>
+                    </div>
+                    <div className="text-[10px] text-gray-400 mt-0.5">{reviewCount} {reviewText}</div>
+                  </>
+                ) : (
+                  // No review yet: "★ 0 / 5" would read as a bad score.
+                  <div className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-bold text-amber-800">
+                    Mới · chưa có đánh giá
+                  </div>
+                )}
               </div>
             </div>
 
@@ -142,6 +155,7 @@ export default function HotelCard({
                 ))}
               </div>
             )}
+            {badges && <div className="mt-2">{badges}</div>}
 
             {/* Room Details & Policies */}
             {roomTypeName && (

@@ -6,6 +6,7 @@ import { Lightbulb, MapPin, Sparkles, Star } from "lucide-react";
 import type { RecommendedHotel } from "@stayreco/shared";
 import { formatMoney } from "@/features/stays/lib/format";
 import { cn } from "@/lib/utils";
+import { StyleBadges } from "@/features/stays/components/StyleBadges";
 import { WhyRecommendedDialog } from "./WhyRecommendedDialog";
 
 const FALLBACK_IMAGE =
@@ -18,9 +19,12 @@ const FALLBACK_IMAGE =
 export function RecommendedHotelCard({
   hotel,
   className,
+  chosenStyles,
 }: {
   hotel: RecommendedHotel;
   className?: string;
+  /** The customer's travel styles: badges of the same style are marked. */
+  chosenStyles?: string[];
 }) {
   return (
     <div className={cn("relative flex", className)}>
@@ -74,6 +78,8 @@ export function RecommendedHotelCard({
               )}
             </p>
           </div>
+
+          <StyleBadges styles={hotel.styles} chosen={chosenStyles} />
 
           {hotel.reason && (
             <p className="flex gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-950">

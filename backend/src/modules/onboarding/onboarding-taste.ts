@@ -177,6 +177,25 @@ export function countPhrases(folded: string, phrases: string[]): number {
   return phrases.filter((p) => padded.includes(` ${fold(p)} `)).length;
 }
 
+/**
+ * The travel styles a hotel is, strongest first: at least STYLE_FIT_MIN_HITS phrases of the style and at least
+ * STYLE_DOMINANCE of its strongest style, the rule of `tasteFit` and of recommender/styles.py `hotel_styles`. Empty
+ * when the text says too little to tell.
+ */
+export function hotelStyles(text: string): string[] {
+  const folded = fold(text);
+  const hits = Object.entries(STYLE_PHRASES).map(
+    ([id, s]) => [id, countPhrases(folded, s.phrases)] as const,
+  );
+  const strongest = Math.max(...hits.map(([, n]) => n));
+  return hits
+    .filter(
+      ([, n]) => n >= STYLE_FIT_MIN_HITS && n >= strongest * STYLE_DOMINANCE,
+    )
+    .sort((x, y) => y[1] - x[1])
+    .map(([id]) => id);
+}
+
 export interface TasteAnswers {
   travelStyles: string[];
   roomAmenities: string[];

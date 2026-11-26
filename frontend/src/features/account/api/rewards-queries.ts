@@ -10,6 +10,7 @@ import type {
   UpdateReviewInput,
   Voucher,
 } from "@stayreco/shared";
+import { useAuthStore } from "@/lib/auth-store";
 import * as rewardsService from "@/services/rewards.service";
 import type { PageParams, WalletTransactionParams } from "@/services/rewards.service";
 import { bookingKeys } from "@/features/booking/api/booking-queries";
@@ -176,6 +177,18 @@ export function usePayWithWallet() {
 
 export function useMyPreferences() {
   return useQuery({ queryKey: rewardsKeys.preferences(), queryFn: rewardsService.getMyPreferences });
+}
+
+/** The travel style ids a signed-in customer chose (for marking matching hotels); empty for anyone else. */
+export function useMyTravelStyles(): string[] {
+  const isCustomer = useAuthStore((state) => state.user?.role === "customer");
+  const query = useQuery({
+    queryKey: rewardsKeys.preferences(),
+    queryFn: rewardsService.getMyPreferences,
+    enabled: isCustomer,
+  });
+  const value = query.data?.travelStyles;
+  return isCustomer && typeof value === "string" ? value.split(",").map((s) => s.trim()).filter(Boolean) : [];
 }
 
 export function useUpdatePreferences() {

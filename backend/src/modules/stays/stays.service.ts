@@ -24,6 +24,7 @@ import {
   hotelInclude,
   toHotel,
 } from '../hotels/hotel.mapper';
+import { HotelStyles } from '../recommendations/hotel-styles';
 import { RecommendationsService } from '../recommendations/recommendations.service';
 import { PriceEngine } from '../pricing/price-engine';
 import { roomTypeNotFound } from '../rooms/room-types.service';
@@ -57,6 +58,7 @@ export class StaysService {
     private readonly availability: AvailabilityService,
     private readonly engine: PriceEngine,
     private readonly recommendations: RecommendationsService,
+    private readonly styles: HotelStyles,
   ) {}
 
   /**
@@ -134,6 +136,7 @@ export class StaysService {
         nights: daysBetween(query.checkIn, query.checkOut),
         fromTotal: cheapest.total,
         freeCancellation: cheapest.freeCancellationUntil !== null,
+        styles: [],
       });
     }
 
@@ -160,10 +163,13 @@ export class StaysService {
       return left === right ? compare(a, b) : left - right;
     });
     const start = (query.page - 1) * query.pageSize;
-    return Paginated.of(matching.slice(start, start + query.pageSize), {
-      ...query,
-      total: matching.length,
-    });
+    const page = matching.slice(start, start + query.pageSize);
+    // Read for the page shown only: it parses each hotel's text.
+    const styles = await this.styles.of(page.map((hotel) => hotel.id));
+    return Paginated.of(
+      page.map((hotel) => ({ ...hotel, styles: styles.get(hotel.id) ?? [] })),
+      { ...query, total: matching.length },
+    );
   }
 
   /** Every sellable room type is listed; one that is full or too small shows its offer instead of disappearing. */
