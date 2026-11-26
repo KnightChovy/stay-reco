@@ -2,14 +2,14 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeftRight, Info, SlidersHorizontal, Sparkles, X } from 'lucide-react';
+import { Info, SlidersHorizontal, Sparkles, X } from 'lucide-react';
 import type { RecommendationQuery } from '@stayreco/shared';
 import { STYLES } from '@/features/account/lib/preference-options';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import AppBreadcrumb from '@/components/common/breadcrumb/AppBreadcrumb';
 import { EmptyState, ErrorState } from '@/components/common/StateViews';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/lib/auth-store';
 import { useRecommendations } from '@/features/recommendations/api/recommendation-queries';
@@ -18,7 +18,6 @@ import {
   RecommendedHotelSkeleton,
 } from '@/features/recommendations/components/RecommendedHotelCard';
 import { RecommendationProfileCard } from '@/features/recommendations/components/RecommendationProfileCard';
-import { ComparePopular } from '@/features/recommendations/components/ComparePopular';
 
 const LIMIT = 20;
 
@@ -26,7 +25,6 @@ export default function RecommendationsPage() {
   const user = useAuthStore((state) => state.user);
   const isCustomer = user?.role === 'customer';
   const [city, setCity] = useState<string | null>(null);
-  const [comparing, setComparing] = useState(false);
   const [style, setStyle] = useState<RecommendationQuery['style'] | null>(null);
 
   // The cities come from the whole list, so the filter keeps its choices while one city is shown.
@@ -124,21 +122,6 @@ export default function RecommendationsPage() {
                 setCity(null);
               }}
             />
-          )}
-
-          {isCustomer && personalized && (all.data?.items.length ?? 0) > 0 && (
-            <div className="space-y-3">
-              <Button
-                variant="outline"
-                className="h-10 gap-2"
-                aria-expanded={comparing}
-                onClick={() => setComparing((open) => !open)}
-              >
-                <ArrowLeftRight className="size-4 text-primary" aria-hidden />
-                {comparing ? 'Ẩn so sánh' : 'So với gợi ý chung'}
-              </Button>
-              {comparing && <ComparePopular mine={all.data!.items} chosenStyles={chosenStyles} />}
-            </div>
           )}
 
           {style && (
