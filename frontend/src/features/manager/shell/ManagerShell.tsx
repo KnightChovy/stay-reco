@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   BadgeCheck,
+  Banknote,
   Building2,
   ChartNoAxesCombined,
   Landmark,
@@ -20,7 +21,7 @@ import { SidebarInset } from "@/components/ui/sidebar";
 import Navbar from "@/components/common/navbar/Navbar";
 import { NotificationBell } from "@/features/notifications/components/NotificationBell";
 import { useAuthStore } from "@/lib/auth-store";
-import { usePendingVerificationCount } from "../api/manager-queries";
+import { usePendingPayoutCount, usePendingVerificationCount } from "../api/manager-queries";
 
 /** Screens still built on the sample data of `@/lib/manager-data` until their APIs exist (Phase 6). */
 const DEMO_BADGE = "Mẫu";
@@ -67,6 +68,12 @@ const navigation: Omit<SidebarItem, "isActive">[] = [
     section: "TÀI CHÍNH NỀN TẢNG",
   },
   {
+    href: "/manager/payouts",
+    label: "Rút tiền đối tác",
+    icon: Banknote,
+    section: "TÀI CHÍNH NỀN TẢNG",
+  },
+  {
     href: "/manager/transactions",
     label: "Giao dịch & quyết toán",
     icon: WalletCards,
@@ -79,15 +86,16 @@ export function ManagerShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
-  // The one real count of the sidebar: requests waiting for a decision.
   const { count: pendingVerifications } = usePendingVerificationCount();
+  const { count: pendingPayouts } = usePendingPayoutCount();
+  const counts: Record<string, number> = {
+    "/manager/verifications": pendingVerifications,
+    "/manager/payouts": pendingPayouts,
+  };
   const items = navigation.map((item) => ({
     ...item,
     isActive: pathname === item.href,
-    badge:
-      item.href === "/manager/verifications" && pendingVerifications > 0
-        ? pendingVerifications
-        : item.badge,
+    badge: counts[item.href] ? counts[item.href] : item.badge,
   }));
 
   return (

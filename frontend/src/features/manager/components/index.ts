@@ -5,19 +5,6 @@ export { ManagerDemoBanner } from "./ManagerDemoBanner";
 export { ManagerNotice } from "./ManagerNotice";
 export type { ManagerNoticeTone } from "./ManagerNotice";
 export { StatusBadge, ErrorPanel } from "./ManagerUi";
-export { ManagerMetricCard } from "./ManagerMetricCard";
-export type { ManagerMetricCardProps } from "./ManagerMetricCard";
-export { ManagerSystemBanner } from "./ManagerSystemBanner";
-export type {
-  ManagerSystemBannerProps,
-  ManagerSystemBannerBadge,
-} from "./ManagerSystemBanner";
-export { ManagerRegionChart } from "./ManagerRegionChart";
-export type { ManagerRegionChartProps } from "./ManagerRegionChart";
-export { ManagerQueuePanel } from "./ManagerQueuePanel";
-export type { ManagerQueuePanelProps } from "./ManagerQueuePanel";
-export { ManagerSignalTable } from "./ManagerSignalTable";
-export type { ManagerSignalTableProps } from "./ManagerSignalTable";
 export { ManagerWorkspaceTable } from "./ManagerWorkspaceTable";
 export type { ManagerWorkspaceTableProps } from "./ManagerWorkspaceTable";
 export { ManagerWorkspaceSummary } from "./ManagerWorkspaceSummary";
