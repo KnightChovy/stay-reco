@@ -7,6 +7,7 @@ import * as adminService from "@/services/admin.service";
 export const adminKeys = {
   all: ["admin"] as const,
   overview: () => [...adminKeys.all, "overview"] as const,
+  recommender: () => [...adminKeys.all, "recommender"] as const,
   users: (params: adminService.AdminUserListParams) => [...adminKeys.all, "users", params] as const,
   user: (userId: string) => [...adminKeys.all, "user", userId] as const,
   suspensionRequests: (params: adminService.SuspensionRequestParams) =>
@@ -17,6 +18,9 @@ export const adminKeys = {
   unmatched: (params: adminService.UnmatchedTransferParams) => [...adminKeys.all, "unmatched", params] as const,
   paymentSettings: () => [...adminKeys.all, "payment-settings"] as const,
 };
+
+export const useRecommenderEvaluation = () =>
+  useQuery({ queryKey: adminKeys.recommender(), queryFn: adminService.getRecommenderEvaluation });
 
 export const useAdminOverview = () =>
   useQuery({ queryKey: adminKeys.overview(), queryFn: adminService.getAdminOverview });

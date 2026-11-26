@@ -8,13 +8,17 @@ Two-sided shrinkage (`weights.py`, `k=5`, `k_item=5`, `k_c=3`: the values the pa
 
 The list is then ordered, removing nothing: hotels within the budget (cheapest room at most 20% over `budgetPerNight`) first, among them those of a travel style the customer chose, among those the ones in the cities they picked (`preferredCities`, else `favouriteCity`), and the score last. A hotel's styles are read from its own text by `styles.py`, the same phrases and rule as the onboarding hotel step (`backend/src/modules/onboarding/onboarding-taste.ts`): at least two phrases of the style, and at least 75% of its strongest style, so a business hotel that mentions the beach is not a resort. Keep the two files in step. Each row carries one reason in Vietnamese saying which part carried it (their own stay, similar guests, a hotel they rated highly, their preferences, guests of their group), marked "Khách sạn mới" for a hotel nobody has rated and "Ngoài điểm đến bạn chọn" for one outside the cities picked. A preference reason names a style only when the hotel is of that style.
 
+## Explanations
+
+Every row carries `explanation` (JSONB) beside `reason`: the weight and predicted rating of each part (history, content, group), the guest's stays and the hotel's ratings, the hotel they rated highly this one reads most like (or, with no stay, the one ticked at onboarding), the styles matched, whether it is in a city they picked and over their budget. The web's "Vì sao?" reads it.
+
 ## One customer now (`--customer`)
 
 `python train.py --customer <id>` (repeatable) fits the same formula on the same data and writes only that customer's list into the run the API already serves: no evaluation, no new `model_run`, everyone else's list untouched. The backend runs it (`ModelRefreshService`, when `RECOMMENDER_PYTHON` is set) when a customer finishes onboarding or saves preferences, so a new customer has the model's own list about 3 seconds later instead of after the nightly run; until then the API ranks them from their preferences (`PreferenceRanking`). Checked against the nightly list of a regular: the same 59 hotels, order, scores and reasons. Rows are upserted, so a booking that points at one keeps it.
 
 ## Evaluation
 
-Every run first evaluates the served formula with the paper's protocol, imported from `stayreco-experiment/` (`data/preprocessor.py` cold-start split: 20% of hotels hidden, 30% of guests cut to their first 0-19 stays; `evaluation/ranking.py` full-catalogue ranking, K = 10), against CF only, content only and popularity. The served method's numbers go on `model_run` (`rmse`, `mae`, `precision_at_k`, `recall_at_k`, `ndcg_at_k`, `coldstart_coverage`) and the whole comparison in `hyperparameters.comparison`. Below 50 ratings the evaluation is skipped and the list is still published.
+Every run first evaluates the served formula with the paper's protocol (against content only, CF only, popularity and random, the mean of 30 draws; overall, by guest group `0-prefs` / `0-none` / `1-4` / `5+`, catalogue coverage and long-tail share, all stored in `hyperparameters.comparison` and shown on `/admin/recommender`), imported from `stayreco-experiment/` (`data/preprocessor.py` cold-start split: 20% of hotels hidden, 30% of guests cut to their first 0-19 stays; `evaluation/ranking.py` full-catalogue ranking, K = 10), against CF only, content only and popularity. The served method's numbers go on `model_run` (`rmse`, `mae`, `precision_at_k`, `recall_at_k`, `ndcg_at_k`, `coldstart_coverage`) and the whole comparison in `hyperparameters.comparison`. Below 50 ratings the evaluation is skipped and the list is still published.
 
 On the seeded data (`npm run db:seed:reco`, seed 42, measured 2026-11-26):
 

@@ -1066,6 +1066,8 @@ model Recommendation {
   score            Decimal   @db.Decimal(5, 3)
   rank             Int?
   reason           String?
+  /// Written by recommender/: weights and predicted rating of each part, and what matched (the "Vì sao?" view).
+  explanation      Json?
   createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   customer         Customer? @relation(fields: [customerId], references: [customerId])
   hotel            Hotel?    @relation(fields: [hotelId], references: [hotelId])

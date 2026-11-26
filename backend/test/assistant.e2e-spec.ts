@@ -127,6 +127,7 @@ describe('Recommendations and assistant (e2e)', () => {
         source: 'POPULAR',
         modelRun: null,
         items: [],
+        profile: null,
       });
     });
 
@@ -199,6 +200,17 @@ describe('Recommendations and assistant (e2e)', () => {
       );
       expect(items[1].reason).toMatch(/^Ngoài điểm đến bạn chọn\./);
       expect(items[0].recommendationId).toBeNull();
+      // Explained as the model would: everything from the preferences, no history yet.
+      expect(res.body.data.items[0].explanation).toMatchObject({
+        weights: { history: 0, content: 1, group: 0 },
+        stays: 0,
+        styles: ['nghỉ dưỡng & thư giãn'],
+        inCity: true,
+      });
+      expect(res.body.data.profile).toMatchObject({
+        stays: 0,
+        weights: { history: 0, content: 1, group: 0 },
+      });
 
       // The search's "Phù hợp nhất" follows the same order for this customer.
       const search = await t
@@ -222,6 +234,218 @@ describe('Recommendations and assistant (e2e)', () => {
       expect(theirs.body.data).toMatchObject({
         source: 'MODEL',
         items: [{ id: kids.hotelId }],
+      });
+    });
+
+    it('explains each hotel of a model list and says what the list is built from', async () => {
+      const resort = await hotel('Sơn Trà Resort & Spa', 'a@hotel.test');
+      const fresh = await hotel('Mỹ Khê Bay Retreat', 'b@hotel.test');
+      const booked = await hotel('Hàn River Loft', 'c@hotel.test');
+      const me = await t.signIn('CUSTOMER', 'me@guest.test');
+      await t.prisma.customerPreference.createMany({
+        data: [
+          ['travelStyles', 'resort,nature'],
+          ['preferredCities', 'Đà Nẵng,Đà Lạt'],
+          ['roomAmenities', 'pool'],
+          ['likedHotels', resort.hotelId],
+        ].map(([preferenceKey, preferenceValue]) => ({
+          customerId: me.id,
+          preferenceKey,
+          preferenceValue,
+        })),
+      });
+      // Their next stay: never on their list, and counted as left out.
+      await t.prisma.booking.create({
+        data: {
+          customerId: me.id,
+          hotelId: booked.hotelId,
+          checkInDate: new Date(`${day(5)}T00:00:00Z`),
+          checkOutDate: new Date(`${day(6)}T00:00:00Z`),
+          totalAmount: 1000000,
+          status: 'CONFIRMED',
+          guestName: 'Khách',
+          contactPhone: '0905123456',
+          cancelFeePercent: 100,
+          commissionRate: 8,
+        },
+      });
+      // A stay that went ahead does not take the hotel off the list: the model brings back what they liked.
+      await t.prisma.booking.create({
+        data: {
+          customerId: me.id,
+          hotelId: resort.hotelId,
+          checkInDate: new Date('2026-10-10T00:00:00Z'),
+          checkOutDate: new Date('2026-10-11T00:00:00Z'),
+          totalAmount: 1000000,
+          status: 'COMPLETED',
+          guestName: 'Khách',
+          contactPhone: '0905123456',
+          cancelFeePercent: 100,
+          commissionRate: 8,
+        },
+      });
+      const runId = await run(me.id, [resort.hotelId, fresh.hotelId]);
+      const explain = (history: number, hotelRatings: number) => ({
+        weights: { history, content: 1 - history, group: 0 },
+        scores: { history: history ? 4.2 : null, content: 4.1, group: null },
+        stays: 30,
+        hotelRatings,
+        own: null,
+        similar: null,
+        picked: null,
+        styles: ['nghỉ dưỡng'],
+        inCity: true,
+        overBudget: false,
+      });
+      await t.prisma.recommendation.updateMany({
+        where: {
+          modelRunId: runId,
+          customerId: me.id,
+          hotelId: resort.hotelId,
+        },
+        data: { explanation: explain(0.8, 120) },
+      });
+      await t.prisma.recommendation.updateMany({
+        where: { modelRunId: runId, customerId: me.id, hotelId: fresh.hotelId },
+        data: { explanation: explain(0, 0) },
+      });
+
+      const res = await t
+        .api()
+        .get('/api/v1/me/recommendations')
+        .set(auth(me.token))
+        .expect(200);
+      const data = res.body.data;
+      expect(data.source).toBe('MODEL');
+      expect((data.items as { id: string }[]).map((h) => h.id)).toEqual([
+        resort.hotelId,
+        fresh.hotelId,
+      ]);
+      expect(data.items[0].explanation).toEqual(explain(0.8, 120));
+      expect(data.items[1].explanation.hotelRatings).toBe(0);
+      expect(data.profile).toEqual({
+        stays: 30,
+        // The customer's side of the formula: 30 / (30 + 5).
+        weights: { history: 0.857, content: 0.143, group: 0 },
+        preferences: {
+          cities: ['Đà Nẵng', 'Đà Lạt'],
+          travelStyles: ['resort', 'nature'],
+          roomAmenities: ['pool'],
+          budgetPerNight: null,
+          pickedHotels: 1,
+        },
+        excluded: { disliked: 0, upcoming: 1 },
+      });
+
+      // The signed-out list has nothing to explain about a person.
+      const pub = await t.api().get('/api/v1/recommendations').expect(200);
+      expect(pub.body.data.profile).toBeNull();
+    });
+
+    it('shows the admin how the served run did offline, its long tail and the bookings it brought', async () => {
+      const a = await hotel('Sơn Trà Resort & Spa', 'a@hotel.test');
+      const b = await hotel('Mỹ Khê Bay Retreat', 'b@hotel.test');
+      const guest = await t.signIn('CUSTOMER', 'me@guest.test');
+      const runId = await run(guest.id, [a.hotelId, b.hotelId]);
+      const method = (recall: number) => ({
+        rmse: 0.8,
+        precision: 0.09,
+        recall,
+        ndcg: recall / 2,
+        new_share: 0.2,
+        coldstart_coverage: 0.9,
+        coverage: 0.8,
+        tail_share: 0.5,
+        by_group: {
+          '0-prefs': { users: 16, recall: recall - 0.1, ndcg: 0.2 },
+          '5+': { users: 179, recall: recall + 0.1, ndcg: 0.3 },
+        },
+      });
+      await t.prisma.modelRun.update({
+        where: { modelRunId: runId },
+        data: {
+          k: 10,
+          relevanceThreshold: 4,
+          hyperparameters: {
+            comparison: {
+              'StayReco two-sided (served)': method(0.47),
+              Popularity: method(0.17),
+              Random: method(0.14),
+            },
+            split: {
+              train: 3103,
+              test: 1706,
+              ranked_users: 385,
+              catalog: 73,
+              hidden_or_new_hotels: 30,
+            },
+          },
+        },
+      });
+      const rec = await t.prisma.recommendation.findFirstOrThrow({
+        where: { modelRunId: runId, customerId: guest.id, rank: 2 },
+      });
+      await t.prisma.booking.create({
+        data: {
+          customerId: guest.id,
+          hotelId: b.hotelId,
+          recommendationId: rec.recommendationId,
+          checkInDate: new Date(`${day(5)}T00:00:00Z`),
+          checkOutDate: new Date(`${day(6)}T00:00:00Z`),
+          totalAmount: 1000000,
+          status: 'CONFIRMED',
+          guestName: 'Khách',
+          contactPhone: '0905123456',
+          cancelFeePercent: 100,
+          commissionRate: 8,
+        },
+      });
+
+      await t
+        .api()
+        .get('/api/v1/admin/recommender/evaluation')
+        .set(auth(guest.token))
+        .expect(403);
+      const admin = await t.signIn('ADMIN', 'admin@stayreco.test');
+      const res = await t
+        .api()
+        .get('/api/v1/admin/recommender/evaluation')
+        .set(auth(admin.token))
+        .expect(200);
+      const data = res.body.data;
+      expect(data.run).toMatchObject({ id: runId, customers: 1, hotels: 2 });
+      expect(data.split).toEqual({
+        train: 3103,
+        test: 1706,
+        rankedUsers: 385,
+        catalog: 73,
+        hiddenHotels: 30,
+        k: 10,
+        threshold: 4,
+      });
+      expect((data.methods as { key: string }[]).map((m) => m.key)).toEqual([
+        'served',
+        'popularity',
+        'random',
+      ]);
+      expect(data.methods[0]).toMatchObject({
+        recall: 0.47,
+        tailShare: 0.5,
+        byGroup: [
+          { group: '0-prefs', users: 16, recall: 0.37, ndcg: 0.2 },
+          { group: '5+', users: 179, recall: 0.57, ndcg: 0.3 },
+        ],
+      });
+      // Every top-10 slot of the one customer list is in some band.
+      const slots = (data.longTail as { slotShare: number }[]).reduce(
+        (sum, band) => sum + band.slotShare,
+        0,
+      );
+      expect(slots).toBeCloseTo(1);
+      expect(data.bookings).toEqual({
+        total: 1,
+        fromRecommendations: 1,
+        medianRank: 2,
       });
     });
 

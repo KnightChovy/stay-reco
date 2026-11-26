@@ -41,6 +41,8 @@ PREF_GAIN = 0.5
 PREF_K = 3
 # A hotel the guest stayed at and rated at least LIKED_AGAIN is suggested again ("Bạn đã ở đây…"); one rated below
 # DISLIKED is never suggested to them.
+# The random baseline of the evaluation is the mean of this many draws.
+RANDOM_DRAWS = 30
 LIKED_AGAIN = 4.0
 DISLIKED = 3.0
 
@@ -148,6 +150,63 @@ class Scorer:
     def popularity(self, items):
         return self.item_mean.reindex(items).fillna(self.global_mean).to_numpy()
 
+    def similar_liked(self, user, item):
+        """(hotel, rating) of the hotel this guest rated highly that this one reads most like, or None."""
+        liked = self.liked.get(user)
+        if not liked or item not in self.content.index:
+            return None
+        index = self.content.index
+        sims = (self.content.vectors[index[item]] @ self.content.vectors[[index[i] for i, _ in liked]].T)
+        best, rating = liked[int(np.argmax(sims.toarray().ravel()))]
+        return None if best == item else (best, float(rating))
+
+    def similar_picked(self, user, item):
+        """The hotel ticked at onboarding (`likedHotels`) this one reads most like, or None; itself if it was ticked."""
+        index = self.content.index
+        picks = [h for h in _split(self.prefs.get(user, {}).get("likedHotels")) if h in index]
+        if not picks or item not in index:
+            return None
+        if item in picks:
+            return item
+        sims = self.content.vectors[index[item]] @ self.content.vectors[[index[h] for h in picks]].T
+        return picks[int(np.argmax(sims.toarray().ravel()))]
+
+    def matched_styles(self, user, item):
+        """Labels of the travel styles the guest chose that this hotel is (a homestay is not "nghỉ dưỡng" because the
+        guest chose it)."""
+        prefs = self.prefs.get(user, {})
+        return [STYLE_LABELS[s] for s in _split(prefs.get("travelStyles"))
+                if s in STYLE_LABELS and s in self.styles.get(item, ())]
+
+    def explain(self, user, item, c, i, *, away, over):
+        """What the "Vì sao?" view shows: the weight and predicted rating of each part, and what matched.
+
+        `c` is `components(user, items)` and `i` the position of `item` in it. Weights are the formula's own
+        (weights.py), so they add up to 1; a part with no weight has no rating to show.
+        """
+        def part(weight, value):
+            return round(float(value), 3) if weight > 0 else None
+
+        a, b, g = float(c["a"][i]), float(c["b"][i]), float(c["g"][i])
+        similar = self.similar_liked(user, item) if user is not None else None
+        picked = self.similar_picked(user, item) if user is not None and not similar else None
+        own = self.own.get((user, item))
+        return {
+            "weights": {"history": round(a, 3), "content": round(b, 3), "group": round(g, 3)},
+            "scores": {"history": part(a, c["cf"][i]), "content": part(b, c["content"][i]),
+                       "group": part(g, c["demo"][i])},
+            "stays": int(self.user_n.get(user, 0)) if user is not None else 0,
+            "hotelRatings": int(self.item_n.get(item, 0)),
+            "own": round(own, 1) if own is not None else None,
+            "similar": {"hotelId": similar[0], "name": self.names.get(similar[0]), "rating": round(similar[1], 1)}
+            if similar else None,
+            # No stay to compare with: the hotel it reads most like among those ticked at onboarding.
+            "picked": {"hotelId": picked, "name": self.names.get(picked)} if picked else None,
+            "styles": self.matched_styles(user, item) if user is not None else [],
+            "inCity": None if user is None or not cities_of(self.prefs.get(user, {})) else not away,
+            "overBudget": bool(over),
+        }
+
     def reason(self, user, item, a, b, g, *, away=False):
         """One line the guest can read: which part of the score carried this hotel.
 
@@ -165,18 +224,13 @@ class Scorer:
         if a >= max(b, g) and a > 0:
             return new + "Khách có gu giống bạn đánh giá cao nơi này."
         if b >= g:
-            liked = self.liked.get(user)
-            if liked:
-                index = self.content.index
-                sims = (self.content.vectors[index[item]] @ self.content.vectors[[index[i] for i, _ in liked]].T)
-                best, rating = liked[int(np.argmax(sims.toarray().ravel()))]
-                if best != item:
-                    return new + f"Giống {self.names.get(best, 'nơi')} mà bạn đã chấm {rating:.1f}★."
+            similar = self.similar_liked(user, item)
+            if similar:
+                best, rating = similar
+                return new + f"Giống {self.names.get(best, 'nơi')} mà bạn đã chấm {rating:.1f}★."
             prefs = self.prefs.get(user, {})
             parts = []
-            # Only the chosen styles this hotel actually is: a homestay is not "nghỉ dưỡng" because the guest chose it.
-            styles = [STYLE_LABELS[s] for s in _split(prefs.get("travelStyles"))
-                      if s in STYLE_LABELS and s in self.styles.get(item, ())]
+            styles = self.matched_styles(user, item)
             if styles:
                 parts.append("phong cách " + ", ".join(styles))
             city = self.cities.get(item, "")
@@ -189,7 +243,7 @@ class Scorer:
 
 
 def recommend(scorer, customers, booked, top_k=TOP_K, include_public=True):
-    """Yields (customer, hotel, score, rank, reason): the signed-out list (unless `include_public` is off), then the
+    """Yields (customer, hotel, score, rank, reason, explanation): the signed-out list (unless `include_public` is off), then the
     top-K per customer.
 
     `booked` holds the hotels each customer has a stay coming up or under way at (reco_db.load_booked): those are left
@@ -223,7 +277,8 @@ def recommend(scorer, customers, booked, top_k=TOP_K, include_public=True):
         order = np.lexsort((items, -c["served"], away, off_style, over))[:top_k]
         for rank, i in enumerate(order, 1):
             yield (user, items[i], float(c["served"][i]), rank,
-                   scorer.reason(user, items[i], c["a"][i], c["b"][i], c["g"][i], away=bool(away[i])))
+                   scorer.reason(user, items[i], c["a"][i], c["b"][i], c["g"][i], away=bool(away[i])),
+                   scorer.explain(user, items[i], c, i, away=bool(away[i]), over=bool(over[i])))
 
 
 def _predict_pairs(scorer, users, items):
@@ -247,7 +302,8 @@ def evaluate(ratings, hotels, customers, amenities, seed=42, log=print):
     few ratings or nobody in the held-out set liked a hotel.
     """
     from data.preprocessor import simulate_cold_start
-    from evaluation.ranking import RELEVANCE_THRESHOLD, build_candidate_frame, cold_item_share, rank_metrics
+    from evaluation.ranking import (RELEVANCE_THRESHOLD, build_candidate_frame, cold_item_share, rank_metrics,
+                                    rank_metrics_by_group)
 
     catalog = hotels["item_id"].to_numpy()
     ratings = ratings[ratings["item_id"].isin(catalog)]
@@ -263,10 +319,26 @@ def evaluate(ratings, hotels, customers, amenities, seed=42, log=print):
     frame, n_rel = build_candidate_frame(train, test, catalog)
     on_frame = _predict_pairs(scorer, frame["user_id"], frame["item_id"])
 
+    # The floor every method is read against: hotels in an order that knows nothing. One draw is noisy on a group of
+    # a dozen guests, so its figures are the mean of RANDOM_DRAWS draws (fixed seed, so runs compare).
+    rng = np.random.default_rng(seed)
+    draws = [(rng.uniform(1, 5, len(test)), rng.uniform(1, 5, len(frame))) for _ in range(RANDOM_DRAWS)]
+    on_test["random"], on_frame["random"] = draws[0]
+
     cold = frame["item_n"].to_numpy() == 0
     n_cold = len(set(frame.loc[cold, "item_id"]))
+    # Long tail: the head is the 20% of hotels with the most ratings in train, the tail everything else.
+    counts = train.groupby("item_id").size().reindex(catalog, fill_value=0).sort_values(ascending=False)
+    head = set(counts.index[: max(1, int(round(len(counts) * 0.2)))])
+    # Users by how much the model knows about them: the cold-start groups of the paper, with the guests of no stay
+    # split by whether they answered onboarding, since those answers are all the model has for them.
+    stays = frame.groupby("user_id")["n"].first()
+    prefs = dict(zip(customers["user_id"], customers["preferences"]))
+    stated = lambda user: any(prefs.get(user, {}).get(key) for key in PREFERENCE_KEYS)
+    user_groups = pd.Series({user: ("0-prefs" if stated(user) else "0-none") if n == 0 else ("1-4" if n < 5 else "5+")
+                             for user, n in stays.items()})
     names = {"served": "StayReco two-sided (served)", "cf": "CF only (SVD++)",
-             "content": "Content only", "pop": "Popularity"}
+             "content": "Content only", "pop": "Popularity", "random": "Random"}
     comparison = {}
     for key, name in names.items():
         if np.isnan(on_test[key]).any():
@@ -274,16 +346,58 @@ def evaluate(ratings, hotels, customers, amenities, seed=42, log=print):
         rm = rank_metrics(frame, on_frame[key], n_rel, top_k=(K,), n_catalog=len(catalog))
         ci = cold_item_share(frame, on_frame[key], top_k=(K,))
         error = on_test[key] - test["rating"].to_numpy()
+        by_group = rank_metrics_by_group(frame, on_frame[key], n_rel, user_groups, top_k=(K,),
+                                         n_catalog=len(catalog))
+        if key == "random":
+            comparison[name] = _mean_of_draws(draws, test, frame, n_rel, catalog, head, user_groups, n_cold)
+            continue
         comparison[name] = {
             "rmse": float(np.sqrt(np.mean(error ** 2))), "mae": float(np.mean(np.abs(error))),
             "precision": rm[f"p@{K}"], "recall": rm[f"r@{K}"], "ndcg": rm[f"ndcg@{K}"],
             "new_share": ci[f"newitem@{K}"],
             "coldstart_coverage": _cold_coverage(frame, on_frame[key], n_cold),
+            "coverage": rm[f"cov@{K}"],
+            "tail_share": _tail_share(frame, on_frame[key], head),
+            "by_group": {group: {"users": int(m["n_users"]), "recall": m[f"r@{K}"], "ndcg": m[f"ndcg@{K}"]}
+                         for group, m in by_group.items()},
         }
     metrics = {**comparison[names["served"]], "k": K, "threshold": RELEVANCE_THRESHOLD}
     split = {**SPLIT, "train": len(train), "test": len(test), "ranked_users": int(len(n_rel)),
              "catalog": int(len(catalog)), "hidden_or_new_hotels": n_cold}
     return metrics, comparison, split
+
+
+def _mean_of_draws(draws, test, frame, n_rel, catalog, head, user_groups, n_cold):
+    """The random baseline's figures, each the mean over the draws (by_group too)."""
+    from evaluation.ranking import cold_item_share, rank_metrics, rank_metrics_by_group
+
+    rows = []
+    for on_test, on_frame in draws:
+        rm = rank_metrics(frame, on_frame, n_rel, top_k=(K,), n_catalog=len(catalog))
+        ci = cold_item_share(frame, on_frame, top_k=(K,))
+        error = on_test - test["rating"].to_numpy()
+        groups = rank_metrics_by_group(frame, on_frame, n_rel, user_groups, top_k=(K,), n_catalog=len(catalog))
+        rows.append({
+            "rmse": float(np.sqrt(np.mean(error ** 2))), "mae": float(np.mean(np.abs(error))),
+            "precision": rm[f"p@{K}"], "recall": rm[f"r@{K}"], "ndcg": rm[f"ndcg@{K}"],
+            "new_share": ci[f"newitem@{K}"], "coldstart_coverage": _cold_coverage(frame, on_frame, n_cold),
+            "coverage": rm[f"cov@{K}"], "tail_share": _tail_share(frame, on_frame, head),
+            "by_group": {g: {"users": int(m["n_users"]), "recall": m[f"r@{K}"], "ndcg": m[f"ndcg@{K}"]}
+                         for g, m in groups.items()},
+        })
+    mean = {key: float(np.mean([row[key] for row in rows])) for key in rows[0] if key != "by_group"}
+    mean["by_group"] = {g: {"users": rows[0]["by_group"][g]["users"],
+                            "recall": float(np.mean([row["by_group"][g]["recall"] for row in rows])),
+                            "ndcg": float(np.mean([row["by_group"][g]["ndcg"] for row in rows]))}
+                        for g in rows[0]["by_group"]}
+    return mean
+
+
+def _tail_share(frame, pred, head):
+    """Share of the top-K slots given to hotels outside the most rated 20% (the long tail), new hotels included."""
+    df = pd.DataFrame({"u": frame["user_id"].to_numpy(), "i": frame["item_id"].to_numpy(), "p": pred})
+    top = df.sort_values(["u", "p", "i"], ascending=[True, False, True]).groupby("u").head(K)
+    return float((~top["i"].isin(head)).mean())
 
 
 def _cold_coverage(frame, pred, n_cold):

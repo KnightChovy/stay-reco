@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { RecommendationExplanation } from '@stayreco/shared';
 import { toNumber } from '../../common/http/decimal';
 import { PrismaService } from '../../prisma/prisma.service';
 import { fold, STYLE_PHRASES, tasteFit } from '../onboarding/onboarding-taste';
@@ -24,6 +25,8 @@ export interface PreferenceRank {
   /** On the model's 1-5 scale, so the field means the same whichever list it comes from. */
   score: number;
   reason: string;
+  /** As the model writes it: everything from the preferences (content), no history yet. */
+  explanation: RecommendationExplanation;
 }
 
 const split = (value: string | undefined) =>
@@ -202,12 +205,26 @@ export class PreferenceRanking {
       ]
         .filter(Boolean)
         .join(' ');
+      // Mapped onto the model's predicted-rating scale: a strong fit reads as a 4-5, no fit as about 3.
+      const score =
+        Math.round(Math.min(5, 3 + s.fit.score * 0.2) * 1000) / 1000;
       return {
         hotelId: s.hotel.hotelId,
         rank: i + 1,
-        // Mapped onto the model's predicted-rating scale: a strong fit reads as a 4-5, no fit as about 3.
-        score: Math.round(Math.min(5, 3 + s.fit.score * 0.2) * 1000) / 1000,
+        score,
         reason,
+        explanation: {
+          weights: { history: 0, content: 1, group: 0 },
+          scores: { history: null, content: score, group: null },
+          stays: 0,
+          hotelRatings: s.reviews,
+          own: null,
+          similar: null,
+          picked: null,
+          styles: s.fit.styles.map(styleLabel),
+          inCity: cities.size ? !s.away : null,
+          overBudget: s.over,
+        },
       };
     });
   }

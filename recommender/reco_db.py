@@ -171,11 +171,11 @@ def finish_run(conn, run_id, algorithm, rows, metrics=None, hyperparameters=None
 
     with conn.cursor() as cur:
         with cur.copy("""
-            COPY recommendation (model_run_id, customer_id, hotel_id, score, rank, reason)
+            COPY recommendation (model_run_id, customer_id, hotel_id, score, rank, reason, explanation)
             FROM STDIN
         """) as copy:
             for row in rows:
-                copy.write_row((run_id, *row))
+                copy.write_row((run_id, *row[:5], _explanation(row)))
         cur.execute("""
             UPDATE model_run SET status = 'COMPLETED', finished_at = now(),
                    rmse = %s, mae = %s, k = %s, relevance_threshold = %s,
@@ -223,11 +223,12 @@ def write_customer(conn, run_id, customer_id, rows):
     rows = list(rows)
     with conn.cursor() as cur:
         cur.executemany("""
-            INSERT INTO recommendation (model_run_id, customer_id, hotel_id, score, rank, reason)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            INSERT INTO recommendation (model_run_id, customer_id, hotel_id, score, rank, reason, explanation)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (model_run_id, customer_id, hotel_id)
-            DO UPDATE SET score = EXCLUDED.score, rank = EXCLUDED.rank, reason = EXCLUDED.reason
-        """, [(run_id, *row) for row in rows])
+            DO UPDATE SET score = EXCLUDED.score, rank = EXCLUDED.rank, reason = EXCLUDED.reason,
+                          explanation = EXCLUDED.explanation
+        """, [(run_id, *row[:5], _explanation(row)) for row in rows])
         kept = [row[1] for row in rows]
         cur.execute("""
             DELETE FROM recommendation r
@@ -240,6 +241,11 @@ def write_customer(conn, run_id, customer_id, rows):
         """, (run_id, customer_id, kept))
     conn.commit()
     return len(rows)
+
+
+def _explanation(row):
+    """The sixth field of a recommendation row as JSON text; rows from before it existed have none."""
+    return json.dumps(row[5], ensure_ascii=False, default=_json_default) if len(row) > 5 and row[5] else None
 
 
 def _json_default(value):

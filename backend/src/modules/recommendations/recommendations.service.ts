@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type {
+  RecommendationExplanation,
   RecommendationQuery,
   RecommendedHotel,
   Recommendations,
@@ -10,6 +11,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { basePriceWhere } from '../rooms/room.mapper';
 import { bookableHotel, sellableRoomType } from '../stays/bookable';
 import { PreferenceRanking } from './preference-ranking';
+import { RecommendationProfiles } from './recommendation-profile';
 
 /** What a card needs to show about a hotel, beyond what the recommendation row carries. */
 export interface HotelCard {
@@ -47,6 +49,7 @@ export class RecommendationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly preferences: PreferenceRanking,
+    private readonly profiles: RecommendationProfiles,
   ) {}
 
   async list(
@@ -74,25 +77,28 @@ export class RecommendationsService {
       if (ranked) {
         const top = ranked.slice(0, query.limit);
         const cards = await this.cards(top.map((r) => r.hotelId));
+        const items: RecommendedHotel[] = top.flatMap((r) => {
+          const card = cards.get(r.hotelId);
+          return card
+            ? [
+                {
+                  ...card,
+                  recommendationId: null,
+                  rank: r.rank,
+                  score: r.score,
+                  reason: r.reason,
+                  isNew: card.reviewCount === 0,
+                  explanation: r.explanation,
+                },
+              ]
+            : [];
+        });
         return {
           personalized: true,
           source: 'PREFERENCES',
           modelRun,
-          items: top.flatMap((r) => {
-            const card = cards.get(r.hotelId);
-            return card
-              ? [
-                  {
-                    ...card,
-                    recommendationId: null,
-                    rank: r.rank,
-                    score: r.score,
-                    reason: r.reason,
-                    isNew: card.reviewCount === 0,
-                  },
-                ]
-              : [];
-          }),
+          items,
+          profile: await this.profiles.of(customerId, items),
         };
       }
     }
@@ -102,6 +108,7 @@ export class RecommendationsService {
         source: 'POPULAR',
         modelRun: null,
         items: [],
+        profile: null,
       };
     }
     const rowsFor = (customer: string | null) =>
@@ -112,11 +119,13 @@ export class RecommendationsService {
           hotelId: inCity ? { in: inCity } : { not: null },
           hotel: {
             ...bookableHotel,
+            // Only where their next stay already is, as the recommender leaves out: a hotel they stayed at and liked
+            // is on their list on purpose ("Bạn đã ở đây và chấm 4.8★").
             ...(customerId && {
               bookings: {
                 none: {
                   customerId,
-                  status: { notIn: ['CANCELLED', 'EXPIRED'] },
+                  status: { in: ['PENDING', 'CONFIRMED', 'CHECKED_IN'] },
                 },
               },
             }),
@@ -130,6 +139,7 @@ export class RecommendationsService {
           rank: true,
           score: true,
           reason: true,
+          explanation: true,
         },
       });
 
@@ -160,6 +170,8 @@ export class RecommendationsService {
           score: toNumber(r.score),
           reason: r.reason,
           isNew: card.reviewCount === 0,
+          explanation:
+            (r.explanation as RecommendationExplanation | null) ?? null,
         },
       ];
     });
@@ -168,6 +180,10 @@ export class RecommendationsService {
       source: personalized ? 'MODEL' : 'POPULAR',
       modelRun,
       items,
+      profile:
+        personalized && customerId
+          ? await this.profiles.of(customerId, items)
+          : null,
     };
   }
 

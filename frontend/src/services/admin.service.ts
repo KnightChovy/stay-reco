@@ -1,5 +1,6 @@
 import { api } from "@/lib/axios";
 import type {
+  RecommenderEvaluation,
   AdminOverview,
   AdminTransaction,
   AdminTransactionDetail,
@@ -138,5 +139,11 @@ export async function getPaymentSettings() {
 
 export async function testPaymentSettings() {
   const { data } = await api.post<APIResponse<PaymentSettingsCheck>>("/admin/payment-settings/test");
+  return data.data;
+}
+
+/** The evidence page of the recommender: offline evaluation, long tail, bookings from recommendations. */
+export async function getRecommenderEvaluation() {
+  const { data } = await api.get<APIResponse<RecommenderEvaluation>>("/admin/recommender/evaluation");
   return data.data;
 }

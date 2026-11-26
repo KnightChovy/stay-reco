@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { CreditCard, LayoutDashboard, ReceiptText, ShieldCheck, Sparkles, UsersRound } from 'lucide-react';
+import { BarChart3, CreditCard, LayoutDashboard, ReceiptText, ShieldCheck, Sparkles, UsersRound } from 'lucide-react';
 import Sidebar, { SidebarProvider, type SidebarItem } from '@/components/common/sidebar/Sidebar';
 import Navbar from '@/components/common/navbar/Navbar';
 import { SidebarInset } from '@/components/ui/sidebar';
@@ -11,6 +11,7 @@ import { useAuthStore } from '@/lib/auth-store';
 const navigation: Omit<SidebarItem, 'isActive'>[] = [
   { href: '/admin/dashboard', label: 'Tổng quan', icon: LayoutDashboard, section: 'QUẢN TRỊ HỆ THỐNG' },
   { href: '/admin/users', label: 'Người dùng & Phân quyền', icon: UsersRound, section: 'QUẢN TRỊ HỆ THỐNG' },
+  { href: '/admin/recommender', label: 'Đánh giá gợi ý', icon: BarChart3, section: 'QUẢN TRỊ HỆ THỐNG' },
   { href: '/admin/payment-settings', label: 'Cấu hình thanh toán', icon: CreditCard, section: 'TÀI CHÍNH & CẤU HÌNH' },
   { href: '/admin/transactions', label: 'Nhật ký giao dịch', icon: ReceiptText, section: 'TÀI CHÍNH & CẤU HÌNH' },
   { href: '/admin/logs', label: 'Nhật ký & Bảo mật', icon: ShieldCheck, section: 'AN TOÀN HỆ THỐNG' },
