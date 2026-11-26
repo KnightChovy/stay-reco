@@ -16,21 +16,25 @@ const QUIET_PATHS = ["/booking", "/login", "/register", "/verify-email", "/reset
  * Mounted by the site Header, so it appears on the first customer page after signing in.
  */
 export function OnboardingGate() {
-  const isCustomer = useAuthStore((state) => state.user?.role === "customer");
-  const hasHydrated = useAuthStore((state) => state.hasHydrated);
+  const accountId = useAuthStore((state) => state.user?.id ?? null);
   const pathname = usePathname();
   const quiet = QUIET_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
-  const query = useOnboarding(hasHydrated && isCustomer);
-  const [closed, setClosed] = useState(false);
+  const query = useOnboarding();
+  // Both remember which account they were about, so a sign-out and another sign-in on this tab starts over.
+  const [closedFor, setClosedFor] = useState<string | null>(null);
   // Opened while NEW; once open it stays until the customer closes it, so the voucher shows after finishing.
-  const [opened, setOpened] = useState(false);
+  const [openedFor, setOpenedFor] = useState<string | null>(null);
 
   const onboarding = query.data;
-  if (!onboarding || closed) return null;
+  if (!onboarding || !accountId || closedFor === accountId) return null;
+  const opened = openedFor === accountId;
   if (!opened && (onboarding.status !== "NEW" || quiet)) return null;
-  if (!opened) setOpened(true);
+  if (!opened) setOpenedFor(accountId);
 
-  return <OnboardingDialog onboarding={onboarding} open onClose={() => setClosed(true)} />;
+  return (
+    // Keyed by account so the dialog's picks and step never carry over to another customer.
+    <OnboardingDialog key={accountId} onboarding={onboarding} open onClose={() => setClosedFor(accountId)} />
+  );
 }
 
 /**
@@ -38,8 +42,7 @@ export function OnboardingGate() {
  * still earns the welcome voucher. Nothing is shown once it is completed.
  */
 export function OnboardingOffer() {
-  const isCustomer = useAuthStore((state) => state.user?.role === "customer");
-  const query = useOnboarding(isCustomer);
+  const query = useOnboarding();
   const [open, setOpen] = useState(false);
   const onboarding = query.data;
   if (!onboarding || (onboarding.status === "COMPLETED" && !open)) return null;

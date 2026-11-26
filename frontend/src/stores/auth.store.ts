@@ -81,8 +81,23 @@ export function accountToAuthUser(account: Account): AuthUser {
   };
 }
 
+/**
+ * `next` only when it is a path on this site. `//host` and `/\host` are read by browsers as another site, and
+ * control characters could smuggle one in, so all of those fall back to the home page.
+ */
 export function getSafeNextPath(next: string | null) {
-  return next?.startsWith('/') && !next.startsWith('//') ? next : '/';
+  const safe =
+    !!next &&
+    next.startsWith('/') &&
+    !next.startsWith('//') &&
+    !next.includes('\\') &&
+    !/[\u0000-\u001f\u007f]/.test(next);
+  return safe ? next : '/';
+}
+
+/** Where a user lands after signing in: a customer goes back to `next` (or home), the portals to their dashboard. */
+export function postLoginPath(role: UserRole, next: string | null) {
+  return role === 'customer' ? getSafeNextPath(next) : roleDashboardPaths[role];
 }
 
 function setWindowAccessToken(token: string | null) {

@@ -35,12 +35,15 @@ export function useRecommendations(params: RecommendationParams = {}) {
   });
 }
 
-export function useOnboarding(enabled: boolean) {
-  const customerId = useAuthStore((state) => state.user?.id);
+/** The signed-in customer's onboarding status; nothing for anyone else. */
+export function useOnboarding() {
+  const user = useAuthStore((state) => state.user);
+  const hasHydrated = useAuthStore((state) => state.hasHydrated);
+  const customerId = user?.role === "customer" ? user.id : undefined;
   return useQuery({
     queryKey: recommendationKeys.onboarding(customerId),
     queryFn: service.getOnboarding,
-    enabled: enabled && Boolean(customerId),
+    enabled: hasHydrated && Boolean(customerId),
     staleTime: Infinity,
     retry: false,
   });
