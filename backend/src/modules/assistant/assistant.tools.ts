@@ -13,10 +13,12 @@ import {
 import { randomUUID } from 'crypto';
 import type { AuthUser } from '../../common/decorators/current-user.decorator';
 import { UserRole } from '../../generated/prisma/client';
+import { todayInVietnam } from '../../common/http/calendar-date';
 import { PrismaService } from '../../prisma/prisma.service';
 import { BookingCancellationService } from '../bookings/booking-cancellation.service';
 import { BookingsService } from '../bookings/bookings.service';
 import { LoyaltyService } from '../loyalty/loyalty.service';
+import { campaignUsable } from '../promotions/discount';
 import { PromotionsService } from '../promotions/promotions.service';
 import { StayDiscountService } from '../promotions/stay-discount.service';
 import { RecommendationsService } from '../recommendations/recommendations.service';
@@ -450,6 +452,9 @@ export class AssistantTools {
         checkOutTime: h.checkOutTime,
         cancellationPolicy: h.cancellationPolicy,
       },
+      // The model once invented spa and dinner offers with prices: this says the list is the whole catalogue.
+      addOnsNote:
+        'Đây là toàn bộ dịch vụ khách sạn bán qua StayReco, giá tính theo lần. Không có trong danh sách thì không được nêu tên hay giá; khách cần thì ghi vào specialRequests.',
       // Services sold with the stay; only prebookable ones can go on propose_booking, the rest are paid at the desk.
       addOns: h.addOns.map((a) => ({
         id: a.id,
@@ -669,10 +674,37 @@ export class AssistantTools {
           ? (nameOf.get(v.hotelId) ?? 'một khách sạn')
           : 'mọi khách sạn',
       })),
+      campaigns: await this.runningCampaigns(),
       note: vouchers.length
-        ? 'Khách chọn mã nào thì truyền vào code của propose_booking. Chiến dịch tự áp dụng (không cần mã) được tính sẵn khi đề xuất.'
-        : 'Khách chưa có mã nào. Chiến dịch tự áp dụng của khách sạn (nếu có) vẫn được tính khi đề xuất đặt phòng.',
+        ? 'Khách chọn mã nào thì truyền vào code của propose_booking. Chiến dịch (campaigns) không cần mã, tự trừ khi đề xuất ở đúng khách sạn.'
+        : 'Khách chưa có mã riêng. Gợi ý các chiến dịch (campaigns) đang chạy: không cần mã, tự trừ khi đề xuất đặt phòng ở đúng khách sạn.',
     };
+  }
+
+  /** Campaigns that apply without a code (the same rule as DiscountService), to suggest when the customer has no voucher. */
+  private async runningCampaigns() {
+    const today = todayInVietnam();
+    const rows = await this.prisma.promotion.findMany({
+      where: { isActive: true, requiresCode: false },
+      include: { hotel: { select: { name: true, city: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: 30,
+    });
+    return rows
+      .filter((p) => campaignUsable(p, today))
+      .slice(0, 10)
+      .map((p) => ({
+        name: p.name,
+        discount:
+          p.discountType === 'PERCENTAGE'
+            ? `${Number(p.discountValue)}%`
+            : `${Number(p.discountValue)} VND`,
+        minBookingAmount: p.minBookingAmount
+          ? Number(p.minBookingAmount)
+          : null,
+        validTo: p.validTo?.toISOString().slice(0, 10) ?? null,
+        hotel: p.hotel ? `${p.hotel.name} (${p.hotel.city})` : 'mọi khách sạn',
+      }));
   }
 
   private async myWallet(customer: ToolCustomer) {
