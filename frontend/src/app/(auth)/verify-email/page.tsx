@@ -8,7 +8,7 @@ import Footer from '@/components/layout/Footer';
 import { Button } from '@/components/ui/button';
 import { OtpVerification } from '@/features/auth/OtpVerification';
 import { AlertTriangle } from 'lucide-react';
-import { getSafeNextPath } from '@/lib/auth-store';
+import { postLoginPath, useAuthStore } from '@/lib/auth-store';
 
 function VerifyEmailContent() {
   const router = useRouter();
@@ -25,7 +25,7 @@ function VerifyEmailContent() {
           {email ? (
             <OtpVerification
               email={email}
-              onVerified={() => router.replace(getSafeNextPath(next))}
+              onVerified={() => router.replace(postLoginPath(useAuthStore.getState().user?.role ?? 'customer', next))}
             />
           ) : (
             <div className="py-4 text-center">

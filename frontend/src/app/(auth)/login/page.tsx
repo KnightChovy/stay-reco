@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Eye, EyeOff, Lock, Mail, ArrowRight, ShieldCheck, Star } from 'lucide-react';
-import { getSafeNextPath, roleDashboardPaths, useAuthStore } from '@/lib/auth-store';
+import { postLoginPath, useAuthStore } from '@/lib/auth-store';
 
 function LoginPageContent() {
   const [showPassword, setShowPassword] = useState(false);
@@ -46,11 +46,7 @@ function LoginPageContent() {
         return;
       }
 
-      router.replace(
-        result.user.role === 'customer'
-          ? getSafeNextPath(next)
-          : roleDashboardPaths[result.user.role],
-      );
+      router.replace(postLoginPath(result.user.role, next));
     } finally {
       setIsLoading(false);
     }

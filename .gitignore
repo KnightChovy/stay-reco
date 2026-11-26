@@ -1,2 +1,7 @@
 # Claude Code local config
 .claude/
+
+# Recommender (Python)
+recommender/.venv/
+recommender/data/
+__pycache__/
