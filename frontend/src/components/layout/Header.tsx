@@ -48,6 +48,8 @@ const navigation: { href: string; label: string; badge?: string }[] = [
   { href: '/blog', label: 'Blog' },
 ];
 
+const PARTNER_SIGNUP_HREF = '/register/partner';
+
 function NavBadge({ label }: { label: string }) {
   return (
     <span className="ml-1.5 rounded-full bg-amber-100 px-1.5 py-0.5 align-middle text-[10px] font-semibold text-amber-800">
@@ -101,6 +103,8 @@ export default function Header() {
   const roleChannel = user ? roleChannels[user.role] : null;
   const RoleChannelIcon = roleChannel?.icon;
   const authHref = `/login?next=${encodeURIComponent(pathname)}`;
+  const showPartnerSignup = !isAuthenticated || user?.role === 'customer';
+  const partnerSignupActive = pathname === PARTNER_SIGNUP_HREF;
   const handleLogout = () => {
     logout();
     router.push('/');
@@ -146,6 +150,20 @@ export default function Header() {
         </nav>
 
         <div className="ml-auto hidden items-center gap-4 lg:flex">
+          {showPartnerSignup && (
+            <Link
+              href={PARTNER_SIGNUP_HREF}
+              aria-current={partnerSignupActive ? 'page' : undefined}
+              className={`inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-sm font-semibold transition-colors focus-visible:outline-none ${
+                partnerSignupActive ? 'bg-accent text-primary' : 'text-primary hover:bg-accent'
+              }`}
+            >
+              <Building2 className="size-4" aria-hidden="true" />
+              <span className="xl:hidden">Đối tác</span>
+              <span className="hidden xl:inline">Trở thành đối tác</span>
+            </Link>
+          )}
+
           <DropdownMenu modal={false}>
             <DropdownMenuTrigger
               className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-white px-3 text-xs sm:text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none"
@@ -417,6 +435,19 @@ export default function Header() {
                 {item.badge && <NavBadge label={item.badge} />}
               </Link>
             ))}
+            {showPartnerSignup && (
+              <Link
+                href={PARTNER_SIGNUP_HREF}
+                aria-current={partnerSignupActive ? 'page' : undefined}
+                onClick={() => setIsMenuOpen(false)}
+                className={`flex items-center gap-2 rounded-lg px-4 py-3 text-base font-semibold transition-colors focus-visible:outline-none ${
+                  partnerSignupActive ? 'bg-accent text-primary' : 'text-primary hover:bg-muted'
+                }`}
+              >
+                <Building2 className="size-4" aria-hidden="true" />
+                Trở thành đối tác
+              </Link>
+            )}
             <div className="mt-2 grid grid-cols-2 gap-2 border-t border-border pt-3">
               <DropdownMenu modal={false}>
                 <DropdownMenuTrigger className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-border text-sm font-medium text-foreground">
