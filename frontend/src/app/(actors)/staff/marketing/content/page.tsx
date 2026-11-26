@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useQueries } from "@tanstack/react-query";
-import { Clock, ImageIcon, Lightbulb, Loader2, PenLine, RefreshCw, Search, Sparkles } from "lucide-react";
+import { ImageIcon, Lightbulb, Loader2, PenLine, RefreshCw, Search, Sparkles } from "lucide-react";
 import type { ContentStatus, MarketingContent } from "@stayreco/shared";
 import Pagination from "@/components/common/pagination/Pagination";
 import { EmptyState } from "@/components/common/StateViews";
@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import * as marketingService from "@/services/marketing.service";
 import { useStaffHotel } from "@/features/staff/components/StaffHotelProvider";
 import { marketingKeys, useBrandVoice, useContentIdeas, useContents } from "@/features/staff/api/marketing-queries";
+import { BrandVoiceDialog } from "@/features/staff/marketing/BrandVoiceDialog";
 import { toneClasses } from "@/features/staff/lib/labels";
 import { contentTypeLabels, ideaKindLabels } from "@/features/staff/lib/marketing-labels";
 import { getMarketingErrorMessage, isMissingMarketingPermission } from "@/features/staff/lib/marketing-errors";
@@ -32,11 +33,10 @@ const PAGE_SIZE = 9;
 
 const TABS: Array<{ id: string; label: string; status?: ContentStatus[] }> = [
   { id: "all", label: "Tất cả" },
-  { id: "draft", label: "Bản nháp", status: ["DRAFT"] },
-  { id: "pending", label: "Chờ duyệt", status: ["PENDING_APPROVAL"] },
-  { id: "approved", label: "Đã duyệt", status: ["APPROVED", "SCHEDULED"] },
+  // PENDING_APPROVAL, APPROVED and REJECTED only remain on pieces from before the approval step was removed.
+  { id: "draft", label: "Chưa đăng", status: ["DRAFT", "PENDING_APPROVAL", "REJECTED", "APPROVED"] },
+  { id: "scheduled", label: "Đã lên lịch", status: ["SCHEDULED"] },
   { id: "published", label: "Đã đăng", status: ["PUBLISHED"] },
-  { id: "rejected", label: "Bị từ chối", status: ["REJECTED"] },
 ];
 
 /** The one thing to do with a piece, by status. */
@@ -45,10 +45,11 @@ function CardAction({ content }: { content: MarketingContent }) {
   const cls = "h-10 w-full justify-center whitespace-nowrap";
   switch (content.status) {
     case "DRAFT":
+    case "PENDING_APPROVAL":
     case "REJECTED":
       return (
         <Link href={href} className={cn(buttonVariants(), cls)}>
-          <PenLine className="size-4" aria-hidden /> Sửa
+          <PenLine className="size-4" aria-hidden /> Sửa & đăng
         </Link>
       );
     case "APPROVED":
@@ -56,12 +57,6 @@ function CardAction({ content }: { content: MarketingContent }) {
         <Link href={href} className={cn(buttonVariants(), cls)}>
           Lên lịch
         </Link>
-      );
-    case "PENDING_APPROVAL":
-      return (
-        <p className="flex h-10 items-center justify-center gap-1.5 rounded-lg bg-muted px-3 text-xs font-medium text-muted-foreground">
-          <Clock className="size-3.5" aria-hidden /> Đang chờ chủ khách sạn duyệt
-        </p>
       );
     default:
       return (
@@ -96,9 +91,6 @@ function ContentCard({ content }: { content: MarketingContent }) {
             {content.title || "(Chưa có tiêu đề)"}
           </h3>
           <p className="line-clamp-3 text-xs leading-relaxed text-muted-foreground">{content.body}</p>
-          {content.status === "REJECTED" && content.rejectedReason && (
-            <p className="line-clamp-2 text-xs font-medium text-destructive">Góp ý: {content.rejectedReason}</p>
-          )}
           <p className="mt-auto pt-2 text-xs text-muted-foreground">
             {content.authorName ?? "Chủ khách sạn"} · {formatDateTime(content.createdAt)}
           </p>
@@ -124,6 +116,7 @@ export default function StaffMarketingContentPage() {
   const forbidden = isMissingMarketingPermission(contentsQuery.error);
   const ideasQuery = useContentIdeas(hotelId);
   const voice = useBrandVoice(hotelId).data;
+  const [voiceOpen, setVoiceOpen] = useState(false);
   const loaded = contentsQuery.data?.contents;
   // The API has no text search, so this narrows the page on screen only.
   const needle = search.trim().toLowerCase();
@@ -153,8 +146,8 @@ export default function StaffMarketingContentPage() {
         crumbs={[{ label: "Thư viện nội dung" }]}
         description={
           <>
-            Nhờ AI viết bài theo giọng thương hiệu của khách sạn, chỉnh sửa rồi <strong>gửi chủ khách sạn duyệt</strong>.
-            Bài đã duyệt mới được lên lịch đăng lên Facebook / Instagram.
+            Nhờ AI viết bài theo giọng thương hiệu của khách sạn, chỉnh sửa, thêm ảnh rồi <strong>lên lịch đăng</strong> lên
+            Facebook / Instagram.
           </>
         }
         actions={
@@ -173,7 +166,14 @@ export default function StaffMarketingContentPage() {
           <div className="grid gap-3 lg:grid-cols-3">
             <AiBudgetCard hotelId={hotelId} />
             <div className="rounded-xl border border-border bg-card p-4 shadow-2xs lg:col-span-2">
-              <p className="text-xs font-semibold uppercase text-muted-foreground">Giọng thương hiệu</p>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-semibold uppercase text-muted-foreground">Giọng thương hiệu</p>
+                {hotelId && (
+                  <Button variant="outline" className="h-10 gap-1.5" onClick={() => setVoiceOpen(true)}>
+                    <PenLine className="size-4" aria-hidden /> Sửa giọng
+                  </Button>
+                )}
+              </div>
               {voice?.summary ? (
                 <div className="mt-1 space-y-1 text-xs text-muted-foreground">
                   <p className="font-semibold text-foreground">{voice.summary}</p>
@@ -183,8 +183,8 @@ export default function StaffMarketingContentPage() {
                 </div>
               ) : (
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Chưa thiết lập. AI vẫn viết được với giọng ấm áp, trung tính; chủ khách sạn có thể dạy AI giọng văn
-                  riêng từ các bài đã đăng.
+                  Chưa thiết lập. AI vẫn viết được với giọng ấm áp, trung tính. Bấm “Sửa giọng” để tự mô tả hoặc dạy AI
+                  từ các bài mẫu.
                 </p>
               )}
             </div>
@@ -332,6 +332,15 @@ export default function StaffMarketingContentPage() {
           open={dialog.open}
           initialBrief={dialog.brief}
           onOpenChange={(open) => setDialog((prev) => ({ ...prev, open }))}
+        />
+      )}
+      {hotelId && (
+        <BrandVoiceDialog
+          key={`${voiceOpen}-${voice?.updatedAt ?? "empty"}`}
+          hotelId={hotelId}
+          voice={voice}
+          open={voiceOpen}
+          onOpenChange={setVoiceOpen}
         />
       )}
     </div>

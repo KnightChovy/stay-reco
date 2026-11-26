@@ -236,12 +236,16 @@ describe('Connecting a Facebook page as the owner (e2e)', () => {
       expect(url).not.toContain('test-app-secret');
     });
 
-    it("is the owner's decision, not a staff member's", async () => {
+    it('is open to staff with MARKETING, not to the rest of the staff', async () => {
       const h = await hotel();
+      const desk = await t.signInStaff(h.hotelId, 'desk@hotel.test', [
+        'FRONT_DESK',
+      ]);
+      await authorize(desk.token, h.hotelId, 403);
       const staff = await t.signInStaff(h.hotelId, 'staff@hotel.test', [
         'MARKETING',
       ]);
-      await authorize(staff.token, h.hotelId, 403);
+      await authorize(staff.token, h.hotelId);
     });
   });
 
@@ -495,13 +499,13 @@ describe('Connecting a Facebook page as the owner (e2e)', () => {
       expect(res.body.code).toBe('SOCIAL_OAUTH_INVALID');
     });
 
-    it("is the owner's decision, not a staff member's", async () => {
+    it('is refused to staff without MARKETING', async () => {
       const h = await hotel();
-      const staff = await t.signInStaff(h.hotelId, 'staff@hotel.test', [
-        'MARKETING',
+      const desk = await t.signInStaff(h.hotelId, 'desk@hotel.test', [
+        'FRONT_DESK',
       ]);
       const { state } = await authorize(h.token, h.hotelId);
-      await exchange(staff.token, h.hotelId, { code: 'CODE', state }).expect(
+      await exchange(desk.token, h.hotelId, { code: 'CODE', state }).expect(
         403,
       );
     });

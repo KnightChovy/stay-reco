@@ -149,13 +149,27 @@ describe('Social accounts, scheduling and publishing (e2e)', () => {
       expect(row.accessToken).toMatch(/^v1:/);
     });
 
-    it('is the owner’s decision, not a staff member’s', async () => {
+    it('is open to staff with MARKETING, not to the rest of the staff', async () => {
       const h = await hotel();
+      const desk = await t.signInStaff(h.hotelId, 'desk@hotel.test', [
+        'FRONT_DESK',
+      ]);
+      expect((await connect(desk.token, h.hotelId)).status).toBe(403);
+
       const staff = await t.signInStaff(h.hotelId, 'staff@hotel.test', [
         'MARKETING',
       ]);
-      const res = await connect(staff.token, h.hotelId);
-      expect(res.status).toBe(403);
+      const id = idOf(await connect(staff.token, h.hotelId).expect(201));
+      await t
+        .api()
+        .delete(`/api/v1/social-accounts/${id}`)
+        .set(auth(desk.token))
+        .expect(403);
+      await t
+        .api()
+        .delete(`/api/v1/social-accounts/${id}`)
+        .set(auth(staff.token))
+        .expect(204);
     });
 
     it('marks a page whose token has already expired unusable', async () => {
@@ -223,7 +237,7 @@ describe('Social accounts, scheduling and publishing (e2e)', () => {
       expect(content.body.data.status).toBe('SCHEDULED');
     });
 
-    it('refuses content the owner has not approved', async () => {
+    it('schedules a draft straight away: there is no approval step', async () => {
       const h = await hotel();
       const accountId = idOf(await connect(h.token, h.hotelId).expect(201));
       const draft = await t
@@ -233,11 +247,15 @@ describe('Social accounts, scheduling and publishing (e2e)', () => {
         .send({ contentType: 'POST', brief: 'Chưa duyệt' })
         .expect(201);
 
-      const res = await schedule(h.token, idOf(draft), {
+      await schedule(h.token, idOf(draft), {
         socialAccountId: accountId,
-      });
-      expect(res.status).toBe(409);
-      expect(res.body.code).toBe('CONTENT_NOT_APPROVED');
+      }).expect(201);
+      const content = await t
+        .api()
+        .get(`/api/v1/marketing-content/${idOf(draft)}`)
+        .set(auth(h.token))
+        .expect(200);
+      expect(content.body.data.status).toBe('SCHEDULED');
     });
 
     it("refuses another hotel's page", async () => {
@@ -470,13 +488,13 @@ describe('Social accounts, scheduling and publishing (e2e)', () => {
       expect(res.body.data.failureReason).toContain('Session expired');
 
       // A post that did not go out must not leave the content looking published, nor stuck on the calendar: with
-      // nothing else waiting it is back to APPROVED and can be scheduled again.
+      // nothing else waiting it is back to DRAFT and can be edited and scheduled again.
       const content = await t
         .api()
         .get(`/api/v1/marketing-content/${h.contentId}`)
         .set(auth(h.token))
         .expect(200);
-      expect(content.body.data.status).toBe('APPROVED');
+      expect(content.body.data.status).toBe('DRAFT');
     });
 
     it('does not retry a post that failed', async () => {
@@ -521,7 +539,7 @@ describe('Social accounts, scheduling and publishing (e2e)', () => {
         .get(`/api/v1/marketing-content/${h.contentId}`)
         .set(auth(h.token))
         .expect(200);
-      expect(content.body.data.status).toBe('APPROVED');
+      expect(content.body.data.status).toBe('DRAFT');
       expect(
         await t.prisma.auditLog.count({
           where: { action: 'CONTENT_PUBLISH_FAILED' },
@@ -580,7 +598,7 @@ describe('Social accounts, scheduling and publishing (e2e)', () => {
           contentSchedules: { some: { contentScheduleId: h.scheduleId } },
         },
       });
-      expect(content.status).toBe('APPROVED');
+      expect(content.status).toBe('DRAFT');
     });
 
     it('refuses to cancel a post that already went out', async () => {
@@ -866,7 +884,7 @@ describe('Social accounts, scheduling and publishing (e2e)', () => {
       ]);
     });
 
-    it('puts the content back to APPROVED once its only post is cancelled', async () => {
+    it('puts the content back to DRAFT once its only post is cancelled', async () => {
       const s = await setup();
       await t
         .api()
@@ -878,7 +896,7 @@ describe('Social accounts, scheduling and publishing (e2e)', () => {
         .get(`/api/v1/marketing-content/${s.contentId}`)
         .set(auth(s.token))
         .expect(200);
-      expect(content.body.data.status).toBe('APPROVED');
+      expect(content.body.data.status).toBe('DRAFT');
     });
 
     it('filters the calendar by content and lists the latest published first', async () => {
@@ -921,8 +939,8 @@ describe('Social accounts, scheduling and publishing (e2e)', () => {
       ]);
     });
   });
-  describe('Editing after approval', () => {
-    /** An approved piece waiting on two pages. */
+  describe('Editing a scheduled piece', () => {
+    /** A piece waiting on two pages. */
     const onTwoPages = async () => {
       const h = await hotel();
       const pageA = idOf(await connect(h.token, h.hotelId).expect(201));
@@ -951,46 +969,21 @@ describe('Social accounts, scheduling and publishing (e2e)', () => {
         .set(auth(token))
         .send({ body: 'Bản sửa sau khi duyệt.' });
 
-    it('takes a scheduled piece off the calendar and back to draft', async () => {
+    it('edits a scheduled piece in place, and its posts go out with the edit', async () => {
       const h = await onTwoPages();
 
       const res = await edit(h.token, h.contentId).expect(200);
 
       expect(res.body.data).toMatchObject({
-        status: 'DRAFT',
+        status: 'SCHEDULED',
         body: 'Bản sửa sau khi duyệt.',
       });
       const rows = await t.prisma.contentSchedule.findMany({
         where: { marketingContentId: h.contentId },
       });
-      expect(rows.map((r) => r.status)).toEqual(['CANCELLED', 'CANCELLED']);
-      const log = await t.prisma.auditLog.findFirstOrThrow({
-        where: { action: 'CONTENT_REOPENED' },
-      });
-      expect(JSON.parse(log.newValue!)).toMatchObject({
-        contentId: h.contentId,
-        cancelledSchedules: 2,
-      });
-      // Nothing that was cancelled goes out when the job runs.
+      expect(rows.map((r) => r.status)).toEqual(['SCHEDULED', 'SCHEDULED']);
       expect(await runJob(new Date(Date.now() + 48 * 3_600_000))).toMatchObject(
-        {
-          published: 0,
-        },
-      );
-    });
-
-    it('can be scheduled again once the owner approves the edit', async () => {
-      const h = await onTwoPages();
-      await edit(h.token, h.contentId).expect(200);
-      for (const action of ['submit', 'approve']) {
-        await t
-          .api()
-          .post(`/api/v1/marketing-content/${h.contentId}/${action}`)
-          .set(auth(h.token))
-          .expect(200);
-      }
-      await schedule(h.token, h.contentId, { socialAccountId: h.pageA }).expect(
-        201,
+        { published: 2 },
       );
     });
 

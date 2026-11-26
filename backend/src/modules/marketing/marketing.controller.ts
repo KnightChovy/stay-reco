@@ -20,6 +20,7 @@ import {
 import { ErrorCode } from '../../common/errors/error-code';
 import { HotelAccessRequired } from '../../common/hotel-access/hotel-access.guard';
 import { ApiData, ApiErrors } from '../../common/swagger/api-docs.decorators';
+import { StaffPermission } from '../../generated/prisma/client';
 import { BrandVoiceService } from './brand-voice.service';
 import { AiService } from './ai.service';
 import { LearnBrandVoiceDto, UpdateBrandVoiceDto } from './dto/marketing.dto';
@@ -50,7 +51,7 @@ export class MarketingController {
     description:
       'Writes the fields it is given, removes the ones set to `null`, and leaves the rest alone, so one screen can own one field.',
   })
-  @HotelAccessRequired('owner')
+  @HotelAccessRequired('member', { permission: StaffPermission.MARKETING })
   @ApiData(brandVoiceResponseSchema)
   @Patch('brand-voice')
   update(@Param('hotelId') hotelId: string, @Body() dto: UpdateBrandVoiceDto) {
@@ -62,7 +63,7 @@ export class MarketingController {
     description:
       'Send 2 to 5 posts the hotel is happy with; the model describes the voice they share and saves it over the current one. Asking an owner to describe their own tone rarely works, so this is the way in. Costs one model call against the monthly budget.',
   })
-  @HotelAccessRequired('owner')
+  @HotelAccessRequired('member', { permission: StaffPermission.MARKETING })
   @ApiData(brandVoiceResponseSchema)
   @ApiErrors(
     ErrorCode.AI_UNAVAILABLE,

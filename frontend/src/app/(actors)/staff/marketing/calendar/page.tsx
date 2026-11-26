@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { BarChart3, CalendarDays, Link2, RefreshCw, XCircle } from "lucide-react";
+import { BarChart3, CalendarDays, RefreshCw, XCircle } from "lucide-react";
 import type { ContentSchedule, ScheduleStatus } from "@stayreco/shared";
 import Pagination from "@/components/common/pagination/Pagination";
 import { ActionMenu } from "@/components/common/ActionBar";
@@ -10,9 +10,9 @@ import { EmptyState } from "@/components/common/StateViews";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { formatDateTime } from "@/features/stays/lib/format";
 import { useStaffHotel } from "@/features/staff/components/StaffHotelProvider";
 import { useCancelSchedule, useSchedules, useSocialAccounts } from "@/features/staff/api/marketing-queries";
+import { SocialPagesPanel } from "@/features/staff/marketing/SocialPagesPanel";
 import { getMarketingErrorMessage, isMissingMarketingPermission } from "@/features/staff/lib/marketing-errors";
 import { platformLabels } from "@/features/staff/lib/marketing-labels";
 import {
@@ -214,7 +214,7 @@ export default function StaffMarketingCalendarPage() {
                 title="Chưa có bài nào ở mục này"
                 description={
                   <>
-                    Mở một bài đã được duyệt trong{" "}
+                    Mở một bài trong{" "}
                     <Link href="/staff/marketing/content" className="font-semibold text-primary underline">
                       Thư viện nội dung
                     </Link>{" "}
@@ -242,43 +242,7 @@ export default function StaffMarketingCalendarPage() {
             )}
           </section>
 
-          <aside className="space-y-3 rounded-xl border border-border bg-card p-4 shadow-2xs">
-            <h2 className="flex items-center gap-2 text-sm font-bold text-foreground">
-              <Link2 className="size-4 text-primary" aria-hidden /> Kênh đã kết nối
-            </h2>
-            {accountsQuery.isLoading ? (
-              <Skeleton className="h-16 rounded-lg" />
-            ) : accountsQuery.error ? (
-              <p className="text-xs text-destructive">{getMarketingErrorMessage(accountsQuery.error)}</p>
-            ) : (accountsQuery.data ?? []).length === 0 ? (
-              <p className="text-xs text-muted-foreground">Chưa có trang nào được kết nối.</p>
-            ) : (
-              <ul className="space-y-2">
-                {accountsQuery.data!.map((account) => (
-                  <li key={account.id} className="space-y-1 rounded-lg border border-border p-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <PlatformPill platform={account.platform} />
-                      <span
-                        className={cn(
-                          "text-xs font-semibold",
-                          account.usable ? "text-emerald-700" : "text-destructive",
-                        )}
-                      >
-                        {account.usable ? "Đang hoạt động" : "Token hết hạn"}
-                      </span>
-                    </div>
-                    <p className="font-mono text-xs text-foreground">{account.accountName}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {account.expiresAt ? `Hết hạn ${formatDateTime(account.expiresAt)}` : "Không có hạn token"}
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <p className="text-xs text-muted-foreground">
-              Chỉ chủ khách sạn mới kết nối hoặc ngắt kết nối trang. TikTok chỉ nhận video nên chưa hỗ trợ đăng bài.
-            </p>
-          </aside>
+          <SocialPagesPanel hotelId={hotelId} />
         </div>
       )}
     </div>

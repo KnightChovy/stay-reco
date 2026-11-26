@@ -59,7 +59,7 @@ POST /hotels/:hotelId/social-accounts/facebook/connect
 ```
 META_APP_ID=…
 META_APP_SECRET=…
-META_OAUTH_REDIRECT_URI=http://localhost:5173/social/facebook/callback
+META_OAUTH_REDIRECT_URI=http://localhost:3001/staff/social/facebook/callback
 ```
 
 Leave `META_APP_ID` empty and those three endpoints answer `503 SOCIAL_OAUTH_DISABLED` while pasting keeps working.
@@ -88,7 +88,7 @@ Open the [Graph API Explorer](https://developers.facebook.com/tools/explorer), p
 | `pages_manage_posts` | to publish |
 | `pages_read_engagement` | the likes count |
 | `read_insights` | the `views` figure |
-| `instagram_basic`, `instagram_content_publish` | only if Instagram is also being connected |
+| `instagram_basic`, `instagram_content_publish` | only if Instagram is also being connected: set `META_INSTAGRAM=true`, and the app needs the Instagram use case or Facebook answers "Invalid Scopes" |
 
 What you get is a **user** token that lasts an hour or two. It is not what to paste.
 

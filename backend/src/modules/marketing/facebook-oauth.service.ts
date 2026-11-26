@@ -26,14 +26,17 @@ import { SocialAccountsService } from './social-accounts.service';
 /**
  * What Facebook is asked for. Each one is a thing the hotel sees the result of, and nothing more:
  * `pages_show_list` to name the pages at all, `pages_manage_posts` to publish, `pages_read_engagement` for likes
- * and comments, `read_insights` for the view count, and the two Instagram scopes only because one token serves
- * both platforms. An owner who declines a scope gets a page list that works for less, not an error.
+ * and comments, `read_insights` for the view count, and, with `META_INSTAGRAM` on, the two Instagram scopes, because one
+ * token serves both platforms. An owner who declines a scope gets a page list that works for less, not an error.
  */
 const SCOPES = [
   'pages_show_list',
   'pages_manage_posts',
   'pages_read_engagement',
   'read_insights',
+] as const;
+/** Asked for as well when `META_INSTAGRAM` is on: the app must have the Instagram use case, or Facebook refuses them. */
+const INSTAGRAM_SCOPES = [
   'instagram_basic',
   'instagram_content_publish',
 ] as const;
@@ -141,6 +144,7 @@ export class FacebookOauthService {
   private readonly appId?: string;
   private readonly appSecret?: string;
   private readonly redirectUri?: string;
+  private readonly instagram: boolean;
   private readonly version: string;
 
   constructor(
@@ -155,6 +159,7 @@ export class FacebookOauthService {
     this.appId = config.get('META_APP_ID', { infer: true });
     this.appSecret = config.get('META_APP_SECRET', { infer: true });
     this.redirectUri = config.get('META_OAUTH_REDIRECT_URI', { infer: true });
+    this.instagram = config.get('META_INSTAGRAM', { infer: true });
     this.version = config.get('META_GRAPH_VERSION', { infer: true });
   }
 
@@ -163,13 +168,13 @@ export class FacebookOauthService {
     return Boolean(this.appId && this.appSecret && this.redirectUri);
   }
 
-  /** Step one. `hotelId` was checked by `HotelAccessRequired('owner')`. */
+  /** Step one. `hotelId` was checked by `HotelAccessRequired('member', MARKETING)`. */
   authorize(hotelId: string): FacebookAuthorize {
     const app = this.app();
     const params = new URLSearchParams({
       client_id: app.appId,
       redirect_uri: app.redirectUri,
-      scope: SCOPES.join(','),
+      scope: [...SCOPES, ...(this.instagram ? INSTAGRAM_SCOPES : [])].join(','),
       response_type: 'code',
       state: this.seal({ kind: 'state', hotelId, ttl: STATE_TTL_MS }),
     });

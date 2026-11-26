@@ -5,11 +5,12 @@ type Labelled = { label: string; tone: StatusTone };
 
 export const contentStatusLabels: Record<ContentStatus, Labelled> = {
   DRAFT: { label: "Bản nháp", tone: "muted" },
-  PENDING_APPROVAL: { label: "Chờ chủ duyệt", tone: "warning" },
-  APPROVED: { label: "Đã duyệt", tone: "success" },
+  // There is no approval step any more; these two and REJECTED only remain on pieces from before it was removed.
+  PENDING_APPROVAL: { label: "Bản nháp", tone: "muted" },
+  APPROVED: { label: "Sẵn sàng đăng", tone: "success" },
   SCHEDULED: { label: "Đã lên lịch", tone: "info" },
   PUBLISHED: { label: "Đã đăng", tone: "success" },
-  REJECTED: { label: "Bị từ chối", tone: "danger" },
+  REJECTED: { label: "Bản nháp", tone: "muted" },
 };
 
 export const contentTypeLabels: Record<ContentType, string> = {
@@ -45,10 +46,19 @@ export const ideaKindLabels: Record<ContentIdea["kind"], { label: string; tone: 
   GREAT_REVIEW: { label: "Đánh giá tốt", tone: "success" },
 };
 
-/** Statuses whose words and picture may still be changed (docs/api/marketing.md, M18). */
-export const EDITABLE_STATUSES: ContentStatus[] = ["DRAFT", "REJECTED"];
-/** Statuses that may be put on the calendar (M9). */
-export const SCHEDULABLE_STATUSES: ContentStatus[] = ["APPROVED", "SCHEDULED"];
+/** Statuses whose words and picture may still be changed: anything not yet out (docs/api/marketing.md). */
+export const EDITABLE_STATUSES: ContentStatus[] = ["DRAFT", "PENDING_APPROVAL", "REJECTED", "APPROVED", "SCHEDULED"];
+/** Statuses that may be put on the calendar: every one, with no approval step (M9). */
+export const SCHEDULABLE_STATUSES: ContentStatus[] = [
+  "DRAFT",
+  "PENDING_APPROVAL",
+  "REJECTED",
+  "APPROVED",
+  "SCHEDULED",
+  "PUBLISHED",
+];
+/** Statuses that may be deleted: not yet put on a page. */
+export const DELETABLE_STATUSES: ContentStatus[] = ["DRAFT", "PENDING_APPROVAL", "REJECTED", "APPROVED"];
 
 const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 4 });
 

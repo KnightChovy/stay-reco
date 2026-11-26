@@ -178,14 +178,6 @@ export function useRemoveContentImage() {
   });
 }
 
-export function useSubmitContent() {
-  const changed = useContentChanged();
-  return useMutation({
-    mutationFn: (contentId: string) => marketingService.submitContent(contentId),
-    onSuccess: changed,
-  });
-}
-
 export function useDeleteContent() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -217,7 +209,7 @@ export function useCancelSchedule() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: [...marketingKeys.all, "schedules"] });
       void queryClient.invalidateQueries({ queryKey: [...marketingKeys.all, "contents"] });
-      // Cancelling the last waiting post puts the piece back to APPROVED: its detail must follow.
+      // Cancelling the last waiting post puts the piece back to DRAFT: its detail must follow.
       void queryClient.invalidateQueries({ queryKey: [...marketingKeys.all, "content"] });
     },
   });

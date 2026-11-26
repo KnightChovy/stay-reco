@@ -287,13 +287,17 @@ describe('Marketing edge cases (e2e)', () => {
       expect(stored.status).toBe('PENDING_APPROVAL');
     });
 
-    it('does not let a staff writer approve, even with MARKETING', async () => {
+    it('lets staff with MARKETING approve what an older client submitted, but not the front desk', async () => {
       const h = await hotel();
       const staff = await writer(h.hotelId);
       const other = await writer(h.hotelId, 'other@hotel.test');
+      const desk = await t.signInStaff(h.hotelId, 'desk@hotel.test', [
+        'FRONT_DESK',
+      ]);
       const id = idOf(await create(staff.token, h.hotelId).expect(201));
       await action(staff.token, id, 'submit').expect(200);
-      await action(other.token, id, 'approve').expect(403);
+      await action(desk.token, id, 'approve').expect(403);
+      await action(other.token, id, 'approve').expect(200);
     });
 
     it('refuses an edit that changes nothing, or a field it does not know', async () => {
@@ -310,7 +314,7 @@ describe('Marketing edge cases (e2e)', () => {
       }
     });
 
-    it('cannot edit while waiting for approval', async () => {
+    it('can still edit a piece an older client submitted', async () => {
       const h = await hotel();
       const staff = await writer(h.hotelId);
       const id = idOf(await create(staff.token, h.hotelId).expect(201));
@@ -320,8 +324,8 @@ describe('Marketing edge cases (e2e)', () => {
         .patch(`/api/v1/marketing-content/${id}`)
         .set(auth(staff.token))
         .send({ body: 'Sửa lúc đang chờ duyệt' })
-        .expect(409);
-      expect(res.body.code).toBe('CONTENT_STATUS_CONFLICT');
+        .expect(200);
+      expect(res.body.data.body).toBe('Sửa lúc đang chờ duyệt');
     });
 
     it('deletes a draft, which then reads as not found', async () => {
@@ -415,11 +419,14 @@ describe('Marketing edge cases (e2e)', () => {
       expect(t.ai.images).toHaveLength(0);
     });
 
-    it('will not draw while the post waits for approval', async () => {
+    it('will not draw for a post that has gone out', async () => {
       const h = await hotel();
       const staff = await writer(h.hotelId);
       const id = idOf(await create(staff.token, h.hotelId).expect(201));
-      await action(staff.token, id, 'submit').expect(200);
+      await t.prisma.marketingContent.update({
+        where: { marketingContentId: id },
+        data: { status: 'PUBLISHED' },
+      });
       const res = await action(staff.token, id, 'image/generate').expect(409);
       expect(res.body.code).toBe('CONTENT_STATUS_CONFLICT');
       expect(t.ai.images).toHaveLength(0);
@@ -427,7 +434,7 @@ describe('Marketing edge cases (e2e)', () => {
   });
 
   describe('the brand voice', () => {
-    it('lets staff read it but only the owner change or learn it', async () => {
+    it('lets staff with MARKETING change it, and the rest of the staff only read it', async () => {
       const h = await hotel();
       const staff = await writer(h.hotelId);
       await t
@@ -444,19 +451,35 @@ describe('Marketing edge cases (e2e)', () => {
         .expect(200);
       expect(read.body.data.summary).toBe('Ấm áp, xưng "mình".');
 
+      const desk = await t.signInStaff(h.hotelId, 'desk@hotel.test', [
+        'FRONT_DESK',
+      ]);
+      await t
+        .api()
+        .get(`/api/v1/hotels/${h.hotelId}/brand-voice`)
+        .set(auth(desk.token))
+        .expect(200);
       await t
         .api()
         .patch(`/api/v1/hotels/${h.hotelId}/brand-voice`)
-        .set(auth(staff.token))
+        .set(auth(desk.token))
         .send({ summary: 'Đổi giọng' })
         .expect(403);
       await t
         .api()
         .post(`/api/v1/hotels/${h.hotelId}/brand-voice/learn`)
-        .set(auth(staff.token))
+        .set(auth(desk.token))
         .send({ samples: ['Bài một khá dài để học.', 'Bài hai cũng khá dài.'] })
         .expect(403);
       expect(t.ai.calls).toHaveLength(0);
+
+      const changed = await t
+        .api()
+        .patch(`/api/v1/hotels/${h.hotelId}/brand-voice`)
+        .set(auth(staff.token))
+        .send({ summary: 'Đổi giọng' })
+        .expect(200);
+      expect(changed.body.data.summary).toBe('Đổi giọng');
     });
 
     it('sends the voice the owner set to the writer', async () => {

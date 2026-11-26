@@ -43,11 +43,24 @@ const wrongStatus = (message: string) =>
     message,
   });
 
-/** The statuses a piece can be put on a page from: approved, already on its way to one, or already out on one. */
+/**
+ * Every status: staff with MARKETING post what they wrote, with no approval step in between (the owner chose to
+ * leave marketing to them). `PENDING_APPROVAL`, `APPROVED` and `REJECTED` only remain on pieces from before.
+ */
 const SCHEDULABLE: readonly ContentStatus[] = [
+  'DRAFT',
+  'PENDING_APPROVAL',
   'APPROVED',
+  'REJECTED',
   'SCHEDULED',
   'PUBLISHED',
+];
+/** Moved to `SCHEDULED` by their first post; a piece already `PUBLISHED` stays so. */
+const NOT_YET_ON_A_PAGE: ContentStatus[] = [
+  'DRAFT',
+  'PENDING_APPROVAL',
+  'APPROVED',
+  'REJECTED',
 ];
 
 const scheduleInclude = {
@@ -118,7 +131,7 @@ export class ScheduleService {
     private readonly publishers: PublisherRegistry,
   ) {}
 
-  /** Puts approved content on the calendar, aimed at one connected page. */
+  /** Puts a piece on the calendar, aimed at one connected page. */
   async schedule(
     user: AuthUser,
     contentId: string,
@@ -142,13 +155,11 @@ export class ScheduleService {
       // Posting on the hotel's page is a marketing action, not something any staff member may do by id.
       StaffPermission.MARKETING,
     );
-    // One approved piece may go to several pages (M9). SCHEDULED is allowed because the first scheduling moved it
-    // off APPROVED, and PUBLISHED because the first post going out moved it on again: the words were frozen when
-    // the owner approved them, so posting them on a second page later is still exactly what was approved.
+    // One piece may go to several pages (M9), also after it went out on the first.
     if (!SCHEDULABLE.includes(content!.status)) {
       throw new ConflictException({
         code: ErrorCode.CONTENT_NOT_APPROVED,
-        message: 'Only content the owner has approved can be scheduled',
+        message: 'This piece cannot be scheduled',
       });
     }
 
@@ -192,7 +203,10 @@ export class ScheduleService {
       });
       // A piece already PUBLISHED stays so: it has gone out, and that is what its status records.
       await tx.marketingContent.updateMany({
-        where: { marketingContentId: contentId, status: 'APPROVED' },
+        where: {
+          marketingContentId: contentId,
+          status: { in: NOT_YET_ON_A_PAGE },
+        },
         data: { status: 'SCHEDULED' },
       });
       return created;

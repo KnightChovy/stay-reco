@@ -129,11 +129,20 @@ function ScheduleRow({ schedule }: { schedule: ContentSchedule }) {
 }
 
 /**
- * Puts approved content on the calendar (`POST /marketing-content/:id/schedule`) and lists where it already goes.
- * Pages are connected by the owner; staff only pick one. There is no publish-now endpoint: "Đăng ngay" schedules for
+ * Puts a piece on the calendar (`POST /marketing-content/:id/schedule`) and lists where it already goes. There is no
+ * approval step: a draft is scheduled directly. Pages are connected under "Lịch đăng & Kết nối kênh". `unsaved`
+ * holds it back while the editor has changes, so what goes out is what is on screen. There is no publish-now endpoint: "Đăng ngay" schedules for
  * the next run of the publisher (M14).
  */
-export function SchedulePanel({ hotelId, content }: { hotelId: string; content: MarketingContent }) {
+export function SchedulePanel({
+  hotelId,
+  content,
+  unsaved = false,
+}: {
+  hotelId: string;
+  content: MarketingContent;
+  unsaved?: boolean;
+}) {
   const accountsQuery = useSocialAccounts(hotelId);
   const schedulesQuery = useSchedules(hotelId, { contentId: content.id, pageSize: 100 }, { poll: true });
   const scheduleContent = useScheduleContent();
@@ -147,7 +156,7 @@ export function SchedulePanel({ hotelId, content }: { hotelId: string; content: 
   const schedules = schedulesQuery.data?.schedules ?? [];
 
   // The calendar is polled; when one of this piece's posts goes out or fails, the piece itself has moved too
-  // (PUBLISHED, or back to APPROVED), so its detail is read again rather than left saying SCHEDULED.
+  // (PUBLISHED, or back to DRAFT), so its detail is read again rather than left saying SCHEDULED.
   const queryClient = useQueryClient();
   const statuses = schedules.map((item) => `${item.id}:${item.status}`).join(",");
   const seen = useRef<string | null>(null);
@@ -161,7 +170,7 @@ export function SchedulePanel({ hotelId, content }: { hotelId: string; content: 
   const canSchedule = SCHEDULABLE_STATUSES.includes(content.status);
 
   const reasonFor = (account: SocialAccount) => {
-    if (!account.usable) return "Token đã hết hạn, nhờ chủ khách sạn kết nối lại";
+    if (!account.usable) return "Token đã hết hạn, hãy kết nối lại trang ở mục Lịch đăng & Kết nối kênh";
     if (account.platform === "TIKTOK") return "TikTok chỉ nhận video, chưa hỗ trợ đăng";
     if (account.platform === "INSTAGRAM" && !content.mediaUrl) return "Instagram cần bài có ảnh";
     return null;
@@ -205,11 +214,7 @@ export function SchedulePanel({ hotelId, content }: { hotelId: string; content: 
       </h2>
 
       {!canSchedule ? (
-        <p className="rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground">
-          {content.status === "PUBLISHED"
-            ? "Bài đã được đăng."
-            : "Chỉ bài đã được chủ khách sạn duyệt mới lên lịch được. Gửi duyệt sau khi chỉnh sửa xong."}
-        </p>
+        <p className="rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground">Bài này không lên lịch được.</p>
       ) : accountsQuery.isLoading ? (
         <p className="flex items-center gap-2 text-xs text-muted-foreground">
           <Loader2 className="size-3.5 animate-spin" /> Đang tải các trang đã kết nối…
@@ -219,7 +224,13 @@ export function SchedulePanel({ hotelId, content }: { hotelId: string; content: 
       ) : accounts.length === 0 ? (
         <p className="flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-xs text-amber-800">
           <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-          Khách sạn chưa kết nối trang Facebook / Instagram nào. Chủ khách sạn cần kết nối trang trước khi lên lịch.
+          <span>
+            Khách sạn chưa kết nối trang Facebook / Instagram nào.{" "}
+            <Link href="/staff/marketing/calendar" className="font-semibold underline">
+              Kết nối trang
+            </Link>{" "}
+            trước khi lên lịch.
+          </span>
         </p>
       ) : (
         <div className="space-y-3">
@@ -278,9 +289,14 @@ export function SchedulePanel({ hotelId, content }: { hotelId: string; content: 
             </p>
           )}
 
+          {unsaved && (
+            <p className="text-xs font-semibold text-amber-700" role="status">
+              Lưu thay đổi của bài trước khi đăng.
+            </p>
+          )}
           <Button
             onClick={submit}
-            disabled={scheduleContent.isPending}
+            disabled={scheduleContent.isPending || unsaved}
             className="h-10 w-full gap-1.5"
           >
             {scheduleContent.isPending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}

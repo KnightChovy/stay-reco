@@ -61,9 +61,9 @@ export class SocialController {
   @ApiOperation({
     summary: 'Connect a social page',
     description:
-      "The **owner** only: a page posts under the hotel's name. `accountName` is the id the platform posts under - a Facebook Page id, or an Instagram Business account id - not the display name. The token is stored encrypted and is never read back out of the API; paste a long-lived one, and send `expiresAt` if the platform gave one.",
+      "The owner or staff with `MARKETING`: a page posts under the hotel's name. `accountName` is the id the platform posts under - a Facebook Page id, or an Instagram Business account id - not the display name. The token is stored encrypted and is never read back out of the API; paste a long-lived one, and send `expiresAt` if the platform gave one.",
   })
-  @HotelAccessRequired('owner')
+  @HotelAccessRequired('member', { permission: StaffPermission.MARKETING })
   @ApiData(socialAccountResponseSchema, HttpStatus.CREATED)
   @Post('hotels/:hotelId/social-accounts')
   connect(
@@ -78,9 +78,9 @@ export class SocialController {
   @ApiOperation({
     summary: 'Start connecting a Facebook page',
     description:
-      'The **owner** only, and the first of three steps (M16). Returns a Facebook URL to open in the browser; Facebook asks the owner which pages this app may post to, then sends them back to the configured redirect with a `code` and the `state` from this URL. The owner never sees a token. Answers `503 SOCIAL_OAUTH_DISABLED` when the server has no Meta app configured - pasting a page token still works.',
+      'The owner or staff with `MARKETING`, and the first of three steps (M16). Returns a Facebook URL to open in the browser; Facebook asks the owner which pages this app may post to, then sends them back to the configured redirect with a `code` and the `state` from this URL. The owner never sees a token. Answers `503 SOCIAL_OAUTH_DISABLED` when the server has no Meta app configured - pasting a page token still works.',
   })
-  @HotelAccessRequired('owner')
+  @HotelAccessRequired('member', { permission: StaffPermission.MARKETING })
   @ApiErrors(ErrorCode.SOCIAL_OAUTH_DISABLED)
   @ApiData(facebookAuthorizeResponseSchema)
   @Get('hotels/:hotelId/social-accounts/facebook/authorize')
@@ -93,7 +93,7 @@ export class SocialController {
     description:
       'Step two. The page the owner lands on reads `code` and `state` out of the query string and posts them here, inside their own session: a redirect from Facebook carries no `Authorization` header, so it cannot call the API itself. Returns the pages the owner administers, which of them this hotel already posts to, and a `connectionToken` that stands in for the access token for ten minutes. No token is in the answer.',
   })
-  @HotelAccessRequired('owner')
+  @HotelAccessRequired('member', { permission: StaffPermission.MARKETING })
   @ApiErrors(
     ErrorCode.SOCIAL_OAUTH_DISABLED,
     ErrorCode.SOCIAL_OAUTH_INVALID,
@@ -114,7 +114,7 @@ export class SocialController {
     description:
       'Step three. An owner may administer a dozen pages and only one of them is this hotel, so nothing is connected until they say which. `instagram: true` also connects the Instagram Business account linked to that page, publishing with the same token. Reconnecting a page already on the hotel updates its token rather than adding a second row.',
   })
-  @HotelAccessRequired('owner')
+  @HotelAccessRequired('member', { permission: StaffPermission.MARKETING })
   @ApiErrors(
     ErrorCode.SOCIAL_OAUTH_DISABLED,
     ErrorCode.SOCIAL_OAUTH_INVALID,
@@ -146,9 +146,9 @@ export class SocialController {
   @ApiOperation({
     summary: 'Disconnect a page',
     description:
-      'The owner only. Clears the token and cancels everything still waiting to go out on that page. The page is kept, not deleted: a post that already went out points at it, and that record should outlive the connection.',
+      'The owner or staff with `MARKETING`. Clears the token and cancels everything still waiting to go out on that page. The page is kept, not deleted: a post that already went out points at it, and that record should outlive the connection.',
   })
-  @ApiHotelAccess('owner', ErrorCode.SOCIAL_ACCOUNT_NOT_FOUND)
+  @ApiHotelAccess('member', ErrorCode.SOCIAL_ACCOUNT_NOT_FOUND)
   @Delete('social-accounts/:id')
   @HttpCode(HttpStatus.NO_CONTENT)
   disconnect(
@@ -160,9 +160,9 @@ export class SocialController {
   }
 
   @ApiOperation({
-    summary: 'Schedule approved content',
+    summary: 'Schedule content',
     description:
-      'Only content the owner has approved (`CONTENT_NOT_APPROVED` otherwise), aimed at one connected page. Leave `scheduledAt` out, or set it in the past, to go out at the next run of the publisher, which is within a minute - that is what a "post now" button sends. One approved piece can be scheduled to several pages.',
+      'Any piece, a draft included (there is no approval step), aimed at one connected page. Leave `scheduledAt` out, or set it in the past, to go out at the next run of the publisher, which is within a minute - that is what a "post now" button sends. One piece can be scheduled to several pages.',
   })
   @ApiHotelAccess('member', ErrorCode.CONTENT_NOT_FOUND)
   @ApiData(contentScheduleResponseSchema, HttpStatus.CREATED)

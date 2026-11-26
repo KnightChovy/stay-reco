@@ -1,28 +1,24 @@
 # AI marketing (phase 5)
 
-The AI writer, the approval it goes through, the calendar it goes out on, and what it all costs. Decisions are in [phase-5-ai-marketing.md](../phases/phase-5-ai-marketing.md). Rules for every API: [../api-guide.md](../api-guide.md). Getting the platform credentials: [../social-setup.md](../social-setup.md).
+The AI writer, the calendar it goes out on, and what it all costs. Decisions are in [phase-5-ai-marketing.md](../phases/phase-5-ai-marketing.md). Rules for every API: [../api-guide.md](../api-guide.md). Getting the platform credentials: [../social-setup.md](../social-setup.md).
 
 Status: `BE Done` for all 27 endpoints. TikTok publishing is deliberately not built (M12).
 
 ## The shape of it
 
 ```
-ideas ─→ generate ─→ [DRAFT] ─→ submit ─→ [PENDING_APPROVAL] ─→ approve ─→ [APPROVED]
-                        ↑                                      ↘ reject ─→ [REJECTED]
-                        └──────────── edit ───────────────────────────────────┘
+ideas ─→ generate ─→ [DRAFT] ─→ edit, picture ─→ schedule ─→ [SCHEDULED] ─→ (the job, every minute) ─→ [PUBLISHED] ─→ metrics
+                                                                          ↘ [FAILED]
+                                                 ↘ cancel ─→ [CANCELLED]   (nothing left waiting: back to [DRAFT])
 
-[APPROVED] ─→ schedule ─→ [SCHEDULED] ─→ (the job, every minute) ─→ [PUBLISHED] ─→ metrics
-                                                                 ↘ [FAILED]
-                                      ↘ cancel ─→ [CANCELLED]
-
-[APPROVED] / [SCHEDULED] ─→ edit (words or picture) ─→ [DRAFT]   (posts still waiting are CANCELLED)
+[SCHEDULED] ─→ edit (words or picture) ─→ stays [SCHEDULED]; its posts go out with the edit
 ```
 
 Three things are worth knowing before reading the table.
 
-**A staff member needs `MARKETING` on every marketing route but the voice and the budget**, including the ones addressed by id (`/marketing-content/:id…`, `/content-schedules/:id…`); the owner always may. Without it a front-desk account could edit, submit or delete a draft, or post on the hotel's page, by knowing an id.
+**A staff member needs `MARKETING` on every marketing route but the voice and the budget**, including the ones addressed by id (`/marketing-content/:id…`, `/content-schedules/:id…`); the owner always may. Without it a front-desk account could edit or delete a draft, or post on the hotel's page, by knowing an id. The brand voice is read by any member and changed by the owner or staff with `MARKETING`.
 
-**Staff write, the owner approves.** A staff member with the `MARKETING` permission can ask for a draft, edit it and submit it. Only the **owner** approves or rejects, because what goes out goes out under the hotel's name. The words and the picture are locked while the piece waits for the owner (`PENDING_APPROVAL`) and once it has gone out (`PUBLISHED`). An approved or scheduled piece **may** still be edited, but the edit sends it back to `DRAFT`, cancels the posts still waiting for it, and it has to be submitted and approved again; on that new submission the owner gets an in-app notice that the piece was changed after approval. So what goes out is always what the owner approved.
+**Staff with `MARKETING` run marketing on their own; there is no approval step** (changed 2026-11-26 at the team's request: the owner hands marketing to the staff they give the permission). They write, edit, set the brand voice, connect and disconnect the hotel's pages, and schedule a draft directly. The words and picture may be edited until the piece has gone out (`PUBLISHED`); editing a `SCHEDULED` piece keeps its posts, which go out with the edit, since the publisher reads the piece when it posts (refused while a post is being sent right now). A piece may be deleted until it is put on a page. `submit`, `approve` and `reject` and the statuses `PENDING_APPROVAL`, `APPROVED`, `REJECTED` remain only for older clients and pieces from before: anyone who may write may use them, nothing requires them, and every status may be scheduled.
 
 **Staff can choose between versions.** `variants` writes three versions of one brief and saves none of them; staff pick one, edit it if they like, and save it with `POST /hotels/:hotelId/marketing-content`. `generate` still writes one and saves it straight away.
 
@@ -37,8 +33,8 @@ Three things are worth knowing before reading the table.
 | Method | Path | Access | Body | Response |
 |---|---|---|---|---|
 | GET | `/hotels/:hotelId/brand-voice` | member | | `BrandVoice` |
-| PATCH | `/hotels/:hotelId/brand-voice` | owner | `updateBrandVoiceSchema` | `BrandVoice` |
-| POST | `/hotels/:hotelId/brand-voice/learn` | owner | `learnBrandVoiceSchema` | `BrandVoice` (200) |
+| PATCH | `/hotels/:hotelId/brand-voice` | member + `MARKETING` | `updateBrandVoiceSchema` | `BrandVoice` |
+| POST | `/hotels/:hotelId/brand-voice/learn` | member + `MARKETING` | `learnBrandVoiceSchema` | `BrandVoice` (200) |
 | GET | `/hotels/:hotelId/ai-budget` | member | | `AiBudget` |
 
 ### Content and approval
@@ -55,21 +51,21 @@ Three things are worth knowing before reading the table.
 | POST | `/marketing-content/:id/image` | member + `MARKETING` | `multipart/form-data`, field `file` | `MarketingContent` (201) |
 | DELETE | `/marketing-content/:id/image` | member + `MARKETING` | | `MarketingContent` |
 | POST | `/marketing-content/:id/image/generate` | member + `MARKETING` | `generateImageSchema` | `MarketingContent` (200), with the drawn picture |
-| POST | `/marketing-content/:id/submit` | member + `MARKETING` | | `MarketingContent` (200) |
-| POST | `/marketing-content/:id/approve` | **owner** | | `MarketingContent` (200) |
-| POST | `/marketing-content/:id/reject` | **owner** | `rejectContentSchema` | `MarketingContent` (200) |
+| POST | `/marketing-content/:id/submit` | member + `MARKETING` (deprecated) | | `MarketingContent` (200) |
+| POST | `/marketing-content/:id/approve` | member + `MARKETING` (deprecated) | | `MarketingContent` (200) |
+| POST | `/marketing-content/:id/reject` | member + `MARKETING` (deprecated) | `rejectContentSchema` | `MarketingContent` (200) |
 | DELETE | `/marketing-content/:id` | member + `MARKETING` | | 204 |
 
 ### Pages, calendar and figures
 
 | Method | Path | Access | Body | Response |
 |---|---|---|---|---|
-| GET | `/hotels/:hotelId/social-accounts/facebook/authorize` | **owner** | | `FacebookAuthorize` |
-| POST | `/hotels/:hotelId/social-accounts/facebook/exchange` | **owner** | `facebookExchangeSchema` | `FacebookExchange` (200) |
-| POST | `/hotels/:hotelId/social-accounts/facebook/connect` | **owner** | `facebookConnectSchema` | `SocialAccount[]` (201) |
-| POST | `/hotels/:hotelId/social-accounts` | **owner** | `connectSocialAccountSchema` | `SocialAccount` (201) |
+| GET | `/hotels/:hotelId/social-accounts/facebook/authorize` | member + `MARKETING` | | `FacebookAuthorize` |
+| POST | `/hotels/:hotelId/social-accounts/facebook/exchange` | member + `MARKETING` | `facebookExchangeSchema` | `FacebookExchange` (200) |
+| POST | `/hotels/:hotelId/social-accounts/facebook/connect` | member + `MARKETING` | `facebookConnectSchema` | `SocialAccount[]` (201) |
+| POST | `/hotels/:hotelId/social-accounts` | member + `MARKETING` | `connectSocialAccountSchema` | `SocialAccount` (201) |
 | GET | `/hotels/:hotelId/social-accounts` | member + `MARKETING` | | `SocialAccount[]` |
-| DELETE | `/social-accounts/:id` | **owner** | | 204 |
+| DELETE | `/social-accounts/:id` | member + `MARKETING` | | 204 |
 | POST | `/marketing-content/:id/schedule` | member + `MARKETING` | `scheduleContentSchema` | `ContentSchedule` (201) |
 | GET | `/hotels/:hotelId/content-schedules` | member + `MARKETING` | | page of `ContentSchedule` |
 | GET | `/content-schedules/:id` | member + `MARKETING` | | `ContentSchedule` |
@@ -148,9 +144,9 @@ The writer may not invent prices, dates, terms or praise (M10), so **each brief 
 
 ## Connecting a page
 
-Two routes in, one encrypted row out. An owner is sent down the first; the second is for us.
+Two routes in, one encrypted row out. Staff are sent down the first; the second is for us.
 
-### Through Facebook, as the owner does it (M16)
+### Through Facebook, as staff with `MARKETING` do it (M16)
 
 ```jsonc
 // 1. GET /hotels/:hotelId/social-accounts/facebook/authorize
@@ -175,7 +171,7 @@ Two routes in, one encrypted row out. An owner is sent down the first; the secon
 // → [SocialAccount FACEBOOK 1001, SocialAccount INSTAGRAM 9001]
 ```
 
-**The redirect lands on the frontend, not the API.** A redirect carries no `Authorization` header, so a `GET /callback` would arrive unauthenticated and have to trust `state` for identity as well as integrity. Posting from the page the owner lands on keeps the request inside their session, and leaves `state` doing one job: it is encrypted with the hotel id in it, so a code obtained while connecting hotel A cannot be replayed onto hotel B by an owner who holds both. Both `state` and `connectionToken` are encrypted with the same cipher as the stored tokens, so neither needed a table and neither is readable by the client holding it.
+**The redirect lands on the frontend, not the API.** A redirect carries no `Authorization` header, so a `GET /callback` would arrive unauthenticated and have to trust `state` for identity as well as integrity. Posting from the page the browser lands on (`/staff/social/facebook/callback`) keeps the request inside their session, and leaves `state` doing one job: it is encrypted with the hotel id in it, so a code obtained while connecting hotel A cannot be replayed onto hotel B by someone who holds both. Both `state` and `connectionToken` are encrypted with the same cipher as the stored tokens, so neither needed a table and neither is readable by the client holding it.
 
 **Nothing is connected automatically.** An owner may administer a dozen pages and one of them is this hotel. Step three reads the pages from Facebook again rather than trusting the browser, and validates every pick before writing any: half a connection is worse than none.
 
@@ -201,7 +197,7 @@ Pasting is kept beside the owner-facing flow because it needs no Meta app at all
 
 `usable` turns false once `expiresAt` has passed. The publisher then **skips** the page and writes the reason on the post, rather than calling a platform with a token it knows is dead.
 
-Disconnecting clears the token and **cancels everything still waiting** on that page; a piece left with nothing waiting or out is back to `APPROVED`, as after a cancel by hand. The account row is kept, not deleted: a published post points at it, and that record of what went out should outlive the connection.
+Disconnecting clears the token and **cancels everything still waiting** on that page; a piece left with nothing waiting or out is back to `DRAFT`, as after a cancel by hand. The account row is kept, not deleted: a published post points at it, and that record of what went out should outlive the connection.
 
 ## The picture (M18)
 
@@ -214,7 +210,7 @@ Staff **upload a file**; they do not find a URL somewhere. JPEG, PNG or WebP up 
 
 The URL is what Meta needs - **it fetches the image itself**, so a local file or a `localhost` address is no use to it - but asking a marketing assistant to produce a public URL before they may illustrate a post is asking them to be a sysadmin. The upload path is the same `StorageService` that hotel and review photos already use.
 
-**The picture may be changed exactly as long as the words may, with the same effect**: freely on a `DRAFT` or `REJECTED` piece, and on an `APPROVED` or `SCHEDULED` one by sending it back to `DRAFT` (posts still waiting are cancelled). What the owner approved is what goes out, and that includes which photograph is attached - a picture swapped after approval goes back in front of the owner rather than onto the hotel's page.
+**The picture may be changed exactly as long as the words may**: until the piece has gone out, and on a `SCHEDULED` piece the new picture goes out with its posts.
 
 Uploading again **replaces** the picture and deletes the file it replaced; deleting the draft takes its file too. A `mediaUrl` that was pasted in by hand through `PATCH` is left alone on both counts: the file is not ours to delete, and guessing at it would be deleting someone else's.
 
@@ -227,7 +223,7 @@ Uploading again **replaces** the picture and deletes the file it replaced; delet
 { "prompt": "Hồ bơi lúc hoàng hôn" }   // optional, 5-500; the post's own words when left out
 ```
 
-The image model (`GEMINI_IMAGE_MODEL`) draws one square picture, which is uploaded and attached **exactly like an upload**: same window and effect (`DRAFT`, `REJECTED`; `APPROVED` and `SCHEDULED` go back to `DRAFT`), same `marketing` folder, replaces and deletes the old file. The model is told: photorealistic, no text or logos, no recognisable faces, nothing that claims a price or an award. The owner sees the picture before approving it, and that is the human check on what the model drew.
+The image model (`GEMINI_IMAGE_MODEL`) draws one square picture, which is uploaded and attached **exactly like an upload**: same window (anything not yet `PUBLISHED`), same `marketing` folder, replaces and deletes the old file. The model is told: photorealistic, no text or logos, no recognisable faces, nothing that claims a price or an award. Staff see the picture before scheduling it, and that is the human check on what the model drew.
 
 A fresh draft still has `mediaUrl: null`; the picture is drawn only when staff ask for it, because one picture costs far more than a draft (see below).
 
@@ -235,7 +231,7 @@ A fresh draft still has `mediaUrl: null`; the picture is drawn only when staff a
 
 `GET /hotels/:hotelId/content-schedules` takes `contentId` (one piece's posts) and `sort`: `scheduled-asc` (default, "post now" rows first, then the soonest) or `published-desc` (latest published first, for figures).
 
-The job **claims** a row before calling the platform (`SCHEDULED → PUBLISHING`), so two runs, two instances or two environments on one database can never send the same post, and a cancel that arrives during the call is refused rather than racing it. A row left in `PUBLISHING` means the process stopped mid-call. The job gives up on it **10 minutes after it was claimed** (`claimed_at`): it becomes `FAILED` with the reason "Publishing was interrupted before the result was saved. Check the page before scheduling it again.", since nobody can tell whether the platform received it, and it is never sent again on its own. A piece whose posts were all cancelled or failed goes back to `APPROVED`.
+The job **claims** a row before calling the platform (`SCHEDULED → PUBLISHING`), so two runs, two instances or two environments on one database can never send the same post, and a cancel that arrives during the call is refused rather than racing it. A row left in `PUBLISHING` means the process stopped mid-call. The job gives up on it **10 minutes after it was claimed** (`claimed_at`): it becomes `FAILED` with the reason "Publishing was interrupted before the result was saved. Check the page before scheduling it again.", since nobody can tell whether the platform received it, and it is never sent again on its own. A piece whose posts were all cancelled or failed goes back to `DRAFT`.
 
 
 ```jsonc
@@ -249,7 +245,7 @@ The job **claims** a row before calling the platform (`SCHEDULED → PUBLISHING`
   "publishedAt": null, "externalPostId": null, "failureReason": null }
 ```
 
-Only content the owner **approved** can be scheduled, or content already `SCHEDULED` or `PUBLISHED` — one approved piece can go to several pages, at once or later: the first scheduling moved it off `APPROVED` and the first post going out moved it to `PUBLISHED`, where it stays. The words were frozen on approval, so a second page later is still what the owner approved.
+Any piece can be scheduled, a draft included: there is no approval step. One piece can go to several pages, at once or later: the first scheduling moves it to `SCHEDULED` and the first post going out to `PUBLISHED`, where it stays.
 
 **Once per page.** While a piece is waiting for a page, being sent to it or already out on it, scheduling it there again is `409 SCHEDULE_STATUS_CONFLICT`: it would be a duplicate post. A post that was cancelled or failed there does not count, so sending it again is how a failure is retried.
 
@@ -321,8 +317,8 @@ Leaving `GEMINI_API_KEY` empty does **not** stop the server starting — the mar
 | `AI_BUDGET_EXCEEDED` | 403 | The hotel has spent its budget for this calendar month |
 | `AI_REFUSED` | 403 | The model declined to write what was asked for |
 | `CONTENT_NOT_FOUND` | 404 | No such content, or it belongs to another hotel |
-| `CONTENT_STATUS_CONFLICT` | 409 | Editing, submitting, approving or deleting content whose status does not allow it (editing while `PENDING_APPROVAL` or `PUBLISHED`); editing a piece while one of its posts is being sent to the platform right now (`PUBLISHING`): try again in a few minutes |
-| `CONTENT_NOT_APPROVED` | 409 | Scheduling content the owner has not approved |
+| `CONTENT_STATUS_CONFLICT` | 409 | Editing, submitting, approving or deleting content whose status does not allow it (editing once `PUBLISHED`, deleting once scheduled); editing a piece while one of its posts is being sent to the platform right now (`PUBLISHING`): try again in a few minutes |
+| `CONTENT_NOT_APPROVED` | 409 | No longer raised: every status may be scheduled. Kept in the catalogue for older clients |
 | `SOCIAL_ACCOUNT_NOT_FOUND` | 404 | No such page, or it belongs to another hotel |
 | `SCHEDULE_NOT_FOUND` | 404 | No such scheduled post, or it belongs to another hotel |
 | `SCHEDULE_STATUS_CONFLICT` | 409 | Cancelling a post that went out, reading figures for one that did not, or scheduling a piece on a page it is already waiting for or out on |

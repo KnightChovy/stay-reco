@@ -16,7 +16,6 @@ import type {
   GenerateImageInput,
   LearnBrandVoiceInput,
   MarketingContent,
-  RejectContentInput,
   ScheduleContentInput,
   ScheduleListQuery,
   SocialAccount,
@@ -151,12 +150,6 @@ export async function removeContentImage(contentId: string) {
   return clean(data.data);
 }
 
-/** DRAFT or REJECTED → PENDING_APPROVAL; the owner decides. */
-export async function submitContent(contentId: string) {
-  const { data } = await api.post<APIResponse<MarketingContent>>(`/marketing-content/${contentId}/submit`);
-  return clean(data.data);
-}
-
 export async function deleteContent(contentId: string) {
   await api.delete(`/marketing-content/${contentId}`);
 }
@@ -210,16 +203,6 @@ export async function learnBrandVoice(hotelId: string, input: LearnBrandVoiceInp
     timeout: 90_000,
   });
   return data.data;
-}
-
-export async function approveContent(contentId: string) {
-  const { data } = await api.post<APIResponse<MarketingContent>>(`/marketing-content/${contentId}/approve`);
-  return clean(data.data);
-}
-
-export async function rejectContent(contentId: string, input: RejectContentInput) {
-  const { data } = await api.post<APIResponse<MarketingContent>>(`/marketing-content/${contentId}/reject`, input);
-  return clean(data.data);
 }
 
 export async function getFacebookAuthorizeUrl(hotelId: string) {

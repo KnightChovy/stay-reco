@@ -163,23 +163,22 @@ describe('A picture on marketing content (e2e)', () => {
     expect(t.storage.uploads).toHaveLength(0);
   });
 
-  it('will not change the picture while the owner is deciding on it', async () => {
+  it('will not change the picture of a post that has gone out', async () => {
     const h = await hotel();
     const id = await draft(h.token, h.hotelId);
     await upload(h.token, id);
     t.storage.clear();
-    await t
-      .api()
-      .post(`/api/v1/marketing-content/${id}/submit`)
-      .set(auth(h.token))
-      .expect(200);
+    await t.prisma.marketingContent.update({
+      where: { marketingContentId: id },
+      data: { status: 'PUBLISHED' },
+    });
 
     const res = await upload(h.token, id).expect(409);
     expect(res.body.code).toBe('CONTENT_STATUS_CONFLICT');
     expect(t.storage.uploads).toHaveLength(0);
   });
 
-  it('sends an approved post back to the owner when its picture changes', async () => {
+  it('changes the picture of an approved post in place', async () => {
     const h = await hotel();
     const id = await draft(h.token, h.hotelId);
     const first = dataOf<{ mediaUrl: string }>(
@@ -193,9 +192,8 @@ describe('A picture on marketing content (e2e)', () => {
         .expect(200);
     }
 
-    // What the owner approved is what goes out, photograph included: a new one needs approving again.
     const res = await upload(h.token, id).expect(201);
-    expect(res.body.data.status).toBe('DRAFT');
+    expect(res.body.data.status).toBe('APPROVED');
     expect(t.storage.deleted).toEqual([keyOf(first)]);
 
     const removed = await t
@@ -204,7 +202,7 @@ describe('A picture on marketing content (e2e)', () => {
       .set(auth(h.token))
       .expect(200);
     expect(removed.body.data).toMatchObject({
-      status: 'DRAFT',
+      status: 'APPROVED',
       mediaUrl: null,
     });
   });
@@ -261,14 +259,13 @@ describe('A picture on marketing content (e2e)', () => {
       expect(t.storage.deleted).toEqual([keyOf(first)]);
     });
 
-    it('will not draw while the owner is deciding on the post', async () => {
+    it('will not draw for a post that has gone out', async () => {
       const h = await hotel();
       const id = await draft(h.token, h.hotelId);
-      await t
-        .api()
-        .post(`/api/v1/marketing-content/${id}/submit`)
-        .set(auth(h.token))
-        .expect(200);
+      await t.prisma.marketingContent.update({
+        where: { marketingContentId: id },
+        data: { status: 'PUBLISHED' },
+      });
 
       const res = await drawn(h.token, id).expect(409);
       expect(res.body.code).toBe('CONTENT_STATUS_CONFLICT');
@@ -276,7 +273,7 @@ describe('A picture on marketing content (e2e)', () => {
       expect(t.ai.images).toHaveLength(0);
     });
 
-    it('draws for an approved post and sends it back to the owner', async () => {
+    it('draws for an approved post and leaves it approved', async () => {
       const h = await hotel();
       const id = await draft(h.token, h.hotelId);
       for (const step of ['submit', 'approve']) {
@@ -288,7 +285,7 @@ describe('A picture on marketing content (e2e)', () => {
       }
 
       const res = await drawn(h.token, id).expect(200);
-      expect(res.body.data.status).toBe('DRAFT');
+      expect(res.body.data.status).toBe('APPROVED');
       expect(t.ai.images).toHaveLength(1);
     });
 

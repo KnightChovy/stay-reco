@@ -151,7 +151,7 @@ export function GenerateContentDialog({
           <DialogDescription>
             {choosing
               ? "Chưa phương án nào được lưu. Chọn bản ưng ý nhất, sửa nếu cần, rồi lưu thành bản nháp. Các bản còn lại sẽ bị bỏ."
-              : `AI viết ${CONTENT_VARIANTS} phương án theo giọng thương hiệu của khách sạn và không tự bịa giá, ngày hay ưu đãi. Bản nháp cần chủ khách sạn duyệt trước khi đăng.`}
+              : `AI viết ${CONTENT_VARIANTS} phương án theo giọng thương hiệu của khách sạn và không tự bịa giá, ngày hay ưu đãi. Bạn đọc lại và chỉnh sửa trước khi đăng.`}
           </DialogDescription>
         </DialogHeader>
 

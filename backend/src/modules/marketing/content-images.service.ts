@@ -85,7 +85,7 @@ export class ContentImagesService {
   /** Takes the picture off, and deletes the file if we were the ones who put it there. */
   async remove(user: AuthUser, contentId: string): Promise<MarketingContent> {
     const current = await this.content.editable(user, contentId);
-    await this.content.saveEdit(user, current, {
+    await this.content.saveEdit(current, {
       mediaUrl: null,
       mediaStorageKey: null,
     });
@@ -104,7 +104,7 @@ export class ContentImagesService {
     uploaded: { url: string; storageKey: string },
   ): Promise<MarketingContent> {
     try {
-      await this.content.saveEdit(user, current, {
+      await this.content.saveEdit(current, {
         mediaUrl: uploaded.url,
         mediaStorageKey: uploaded.storageKey,
       });

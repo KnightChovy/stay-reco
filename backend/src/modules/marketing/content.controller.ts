@@ -47,7 +47,7 @@ import {
   UpdateContentDto,
 } from './dto/marketing.dto';
 
-/** Marketing drafts, written by the AI in the hotel's voice and approved by the owner (M7, M8). */
+/** Marketing drafts, written by the AI in the hotel's voice and posted by staff with `MARKETING` (M7, M8). */
 @ApiTags('marketing')
 @Controller()
 export class ContentController {
@@ -116,7 +116,7 @@ export class ContentController {
   @ApiOperation({
     summary: 'Save a draft',
     description:
-      'Saves the version picked from `variants` (or written by hand) as a `DRAFT`, ready to edit, illustrate and submit. Costs nothing.',
+      'Saves the version picked from `variants` (or written by hand) as a `DRAFT`, ready to edit, illustrate and schedule. Costs nothing.',
   })
   @HotelAccessRequired('member', { permission: StaffPermission.MARKETING })
   @ApiData(marketingContentResponseSchema, HttpStatus.CREATED)
@@ -133,7 +133,7 @@ export class ContentController {
   @ApiOperation({
     summary: "A hotel's marketing content",
     description:
-      'Newest first. `status` and `contentType` may each be repeated, so an approval queue sends `status=PENDING_APPROVAL`.',
+      'Newest first. `status` and `contentType` may each be repeated, e.g. `status=DRAFT&status=SCHEDULED`.',
   })
   @HotelAccessRequired('member', { permission: StaffPermission.MARKETING })
   @ApiPage(marketingContentResponseSchema)
@@ -157,7 +157,7 @@ export class ContentController {
   @ApiOperation({
     summary: 'Edit a piece',
     description:
-      '`DRAFT` stays `DRAFT`; `REJECTED` goes back to `DRAFT`. `APPROVED` or `SCHEDULED` goes back to `DRAFT` too, its posts still waiting are cancelled, and it needs submitting and approving again, so what goes out is always what the owner approved. Refused while `PENDING_APPROVAL` or `PUBLISHED`, and while one of its posts is being sent right now.',
+      'Anything not yet `PUBLISHED`. The status stays (a `REJECTED` piece from before goes back to `DRAFT`); a `SCHEDULED` piece keeps its posts, which go out with the edit. Refused while one of its posts is being sent right now.',
   })
   @ApiHotelAccess('member', ErrorCode.CONTENT_NOT_FOUND)
   @ApiData(marketingContentResponseSchema)
@@ -167,14 +167,15 @@ export class ContentController {
     @CurrentUser() user: AuthUser,
     @Param('id') id: string,
     @Body() dto: UpdateContentDto,
-    @ReqMeta() meta: RequestMeta,
   ) {
-    return this.content.update(user, id, dto, meta);
+    return this.content.update(user, id, dto);
   }
 
   @ApiOperation({
-    summary: 'Send a draft for approval',
-    description: '`DRAFT` or `REJECTED` → `PENDING_APPROVAL`.',
+    summary: 'Send a draft for approval (no longer needed)',
+    description:
+      '`DRAFT` or `REJECTED` → `PENDING_APPROVAL`. Kept for older clients: there is no approval step, a draft is scheduled directly.',
+    deprecated: true,
   })
   @ApiHotelAccess('member', ErrorCode.CONTENT_NOT_FOUND)
   @ApiData(marketingContentResponseSchema)
@@ -192,9 +193,10 @@ export class ContentController {
   @ApiOperation({
     summary: 'Approve content',
     description:
-      'The **owner** only. Staff write and submit; the owner decides what goes out under the hotel’s name.',
+      '`PENDING_APPROVAL` → `APPROVED`. Kept for older clients; nothing requires it. Staff with `MARKETING` or the owner.',
+    deprecated: true,
   })
-  @ApiHotelAccess('owner', ErrorCode.CONTENT_NOT_FOUND)
+  @ApiHotelAccess('member', ErrorCode.CONTENT_NOT_FOUND)
   @ApiData(marketingContentResponseSchema)
   @ApiErrors(ErrorCode.CONTENT_STATUS_CONFLICT)
   @Post('marketing-content/:id/approve')
@@ -210,9 +212,10 @@ export class ContentController {
   @ApiOperation({
     summary: 'Send content back with a reason',
     description:
-      'The owner only. The reason comes back on the piece as `rejectedReason`, so the writer can fix it rather than guess.',
+      '`PENDING_APPROVAL` → `REJECTED`, the reason coming back as `rejectedReason`. Kept for older clients; nothing requires it.',
+    deprecated: true,
   })
-  @ApiHotelAccess('owner', ErrorCode.CONTENT_NOT_FOUND)
+  @ApiHotelAccess('member', ErrorCode.CONTENT_NOT_FOUND)
   @ApiData(marketingContentResponseSchema)
   @ApiErrors(ErrorCode.CONTENT_STATUS_CONFLICT)
   @Post('marketing-content/:id/reject')
@@ -229,7 +232,7 @@ export class ContentController {
   @ApiOperation({
     summary: 'Attach a picture',
     description:
-      'Staff with `MARKETING`, in the same window and with the same effect as editing the words: on an `APPROVED` or `SCHEDULED` piece it sends the piece back to `DRAFT` and cancels its waiting posts, because what the owner approved is what goes out. JPEG, PNG or WebP, up to 10MB. Uploading again replaces the picture and deletes the old file. Facebook and Instagram fetch the image themselves, which is why it is hosted rather than sent with the post; Instagram refuses a post without one.',
+      'Staff with `MARKETING`, in the same window as editing the words: anything not yet `PUBLISHED`. JPEG, PNG or WebP, up to 10MB. Uploading again replaces the picture and deletes the old file. Facebook and Instagram fetch the image themselves, which is why it is hosted rather than sent with the post; Instagram refuses a post without one.',
   })
   @UploadFile('image')
   @ApiData(marketingContentResponseSchema, HttpStatus.CREATED)
@@ -250,7 +253,7 @@ export class ContentController {
   @ApiOperation({
     summary: 'Let the AI draw the picture',
     description:
-      'Same window and the same effect as uploading one: the picture is hosted, attached, and replaces the old one. Drawn from `prompt` when given, otherwise from the post itself, in the brand voice; photorealistic, no text, no logos, no recognisable faces. The owner sees it before approving. One image call against the monthly budget - an image costs far more than a draft.',
+      'Same window and the same effect as uploading one: the picture is hosted, attached, and replaces the old one. Drawn from `prompt` when given, otherwise from the post itself, in the brand voice; photorealistic, no text, no logos, no recognisable faces. Staff see it before scheduling. One image call against the monthly budget - an image costs far more than a draft.',
   })
   @ApiData(marketingContentResponseSchema)
   @ApiErrors(
@@ -285,7 +288,7 @@ export class ContentController {
   @ApiOperation({
     summary: 'Delete a draft',
     description:
-      'Only a `DRAFT` or `REJECTED` piece. Anything approved or published stays, as the record of what went out.',
+      'Only a piece not yet put on a page. Anything scheduled or published stays, as the record of what went out; cancel its posts first.',
   })
   @ApiHotelAccess('member', ErrorCode.CONTENT_NOT_FOUND)
   @ApiErrors(ErrorCode.CONTENT_STATUS_CONFLICT)

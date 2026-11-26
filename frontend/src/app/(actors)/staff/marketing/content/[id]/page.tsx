@@ -10,11 +10,9 @@ import {
   Loader2,
   Lock,
   Save,
-  Send,
   Sparkles,
   Trash2,
   Wand2,
-  XCircle,
 } from "lucide-react";
 import { updateContentSchema, type MarketingContent } from "@stayreco/shared";
 import { ActionBar, ActionMenu, type ActionMenuItem } from "@/components/common/ActionBar";
@@ -31,11 +29,10 @@ import {
   useDeleteContent,
   useGenerateContentImage,
   useRemoveContentImage,
-  useSubmitContent,
   useUpdateContent,
   useUploadContentImage,
 } from "@/features/staff/api/marketing-queries";
-import { contentTypeLabels, EDITABLE_STATUSES } from "@/features/staff/lib/marketing-labels";
+import { contentTypeLabels, DELETABLE_STATUSES, EDITABLE_STATUSES } from "@/features/staff/lib/marketing-labels";
 import { getMarketingErrorMessage } from "@/features/staff/lib/marketing-errors";
 import {
   ConfirmDialog,
@@ -51,12 +48,12 @@ const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
 const STATUS_HINT: Record<MarketingContent["status"], string> = {
-  DRAFT: "Bản nháp: chỉnh sửa thoải mái, xong thì gửi chủ khách sạn duyệt.",
-  PENDING_APPROVAL: "Đang chờ chủ khách sạn duyệt. Nội dung tạm khoá chỉnh sửa.",
-  APPROVED: "Chủ khách sạn đã duyệt. Nội dung được giữ nguyên như lúc duyệt; hãy lên lịch đăng.",
-  SCHEDULED: "Đã lên lịch đăng. Khi chưa có lịch nào đăng xong, bạn có thể đăng thêm lên trang khác.",
-  PUBLISHED: "Bài đã được đăng.",
-  REJECTED: "Chủ khách sạn đã từ chối. Sửa theo góp ý rồi gửi duyệt lại.",
+  DRAFT: "Bản nháp: chỉnh sửa, thêm ảnh rồi lên lịch đăng hoặc đăng ngay.",
+  PENDING_APPROVAL: "Bản nháp: chỉnh sửa, thêm ảnh rồi lên lịch đăng hoặc đăng ngay.",
+  APPROVED: "Sẵn sàng đăng: lên lịch hoặc đăng ngay ở khung bên phải.",
+  SCHEDULED: "Đã lên lịch đăng. Sửa bài trước giờ đăng thì bản sửa sẽ được đăng. Có thể đăng thêm lên trang khác.",
+  PUBLISHED: "Bài đã được đăng. Có thể đăng thêm lên trang khác.",
+  REJECTED: "Bản nháp: chỉnh sửa, thêm ảnh rồi lên lịch đăng hoặc đăng ngay.",
 };
 
 /** The words and picture of a draft; the piece is remounted (keyed on its status) when the server changes it. */
@@ -155,7 +152,6 @@ function ContentWorkspace({
 }) {
   const editor = useContentEditor(content);
   const fileRef = useRef<HTMLInputElement>(null);
-  const submit = useSubmitContent();
   const remove = useDeleteContent();
   const drawImage = useGenerateContentImage();
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -164,7 +160,6 @@ function ContentWorkspace({
   const editable = EDITABLE_STATUSES.includes(content.status);
   const busy =
     editor.update.isPending ||
-    submit.isPending ||
     editor.upload.isPending ||
     editor.removeImage.isPending ||
     drawImage.isPending;
@@ -178,19 +173,8 @@ function ContentWorkspace({
     return () => window.removeEventListener("beforeunload", warn);
   }, [dirty]);
 
-  const sendForApproval = () => {
-    // Unsaved words go first: what is submitted is what the owner reads.
-    if (editor.dirty) editor.save(() => submit.mutate(content.id));
-    else submit.mutate(content.id);
-  };
-
-  const actionError = submit.error ?? editor.update.error ?? remove.error;
-  const lockedReason =
-    content.status === "PENDING_APPROVAL"
-      ? "Đang chờ chủ khách sạn duyệt nên chữ và ảnh tạm khoá, để chủ đọc đúng bản đã gửi."
-      : content.status === "PUBLISHED"
-        ? "Bài đã đăng nên chữ và ảnh không sửa được nữa."
-        : "Bài đã được duyệt nên chữ và ảnh giữ nguyên như lúc duyệt. Muốn sửa, hãy tạo bài mới.";
+  const actionError = editor.update.error ?? remove.error;
+  const lockedReason = "Bài đã đăng nên chữ và ảnh không sửa được nữa. Muốn nói điều khác, hãy tạo bài mới.";
 
   const imageMenu: ActionMenuItem[] = [
     {
@@ -221,21 +205,17 @@ function ContentWorkspace({
       : []),
   ];
 
-  const submitMenu: ActionMenuItem[] = [
-    {
-      label: "Lưu nháp",
-      description: "Giữ lại chỉnh sửa, chưa gửi duyệt.",
-      icon: Save,
-      onSelect: () => editor.save(),
-      disabled: !editor.dirty || busy,
-    },
+  const deletable = DELETABLE_STATUSES.includes(content.status);
+  const moreMenu: ActionMenuItem[] = [
     {
       label: "Xoá nội dung",
-      description: "Xoá hẳn bài này, không khôi phục được.",
+      description: deletable
+        ? "Xoá hẳn bài này, không khôi phục được."
+        : "Bài đã lên lịch: huỷ các lịch đăng trước khi xoá.",
       icon: Trash2,
       destructive: true,
       onSelect: () => setConfirmDelete(true),
-      disabled: busy,
+      disabled: busy || !deletable,
     },
   ];
 
@@ -251,20 +231,8 @@ function ContentWorkspace({
       {generated && content.status === "DRAFT" && (
         <p className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-semibold text-emerald-800">
           <CheckCircle2 className="size-4 shrink-0" aria-hidden /> AI đã viết xong bản nháp. Đọc lại, chỉnh sửa và thêm ảnh
-          trước khi gửi duyệt.
+          rồi lên lịch đăng ở khung bên phải.
         </p>
-      )}
-      {content.status === "REJECTED" && (
-        <div role="alert" className="flex items-start gap-3 rounded-xl border-2 border-destructive/40 bg-destructive/5 px-4 py-4">
-          <XCircle className="mt-0.5 size-5 shrink-0 text-destructive" aria-hidden />
-          <div className="min-w-0 space-y-1">
-            <p className="text-sm font-bold text-destructive">Chủ khách sạn đã từ chối bài này</p>
-            <p className="whitespace-pre-line text-sm text-foreground">
-              {content.rejectedReason || "Chủ khách sạn không ghi lý do. Hãy đọc lại bài và liên hệ chủ nếu cần."}
-            </p>
-            <p className="text-xs text-muted-foreground">Sửa theo góp ý rồi gửi duyệt lại.</p>
-          </div>
-        </div>
       )}
       {!editable && (
         <p className="flex items-start gap-2 rounded-xl border border-border bg-muted/50 px-4 py-3 text-xs text-muted-foreground">
@@ -315,7 +283,7 @@ function ContentWorkspace({
                 />
                 <div className="flex justify-between gap-3 text-xs">
                   <span className={editor.errors.body ? "text-destructive" : "text-muted-foreground"}>
-                    {editor.errors.body ?? "AI không tự thêm giá, ngày hay ưu đãi. Kiểm tra lại mọi con số trước khi gửi."}
+                    {editor.errors.body ?? "AI không tự thêm giá, ngày hay ưu đãi. Kiểm tra lại mọi con số trước khi đăng."}
                   </span>
                   <span className="shrink-0 text-muted-foreground">{editor.body.trim().length}/10.000</span>
                 </div>
@@ -367,47 +335,43 @@ function ContentWorkspace({
             </p>
           )}
 
-          {/* The backend deletes only what may still be edited (DRAFT, REJECTED). */}
           {editable && (
             <div className="flex items-center gap-2 border-t border-border pt-4">
               <p className="mr-auto min-w-0 text-xs" role="status">
                 {dirty ? (
-                  <span className="font-semibold text-amber-700">Có thay đổi chưa lưu. Gửi duyệt sẽ lưu luôn.</span>
+                  <span className="font-semibold text-amber-700">Có thay đổi chưa lưu.</span>
                 ) : editor.saved ? (
                   <span className="flex items-center gap-1 font-semibold text-emerald-700">
                     <CheckCircle2 className="size-3.5" aria-hidden /> Đã lưu
                   </span>
                 ) : (
-                  <span className="text-muted-foreground">Gửi duyệt xong, chữ và ảnh sẽ khoá đến khi chủ quyết định.</span>
+                  <span className="text-muted-foreground">Lưu xong thì lên lịch đăng ở khung bên phải.</span>
                 )}
               </p>
               <ActionBar
                 primary={
-                  <Button className="h-10 gap-1.5 whitespace-nowrap" disabled={busy || !editor.body.trim()} onClick={sendForApproval}>
-                    {submit.isPending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" aria-hidden />}
-                    Gửi chủ duyệt
+                  <Button
+                    className="h-10 gap-1.5 whitespace-nowrap"
+                    disabled={busy || !editor.dirty || !editor.body.trim()}
+                    onClick={() => editor.save()}
+                  >
+                    {editor.update.isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" aria-hidden />}
+                    Lưu bài
                   </Button>
                 }
-                menu={submitMenu}
+                menu={moreMenu}
               />
             </div>
-          )}
-          {content.status === "PENDING_APPROVAL" && (
-            <p className="flex items-center gap-2 border-t border-border pt-4 text-xs text-muted-foreground">
-              <Clock className="size-4 shrink-0" aria-hidden /> Không cần làm gì thêm: bạn sẽ thấy trạng thái đổi khi chủ khách
-              sạn duyệt hoặc từ chối.
-            </p>
           )}
         </section>
 
         <aside className="space-y-4">
-          {hotelId && <SchedulePanel hotelId={hotelId} content={content} />}
+          {hotelId && <SchedulePanel hotelId={hotelId} content={content} unsaved={dirty} />}
           <div className="rounded-xl border border-border bg-card p-4 text-xs text-muted-foreground shadow-2xs">
             <p className="mb-1 font-semibold text-foreground">Quy trình</p>
             <ol className="list-decimal space-y-0.5 pl-4">
               <li>AI viết bản nháp, nhân viên chỉnh sửa và thêm ảnh</li>
-              <li>Gửi chủ khách sạn duyệt (chủ có thể từ chối kèm góp ý)</li>
-              <li>Bài đã duyệt được lên lịch đăng lên trang đã kết nối</li>
+              <li>Lên lịch hoặc đăng ngay lên trang đã kết nối</li>
               <li>Sau khi đăng, theo dõi hiệu quả ở mục Hiệu quả tiếp thị</li>
             </ol>
           </div>

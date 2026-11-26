@@ -17,6 +17,7 @@ import type {
   SocialPlatform as SocialPlatformName,
   SocialAccount as SocialAccountRow,
 } from '../../generated/prisma/client';
+import { StaffPermission } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditAction, AuditService } from '../audit/audit.service';
 import { settleContent } from './content-status';
@@ -69,7 +70,7 @@ export class SocialAccountsService {
     );
   }
 
-  /** `hotelId` was checked by `HotelAccessRequired('owner')`: connecting a page is not a staff decision. */
+  /** `hotelId` was checked by `HotelAccessRequired('member', MARKETING)`: the owner or staff who run marketing. */
   async connect(
     user: AuthUser,
     hotelId: string,
@@ -203,14 +204,20 @@ export class SocialAccountsService {
     };
   }
 
-  /** The account, checked to belong to a hotel the caller owns. */
+  /** The account, checked to belong to a hotel the caller runs marketing for (the owner, or staff with MARKETING). */
   private async owned(user: AuthUser, accountId: string) {
     const account = isUuid(accountId)
       ? await this.prisma.socialAccount.findUnique({
           where: { socialAccountId: accountId },
         })
       : null;
-    await this.access.assertResource(user, account?.hotelId, 'owner', notFound);
+    await this.access.assertResource(
+      user,
+      account?.hotelId,
+      'member',
+      notFound,
+      StaffPermission.MARKETING,
+    );
     return account!;
   }
 }

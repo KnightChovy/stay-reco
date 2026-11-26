@@ -13,7 +13,7 @@ import { getMarketingErrorMessage } from "../lib/marketing-errors";
 import { AiBudgetNote, useAiBudgetState } from "./MarketingParts";
 
 /**
- * "AI vẽ ảnh" (A4): `POST /marketing-content/:id/image/generate` draws one square picture for a DRAFT or REJECTED
+ * "AI vẽ ảnh" (A4): `POST /marketing-content/:id/image/generate` draws one square picture for a piece not yet published
  * piece and attaches it like an upload. The prompt is optional; the post's own words are used when it is empty. The
  * mutation lives in the editor so its other picture buttons wait while a picture is being drawn.
  */
