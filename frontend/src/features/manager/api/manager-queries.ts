@@ -21,6 +21,14 @@ export const managerKeys = {
   payouts: (params: managerService.PayoutQueueParams) => [...managerKeys.payoutQueue(), params] as const,
   payout: (payoutId: string) => [...managerKeys.all, "payout", payoutId] as const,
   overview: (params: managerService.PlatformRangeParams) => [...managerKeys.all, "overview", params] as const,
+  hotels: (params: managerService.PlatformHotelParams) => [...managerKeys.all, "hotels", params] as const,
+  revenue: (params: managerService.PlatformRevenueParams) => [...managerKeys.all, "revenue", params] as const,
+  revenueHotels: (params: managerService.HotelRevenueParams) =>
+    [...managerKeys.all, "revenue-hotels", params] as const,
+  hotelRevenue: (hotelId: string, params: managerService.PlatformRangeParams) =>
+    [...managerKeys.all, "hotel-revenue", hotelId, params] as const,
+  hotelWallet: (hotelId: string, params: managerService.HotelWalletParams) =>
+    [...managerKeys.all, "hotel-wallet", hotelId, params] as const,
 };
 
 /** Codes whose shared message is written for the partner; the manager reads them from the other side. */
@@ -67,6 +75,47 @@ export function usePlatformOverview(params: managerService.PlatformRangeParams) 
   return useQuery({
     queryKey: managerKeys.overview(params),
     queryFn: () => managerService.getPlatformOverview(params),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function usePlatformRevenue(params: managerService.PlatformRevenueParams) {
+  return useQuery({
+    queryKey: managerKeys.revenue(params),
+    queryFn: () => managerService.getPlatformRevenue(params),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useHotelRevenueList(params: managerService.HotelRevenueParams) {
+  return useQuery({
+    queryKey: managerKeys.revenueHotels(params),
+    queryFn: () => managerService.getHotelRevenueList(params),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useHotelRevenue(hotelId: string | undefined, params: managerService.PlatformRangeParams) {
+  return useQuery({
+    queryKey: managerKeys.hotelRevenue(hotelId ?? "", params),
+    queryFn: () => managerService.getHotelRevenue(hotelId!, params),
+    enabled: !!hotelId,
+  });
+}
+
+export function useHotelWalletTransactions(hotelId: string | undefined, params: managerService.HotelWalletParams) {
+  return useQuery({
+    queryKey: managerKeys.hotelWallet(hotelId ?? "", params),
+    queryFn: () => managerService.getHotelWalletTransactions(hotelId!, params),
+    enabled: !!hotelId,
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function usePlatformHotels(params: managerService.PlatformHotelParams) {
+  return useQuery({
+    queryKey: managerKeys.hotels(params),
+    queryFn: () => managerService.getPlatformHotels(params),
     placeholderData: keepPreviousData,
   });
 }

@@ -5,6 +5,8 @@ export { ManagerDemoBanner } from "./ManagerDemoBanner";
 export { ManagerNotice } from "./ManagerNotice";
 export type { ManagerNoticeTone } from "./ManagerNotice";
 export { StatusBadge, ErrorPanel } from "./ManagerUi";
+export { MetricDelta } from "./MetricDelta";
+export { ExportReportButton } from "./ExportReportButton";
 export { ManagerWorkspaceTable } from "./ManagerWorkspaceTable";
 export type { ManagerWorkspaceTableProps } from "./ManagerWorkspaceTable";
 export { ManagerWorkspaceSummary } from "./ManagerWorkspaceSummary";

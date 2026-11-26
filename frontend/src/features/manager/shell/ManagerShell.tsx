@@ -37,7 +37,6 @@ const navigation: Omit<SidebarItem, "isActive">[] = [
     href: "/manager/partners",
     label: "Đối tác khách sạn",
     icon: Building2,
-    badge: DEMO_BADGE,
     section: "ĐỐI TÁC & RỦI RO",
   },
   {
@@ -57,7 +56,6 @@ const navigation: Omit<SidebarItem, "isActive">[] = [
     href: "/manager/revenue",
     label: "Doanh thu nền tảng",
     icon: ChartNoAxesCombined,
-    badge: DEMO_BADGE,
     section: "TÀI CHÍNH NỀN TẢNG",
   },
   {

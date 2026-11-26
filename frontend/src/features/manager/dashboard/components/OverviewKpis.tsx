@@ -1,11 +1,8 @@
-import { ArrowDown, ArrowUp, Minus } from "lucide-react";
 import type { Metric, PlatformOverview } from "@stayreco/shared";
-import { cn } from "@/lib/utils";
-import { ManagerPanel } from "../../components";
+import { ManagerPanel, MetricDelta } from "../../components";
 import { formatMoney } from "../../lib/labels";
 
 const countFormat = new Intl.NumberFormat("vi-VN");
-const deltaFormat = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 1 });
 
 function formatCount(value: number | null) {
   return value == null ? "—" : countFormat.format(value);
@@ -56,7 +53,7 @@ export function OverviewKpis({ overview }: { overview: PlatformOverview }) {
               {card.format(card.metric.value)}
             </strong>
             <p className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
-              <Delta value={card.metric.deltaPercent} />
+              <MetricDelta value={card.metric.deltaPercent} />
               {card.metric.previous != null && <span>Kỳ trước {card.format(card.metric.previous)}</span>}
             </p>
             <p className="mt-1 text-xs text-muted-foreground">{card.hint}</p>
@@ -64,22 +61,5 @@ export function OverviewKpis({ overview }: { overview: PlatformOverview }) {
         ))}
       </div>
     </section>
-  );
-}
-
-function Delta({ value }: { value: number | null }) {
-  if (value == null) return null;
-  const Icon = value > 0 ? ArrowUp : value < 0 ? ArrowDown : Minus;
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-0.5 font-semibold tabular-nums",
-        value > 0 ? "text-success" : value < 0 ? "text-danger" : "text-muted-foreground",
-      )}
-    >
-      <Icon size={12} aria-hidden />
-      <span className="sr-only">{value > 0 ? "Tăng" : value < 0 ? "Giảm" : "Không đổi"}</span>
-      {deltaFormat.format(Math.abs(value))}%
-    </span>
   );
 }

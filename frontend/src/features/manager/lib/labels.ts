@@ -2,10 +2,13 @@ import { format, formatDistanceToNowStrict } from "date-fns";
 import { vi } from "date-fns/locale";
 import type {
   DocumentType,
+  HotelStatus,
   PartnerStatus,
+  Region,
   PayoutStatus,
   VerificationRequestType,
   VerificationStatus,
+  WalletTxnType,
 } from "@stayreco/shared";
 
 /** Badge classes built from the semantic status tokens in globals.css. */
@@ -33,6 +36,31 @@ export const partnerStatusLabels: Record<PartnerStatus, Labelled> = {
   APPROVED: { label: "Đang hoạt động", tone: "success" },
   REJECTED: { label: "Bị từ chối", tone: "danger" },
   SUSPENDED: { label: "Tạm ngưng", tone: "danger" },
+};
+
+export const hotelStatusLabels: Record<HotelStatus, Labelled> = {
+  DRAFT: { label: "Bản nháp", tone: "muted" },
+  PENDING_VERIFICATION: { label: "Chờ xác minh", tone: "warning" },
+  ACTIVE: { label: "Đang bán", tone: "success" },
+  SUSPENDED: { label: "Tạm ngưng", tone: "danger" },
+  INACTIVE: { label: "Ngừng hoạt động", tone: "muted" },
+};
+
+export const regionLabels: Record<Region, string> = {
+  NORTH: "Miền Bắc",
+  CENTRAL: "Miền Trung",
+  SOUTH: "Miền Nam",
+  OTHER: "Khác",
+};
+
+export const walletTxnTypeLabels: Record<WalletTxnType, string> = {
+  BOOKING_PAYMENT: "Thanh toán đặt phòng",
+  COMMISSION: "Hoa hồng nền tảng",
+  REFUND: "Hoàn tiền huỷ phòng",
+  SETTLEMENT: "Chuyển sang khả dụng",
+  PAYOUT: "Rút tiền",
+  ADJUSTMENT: "Điều chỉnh",
+  TOPUP: "Nạp tiền",
 };
 
 const moneyFormat = new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 });
