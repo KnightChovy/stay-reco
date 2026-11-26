@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
@@ -65,9 +65,14 @@ function hotelHref(hotel: AssistantHotel, dates: StayDates) {
   return `/hotels/${hotel.id}?${query}`;
 }
 
+/** Hotels shown before "Xem thêm": enough to compare without pushing the answer off a narrow chat. */
+const HOTELS_SHOWN = 3;
+
 /**
- * The hotels of a reply, side by side. The card opens the hotel (with the conversation's dates); "Đặt phòng này" asks
- * the assistant to prepare the booking, which still ends with the customer's own "Xác nhận đặt phòng".
+ * The hotels of a reply as a compact list, one row each (picture, name, styles, why, price), the way travel sites
+ * lay out results inside a chat: a row fits the narrow panel where side-scrolled cards were cut off. The picture and
+ * the name open the hotel (with the conversation's dates); "Đặt phòng này" asks the assistant to prepare the booking,
+ * which still ends with the customer's own "Xác nhận đặt phòng". The first three show, the rest behind "Xem thêm".
  */
 export function HotelCards({
   hotels,
@@ -79,64 +84,77 @@ export function HotelCards({
   /** Asks the assistant to book this hotel; absent when nothing new can be sent from this reply. */
   onBook?: (hotel: AssistantHotel) => void;
 }) {
+  const [all, setAll] = useState(false);
   if (hotels.length === 0) return null;
+  const shown = all ? hotels : hotels.slice(0, HOTELS_SHOWN);
+  const hidden = hotels.length - shown.length;
+
   return (
-    <ul className="no-scrollbar -mx-1 flex snap-x gap-2.5 overflow-x-auto px-1 pb-1" aria-label="Khách sạn trợ lý gợi ý">
-      {hotels.map((hotel) => (
-        <li
-          key={hotel.id}
-          className="flex w-56 shrink-0 snap-start flex-col overflow-hidden rounded-xl border border-border bg-card shadow-xs transition-shadow hover:shadow-md"
+    <div className="max-w-md space-y-2">
+      <ul className="space-y-2" aria-label="Khách sạn trợ lý gợi ý">
+        {shown.map((hotel) => {
+          const href = hotelHref(hotel, dates);
+          return (
+            <li key={hotel.id} className="flex gap-3 rounded-xl border border-border bg-card p-2.5 shadow-xs">
+              <Link
+                href={href}
+                className="relative size-20 shrink-0 overflow-hidden rounded-lg bg-muted sm:size-24"
+                aria-label={`Xem ${hotel.name}`}
+              >
+                <Image src={hotel.coverImageUrl ?? FALLBACK_HOTEL} alt="" fill sizes="96px" className="object-cover" />
+              </Link>
+              <div className="flex min-w-0 flex-1 flex-col gap-1">
+                <Link href={href} className="line-clamp-1 text-sm font-semibold text-foreground hover:text-primary">
+                  {hotel.name}
+                </Link>
+                <p className="flex flex-wrap items-center gap-x-1 text-xs text-muted-foreground">
+                  <MapPin className="size-3" aria-hidden /> {hotel.city}
+                  {hotel.starRating ? <span>· {hotel.starRating} sao</span> : null}
+                  {hotel.rating !== null && (
+                    <span className="inline-flex items-center gap-0.5 font-semibold text-foreground">
+                      · <Star className="size-3 fill-amber-400 text-amber-400" aria-hidden /> {hotel.rating.toFixed(1)}
+                    </span>
+                  )}
+                </p>
+                <StyleBadges styles={hotel.styles} />
+                {hotel.reason && <p className="line-clamp-2 text-xs text-emerald-700">{hotel.reason}</p>}
+                <div className="mt-auto flex items-end justify-between gap-2 pt-1">
+                  <p className="text-sm font-bold text-primary">
+                    {hotel.fromTotal !== null ? (
+                      <>
+                        {formatMoney(hotel.fromTotal)}
+                        <span className="block text-xs font-normal text-muted-foreground">{hotel.nights} đêm</span>
+                      </>
+                    ) : hotel.pricePerNightFrom !== null ? (
+                      <>
+                        Từ {formatMoney(hotel.pricePerNightFrom)}
+                        <span className="block text-xs font-normal text-muted-foreground">mỗi đêm</span>
+                      </>
+                    ) : (
+                      <span className="text-xs font-normal text-muted-foreground">Xem giá theo ngày</span>
+                    )}
+                  </p>
+                  {onBook && (
+                    <Button type="button" size="sm" className="h-10 shrink-0 px-3" onClick={() => onBook(hotel)}>
+                      Đặt phòng này
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+      {hidden > 0 && (
+        <button
+          type="button"
+          onClick={() => setAll(true)}
+          className="inline-flex min-h-10 items-center px-1 text-sm font-semibold text-primary hover:underline"
         >
-          <Link href={hotelHref(hotel, dates)} className="group flex flex-1 flex-col">
-            <div className="relative h-28 w-full bg-muted">
-              <Image
-                src={hotel.coverImageUrl ?? FALLBACK_HOTEL}
-                alt={hotel.name}
-                fill
-                sizes="224px"
-                className="object-cover transition-transform duration-300 group-hover:scale-105"
-              />
-              {hotel.rating !== null && (
-                <span className="absolute top-2 left-2 inline-flex items-center gap-1 rounded-md bg-card/95 px-1.5 py-0.5 text-xs font-bold text-foreground">
-                  <Star className="size-3 fill-amber-400 text-amber-400" aria-hidden /> {hotel.rating.toFixed(1)}
-                </span>
-              )}
-            </div>
-            <div className="flex flex-1 flex-col gap-1.5 p-3">
-              <p className="line-clamp-2 text-sm font-semibold text-foreground group-hover:text-primary">{hotel.name}</p>
-              <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                <MapPin className="size-3" aria-hidden /> {hotel.city}
-                {hotel.starRating ? ` · ${hotel.starRating} sao` : ""}
-              </p>
-              <StyleBadges styles={hotel.styles} />
-              {hotel.reason && <p className="line-clamp-2 text-xs text-emerald-700">{hotel.reason}</p>}
-              <p className="mt-auto pt-1 text-sm font-bold text-primary">
-                {hotel.fromTotal !== null ? (
-                  <>
-                    {formatMoney(hotel.fromTotal)}
-                    <span className="text-xs font-normal text-muted-foreground"> · {hotel.nights} đêm</span>
-                  </>
-                ) : hotel.pricePerNightFrom !== null ? (
-                  <>
-                    Từ {formatMoney(hotel.pricePerNightFrom)}
-                    <span className="text-xs font-normal text-muted-foreground"> / đêm</span>
-                  </>
-                ) : (
-                  <span className="text-xs font-normal text-muted-foreground">Xem giá theo ngày</span>
-                )}
-              </p>
-            </div>
-          </Link>
-          {onBook && (
-            <div className="px-3 pb-3">
-              <Button type="button" variant="outline" className="h-10 w-full" onClick={() => onBook(hotel)}>
-                Đặt phòng này
-              </Button>
-            </div>
-          )}
-        </li>
-      ))}
-    </ul>
+          Xem thêm {hidden} khách sạn
+        </button>
+      )}
+    </div>
   );
 }
 
