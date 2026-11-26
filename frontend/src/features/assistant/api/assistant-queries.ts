@@ -5,7 +5,6 @@ import type { AssistantMessage, AssistantReply, Conversation, ConversationSummar
 import * as assistantService from "@/services/assistant.service";
 import { bookingKeys } from "@/features/booking/api/booking-queries";
 import { rewardsKeys } from "@/features/account/api/rewards-queries";
-import { recommendationKeys } from "@/features/recommendations/api/recommendation-queries";
 
 export const assistantKeys = {
   all: ["assistant"] as const,
@@ -63,11 +62,6 @@ export function useSendAssistantMessage() {
         return { ...summary, messages: [reply.message, reply.reply] };
       });
       void queryClient.invalidateQueries({ queryKey: assistantKeys.conversations() });
-      // The assistant saved what the customer likes: their preferences and their list change with it.
-      if (reply.reply.remembered) {
-        void queryClient.invalidateQueries({ queryKey: rewardsKeys.preferences() });
-        void queryClient.invalidateQueries({ queryKey: recommendationKeys.all });
-      }
     },
   });
 }

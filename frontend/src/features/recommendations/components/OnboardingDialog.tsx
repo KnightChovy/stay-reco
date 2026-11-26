@@ -76,16 +76,20 @@ function toInput(picks: Picks): CompleteOnboardingInput {
  * hotels that fit those answers (`GET /me/onboarding/hotels`). Hotels come last so a customer cannot pick one that
  * contradicts what they just said: changing an earlier answer clears the hotels picked, since they were offered for
  * the old answers. At least `ONBOARDING_LIMITS.minPicks` picks finish it and earn the platform's welcome voucher,
- * shown at once. "Để sau" records a skip; it can be finished later from /account/preferences and still earns the code.
+ * shown at once. A new customer must finish it (`required`, decided 2026-11-26: the recommendations start from these
+ * answers); opened again from /account/preferences it can be closed with "Để sau".
  */
 export function OnboardingDialog({
   onboarding,
   open,
   onClose,
+  required = false,
 }: {
   onboarding: Onboarding;
   open: boolean;
   onClose: () => void;
+  /** No "Để sau", and Escape does not close it: only finishing does. */
+  required?: boolean;
 }) {
   const options = onboarding.options;
   const steps = [
@@ -135,7 +139,9 @@ export function OnboardingDialog({
     <Dialog
       open={open}
       onOpenChange={(next) => {
-        if (!next) (done ? onClose : later)();
+        if (next) return;
+        if (done) onClose();
+        else if (!required) later();
       }}
       disablePointerDismissal
     >
@@ -301,9 +307,11 @@ export function OnboardingDialog({
                 </p>
               )}
               <div className="flex items-center gap-2">
-                <Button type="button" variant="ghost" className="h-10 px-3" onClick={later} disabled={busy}>
-                  {skip.isPending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null} Để sau
-                </Button>
+                {!required && (
+                  <Button type="button" variant="ghost" className="h-10 px-3" onClick={later} disabled={busy}>
+                    {skip.isPending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null} Để sau
+                  </Button>
+                )}
                 <span className="ml-auto hidden text-xs text-muted-foreground sm:inline" aria-live="polite">
                   Đã chọn {picked}
                   {!enough && ` · cần thêm ${ONBOARDING_LIMITS.minPicks - picked}`}

@@ -12,8 +12,9 @@ import { OnboardingDialog } from "./OnboardingDialog";
 const QUIET_PATHS = ["/booking", "/login", "/register", "/verify-email", "/reset-password", "/forgot-password"];
 
 /**
- * Shows the first-login preferences dialog once to a customer whose onboarding is `NEW` (docs/api/onboarding.md).
- * Mounted by the site Header, so it appears on the first customer page after signing in.
+ * Shows the first-login preferences dialog to a customer whose onboarding is `NEW` (docs/api/onboarding.md), and
+ * keeps it until they finish: it cannot be skipped, since the recommendations of a customer with no stays start from
+ * these answers. Mounted by the site Header, so it appears on the first customer page after signing in.
  */
 export function OnboardingGate() {
   const accountId = useAuthStore((state) => state.user?.id ?? null);
@@ -33,7 +34,7 @@ export function OnboardingGate() {
 
   return (
     // Keyed by account so the dialog's picks and step never carry over to another customer.
-    <OnboardingDialog key={accountId} onboarding={onboarding} open onClose={() => setClosedFor(accountId)} />
+    <OnboardingDialog key={accountId} onboarding={onboarding} open required onClose={() => setClosedFor(accountId)} />
   );
 }
 

@@ -364,17 +364,6 @@ export const assistantMessageResponseSchema = z
       .describe(
         "The assistant needs the dates and guests: show a picker, filled with what is already known, that answers with a message.",
       ),
-    remembered: z
-      .object({
-        travelStyles: z.array(z.string()),
-        cities: z.array(z.string()),
-        roomAmenities: z.array(z.string()),
-        budgetPerNight: z.number().int().nullable(),
-      })
-      .nullable()
-      .describe(
-        "What this answer saved to the customer's preferences from what they said (tool `save_preferences`), as `/account/preferences` stores it; null when nothing was saved.",
-      ),
     feedback: z
       .enum(["UP", "DOWN"])
       .nullable()

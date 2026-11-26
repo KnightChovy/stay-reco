@@ -22,47 +22,12 @@ import { StayDiscountService } from '../promotions/stay-discount.service';
 import { RecommendationsService } from '../recommendations/recommendations.service';
 import { StaysService } from '../stays/stays.service';
 import { CustomerWalletService } from '../wallets/customer-wallet.service';
-import { PreferencesService } from '../preferences/preferences.service';
-import { bookableHotel } from '../stays/bookable';
 import { STYLE_LABELS as STYLE_WORDS } from './assistant.prompt';
 
 /** How long a priced proposal can be confirmed: prices and free rooms move, so it does not wait for ever. */
 export const PROPOSAL_TTL_MS = 30 * 60_000;
 /** Hotels returned to the model per search: enough to compare, few enough to keep the prompt small. */
 const SEARCH_RESULTS = 8;
-/**
- * The ids `/account/preferences` and onboarding save (frontend `preference-options`), which the recommender reads:
- * the assistant saves the same ones, so a preference said in the chat counts exactly like one ticked on a screen.
- */
-const TRAVEL_STYLES = [
-  'resort',
-  'nature',
-  'foodie',
-  'business',
-  'family',
-  'chill',
-];
-const ROOM_AMENITIES = [
-  'pool',
-  'view',
-  'breakfast',
-  'spa',
-  'quiet',
-  'tub',
-  'shuttle',
-  'parking',
-];
-/** Words for the amenity ids, to read back to the customer. */
-const AMENITY_WORDS: Record<string, string> = {
-  pool: 'hồ bơi',
-  view: 'view sông / biển',
-  breakfast: 'bữa sáng',
-  spa: 'spa & massage',
-  quiet: 'phòng yên tĩnh',
-  tub: 'bồn tắm',
-  shuttle: 'đưa đón sân bay',
-  parking: 'chỗ đậu xe',
-};
 
 /** What the customer is, as far as the tools need: their id and the defaults for a booking. */
 export interface ToolCustomer {
@@ -82,8 +47,6 @@ export interface TurnState {
   roomTypes: Map<string, { hotelName: string; name: string }>;
   /** The model needs the dates and guests: a picker is shown under the reply, filled with what is known. */
   askTrip: AssistantMessage['askTrip'];
-  /** What the customer said they like, saved to their preferences this turn. */
-  remembered: AssistantMessage['remembered'];
 }
 
 /**
@@ -212,37 +175,6 @@ export const TOOL_DECLARATIONS: FunctionDeclaration[] = [
     },
   },
   {
-    name: 'save_preferences',
-    description:
-      'Ghi nhớ sở thích khách vừa nói vào hồ sơ của khách (giống trang Sở thích), để mọi gợi ý sau này, kể cả trang "Gợi ý cho bạn", theo đúng gu khách. Gọi ngay khi khách nói phong cách chuyến đi, thành phố muốn đến, ngân sách mỗi đêm hoặc tiện nghi cần có, rồi mới gợi ý. Mỗi mục truyền vào sẽ THAY danh sách đã lưu của mục đó: muốn thêm thì gộp với cái đã lưu. Mục khách không nhắc thì bỏ trống.',
-    parametersJsonSchema: {
-      type: 'object',
-      properties: {
-        travelStyles: {
-          type: 'array',
-          items: { type: 'string', enum: TRAVEL_STYLES },
-          description:
-            'resort: nghỉ dưỡng, biển, thư giãn; nature: thiên nhiên, rừng, núi; foodie: ẩm thực, văn hoá, phố cổ; business: công tác; family: gia đình, trẻ nhỏ; chill: cà phê, chụp ảnh, homestay.',
-        },
-        cities: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Thành phố muốn đến, ví dụ ["Đà Nẵng", "Đà Lạt"].',
-        },
-        budgetPerNight: {
-          type: 'integer',
-          description: 'Số tiền tối đa MỖI ĐÊM (VND), ví dụ 1500000.',
-        },
-        roomAmenities: {
-          type: 'array',
-          items: { type: 'string', enum: ROOM_AMENITIES },
-          description:
-            'pool: hồ bơi; view: view sông/biển; breakfast: bữa sáng; spa: spa, massage; quiet: yên tĩnh, tầng cao; tub: bồn tắm; shuttle: đưa đón sân bay; parking: chỗ đậu xe.',
-        },
-      },
-    },
-  },
-  {
     name: 'ask_trip_details',
     description:
       'Hiện khung chọn ngày nhận/trả phòng và số khách ngay dưới tin nhắn, để khách bấm chọn thay vì gõ. Gọi khi cần tìm phòng trống hay đặt phòng mà còn thiếu ngày hoặc số khách. Truyền những gì đã biết để điền sẵn.',
@@ -319,7 +251,6 @@ export class AssistantTools {
     private readonly wallet: CustomerWalletService,
     private readonly bookings: BookingsService,
     private readonly cancellations: BookingCancellationService,
-    private readonly preferences: PreferencesService,
   ) {}
 
   /** Runs one call. Errors become a result the model can read and explain, never an exception for the customer. */
@@ -341,8 +272,6 @@ export class AssistantTools {
           return await this.proposeBooking(args, customer, state);
         case 'ask_trip_details':
           return askTrip(args, state);
-        case 'save_preferences':
-          return await this.savePreferences(args, customer, state);
         case 'my_vouchers':
           return await this.myVouchers(customer);
         case 'my_wallet':
@@ -438,91 +367,6 @@ export class AssistantTools {
       nights: found.items[0]?.nights ?? null,
       matching: found.meta.total,
       hotels,
-    };
-  }
-
-  /**
-   * `save_preferences`: what the customer said they like, saved as their preferences, the same keys and the same
-   * service as `PUT /me/preferences` (so the recommender reruns for them in seconds). Styles and amenities must be ids
-   * of the lists the screens offer; a city must have a bookable hotel (matched ignoring accents) and is saved with its
-   * catalogue spelling. Each list given replaces the saved one; anything not given is left alone.
-   */
-  private async savePreferences(
-    args: Args,
-    customer: ToolCustomer,
-    state: TurnState,
-  ) {
-    const ids = (v: unknown, allowed: string[]) =>
-      Array.isArray(v)
-        ? [...new Set(v.map(String).filter((x) => allowed.includes(x)))]
-        : undefined;
-    const styles = ids(args.travelStyles, TRAVEL_STYLES);
-    const amenities = ids(args.roomAmenities, ROOM_AMENITIES);
-    const budget = Number(args.budgetPerNight);
-    const budgetPerNight =
-      Number.isInteger(budget) && budget >= 100_000 && budget <= 1_000_000_000
-        ? budget
-        : undefined;
-
-    let cities: string[] | undefined;
-    const unknownCities: string[] = [];
-    if (Array.isArray(args.cities)) {
-      const rows = await this.prisma.hotel.findMany({
-        where: bookableHotel,
-        distinct: ['city'],
-        select: { city: true },
-      });
-      cities = [];
-      for (const said of args.cities.map(String)) {
-        const hit = rows.find((r) => fold(r.city) === fold(said));
-        if (hit) {
-          if (!cities.includes(hit.city)) cities.push(hit.city);
-        } else unknownCities.push(said);
-      }
-    }
-
-    const preferences: Record<string, string | null> = {};
-    if (styles?.length) preferences.travelStyles = styles.join(',');
-    if (amenities?.length) preferences.roomAmenities = amenities.join(',');
-    if (budgetPerNight) preferences.budgetPerNight = String(budgetPerNight);
-    if (cities?.length) {
-      preferences.preferredCities = cities.join(',');
-      preferences.favouriteCity = cities[0];
-    }
-    if (!Object.keys(preferences).length) {
-      return {
-        error: 'Không có sở thích nào hợp lệ để lưu',
-        ...(unknownCities.length && {
-          unknownCities,
-          note: 'StayReco chưa có khách sạn ở những thành phố này.',
-        }),
-      };
-    }
-
-    const saved = (await this.preferences.update(customer.id, { preferences }))
-      .preferences;
-    const list = (key: string) => (saved[key] ?? '').split(',').filter(Boolean);
-    state.remembered = {
-      travelStyles: list('travelStyles'),
-      cities: list('preferredCities'),
-      roomAmenities: list('roomAmenities'),
-      budgetPerNight: saved.budgetPerNight
-        ? Number(saved.budgetPerNight)
-        : null,
-    };
-    return {
-      saved: {
-        travelStyles: state.remembered.travelStyles.map(
-          (s) => STYLE_WORDS[s] ?? s,
-        ),
-        cities: state.remembered.cities,
-        roomAmenities: state.remembered.roomAmenities.map(
-          (a) => AMENITY_WORDS[a] ?? a,
-        ),
-        budgetPerNight: state.remembered.budgetPerNight,
-      },
-      ...(unknownCities.length && { unknownCities }),
-      note: 'Đã lưu vào hồ sơ sở thích; gợi ý của khách đang được tính lại theo đó. Nói ngắn gọn với khách bạn đã ghi nhớ gì (khung "Đã ghi nhớ" hiện dưới tin nhắn), rồi gợi ý bằng recommend_hotels nếu khách chưa có ngày, hoặc search_hotels nếu đã có. Thành phố trong unknownCities thì nói StayReco chưa có khách sạn ở đó.',
     };
   }
 

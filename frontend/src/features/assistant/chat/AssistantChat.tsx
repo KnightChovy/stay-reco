@@ -100,7 +100,6 @@ export function AssistantChat({
         cancellation: null,
         suggestions: [],
         askTrip: null,
-        remembered: null,
         feedback: null,
         createdAt: new Date(0).toISOString(),
       }
