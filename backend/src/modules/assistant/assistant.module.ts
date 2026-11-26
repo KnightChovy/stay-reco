@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { BookingsModule } from '../bookings/bookings.module';
 import { LoyaltyModule } from '../loyalty/loyalty.module';
+import { PreferencesModule } from '../preferences/preferences.module';
 import { PromotionsModule } from '../promotions/promotions.module';
 import { WalletsModule } from '../wallets/wallets.module';
 import { MarketingModule } from '../marketing/marketing.module';
@@ -19,6 +20,7 @@ import { AssistantTools } from './assistant.tools';
     PromotionsModule,
     LoyaltyModule,
     WalletsModule,
+    PreferencesModule,
   ],
   controllers: [AssistantController],
   providers: [AssistantService, AssistantTools],

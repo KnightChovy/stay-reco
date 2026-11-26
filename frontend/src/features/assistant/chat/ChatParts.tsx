@@ -8,6 +8,7 @@ import { vi } from "date-fns/locale";
 import {
   ArrowUpRight,
   BedDouble,
+  BookmarkCheck,
   CalendarDays,
   CheckCircle2,
   Clock,
@@ -35,6 +36,7 @@ import { getApiErrorMessage } from "@/lib/api-error";
 import { formatDate, formatDateTime, formatMoney } from "@/features/stays/lib/format";
 import { useBooking } from "@/features/booking/api/booking-queries";
 import { useMyWallet, usePayWithWallet } from "@/features/account/api/rewards-queries";
+import { AMENITIES, STYLES } from "@/features/account/lib/preference-options";
 import { StaySearchBar } from "@/features/stays/components/StaySearchBar";
 import { StyleBadges } from "@/features/stays/components/StyleBadges";
 import { ChatMarkdown } from "../lib/chat-markdown";
@@ -505,6 +507,7 @@ export function MessageRow({
             onConfirm={() => onConfirmCancel(message.cancellation!.id)}
           />
         )}
+        {message.remembered && <RememberedCard remembered={message.remembered} />}
         {live && message.askTrip && <TripPicker ask={message.askTrip} onSend={live.onSend} />}
         {live && message.suggestions.length > 0 && (
           <div className="flex flex-wrap gap-2" aria-label="Gợi ý trả lời">
@@ -523,6 +526,42 @@ export function MessageRow({
         {actions && message.content && (
           <Feedback value={message.feedback} onRate={(value) => actions.onRate(message.id, value, message.feedback)} />
         )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * What the assistant saved to the customer's preferences from what they said: the same preferences the account page
+ * edits and the recommendations follow, so the card links to both.
+ */
+function RememberedCard({ remembered }: { remembered: NonNullable<AssistantMessage["remembered"]> }) {
+  const items = [
+    ...remembered.travelStyles.map((id) => STYLES.find((s) => s.id === id)?.title ?? id),
+    ...remembered.cities,
+    ...remembered.roomAmenities.map((id) => AMENITIES.find((a) => a.id === id)?.label ?? id),
+    ...(remembered.budgetPerNight ? [`dưới ${formatMoney(remembered.budgetPerNight)}/đêm`] : []),
+  ];
+  return (
+    <div className="max-w-sm space-y-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-950">
+      <p className="flex items-center gap-1.5 font-semibold">
+        <BookmarkCheck className="size-4 text-emerald-700" aria-hidden /> Đã ghi nhớ sở thích của bạn
+      </p>
+      <ul className="flex flex-wrap gap-1.5">
+        {items.map((item) => (
+          <li key={item} className="rounded-full bg-card px-2.5 py-1 text-xs font-medium text-foreground ring-1 ring-emerald-200">
+            {item}
+          </li>
+        ))}
+      </ul>
+      <p className="text-xs">Gợi ý cho bạn sẽ theo những điều này từ giờ.</p>
+      <div className="flex flex-wrap gap-x-4 gap-y-1">
+        <Link href="/recommendations" className="inline-flex min-h-10 items-center text-xs font-semibold text-emerald-800 hover:underline">
+          Xem gợi ý cho bạn →
+        </Link>
+        <Link href="/account/preferences" className="inline-flex min-h-10 items-center text-xs font-semibold text-emerald-800 hover:underline">
+          Sửa sở thích
+        </Link>
       </div>
     </div>
   );

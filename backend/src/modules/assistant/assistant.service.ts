@@ -48,6 +48,7 @@ interface MessageMeta {
   roomTypes?: { id: string; hotelName: string; name: string }[];
   suggestions?: string[];
   askTrip?: AssistantMessage['askTrip'];
+  remembered?: AssistantMessage['remembered'];
   feedback?: AssistantMessage['feedback'];
 }
 
@@ -67,6 +68,7 @@ const TOOL_STATUS: Record<string, string> = {
   recommend_hotels: 'Đang chọn khách sạn hợp với bạn…',
   get_hotel_rooms: 'Đang xem các loại phòng…',
   propose_booking: 'Đang tính giá…',
+  save_preferences: 'Đang ghi nhớ sở thích của bạn…',
   propose_cancellation: 'Đang tính phí huỷ…',
   my_vouchers: 'Đang xem mã giảm giá của bạn…',
   my_wallet: 'Đang xem ví và điểm của bạn…',
@@ -394,6 +396,7 @@ export class AssistantService {
       cancellation: null,
       roomTypes: new Map(),
       askTrip: null,
+      remembered: null,
     };
     const calls: Prisma.AiFunctionCallCreateManyInput[] = [];
     const context = {
@@ -487,6 +490,7 @@ export class AssistantService {
       }),
       ...(suggestions.length && { suggestions }),
       ...(state.askTrip && { askTrip: state.askTrip }),
+      ...(state.remembered && { remembered: state.remembered }),
     };
 
     const { conversation, question, reply } = await this.prisma.$transaction(
@@ -666,6 +670,7 @@ function toMessage(m: {
     cancellation,
     suggestions: meta.suggestions ?? [],
     askTrip: meta.askTrip ?? null,
+    remembered: meta.remembered ?? null,
     feedback: meta.feedback ?? null,
     createdAt: m.createdAt.toISOString(),
   };
