@@ -1219,6 +1219,157 @@ describe('Recommendations and assistant (e2e)', () => {
       expect(messages[2].content).toContain('ví StayReco');
     });
 
+    it('streams the answer with what it is doing, and takes the quick replies off the text', async () => {
+      const a = await hotel('Biển Xanh', 'a@hotel.test');
+      await t.prisma.hotel.update({
+        where: { hotelId: a.hotelId },
+        data: {
+          description: 'Resort nghỉ dưỡng ven biển, spa, hồ bơi vô cực.',
+        },
+      });
+      const me = await t.signIn('CUSTOMER', 'me@guest.test');
+      await run(me.id, [a.hotelId]);
+      t.ai.script = [
+        { calls: [{ name: 'recommend_hotels', args: {} }] },
+        {
+          text: 'Bạn thử Biển Xanh nhé.\n>> Xem phòng ở Biển Xanh | Tìm nơi rẻ hơn',
+        },
+      ];
+      const res = await t
+        .api()
+        .post('/api/v1/me/conversations/stream')
+        .set(auth(me.token))
+        .send({ content: 'Gợi ý giúp mình' })
+        .buffer(true)
+        .parse((r, done) => {
+          let body = '';
+          r.on('data', (chunk: Buffer) => (body += chunk.toString()));
+          r.on('end', () => done(null, body));
+        })
+        .expect(201)
+        .expect('Content-Type', /text\/event-stream/);
+      const events = (res.body as string)
+        .trim()
+        .split('\n\n')
+        .map((block) => {
+          const [event, data] = block.split('\n');
+          return {
+            event: event.slice('event: '.length),
+            data: JSON.parse(data.slice('data: '.length)) as Record<
+              string,
+              unknown
+            >,
+          };
+        });
+      expect(events.map((e) => e.event)).toEqual([
+        'status',
+        'delta',
+        'delta',
+        'done',
+      ]);
+      expect(events[0].data.text).toBe('Đang chọn khách sạn hợp với bạn…');
+      const reply = (
+        events[3].data as {
+          reply: {
+            content: string;
+            suggestions: string[];
+            hotels: { styles: string[] }[];
+          };
+        }
+      ).reply;
+      expect(reply.content).toBe('Bạn thử Biển Xanh nhé.');
+      expect(reply.suggestions).toEqual([
+        'Xem phòng ở Biển Xanh',
+        'Tìm nơi rẻ hơn',
+      ]);
+      expect(reply.hotels[0].styles).toEqual(['resort']);
+      // Stored as shown.
+      const stored = await t.prisma.message.findFirstOrThrow({
+        where: { role: 'ASSISTANT' },
+      });
+      expect(stored.content).toBe('Bạn thử Biển Xanh nhé.');
+    });
+
+    it('shows a date picker instead of asking for the dates in words, and keeps the 👍 or 👎', async () => {
+      const me = await t.signIn('CUSTOMER', 'me@guest.test');
+      t.ai.script = [
+        {
+          calls: [
+            {
+              name: 'ask_trip_details',
+              args: { destination: 'Đà Lạt', guests: 2, checkIn: 'mai' },
+            },
+          ],
+        },
+        { text: 'Bạn chọn ngày đi Đà Lạt ở khung bên dưới nhé.' },
+      ];
+      const res = await start(me.token, 'Mình muốn đi Đà Lạt').expect(201);
+      const { conversationId, reply } = res.body.data as {
+        conversationId: string;
+        reply: { id: string; askTrip: unknown; suggestions: string[] };
+      };
+      expect(reply.askTrip).toEqual({
+        destination: 'Đà Lạt',
+        checkIn: null,
+        checkOut: null,
+        guests: 2,
+      });
+      expect(reply.suggestions).toEqual([]);
+
+      const rated = await t
+        .api()
+        .put(
+          `/api/v1/conversations/${conversationId}/messages/${reply.id}/feedback`,
+        )
+        .set(auth(me.token))
+        .send({ value: 'DOWN' })
+        .expect(200);
+      expect(rated.body.data.feedback).toBe('DOWN');
+      const again = await t
+        .api()
+        .get(`/api/v1/conversations/${conversationId}`)
+        .set(auth(me.token))
+        .expect(200);
+      expect(again.body.data.messages[1]).toMatchObject({
+        feedback: 'DOWN',
+        askTrip: { destination: 'Đà Lạt' },
+      });
+
+      // Only the customer's own answers from the assistant.
+      const other = await t.signIn('CUSTOMER', 'other@guest.test');
+      await t
+        .api()
+        .put(
+          `/api/v1/conversations/${conversationId}/messages/${reply.id}/feedback`,
+        )
+        .set(auth(other.token))
+        .send({ value: 'UP' })
+        .expect(404);
+      const question = again.body.data.messages[0].id as string;
+      const r = await t
+        .api()
+        .put(
+          `/api/v1/conversations/${conversationId}/messages/${question}/feedback`,
+        )
+        .set(auth(me.token))
+        .send({ value: 'UP' })
+        .expect(404);
+      expect(r.body.code).toBe('MESSAGE_NOT_FOUND');
+    });
+
+    it('answers a streamed turn over budget with a plain JSON error', async () => {
+      const me = await t.signIn('CUSTOMER', 'me@guest.test');
+      t.ai.budgetLeft = 0;
+      const res = await t
+        .api()
+        .post('/api/v1/me/conversations/stream')
+        .set(auth(me.token))
+        .send({ content: 'Xin chào' })
+        .expect(403);
+      expect(res.body.code).toBe('AI_BUDGET_EXCEEDED');
+      expect(await t.prisma.conversation.count()).toBe(0);
+    });
+
     it('stores nothing when the customer is over the assistant budget', async () => {
       const me = await t.signIn('CUSTOMER', 'me@guest.test');
       t.ai.budgetLeft = 0;

@@ -73,6 +73,18 @@ export function ApiFile(mimeType: string, description: string) {
   });
 }
 
+/** Server-sent events: the body is a `text/event-stream` (no envelope); the description lists the events. */
+export function ApiStream(
+  description: string,
+  status: HttpStatus = HttpStatus.CREATED,
+) {
+  return ApiResponse({
+    status,
+    description,
+    content: { 'text/event-stream': { schema: { type: 'string' } } },
+  });
+}
+
 /** Paginated list: `data` is an array of the schema and `meta` holds page, pageSize, total, totalPages. */
 export function ApiPage(schema: z.ZodType) {
   return ApiResponse({

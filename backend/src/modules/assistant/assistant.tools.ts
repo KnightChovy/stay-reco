@@ -2,6 +2,7 @@ import type { FunctionDeclaration } from '@google/genai';
 import { HttpException, Injectable } from '@nestjs/common';
 import {
   type AssistantHotel,
+  type AssistantMessage,
   type BookingProposal,
   type CancellationProposal,
   createBookingSchema,
@@ -21,6 +22,7 @@ import { StayDiscountService } from '../promotions/stay-discount.service';
 import { RecommendationsService } from '../recommendations/recommendations.service';
 import { StaysService } from '../stays/stays.service';
 import { CustomerWalletService } from '../wallets/customer-wallet.service';
+import { STYLE_LABELS as STYLE_WORDS } from './assistant.prompt';
 
 /** How long a priced proposal can be confirmed: prices and free rooms move, so it does not wait for ever. */
 export const PROPOSAL_TTL_MS = 30 * 60_000;
@@ -43,6 +45,8 @@ export interface TurnState {
   cancellation: CancellationProposal | null;
   /** Room types looked at, so the next turn can book one by its real id instead of guessing it. */
   roomTypes: Map<string, { hotelName: string; name: string }>;
+  /** The model needs the dates and guests: a picker is shown under the reply, filled with what is known. */
+  askTrip: AssistantMessage['askTrip'];
 }
 
 /**
@@ -171,6 +175,23 @@ export const TOOL_DECLARATIONS: FunctionDeclaration[] = [
     },
   },
   {
+    name: 'ask_trip_details',
+    description:
+      'Hiện khung chọn ngày nhận/trả phòng và số khách ngay dưới tin nhắn, để khách bấm chọn thay vì gõ. Gọi khi cần tìm phòng trống hay đặt phòng mà còn thiếu ngày hoặc số khách. Truyền những gì đã biết để điền sẵn.',
+    parametersJsonSchema: {
+      type: 'object',
+      properties: {
+        destination: {
+          type: 'string',
+          description: 'Nơi đến khách đã nói, nếu có.',
+        },
+        checkIn: { type: 'string', description: 'YYYY-MM-DD, nếu đã biết.' },
+        checkOut: { type: 'string', description: 'YYYY-MM-DD, nếu đã biết.' },
+        guests: { type: 'integer', description: 'Số khách, nếu đã biết.' },
+      },
+    },
+  },
+  {
     name: 'my_vouchers',
     description:
       'Các mã giảm giá (voucher) khách đang có và còn dùng được: mã, mức giảm, đơn tối thiểu, hạn dùng, khách sạn áp dụng. Dùng khi khách hỏi về mã giảm giá, khuyến mãi.',
@@ -249,6 +270,8 @@ export class AssistantTools {
           return await this.hotelRooms(args, state);
         case 'propose_booking':
           return await this.proposeBooking(args, customer, state);
+        case 'ask_trip_details':
+          return askTrip(args, state);
         case 'my_vouchers':
           return await this.myVouchers(customer);
         case 'my_wallet':
@@ -323,6 +346,7 @@ export class AssistantTools {
         pricePerNightFrom: card?.pricePerNightFrom ?? null,
         reason: score?.reason ?? null,
         recommendationId: score?.recommendationId ?? null,
+        styles: h.styles,
       };
       state.hotels.set(h.id, shown);
       return {
@@ -334,6 +358,7 @@ export class AssistantTools {
         reviews: card?.reviewCount ?? 0,
         totalForStay: h.fromTotal,
         freeCancellation: h.freeCancellation,
+        styles: h.styles.map((s) => STYLE_WORDS[s] ?? s),
         recommendedForThisGuest: score ? score.rank : null,
         whyRecommended: score?.reason ?? null,
       };
@@ -372,6 +397,7 @@ export class AssistantTools {
         pricePerNightFrom: h.pricePerNightFrom,
         reason: h.reason,
         recommendationId: h.recommendationId ?? null,
+        styles: h.styles,
       });
     }
     return {
@@ -384,6 +410,7 @@ export class AssistantTools {
         rating: h.rating,
         reviews: h.reviewCount,
         pricePerNightFrom: h.pricePerNightFrom,
+        styles: h.styles.map((s) => STYLE_WORDS[s] ?? s),
         isNew: h.isNew,
         why: h.reason,
       })),
@@ -789,6 +816,32 @@ const invalid = (error: {
   error: 'Tham số không hợp lệ',
   issues: error.issues.map((i) => `${i.path.join('.')}: ${i.message}`),
 });
+
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * `ask_trip_details`: nothing to look up, only a picker to show. What the model already knows is passed through when
+ * it looks right, so the customer only fills in the rest; the answer tells the model not to ask again in words.
+ */
+function askTrip(args: Args, state: TurnState) {
+  const date = (v: unknown) =>
+    typeof v === 'string' && DATE.test(v) ? v : null;
+  const guests = Number(args.guests);
+  state.askTrip = {
+    destination:
+      typeof args.destination === 'string' && args.destination.trim()
+        ? args.destination.trim().slice(0, 100)
+        : null,
+    checkIn: date(args.checkIn),
+    checkOut: date(args.checkOut),
+    guests:
+      Number.isInteger(guests) && guests > 0 && guests <= 30 ? guests : null,
+  };
+  return {
+    shown: true,
+    note: 'Khung chọn ngày và số khách đã hiện dưới tin nhắn. Viết một câu ngắn mời khách chọn ở khung đó, không hỏi lại bằng chữ và không thêm dòng gợi ý trả lời.',
+  };
+}
 
 /** Lowercase without Vietnamese accents. */
 export const fold = (text: string) =>

@@ -346,6 +346,10 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorInfo> = {
     description:
       "The conversation doesn't exist or belongs to another customer",
   },
+  MESSAGE_NOT_FOUND: {
+    status: 404,
+    description: 'No answer of the assistant with this id in the conversation',
+  },
   BOOKING_PROPOSAL_NOT_FOUND: {
     status: 404,
     description: 'No booking proposal with this id in the conversation',

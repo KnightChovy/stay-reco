@@ -8,6 +8,7 @@ import {
   useConfirmProposal,
   useConversation,
   useConversations,
+  useRateMessage,
   useSendAssistantMessage,
 } from "../api/assistant-queries";
 import { chatErrorMessage, isAssistantOff } from "../lib/chat-errors";
@@ -52,6 +53,9 @@ export function useAssistantChat(initialId?: string | null) {
   const storedId = useSyncExternalStore(subscribeActive, readActive, () => null);
   const [draft, setDraft] = useState("");
   const [pendingText, setPendingText] = useState<string | null>(null);
+  // The reply while it is written, and what the assistant is doing before the first word.
+  const [streamText, setStreamText] = useState("");
+  const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [assistantOff, setAssistantOff] = useState(false);
   const [now, setNow] = useState(() => Date.now());
@@ -77,6 +81,7 @@ export function useAssistantChat(initialId?: string | null) {
   const send = useSendAssistantMessage();
   const confirm = useConfirmProposal();
   const cancel = useConfirmCancellation();
+  const rate = useRateMessage();
 
   // Forget it in storage too, so the next visit starts clean (an external store, not React state).
   useEffect(() => {
@@ -96,17 +101,29 @@ export function useAssistantChat(initialId?: string | null) {
       if (!content || send.isPending) return;
       setError(null);
       setPendingText(content);
+      setStreamText("");
+      setStatus(null);
       setDraft("");
+      const handlers = {
+        onStatus: (text: string) => setStatus(text),
+        onDelta: (text: string) => setStreamText((shown) => shown + text),
+        onReset: () => setStreamText(""),
+      };
+      const settle = () => {
+        setPendingText(null);
+        setStreamText("");
+        setStatus(null);
+      };
       send.mutate(
-        { conversationId: activeId, content },
+        { conversationId: activeId, content, handlers },
         {
           onSuccess: (reply) => {
-            setPendingText(null);
+            settle();
             if (reply.conversationId !== activeId) setActiveId(reply.conversationId);
           },
           onError: (sendError) => {
             // Nothing was stored: give the words back so the customer can resend them.
-            setPendingText(null);
+            settle();
             setDraft(content);
             if (isAssistantOff(sendError)) setAssistantOff(true);
             setError(chatErrorMessage(sendError));
@@ -142,6 +159,13 @@ export function useAssistantChat(initialId?: string | null) {
     [activeId, cancel],
   );
 
+  const rateMessage = useCallback(
+    (messageId: string, value: "UP" | "DOWN" | null, previous: "UP" | "DOWN" | null) => {
+      if (activeId) rate.mutate({ conversationId: activeId, messageId, value, previous });
+    },
+    [activeId, rate],
+  );
+
   return {
     user,
     isCustomer,
@@ -152,6 +176,9 @@ export function useAssistantChat(initialId?: string | null) {
     conversation,
     messages,
     pendingText,
+    streamText,
+    status,
+    rateMessage,
     sending: send.isPending,
     draft,
     setDraft,

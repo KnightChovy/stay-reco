@@ -24,6 +24,12 @@ export type ConfirmBookingProposalInput = z.infer<
   typeof confirmBookingProposalSchema
 >;
 
+/** `PUT /conversations/:id/messages/:messageId/feedback`: 👍 or 👎 on an answer of the assistant; null takes it back. */
+export const assistantFeedbackSchema = z.strictObject({
+  value: z.enum(["UP", "DOWN"]).nullable(),
+});
+export type AssistantFeedbackInput = z.infer<typeof assistantFeedbackSchema>;
+
 /** `POST /conversations/:id/confirm-cancellation`: the cancellation proposal the customer confirms. */
 export const confirmCancellationProposalSchema = confirmBookingProposalSchema;
 export type ConfirmCancellationProposalInput = ConfirmBookingProposalInput;

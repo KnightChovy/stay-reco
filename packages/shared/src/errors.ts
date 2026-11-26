@@ -218,6 +218,8 @@ export const ErrorCode = {
   // Assistant (phase 5)
   /** The conversation doesn't exist, or belongs to another customer. */
   CONVERSATION_NOT_FOUND: 'CONVERSATION_NOT_FOUND',
+  /** No answer of the assistant with this id in the conversation. */
+  MESSAGE_NOT_FOUND: 'MESSAGE_NOT_FOUND',
   /** No booking proposal with this id in the conversation. */
   BOOKING_PROPOSAL_NOT_FOUND: 'BOOKING_PROPOSAL_NOT_FOUND',
   /** The proposal was already confirmed, or has expired; ask the assistant for a new one. */

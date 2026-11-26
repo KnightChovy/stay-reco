@@ -1,8 +1,10 @@
 import {
   type Content,
   FinishReason,
+  type FunctionCall,
   type FunctionDeclaration,
   type GenerateContentResponse,
+  type Part,
   GoogleGenAI,
   Modality,
 } from '@google/genai';
@@ -44,6 +46,13 @@ export interface ChatRequest {
   system: string;
   contents: Content[];
   tools: FunctionDeclaration[];
+}
+
+/** One model turn of a chat: its text, the tools it asks for, and the turn to append to the conversation. */
+export interface ChatTurn {
+  text: string | undefined;
+  functionCalls: FunctionCall[] | undefined;
+  content: Content | undefined;
 }
 
 /** Longest answer we will pay for. A social post is a few hundred tokens; a blog article the top of this. */
@@ -262,11 +271,13 @@ export class AiService {
   async chat(
     context: CallContext,
     request: ChatRequest,
-  ): Promise<GenerateContentResponse> {
+    /** When given, the answer is streamed and each piece of text is passed here as it arrives. */
+    onText?: (text: string) => void,
+  ): Promise<ChatTurn> {
     if (!this.client) throw disabled();
     await this.assertBudget(context);
 
-    const response = await this.client.models.generateContent({
+    const params = {
       model: this.model,
       contents: request.contents,
       config: {
@@ -280,14 +291,55 @@ export class AiService {
         // rate for little gain.
         thinkingConfig: { thinkingBudget: 0 },
       },
-    });
+    };
+
+    let response: GenerateContentResponse;
+    let turn: ChatTurn;
+    if (!onText) {
+      response = await this.client.models.generateContent(params);
+      turn = {
+        text: response.text,
+        functionCalls: response.functionCalls,
+        content: response.candidates?.[0]?.content,
+      };
+    } else {
+      // The pieces of a streamed answer, put back together into the one turn generateContent would have returned.
+      const parts: Part[] = [];
+      const calls: FunctionCall[] = [];
+      let text = '';
+      let last: GenerateContentResponse | undefined;
+      let blocked: GenerateContentResponse['promptFeedback'];
+      for await (const chunk of await this.client.models.generateContentStream(
+        params,
+      )) {
+        last = chunk;
+        blocked ??= chunk.promptFeedback;
+        parts.push(...(chunk.candidates?.[0]?.content?.parts ?? []));
+        calls.push(...(chunk.functionCalls ?? []));
+        const piece = chunk.text;
+        if (piece) {
+          text += piece;
+          onText(piece);
+        }
+      }
+      response = {
+        promptFeedback: blocked,
+        candidates: last?.candidates,
+        usageMetadata: last?.usageMetadata,
+      } as GenerateContentResponse;
+      turn = {
+        text: text || undefined,
+        functionCalls: calls.length ? calls : undefined,
+        content: parts.length ? { role: 'model', parts } : undefined,
+      };
+    }
     await this.record(context, this.model, response.usageMetadata);
 
     const finish = this.assertAnswered(response);
     if (finish === FinishReason.MAX_TOKENS) {
       throw unusable('The model ran out of room before finishing');
     }
-    return response;
+    return turn;
   }
 
   /** Refuses a hotel or a customer over its monthly cap before anything is spent. */

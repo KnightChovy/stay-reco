@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { AssistantReply, Conversation, ConversationSummary } from "@stayreco/shared";
+import type { AssistantMessage, AssistantReply, Conversation, ConversationSummary } from "@stayreco/shared";
 import * as assistantService from "@/services/assistant.service";
 import { bookingKeys } from "@/features/booking/api/booking-queries";
 import { rewardsKeys } from "@/features/account/api/rewards-queries";
@@ -37,10 +37,16 @@ export function useConversation(id: string | null, enabled = true) {
 export function useSendAssistantMessage() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ conversationId, content }: { conversationId: string | null; content: string }) =>
-      conversationId
-        ? assistantService.sendMessage(conversationId, content)
-        : assistantService.startConversation(content),
+    // Streamed: the handlers show the status and the text while the reply is written.
+    mutationFn: ({
+      conversationId,
+      content,
+      handlers,
+    }: {
+      conversationId: string | null;
+      content: string;
+      handlers: assistantService.StreamHandlers;
+    }) => assistantService.streamMessage(conversationId, content, handlers),
     onSuccess: (reply: AssistantReply, { conversationId }) => {
       queryClient.setQueryData<Conversation>(assistantKeys.conversation(reply.conversationId), (current) => {
         if (current) return { ...current, messages: [...current.messages, reply.message, reply.reply], updatedAt: reply.reply.createdAt };
@@ -57,6 +63,24 @@ export function useSendAssistantMessage() {
       });
       void queryClient.invalidateQueries({ queryKey: assistantKeys.conversations() });
     },
+  });
+}
+
+/** 👍 / 👎 on an answer: written into the open conversation at once, put back if the request fails. */
+export function useRateMessage() {
+  const queryClient = useQueryClient();
+  const write = (conversationId: string, messageId: string, feedback: AssistantMessage["feedback"]) =>
+    queryClient.setQueryData<Conversation>(assistantKeys.conversation(conversationId), (current) =>
+      current && {
+        ...current,
+        messages: current.messages.map((m) => (m.id === messageId ? { ...m, feedback } : m)),
+      },
+    );
+  return useMutation({
+    mutationFn: ({ conversationId, messageId, value }: { conversationId: string; messageId: string; value: AssistantMessage["feedback"]; previous: AssistantMessage["feedback"] }) =>
+      assistantService.rateMessage(conversationId, messageId, value),
+    onMutate: ({ conversationId, messageId, value }) => write(conversationId, messageId, value),
+    onError: (_error, { conversationId, messageId, previous }) => write(conversationId, messageId, previous),
   });
 }
 

@@ -73,7 +73,13 @@ describe('Swagger (e2e)', () => {
       const file = Object.entries(content ?? {}).find(
         ([type]) => type !== 'application/json',
       );
-      if (file) {
+      if (file?.[0] === 'text/event-stream') {
+        // A stream of server-sent events, never inside the envelope.
+        expect({ name, stream: file[1] }).toEqual({
+          name,
+          stream: { schema: { type: 'string' } },
+        });
+      } else if (file) {
         // A download: the file itself, never inside the envelope.
         expect({ name, file: file[1] }).toEqual({
           name,

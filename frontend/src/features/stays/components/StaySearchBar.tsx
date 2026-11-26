@@ -36,6 +36,8 @@ type StaySearchBarProps = {
   /** Hotel and room type pages change only the stay, so they hide the destination. */
   showDestination?: boolean;
   submitLabel?: string;
+  /** One field under another whatever the screen width: for narrow places like the assistant chat. */
+  stacked?: boolean;
 };
 
 // text-base on phones keeps iOS from zooming into the field on focus.
@@ -54,6 +56,7 @@ export function StaySearchBar({
   onSearch,
   showDestination = true,
   submitLabel = 'Tìm khách sạn',
+  stacked = false,
 }: StaySearchBarProps) {
   const router = useRouter();
   const fallback = defaultStay(1, 2);
@@ -120,10 +123,13 @@ export function StaySearchBar({
     <div className="rounded-2xl border border-border bg-card p-1.5 shadow-[0_8px_30px_rgba(20,45,66,0.08)]">
       <div
         className={cn(
-          'grid grid-cols-1 divide-y divide-border sm:grid-cols-2 sm:divide-y-0 lg:divide-x',
-          showDestination
+          'grid grid-cols-1 divide-y divide-border',
+          stacked
+            ? ''
+            : showDestination
             ? 'lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1.55fr)_minmax(0,0.95fr)_auto]'
-            : 'lg:grid-cols-[minmax(0,1.55fr)_minmax(0,0.95fr)_auto]',
+              : 'lg:grid-cols-[minmax(0,1.55fr)_minmax(0,0.95fr)_auto]',
+          !stacked && 'sm:grid-cols-2 sm:divide-y-0 lg:divide-x',
         )}
       >
         {showDestination && (
@@ -197,7 +203,7 @@ export function StaySearchBar({
           </div>
         </div>
 
-        <div className="flex min-w-0 items-center p-1 sm:col-span-2 lg:col-span-1">
+        <div className={cn('flex min-w-0 items-center p-1', !stacked && 'sm:col-span-2 lg:col-span-1')}>
           <Button
             type="button"
             onClick={handleSearch}

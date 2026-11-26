@@ -17,6 +17,8 @@ import {
   Send,
   ShieldCheck,
   Star,
+  ThumbsDown,
+  ThumbsUp,
   Users,
 } from "lucide-react";
 import {
@@ -33,6 +35,8 @@ import { getApiErrorMessage } from "@/lib/api-error";
 import { formatDate, formatDateTime, formatMoney } from "@/features/stays/lib/format";
 import { useBooking } from "@/features/booking/api/booking-queries";
 import { useMyWallet, usePayWithWallet } from "@/features/account/api/rewards-queries";
+import { StaySearchBar } from "@/features/stays/components/StaySearchBar";
+import { StyleBadges } from "@/features/stays/components/StyleBadges";
 import { ChatMarkdown } from "../lib/chat-markdown";
 import { VoiceButton } from "../AssistantChatParts";
 import type { useSpeechInput } from "../use-speech-input";
@@ -61,16 +65,29 @@ function hotelHref(hotel: AssistantHotel, dates: StayDates) {
   return `/hotels/${hotel.id}?${query}`;
 }
 
-export function HotelCards({ hotels, dates }: { hotels: AssistantHotel[]; dates: StayDates }) {
+/**
+ * The hotels of a reply, side by side. The card opens the hotel (with the conversation's dates); "Đặt phòng này" asks
+ * the assistant to prepare the booking, which still ends with the customer's own "Xác nhận đặt phòng".
+ */
+export function HotelCards({
+  hotels,
+  dates,
+  onBook,
+}: {
+  hotels: AssistantHotel[];
+  dates: StayDates;
+  /** Asks the assistant to book this hotel; absent when nothing new can be sent from this reply. */
+  onBook?: (hotel: AssistantHotel) => void;
+}) {
   if (hotels.length === 0) return null;
   return (
     <ul className="no-scrollbar -mx-1 flex snap-x gap-2.5 overflow-x-auto px-1 pb-1" aria-label="Khách sạn trợ lý gợi ý">
       {hotels.map((hotel) => (
-        <li key={hotel.id} className="w-56 shrink-0 snap-start">
-          <Link
-            href={hotelHref(hotel, dates)}
-            className="group flex h-full flex-col overflow-hidden rounded-xl border border-border bg-card shadow-xs transition-shadow hover:shadow-md"
-          >
+        <li
+          key={hotel.id}
+          className="flex w-56 shrink-0 snap-start flex-col overflow-hidden rounded-xl border border-border bg-card shadow-xs transition-shadow hover:shadow-md"
+        >
+          <Link href={hotelHref(hotel, dates)} className="group flex flex-1 flex-col">
             <div className="relative h-28 w-full bg-muted">
               <Image
                 src={hotel.coverImageUrl ?? FALLBACK_HOTEL}
@@ -85,12 +102,13 @@ export function HotelCards({ hotels, dates }: { hotels: AssistantHotel[]; dates:
                 </span>
               )}
             </div>
-            <div className="flex flex-1 flex-col gap-1 p-3">
-              <p className="line-clamp-2 text-sm font-semibold text-foreground">{hotel.name}</p>
+            <div className="flex flex-1 flex-col gap-1.5 p-3">
+              <p className="line-clamp-2 text-sm font-semibold text-foreground group-hover:text-primary">{hotel.name}</p>
               <p className="flex items-center gap-1 text-xs text-muted-foreground">
                 <MapPin className="size-3" aria-hidden /> {hotel.city}
                 {hotel.starRating ? ` · ${hotel.starRating} sao` : ""}
               </p>
+              <StyleBadges styles={hotel.styles} />
               {hotel.reason && <p className="line-clamp-2 text-xs text-emerald-700">{hotel.reason}</p>}
               <p className="mt-auto pt-1 text-sm font-bold text-primary">
                 {hotel.fromTotal !== null ? (
@@ -109,6 +127,13 @@ export function HotelCards({ hotels, dates }: { hotels: AssistantHotel[]; dates:
               </p>
             </div>
           </Link>
+          {onBook && (
+            <div className="px-3 pb-3">
+              <Button type="button" variant="outline" className="h-10 w-full" onClick={() => onBook(hotel)}>
+                Đặt phòng này
+              </Button>
+            </div>
+          )}
         </li>
       ))}
     </ul>
@@ -402,6 +427,15 @@ export function CancellationCard({
   );
 }
 
+/** What the customer can do from an answer of the assistant; only the latest answer takes new input. */
+export type ReplyActions = {
+  /** Sends a message as if typed: a quick reply, "Đặt phòng này", the trip picker. */
+  onSend: (text: string) => void;
+  onRate: (messageId: string, value: "UP" | "DOWN" | null, previous: "UP" | "DOWN" | null) => void;
+  /** Nothing new can be sent while a reply is being written. */
+  busy: boolean;
+};
+
 export function MessageRow({
   message,
   dates,
@@ -410,6 +444,8 @@ export function MessageRow({
   onConfirm,
   cancellingId = null,
   onConfirmCancel = () => {},
+  latest = false,
+  actions,
 }: {
   message: AssistantMessage;
   dates: StayDates;
@@ -418,6 +454,9 @@ export function MessageRow({
   onConfirm: (proposalId: string) => void;
   cancellingId?: string | null;
   onConfirmCancel?: (proposalId: string) => void;
+  /** The last message of the conversation: its quick replies and trip picker are still live. */
+  latest?: boolean;
+  actions?: ReplyActions;
 }) {
   if (message.role === "SYSTEM") {
     return (
@@ -435,6 +474,7 @@ export function MessageRow({
       </div>
     );
   }
+  const live = latest && actions && !actions.busy ? actions : null;
   return (
     <div className="flex items-end gap-2">
       <AssistantAvatar className="mb-0.5" />
@@ -444,7 +484,11 @@ export function MessageRow({
             <ChatMarkdown content={message.content} />
           </div>
         )}
-        <HotelCards hotels={message.hotels} dates={dates} />
+        <HotelCards
+          hotels={message.hotels}
+          dates={dates}
+          onBook={live ? (hotel) => live.onSend(`Mình muốn đặt phòng ở ${hotel.name}`) : undefined}
+        />
         {message.proposal && (
           <ProposalCard
             proposal={message.proposal}
@@ -461,12 +505,114 @@ export function MessageRow({
             onConfirm={() => onConfirmCancel(message.cancellation!.id)}
           />
         )}
+        {live && message.askTrip && <TripPicker ask={message.askTrip} onSend={live.onSend} />}
+        {live && message.suggestions.length > 0 && (
+          <div className="flex flex-wrap gap-2" aria-label="Gợi ý trả lời">
+            {message.suggestions.map((text) => (
+              <button
+                key={text}
+                type="button"
+                onClick={() => live.onSend(text)}
+                className="min-h-10 rounded-full border border-primary/30 bg-card px-3.5 py-2 text-left text-sm font-medium text-primary transition-colors hover:bg-primary/5"
+              >
+                {text}
+              </button>
+            ))}
+          </div>
+        )}
+        {actions && message.content && (
+          <Feedback value={message.feedback} onRate={(value) => actions.onRate(message.id, value, message.feedback)} />
+        )}
       </div>
     </div>
   );
 }
 
-export function TypingBubble() {
+/** 👍 / 👎 under an answer; pressing the chosen one again takes it back. */
+function Feedback({
+  value,
+  onRate,
+}: {
+  value: AssistantMessage["feedback"];
+  onRate: (value: "UP" | "DOWN" | null) => void;
+}) {
+  const choices = [
+    { id: "UP" as const, Icon: ThumbsUp, label: "Câu trả lời hữu ích" },
+    { id: "DOWN" as const, Icon: ThumbsDown, label: "Câu trả lời chưa tốt" },
+  ];
+  return (
+    <div className="flex items-center gap-1">
+      {choices.map(({ id, Icon, label }) => (
+        <button
+          key={id}
+          type="button"
+          aria-label={label}
+          title={label}
+          aria-pressed={value === id}
+          onClick={() => onRate(value === id ? null : id)}
+          className={cn(
+            "grid size-10 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+            value === id && "text-primary",
+          )}
+        >
+          <Icon className={cn("size-4", value === id && "fill-primary/20")} aria-hidden />
+        </button>
+      ))}
+      {value && <span className="text-xs text-muted-foreground">Cảm ơn bạn đã góp ý</span>}
+    </div>
+  );
+}
+
+/**
+ * The assistant needs the dates and guests: the site's own stay search, filled with what it already knows, answers
+ * with a message in words ("Mình muốn ở Đà Lạt từ 12/12/2026 đến 14/12/2026, 2 khách, 1 phòng.").
+ */
+function TripPicker({ ask, onSend }: { ask: NonNullable<AssistantMessage["askTrip"]>; onSend: (text: string) => void }) {
+  return (
+    <div className="max-w-sm">
+      <StaySearchBar
+        stacked
+        initialDestination={ask.destination ?? ""}
+        initialCheckIn={ask.checkIn ?? undefined}
+        initialCheckOut={ask.checkOut ?? undefined}
+        initialGuests={ask.guests ?? undefined}
+        submitLabel="Gửi cho trợ lý"
+        onSearch={(trip) =>
+          onSend(
+            `Mình muốn ở ${trip.destination} từ ${formatDate(trip.checkIn)} đến ${formatDate(trip.checkOut)}, ${trip.guests} khách, ${trip.rooms} phòng.`,
+          )
+        }
+      />
+    </div>
+  );
+}
+
+/** A line the server takes off the stored reply: an internal note in brackets. */
+const isNote = (line: string) => line.trim().startsWith("[") && line.trim().endsWith("]");
+
+/**
+ * The reply while it is written. The quick-reply line (`>> …`) and internal notes are taken off the stored reply by
+ * the server; while streaming they are hidden here, so they never flash on screen.
+ */
+export function StreamingBubble({ text }: { text: string }) {
+  const lines = text.split("\n");
+  const cut = lines.findIndex((line) => line.trim().startsWith(">"));
+  const shown = (cut === -1 ? lines : lines.slice(0, cut))
+    .filter((line) => !isNote(line))
+    .join("\n")
+    .trim();
+  return (
+    <div className="flex items-end gap-2" aria-live="polite">
+      <AssistantAvatar className="mb-0.5" />
+      <div className="w-fit max-w-[92%] rounded-2xl rounded-bl-md bg-card px-3.5 py-2.5 text-sm leading-relaxed text-foreground shadow-xs ring-1 ring-border">
+        <ChatMarkdown content={shown} />
+        <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse rounded-sm bg-primary/60 align-text-bottom" aria-hidden />
+      </div>
+    </div>
+  );
+}
+
+export function TypingBubble({ status }: { status?: string | null }) {
   return (
     <div className="flex items-end gap-2" role="status" aria-live="polite">
       <AssistantAvatar />
@@ -476,7 +622,7 @@ export function TypingBubble() {
           <span className="size-1.5 animate-bounce rounded-full bg-primary [animation-delay:-0.15s]" />
           <span className="size-1.5 animate-bounce rounded-full bg-primary" />
         </span>
-        <span className="text-xs text-muted-foreground">Trợ lý đang tìm phòng và tính giá…</span>
+        <span className="text-xs text-muted-foreground">{status ?? "Trợ lý đang suy nghĩ…"}</span>
       </div>
     </div>
   );
@@ -581,7 +727,7 @@ export function ChatComposer({
         </Button>
       </div>
       <div className="flex justify-between px-1 text-xs text-muted-foreground">
-        <span>{voice.error ?? "Enter để gửi · Shift + Enter để xuống dòng"}</span>
+        <span>{voice.error ?? "Trợ lý AI có thể nhầm. Hãy kiểm tra giá và ngày trước khi xác nhận."}</span>
         {near && (
           <span>
             {value.length}/{ASSISTANT_MESSAGE_MAX}

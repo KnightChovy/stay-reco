@@ -1,4 +1,8 @@
-import { isInternalNote, stripInternalNotes } from './assistant-text';
+import {
+  isInternalNote,
+  splitSuggestions,
+  stripInternalNotes,
+} from './assistant-text';
 
 describe('assistant internal notes', () => {
   it('removes the note the model copied at the end of an answer', () => {
@@ -36,5 +40,25 @@ describe('assistant internal notes', () => {
 
   it('can leave nothing, which the caller treats as no answer', () => {
     expect(stripInternalNotes('[Đã hiển thị: A (hotelId=1)]\n')).toBe('');
+  });
+});
+
+describe('assistant quick replies', () => {
+  it('takes the last line of quick replies off the answer', () => {
+    expect(
+      splitSuggestions(
+        'Có 2 nơi hợp với bạn.\n\n>> Xem phòng ở Sơn Trà | "Rẻ hơn chút" | Rẻ hơn chút | Đổi ngày | Thêm một',
+      ),
+    ).toEqual({
+      text: 'Có 2 nơi hợp với bạn.',
+      suggestions: ['Xem phòng ở Sơn Trà', 'Rẻ hơn chút', 'Đổi ngày'],
+    });
+  });
+
+  it('leaves an answer without them alone', () => {
+    expect(splitSuggestions('Chào bạn!')).toEqual({
+      text: 'Chào bạn!',
+      suggestions: [],
+    });
   });
 });

@@ -34,3 +34,35 @@ export function stripInternalNotes(text: string): string {
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
+
+/** Longest quick reply kept: a tap-sized answer, not a sentence. */
+const SUGGESTION_MAX = 60;
+
+/**
+ * The answer and the quick replies the model offered with it. The prompt asks for them as a last line
+ * `>> Xem phòng | Rẻ hơn chút | Đổi ngày`; that line is taken off the text and returned as buttons. At most three,
+ * each short; anything else on the line is dropped rather than shown.
+ */
+export function splitSuggestions(text: string): {
+  text: string;
+  suggestions: string[];
+} {
+  const lines = text.split('\n');
+  const at = lines.findIndex((line) => line.trim().startsWith('>>'));
+  if (at === -1) return { text: text.trim(), suggestions: [] };
+  const suggestions = [
+    ...new Set(
+      lines[at]
+        .trim()
+        .slice(2)
+        .split('|')
+        .map((s) => s.trim().replace(/^["“]|["”]$/g, ''))
+        .filter((s) => s && s.length <= SUGGESTION_MAX),
+    ),
+  ].slice(0, 3);
+  return {
+    // The line and anything the model wrote after it.
+    text: lines.slice(0, at).join('\n').trim(),
+    suggestions,
+  };
+}

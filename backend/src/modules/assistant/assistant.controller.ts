@@ -1,6 +1,16 @@
-import { Body, Controller, Get, HttpStatus, Param, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpStatus,
+  Param,
+  Post,
+  Put,
+  Res,
+} from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
+  assistantMessageResponseSchema,
   assistantReplyResponseSchema,
   bookingResponseSchema,
   conversationResponseSchema,
@@ -13,13 +23,23 @@ import {
 } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { ErrorCode } from '../../common/errors/error-code';
-import { ApiData, ApiErrors } from '../../common/swagger/api-docs.decorators';
+import {
+  ApiData,
+  ApiErrors,
+  ApiStream,
+} from '../../common/swagger/api-docs.decorators';
 import { UserRole } from '../../generated/prisma/client';
+import type { Response } from 'express';
+import { streamTurn } from './assistant-stream';
 import { AssistantService } from './assistant.service';
 import {
+  AssistantFeedbackDto,
   ConfirmBookingProposalDto,
   SendAssistantMessageDto,
 } from './dto/assistant.dto';
+
+const STREAM_NOTE =
+  ' Answers as server-sent events (`text/event-stream`): `status` {text} while a tool runs ("Đang tìm phòng còn trống…"), `delta` {text} the next piece of the answer, `reset` {} drop the text shown so far, then `done` with the same AssistantReply as the plain route, or `error` {status, code, message}. Errors found before the first event (not your conversation, budget spent, model off) come back as a normal JSON error. The text pieces may carry the quick-reply line `>> …`, which `done` returns as `reply.suggestions`; hide it while streaming.';
 
 const MODEL_ERRORS = [
   ErrorCode.AI_UNAVAILABLE,
@@ -81,6 +101,60 @@ export class AssistantController {
     @Body() dto: SendAssistantMessageDto,
   ) {
     return this.assistant.send(user, id, dto);
+  }
+
+  @ApiOperation({
+    summary: 'Start a conversation, streamed',
+    description: 'As `POST /me/conversations`.' + STREAM_NOTE,
+  })
+  @ApiStream(
+    'The turn as server-sent events: status, delta, reset, then done or error.',
+  )
+  @ApiErrors(...MODEL_ERRORS)
+  @Post('me/conversations/stream')
+  startStream(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: SendAssistantMessageDto,
+    @Res() res: Response,
+  ) {
+    return streamTurn(res, (events) => this.assistant.start(user, dto, events));
+  }
+
+  @ApiOperation({
+    summary: 'Send the assistant a message, streamed',
+    description: 'As `POST /conversations/:id/messages`.' + STREAM_NOTE,
+  })
+  @ApiStream(
+    'The turn as server-sent events: status, delta, reset, then done or error.',
+  )
+  @ApiErrors(ErrorCode.CONVERSATION_NOT_FOUND, ...MODEL_ERRORS)
+  @Post('conversations/:id/messages/stream')
+  sendStream(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body() dto: SendAssistantMessageDto,
+    @Res() res: Response,
+  ) {
+    return streamTurn(res, (events) =>
+      this.assistant.send(user, id, dto, events),
+    );
+  }
+
+  @ApiOperation({
+    summary: 'Rate an answer of the assistant',
+    description:
+      "👍 (`UP`) or 👎 (`DOWN`) on one of the assistant's answers; `null` takes it back. Answers with the message.",
+  })
+  @ApiData(assistantMessageResponseSchema)
+  @ApiErrors(ErrorCode.CONVERSATION_NOT_FOUND, ErrorCode.MESSAGE_NOT_FOUND)
+  @Put('conversations/:id/messages/:messageId/feedback')
+  feedback(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Param('messageId') messageId: string,
+    @Body() dto: AssistantFeedbackDto,
+  ) {
+    return this.assistant.feedback(user.accountId, id, messageId, dto.value);
   }
 
   @ApiOperation({

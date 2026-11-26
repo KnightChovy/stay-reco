@@ -14,6 +14,7 @@ import {
   ChatWelcome,
   ConversationList,
   MessageRow,
+  StreamingBubble,
   TypingBubble,
 } from "./ChatParts";
 import { useAssistantChat } from "./use-assistant-chat";
@@ -44,7 +45,7 @@ export function AssistantChat({
   useEffect(() => {
     const el = scroller.current;
     if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-  }, [messageCount, chat.pendingText, chat.activeId, chat.error]);
+  }, [messageCount, chat.pendingText, chat.streamText, chat.status, chat.activeId, chat.error]);
 
   if (!chat.user) {
     return (
@@ -97,6 +98,9 @@ export function AssistantChat({
         hotels: [],
         proposal: null,
         cancellation: null,
+        suggestions: [],
+        askTrip: null,
+        feedback: null,
         createdAt: new Date(0).toISOString(),
       }
     : null;
@@ -119,9 +123,11 @@ export function AssistantChat({
           <ChatWelcome name={chat.user.name?.split(" ").pop()} onPick={chat.sendText} />
         ) : null}
 
-        {chat.messages.map((message) => (
+        {chat.messages.map((message, index) => (
           <MessageRow
             key={message.id}
+            latest={index === messageCount - 1}
+            actions={{ onSend: chat.sendText, onRate: chat.rateMessage, busy: chat.sending }}
             message={message}
             dates={chat.dates}
             now={chat.now}
@@ -134,7 +140,7 @@ export function AssistantChat({
         {pendingMessage && (
           <>
             <MessageRow message={pendingMessage} dates={null} now={chat.now} confirmingId={null} onConfirm={() => {}} />
-            <TypingBubble />
+            {chat.streamText ? <StreamingBubble text={chat.streamText} /> : <TypingBubble status={chat.status} />}
           </>
         )}
         {chat.error && (

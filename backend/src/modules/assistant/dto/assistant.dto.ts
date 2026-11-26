@@ -1,4 +1,5 @@
 import {
+  assistantFeedbackSchema,
   confirmBookingProposalSchema,
   sendAssistantMessageSchema,
 } from '@stayreco/shared';
@@ -10,3 +11,4 @@ export class SendAssistantMessageDto extends zodDto(
 export class ConfirmBookingProposalDto extends zodDto(
   confirmBookingProposalSchema,
 ) {}
+export class AssistantFeedbackDto extends zodDto(assistantFeedbackSchema) {}

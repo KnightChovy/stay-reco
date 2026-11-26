@@ -36,6 +36,9 @@ Two features on one model:
 | POST | `/me/conversations` | Customer | `{ content, channel? }` (`sendAssistantMessageSchema`) | 201 `AssistantReply` |
 | GET | `/conversations/:id` | Customer (own) | | `Conversation` with `messages`, oldest first |
 | POST | `/conversations/:id/messages` | Customer (own) | `{ content }` | 201 `AssistantReply` |
+| POST | `/me/conversations/stream` | Customer | as `POST /me/conversations` | 201 `text/event-stream` (see Streaming) |
+| POST | `/conversations/:id/messages/stream` | Customer (own) | `{ content }` | 201 `text/event-stream` |
+| PUT | `/conversations/:id/messages/:messageId/feedback` | Customer (own) | `{ value: "UP" \| "DOWN" \| null }` (`assistantFeedbackSchema`) | `AssistantMessage` |
 | POST | `/conversations/:id/confirm-booking` | Customer (own) | `{ proposalId }` (`confirmBookingProposalSchema`) | 201 `Booking` (PENDING) |
 | POST | `/conversations/:id/confirm-cancellation` | Customer (own) | `{ proposalId }` (`confirmCancellationProposalSchema`) | 201 `Booking` (`CANCELLED`, or `CONFIRMED` with `REFUND_PENDING`) |
 
@@ -46,12 +49,29 @@ Two features on one model:
 `AssistantReply` is `{ conversationId, message, reply }`: `message` is the customer's message as stored, `reply` the answer. Each `AssistantMessage` has:
 
 - `content`: Markdown (bold, lists). Render it as Markdown.
-- `hotels[]` (`AssistantHotel`): cards for the hotels the reply talks about. `fromTotal` and `nights` are set when the customer gave dates (the total for the whole stay), `pricePerNightFrom` otherwise; `reason` is set when the model recommends it to this customer. Link a card to the hotel page **with the dates of the conversation** when there are some.
+- `hotels[]` (`AssistantHotel`): cards for the hotels the reply talks about. `fromTotal` and `nights` are set when the customer gave dates (the total for the whole stay), `pricePerNightFrom` otherwise; `reason` is set when the model recommends it to this customer; `styles` are its travel styles, as on the recommendation cards (empty on replies stored before 2026-11-26). Link a card to the hotel page **with the dates of the conversation** when there are some. The web adds "Đặt phòng này" on the latest reply's cards, which sends "Mình muốn đặt phòng ở …" as the customer's message.
+- `suggestions[]`: up to three short replies to show as buttons under the **latest** answer; a tap sends that text as the customer's message. Empty when the reply carries a proposal, a cancellation or `askTrip`. The model writes them as a last line `>> a | b | c`, which the backend takes off `content`; when it writes none and the reply has hotels, the backend offers "Xem phòng ở <first hotel>" and "Tìm nơi rẻ hơn".
+- `askTrip` or null: the model needs the dates or the guests (tool `ask_trip_details`). Show a stay picker (destination, check-in, check-out, guests, rooms) filled with `destination`, `checkIn`, `checkOut`, `guests` where not null, under the latest answer only; it answers with a message in words, e.g. "Mình muốn ở Đà Lạt từ 12/12/2026 đến 14/12/2026, 2 khách, 1 phòng."
+- `feedback`: `UP`, `DOWN` or null, the customer's 👍 / 👎 on an answer (`PUT …/feedback`; the same value again is sent as `null` to take it back). Stored on the message (`metadata.feedback`) for reading the assistant's quality; it changes nothing in the conversation.
 - `proposal` (`BookingProposal`) or null: a priced booking. Show it as a summary (hotel, room type, dates, guests, total, free cancellation until) with a **"Xác nhận đặt phòng"** button, while `bookingId` is null and `expiresAt` is in the future. It is priced with `POST /bookings/discount-quote`: `subtotal` (rooms and add-ons), `discount` (the campaign or the voucher code, with its amount), `points` (StayMiles spent) and `addOns` (lines booked with the stay) are the breakdown of `total`; all four are absent on proposals made before 2026-11-26. Once `bookingId` is set, show how to pay **in the chat**: `GET /bookings/:id` gives `payment` (VietQR image, bank, account, amount, content) while it is PENDING, and the wallet pays it with `POST /bookings/:id/pay-with-wallet`.
 - `cancellation` (`CancellationProposal`) or null: a priced cancellation of one of the customer's paid bookings: `paid`, `fee`, `refund`, `needsApproval` (the refund waits for the hotel), `freeUntil`. Show it with a **"Xác nhận huỷ"** button while `outcome` is null and `expiresAt` is in the future; after the click `outcome` is `CANCELLED` (nothing to refund) or `REFUND_PENDING` (the hotel approves, then the money reaches the wallet).
 - `role`: `USER`, `ASSISTANT`, or `SYSTEM` (a note the platform adds, e.g. "Đã giữ phòng ..., mã đặt phòng SR-..." after a confirmation). Show `SYSTEM` as a centred note, not a bubble.
 
 When the model fails, nothing is stored: the customer's message is not in the conversation, so resending is safe.
+
+### Streaming
+
+The `/stream` routes run the same turn and answer with server-sent events, so the customer sees what the assistant is doing and the answer while it is written (the web uses them; the plain routes stay for clients that do not read streams). Send `Authorization` as usual; a `fetch` with a readable body works, `EventSource` does not (it cannot POST).
+
+| Event | Data | Meaning |
+|---|---|---|
+| `status` | `{ text }` | A tool is running: "Đang tìm phòng còn trống…", "Đang xem các loại phòng…", "Đang tính giá…" |
+| `delta` | `{ text }` | The next piece of the answer; append it |
+| `reset` | `{}` | Drop the text shown so far (the model wrote something, then went on to use a tool) |
+| `done` | `AssistantReply` | The stored turn, exactly as the plain route answers; replace the streamed text with `reply` |
+| `error` | `{ status, code, message }` | The turn failed after the stream opened; nothing is stored |
+
+A failure before the first event (not the customer's conversation, budget used up, model off, validation) is a normal JSON error with its status, as on the plain routes. The streamed text may end with the quick-reply line `>> …` and, rarely, an internal note in brackets: hide both while streaming; `done` has them removed.
 
 ### Confirming a proposal
 
@@ -76,6 +96,7 @@ Each customer has a monthly assistant budget (`AI_ASSISTANT_MONTHLY_BUDGET_USD`,
 | Code | When |
 |---|---|
 | `CONVERSATION_NOT_FOUND` (404) | Not a conversation of this customer |
+| `MESSAGE_NOT_FOUND` (404) | Feedback on a message that is not an answer of the assistant in this conversation |
 | `BOOKING_PROPOSAL_NOT_FOUND` (404) | No booking or cancellation proposal with this id in the conversation |
 | `BOOKING_PROPOSAL_INVALID` (409) | Already confirmed, or expired (both kinds of proposal) |
 | `AI_UNAVAILABLE` (503), `AI_BUDGET_EXCEEDED` (403), `AI_REFUSED` (403) | The model is off, the budget is used up, or the model declined |
@@ -84,7 +105,7 @@ Each customer has a monthly assistant budget (`AI_ASSISTANT_MONTHLY_BUDGET_USD`,
 
 ## What the assistant can do
 
-The model is given eight tools, all read-only, each going through the same service and validation as the matching public endpoint. Booking and cancelling are only proposed; the customer's click does them.
+The model is given nine tools, all read-only, each going through the same service and validation as the matching public endpoint. Booking and cancelling are only proposed; the customer's click does them.
 
 | Tool | Does | Same as |
 |---|---|---|
@@ -92,6 +113,7 @@ The model is given eight tools, all read-only, each going through the same servi
 | `recommend_hotels` | The customer's recommendation list, optionally for one city | `GET /me/recommendations` |
 | `get_hotel_rooms` | A hotel's description, amenities, cancellation policy, add-ons (with `prebookable`) and room types, priced when dates are given | `GET /hotels/:id/listing` |
 | `propose_booking` | Prices one room type for a stay, with an optional voucher `code`, `pointsToUse` and prebookable `addOns`, and checks it could be booked; makes the proposal | `POST /bookings/discount-quote` and the checks of `POST /bookings` |
+| `ask_trip_details` | Looks up nothing: shows the stay picker (`askTrip`) under the reply, filled with what the customer already said, instead of asking for the dates in words | none |
 | `my_vouchers` | The customer's usable codes: discount, cap, minimum, expiry, the hotel they apply at | `GET /me/vouchers?active=true` |
 | `my_wallet` | Wallet balance, StayMiles points, their value and the tier (points null when no programme runs) | `GET /me/wallet`, `GET /me/loyalty` |
 | `my_bookings` | The customer's bookings by tab or all: code, hotel, dates, status, payment status, total | `GET /me/bookings` |

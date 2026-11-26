@@ -25,7 +25,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { BookingCancellationService } from '../bookings/booking-cancellation.service';
 import { BookingsService } from '../bookings/bookings.service';
 import { AiService } from '../marketing/ai.service';
-import { stripInternalNotes } from './assistant-text';
+import { splitSuggestions, stripInternalNotes } from './assistant-text';
 import { systemPrompt } from './assistant.prompt';
 import {
   AssistantTools,
@@ -46,12 +46,43 @@ interface MessageMeta {
   cancellation?: CancellationProposal & { claimedAt?: string };
   /** Room types the tools looked at this turn: replayed to the model, not shown to the customer. */
   roomTypes?: { id: string; hotelName: string; name: string }[];
+  suggestions?: string[];
+  askTrip?: AssistantMessage['askTrip'];
+  feedback?: AssistantMessage['feedback'];
 }
+
+/**
+ * What a streamed turn reports while it runs (POST …/stream): what the assistant is doing, the answer's text as it
+ * is written, and `onReset` when text already sent belongs to a round that turned into tool calls after all.
+ */
+export interface TurnEvents {
+  onStatus: (text: string) => void;
+  onText: (text: string) => void;
+  onReset: () => void;
+}
+
+/** What the customer reads while a tool runs, in place of the dots. */
+const TOOL_STATUS: Record<string, string> = {
+  search_hotels: 'Đang tìm phòng còn trống…',
+  recommend_hotels: 'Đang chọn khách sạn hợp với bạn…',
+  get_hotel_rooms: 'Đang xem các loại phòng…',
+  propose_booking: 'Đang tính giá…',
+  propose_cancellation: 'Đang tính phí huỷ…',
+  my_vouchers: 'Đang xem mã giảm giá của bạn…',
+  my_wallet: 'Đang xem ví và điểm của bạn…',
+  my_bookings: 'Đang xem các chuyến đi của bạn…',
+};
 
 const conversationNotFound = () =>
   new NotFoundException({
     code: ErrorCode.CONVERSATION_NOT_FOUND,
     message: 'Conversation not found',
+  });
+
+const messageNotFound = () =>
+  new NotFoundException({
+    code: ErrorCode.MESSAGE_NOT_FOUND,
+    message: 'Message not found',
   });
 
 /**
@@ -119,17 +150,44 @@ export class AssistantService {
   }
 
   /** A new conversation, opened with its first message. */
-  start(user: AuthUser, input: SendAssistantMessageInput) {
-    return this.turn(user, null, input);
+  start(user: AuthUser, input: SendAssistantMessageInput, events?: TurnEvents) {
+    return this.turn(user, null, input, events);
   }
 
   async send(
     user: AuthUser,
     conversationId: string,
     input: SendAssistantMessageInput,
+    events?: TurnEvents,
   ) {
     await this.own(user.accountId, conversationId);
-    return this.turn(user, conversationId, input);
+    return this.turn(user, conversationId, input, events);
+  }
+
+  /** 👍 or 👎 on one of the assistant's answers in the customer's own conversation; null takes it back. */
+  async feedback(
+    customerId: string,
+    conversationId: string,
+    messageId: string,
+    value: 'UP' | 'DOWN' | null,
+  ): Promise<AssistantMessage> {
+    await this.own(customerId, conversationId);
+    const message = isUuid(messageId)
+      ? await this.prisma.message.findFirst({
+          where: { messageId, conversationId, role: 'ASSISTANT' },
+        })
+      : null;
+    if (!message) throw messageNotFound();
+    const updated = await this.prisma.message.update({
+      where: { messageId },
+      data: {
+        metadata: {
+          ...((message.metadata ?? {}) as object),
+          feedback: value,
+        },
+      },
+    });
+    return toMessage(updated);
   }
 
   /**
@@ -318,6 +376,7 @@ export class AssistantService {
     user: AuthUser,
     conversationId: string | null,
     input: SendAssistantMessageInput,
+    events?: TurnEvents,
   ): Promise<AssistantReply> {
     const customer = await this.customer(user.accountId);
     const priorRecommendations = new Map<string, string>();
@@ -334,6 +393,7 @@ export class AssistantService {
       proposal: null,
       cancellation: null,
       roomTypes: new Map(),
+      askTrip: null,
     };
     const calls: Prisma.AiFunctionCallCreateManyInput[] = [];
     const context = {
@@ -349,22 +409,32 @@ export class AssistantService {
     });
 
     let text = '';
+    let suggestions: string[] = [];
     for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
-      const response = await this.ai.chat(context, {
-        system,
-        contents,
-        tools: round < MAX_TOOL_ROUNDS ? TOOL_DECLARATIONS : [],
-      });
+      const response = await this.ai.chat(
+        context,
+        {
+          system,
+          contents,
+          tools: round < MAX_TOOL_ROUNDS ? TOOL_DECLARATIONS : [],
+        },
+        events?.onText,
+      );
       const requested = response.functionCalls ?? [];
       if (!requested.length) {
         // The last layer: whatever the model wrote, no internal note with an id is stored or shown.
-        text = stripInternalNotes(response.text ?? '');
+        ({ text, suggestions } = splitSuggestions(
+          stripInternalNotes(response.text ?? ''),
+        ));
         break;
       }
-      const modelTurn = response.candidates?.[0]?.content;
-      if (modelTurn) contents.push(modelTurn);
+      // Words the model wrote before asking for a tool are not the answer: the customer's screen drops them.
+      if (response.text) events?.onReset();
+      if (response.content) contents.push(response.content);
       const results: Part[] = [];
       for (const call of requested) {
+        const status = TOOL_STATUS[call.name ?? ''];
+        if (status) events?.onStatus(status);
         const started = Date.now();
         const args = call.args ?? {};
         const result = await this.tools.run(
@@ -391,18 +461,32 @@ export class AssistantService {
         ? 'Mình đã chuẩn bị đề xuất đặt phòng bên dưới, bạn kiểm tra và bấm "Xác nhận đặt phòng" nhé.'
         : state.cancellation
           ? 'Mình đã chuẩn bị đề xuất huỷ bên dưới, bạn kiểm tra số tiền hoàn rồi bấm "Xác nhận huỷ" nếu đồng ý nhé.'
-          : 'Xin lỗi, mình chưa tìm được câu trả lời. Bạn có thể nói rõ hơn nơi đến, ngày và số khách không?';
+          : state.askTrip
+            ? 'Bạn chọn ngày và số khách ở khung bên dưới nhé.'
+            : 'Xin lỗi, mình chưa tìm được câu trả lời. Bạn có thể nói rõ hơn nơi đến, ngày và số khách không?';
     }
 
+    const hotels = [...state.hotels.values()].filter((h) =>
+      mentions(text, h.name, state),
+    );
+    // A card or a picker to act on already says what to do next; otherwise, when the model offered nothing to tap
+    // and there are hotels to look at, the obvious next steps.
+    if (state.proposal || state.cancellation || state.askTrip) {
+      suggestions = [];
+    } else if (!suggestions.length && hotels.length) {
+      suggestions = [`Xem phòng ở ${hotels[0].name}`, 'Tìm nơi rẻ hơn'].filter(
+        (s) => s.length <= 60,
+      );
+    }
     const meta: MessageMeta = {
-      hotels: [...state.hotels.values()].filter((h) =>
-        mentions(text, h.name, state),
-      ),
+      hotels,
       ...(state.proposal && { proposal: state.proposal }),
       ...(state.cancellation && { cancellation: state.cancellation }),
       ...(state.roomTypes.size && {
         roomTypes: [...state.roomTypes].map(([id, rt]) => ({ id, ...rt })),
       }),
+      ...(suggestions.length && { suggestions }),
+      ...(state.askTrip && { askTrip: state.askTrip }),
     };
 
     const { conversation, question, reply } = await this.prisma.$transaction(
@@ -576,9 +660,13 @@ function toMessage(m: {
     role: m.role,
     // Answers stored before the notes were kept out of model turns may carry one: never shown.
     content: m.role === 'ASSISTANT' ? stripInternalNotes(m.content) : m.content,
-    hotels: meta.hotels ?? [],
+    // Hotels stored before the styles were kept have none.
+    hotels: (meta.hotels ?? []).map((h) => ({ ...h, styles: h.styles ?? [] })),
     proposal,
     cancellation,
+    suggestions: meta.suggestions ?? [],
+    askTrip: meta.askTrip ?? null,
+    feedback: meta.feedback ?? null,
     createdAt: m.createdAt.toISOString(),
   };
 }

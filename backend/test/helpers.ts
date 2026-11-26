@@ -154,6 +154,7 @@ export class FakeAi {
       system: string;
       contents: { role?: string; parts?: Record<string, unknown>[] }[];
     },
+    onText?: (text: string) => void,
   ) {
     if (this.budgetLeft <= 0) {
       return Promise.reject(
@@ -177,22 +178,22 @@ export class FakeAi {
       return Promise.resolve({
         functionCalls,
         text: undefined,
-        candidates: [
-          {
-            content: {
-              role: 'model',
-              parts: functionCalls.map((f) => ({ functionCall: f })),
-            },
-          },
-        ],
+        content: {
+          role: 'model',
+          parts: functionCalls.map((f) => ({ functionCall: f })),
+        },
       });
+    }
+    // Streamed in two pieces, as a model would.
+    if (onText) {
+      const half = Math.ceil(step.text.length / 2);
+      onText(step.text.slice(0, half));
+      if (step.text.length > half) onText(step.text.slice(half));
     }
     return Promise.resolve({
       functionCalls: undefined,
       text: step.text,
-      candidates: [
-        { content: { role: 'model', parts: [{ text: step.text }] } },
-      ],
+      content: { role: 'model', parts: [{ text: step.text }] },
     });
   }
 

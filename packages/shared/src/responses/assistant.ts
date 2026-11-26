@@ -221,6 +221,11 @@ export const assistantHotelResponseSchema = z
       .describe(
         "Why the model recommends it for this customer; null if it does not.",
       ),
+    styles: z
+      .array(z.string())
+      .describe(
+        "Travel styles the hotel fits (`resort`, `nature`, `foodie`, `business`, `family`, `chill`), as on the recommendation cards.",
+      ),
   })
   .register(responseSchemas, { id: "AssistantHotel" });
 export type AssistantHotel = z.infer<typeof assistantHotelResponseSchema>;
@@ -343,6 +348,26 @@ export const assistantMessageResponseSchema = z
       .describe(
         "A cancellation to confirm, shown as a card under the reply; null when none.",
       ),
+    suggestions: z
+      .array(z.string())
+      .describe(
+        "Short replies the customer can tap to answer, in their words; empty when none.",
+      ),
+    askTrip: z
+      .object({
+        destination: z.string().nullable(),
+        checkIn: z.iso.date().nullable(),
+        checkOut: z.iso.date().nullable(),
+        guests: z.number().int().nullable(),
+      })
+      .nullable()
+      .describe(
+        "The assistant needs the dates and guests: show a picker, filled with what is already known, that answers with a message.",
+      ),
+    feedback: z
+      .enum(["UP", "DOWN"])
+      .nullable()
+      .describe("The customer's 👍 or 👎 on this answer."),
     createdAt: isoDateTime(),
   })
   .register(responseSchemas, { id: "AssistantMessage" });
