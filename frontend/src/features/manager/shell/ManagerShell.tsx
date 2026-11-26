@@ -37,7 +37,6 @@ const navigation: Omit<SidebarItem, "isActive">[] = [
     href: "/manager/partners",
     label: "Đối tác khách sạn",
     icon: Building2,
-    badge: DEMO_BADGE,
     section: "ĐỐI TÁC & RỦI RO",
   },
   {

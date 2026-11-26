@@ -4,6 +4,8 @@ import type {
   ManagerPayoutListQuery,
   PayoutPaidInput,
   PayoutRejectInput,
+  PlatformHotelListQuery,
+  PlatformHotelRow,
   PlatformOverview,
   VerificationFileLink,
   VerificationListQuery,
@@ -74,6 +76,16 @@ export type PlatformRangeParams = { from?: string; to?: string };
 export async function getPlatformOverview(params: PlatformRangeParams) {
   const { data } = await api.get<APIResponse<PlatformOverview>>("/platform/stats/overview", { params });
   return data.data;
+}
+
+export type PlatformHotelParams = Partial<PlatformHotelListQuery>;
+
+export async function getPlatformHotels(params: PlatformHotelParams) {
+  const { data } = await api.get<APIResponse<PlatformHotelRow[]>>("/platform/hotels", {
+    params,
+    paramsSerializer: { indexes: null },
+  });
+  return { hotels: data.data, meta: data.meta as PageMeta };
 }
 
 // ── Withdrawals ─────────────────────────────────────────────

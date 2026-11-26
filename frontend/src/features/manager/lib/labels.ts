@@ -2,7 +2,9 @@ import { format, formatDistanceToNowStrict } from "date-fns";
 import { vi } from "date-fns/locale";
 import type {
   DocumentType,
+  HotelStatus,
   PartnerStatus,
+  Region,
   PayoutStatus,
   VerificationRequestType,
   VerificationStatus,
@@ -35,7 +37,22 @@ export const partnerStatusLabels: Record<PartnerStatus, Labelled> = {
   SUSPENDED: { label: "Tạm ngưng", tone: "danger" },
 };
 
-const moneyFormat = new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 });
+export const hotelStatusLabels: Record<HotelStatus, Labelled> = {
+  DRAFT: { label: "Bản nháp", tone: "muted" },
+  PENDING_VERIFICATION: { label: "Chờ xác minh", tone: "warning" },
+  ACTIVE: { label: "Đang bán", tone: "success" },
+  SUSPENDED: { label: "Tạm ngưng", tone: "danger" },
+  INACTIVE: { label: "Ngừng hoạt động", tone: "muted" },
+};
+
+export const regionLabels: Record<Region, string> = {
+  NORTH: "Miền Bắc",
+  CENTRAL: "Miền Trung",
+  SOUTH: "Miền Nam",
+  OTHER: "Khác",
+};
+
+const moneyFormat =new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 });
 
 export function formatMoney(amount: number | null | undefined) {
   return amount == null ? "—" : moneyFormat.format(amount);

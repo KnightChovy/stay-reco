@@ -21,6 +21,7 @@ export const managerKeys = {
   payouts: (params: managerService.PayoutQueueParams) => [...managerKeys.payoutQueue(), params] as const,
   payout: (payoutId: string) => [...managerKeys.all, "payout", payoutId] as const,
   overview: (params: managerService.PlatformRangeParams) => [...managerKeys.all, "overview", params] as const,
+  hotels: (params: managerService.PlatformHotelParams) => [...managerKeys.all, "hotels", params] as const,
 };
 
 /** Codes whose shared message is written for the partner; the manager reads them from the other side. */
@@ -67,6 +68,14 @@ export function usePlatformOverview(params: managerService.PlatformRangeParams) 
   return useQuery({
     queryKey: managerKeys.overview(params),
     queryFn: () => managerService.getPlatformOverview(params),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function usePlatformHotels(params: managerService.PlatformHotelParams) {
+  return useQuery({
+    queryKey: managerKeys.hotels(params),
+    queryFn: () => managerService.getPlatformHotels(params),
     placeholderData: keepPreviousData,
   });
 }
