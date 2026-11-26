@@ -288,9 +288,9 @@ function RegisterPageContent() {
                         onCheckedChange={(checked) => setFormData({ ...formData, agreeTerms: !!checked })}
                         className="mt-0.5"
                       />
-                      <Label htmlFor="terms" className="text-xs text-muted-foreground leading-normal cursor-pointer">
+                      <label htmlFor="terms" className="text-xs text-muted-foreground leading-relaxed cursor-pointer">
                         Tôi đồng ý với <Link href="/terms" className="text-primary hover:underline font-semibold">Điều khoản sử dụng</Link> và <Link href="/privacy" className="text-primary hover:underline font-semibold">Chính sách bảo mật</Link> của StayReco.
-                      </Label>
+                      </label>
                     </div>
 
                     {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-700" role="alert">{error}</p>}
@@ -310,6 +310,12 @@ function RegisterPageContent() {
                     <Link href={loginHref} className="font-semibold text-primary hover:underline">
                       Đăng nhập tại đây
                     </Link>
+                    <p className="mt-2">
+                      Bạn là chủ khách sạn?{' '}
+                      <Link href="/register/partner" className="font-semibold text-primary hover:underline">
+                        Đăng ký trở thành đối tác
+                      </Link>
+                    </p>
                   </div>
                 </>
               )}
