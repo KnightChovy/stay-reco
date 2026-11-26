@@ -22,7 +22,7 @@ import {
   Sparkles,
   CheckCircle2,
 } from 'lucide-react';
-import { getSafeNextPath, useAuthStore } from '@/lib/auth-store';
+import { postLoginPath, useAuthStore } from '@/lib/auth-store';
 
 function RegisterPageContent() {
   const router = useRouter();
@@ -157,7 +157,7 @@ function RegisterPageContent() {
                 /* Email OTP verification step */
                 <OtpVerification
                   email={pendingEmail}
-                  onVerified={() => router.replace(getSafeNextPath(next))}
+                  onVerified={() => router.replace(postLoginPath(useAuthStore.getState().user?.role ?? 'customer', next))}
                 />
               ) : (
                 /* Registration Form */

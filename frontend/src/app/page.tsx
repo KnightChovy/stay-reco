@@ -32,30 +32,31 @@ export default function HomePage() {
     `/hotels/${hotelId}?checkIn=${FEATURED_STAYS.checkIn}&checkOut=${FEATURED_STAYS.checkOut}&guests=2&rooms=1`;
 
 
+  // Hardcoded until the backend serves `GET /destinations` (be-request-destinations.md); names as the search expects.
   const destinations = [
     {
       name: 'Hội An',
       image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAsiNPMoR80a471Yprz9VZm8dWikwo5riP15btQ6MV0P-HYp9ZIqLT5SuGAzJPDQ_c-DBH1zJ9mRckeYXHHsXpQfrd8EyhqzD2-J1kc9xqODOMJs9XHhwnqZk7phj0SObVWzHXhV81SHb5IqHiqjxbEdsqA3GRKzT5of_JsHY0n19frLX5HIo7GIJvjTBsKha1EEgXNMT2HTIXVJ8aiB75ppqFkrUNHCgqCuDxbHqSe3pznv7LEWJTK',
       countText: '240+ chỗ nghỉ boutique',
-      href: '/search?destination=HoiAn',
+      href: `/search?destination=${encodeURIComponent('Hội An')}`,
     },
     {
       name: 'Đà Lạt',
       image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDQJJI3prPOAY-_on21KHQ8vwpEZEq529kN0Q4BMs9C3_Y8nqlgs2REq8l8_Dszj-oK8RxqWDtmUd7oF5C2zWkayEpQm3Wm71mekprEsxJAnTWQicloD1nyzuFQ1rWXVc1PA60tYY8JpiDrHEUFjmBvd5dXJz9LhFPBpJVyEs6IStqidRaOwjetbRRMz6DfSFfybAASCWBAcKodqOJjvlIZB5DFDes1d6MVW-FYU2B113Hmx71eH_U6',
       countText: '310+ chỗ nghỉ boutique',
-      href: '/search?destination=DaLat',
+      href: `/search?destination=${encodeURIComponent('Đà Lạt')}`,
     },
     {
       name: 'Phú Quốc',
       image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuA4XhdLh0CuG_TSo4zX2jjwnskgidplTzgcvX4_z38uO04Ev9LyHQUOklP_--sH_pjyjnODhlBAGQtvgW8Ro8jQQHqFz3_FJUjigdM0_0WD6YzLixfwS0zZAB7uJwT72mYpbgPbB7x1Y-LLblOktBu-5SAg3TCIPKdMi3zleWmgZ3da_q4s1LZhVEg7-8A_0zLFn44y-XBRY_tTKX-L-hDwEwHcX1DND-U-6hc6ojzeD01xKYoXhtmZ',
       countText: '180+ chỗ nghỉ boutique',
-      href: '/search?destination=PhuQuoc',
+      href: `/search?destination=${encodeURIComponent('Phú Quốc')}`,
     },
     {
       name: 'Ninh Bình',
       image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBq_dh6uInEnJdBqblYzP09L3o0LSR_Ys-nNYyOL5TvkKC-xzzMjumnkifQuOmxTipnmtabnuSi8axc-7tytfAgej_ZhDUx0OrzwmX90VLcaoQV9WQj2ET9mpNWApHGNbSLU_t4XNzvKJSOYl1_J-rmS5BgSo3TGzJJFcsULm7eUHiuHH6WDSeJpC1Ux7ynZqpWSXGM4KrQ2b9rTE0KhyTlit7ZEAn31j_QdpPobwbhyGyKnHTfJFsk',
       countText: '95+ chỗ nghỉ boutique',
-      href: '/search?destination=NinhBinh',
+      href: `/search?destination=${encodeURIComponent('Ninh Bình')}`,
     },
   ];
 

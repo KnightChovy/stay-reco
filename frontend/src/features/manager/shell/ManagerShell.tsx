@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   BadgeCheck,
+  Banknote,
   Building2,
   ChartNoAxesCombined,
   Landmark,
@@ -20,10 +21,8 @@ import { SidebarInset } from "@/components/ui/sidebar";
 import Navbar from "@/components/common/navbar/Navbar";
 import { NotificationBell } from "@/features/notifications/components/NotificationBell";
 import { useAuthStore } from "@/lib/auth-store";
-import { usePendingVerificationCount } from "../api/manager-queries";
+import { usePendingPayoutCount, usePendingVerificationCount } from "../api/manager-queries";
 
-/** Screens still built on the sample data of `@/lib/manager-data` until their APIs exist (Phase 6). */
-const DEMO_BADGE = "Mẫu";
 
 const navigation: Omit<SidebarItem, "isActive">[] = [
   {
@@ -36,7 +35,6 @@ const navigation: Omit<SidebarItem, "isActive">[] = [
     href: "/manager/partners",
     label: "Đối tác khách sạn",
     icon: Building2,
-    badge: DEMO_BADGE,
     section: "ĐỐI TÁC & RỦI RO",
   },
   {
@@ -49,28 +47,30 @@ const navigation: Omit<SidebarItem, "isActive">[] = [
     href: "/manager/compliance",
     label: "Tuân thủ & chất lượng",
     icon: ShieldAlert,
-    badge: DEMO_BADGE,
     section: "ĐỐI TÁC & RỦI RO",
   },
   {
     href: "/manager/revenue",
     label: "Doanh thu nền tảng",
     icon: ChartNoAxesCombined,
-    badge: DEMO_BADGE,
     section: "TÀI CHÍNH NỀN TẢNG",
   },
   {
     href: "/manager/cashflow",
     label: "Dòng tiền & đối soát",
     icon: Landmark,
-    badge: DEMO_BADGE,
+    section: "TÀI CHÍNH NỀN TẢNG",
+  },
+  {
+    href: "/manager/payouts",
+    label: "Rút tiền đối tác",
+    icon: Banknote,
     section: "TÀI CHÍNH NỀN TẢNG",
   },
   {
     href: "/manager/transactions",
-    label: "Giao dịch & quyết toán",
+    label: "Hoa hồng nền tảng",
     icon: WalletCards,
-    badge: DEMO_BADGE,
     section: "TÀI CHÍNH NỀN TẢNG",
   },
 ];
@@ -79,15 +79,16 @@ export function ManagerShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
-  // The one real count of the sidebar: requests waiting for a decision.
   const { count: pendingVerifications } = usePendingVerificationCount();
+  const { count: pendingPayouts } = usePendingPayoutCount();
+  const counts: Record<string, number> = {
+    "/manager/verifications": pendingVerifications,
+    "/manager/payouts": pendingPayouts,
+  };
   const items = navigation.map((item) => ({
     ...item,
     isActive: pathname === item.href,
-    badge:
-      item.href === "/manager/verifications" && pendingVerifications > 0
-        ? pendingVerifications
-        : item.badge,
+    badge: counts[item.href] ? counts[item.href] : item.badge,
   }));
 
   return (

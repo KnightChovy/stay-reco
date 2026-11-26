@@ -9,12 +9,9 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { OperationDialog } from "@/components/common/modal/OperationDialog";
 import { ManagerNotice, type ManagerNoticeTone } from "./ManagerNotice";
 
 type ManagerActionContextValue = {
-  /** Mock screens: opens the sample operation dialog for an action that has no API yet. */
-  notify: (message: string) => void;
   /** Toast-like notice for the outcome of an API call. */
   showNotice: (message: string, tone?: ManagerNoticeTone) => void;
 };
@@ -26,17 +23,13 @@ const ManagerActionContext = createContext<ManagerActionContextValue | null>(
 );
 
 export function ManagerActionProvider({ children }: { children: ReactNode }) {
-  const [action, setAction] = useState("");
   const [notice, setNotice] = useState<Notice | null>(null);
   const showNotice = useCallback(
     (message: string, tone: ManagerNoticeTone = "success") =>
       setNotice({ message, tone, id: Date.now() }),
     [],
   );
-  const value = useMemo(
-    () => ({ notify: setAction, showNotice }),
-    [showNotice],
-  );
+  const value = useMemo(() => ({ showNotice }), [showNotice]);
 
   useEffect(() => {
     if (!notice) return;
@@ -47,17 +40,6 @@ export function ManagerActionProvider({ children }: { children: ReactNode }) {
   return (
     <ManagerActionContext.Provider value={value}>
       {children}
-      <OperationDialog
-        action={action}
-        scope="Vận hành nền tảng · StayReco"
-        demo
-        onClose={() => setAction("")}
-        onComplete={() => {
-          // Nothing is stored: saying "recorded" would mislead a manager into thinking the action took effect.
-          showNotice(`Bản minh hoạ: "${action}" chưa được lưu vì tính năng đang hoàn thiện.`, "info");
-          setAction("");
-        }}
-      />
       {notice && (
         <ManagerNotice
           key={notice.id}
