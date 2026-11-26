@@ -18,7 +18,7 @@ import { getApiErrorMessage } from "@/lib/api-error";
 import { formatMoney } from "@/features/stays/lib/format";
 import { AMENITIES, BUDGETS, STYLES } from "@/features/account/lib/preference-options";
 import { describeVoucherDiscount } from "@/features/account/lib/rewards-labels";
-import { useCompleteOnboarding, useOnboardingHotels, useSkipOnboarding } from "../api/recommendation-queries";
+import { useCompleteOnboarding, useOnboardingHotels } from "../api/recommendation-queries";
 
 const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=600&q=80";
 
@@ -103,20 +103,17 @@ export function OnboardingDialog({
   const [voucher, setVoucher] = useState<Voucher | null>(null);
   const [done, setDone] = useState(false);
   const complete = useCompleteOnboarding();
-  const skip = useSkipOnboarding();
 
   const step = steps[Math.min(stepIndex, steps.length - 1)].key;
   const isLast = stepIndex >= steps.length - 1;
   const picked = countPicks(picks);
   const enough = picked >= ONBOARDING_LIMITS.minPicks;
-  const busy = complete.isPending || skip.isPending;
+  const busy = complete.isPending;
   const suggestions = useOnboardingHotels(toHotelsQuery(picks), open && step === "hotels");
 
+  // Only when opened again from /account/preferences: closing records nothing, onboarding cannot be skipped.
   const later = () => {
-    if (busy) return;
-    // Skipping again after a skip changes nothing; only a NEW customer records it.
-    if (onboarding.status === "NEW") skip.mutate(undefined, { onSettled: onClose });
-    else onClose();
+    if (!busy) onClose();
   };
 
   const finish = () => {
@@ -309,7 +306,7 @@ export function OnboardingDialog({
               <div className="flex items-center gap-2">
                 {!required && (
                   <Button type="button" variant="ghost" className="h-10 px-3" onClick={later} disabled={busy}>
-                    {skip.isPending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null} Để sau
+                    Để sau
                   </Button>
                 )}
                 <span className="ml-auto hidden text-xs text-muted-foreground sm:inline" aria-live="polite">

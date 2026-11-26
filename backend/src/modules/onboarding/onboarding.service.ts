@@ -146,22 +146,6 @@ export class OnboardingService {
     };
   }
 
-  /** Remembers that the customer skipped, so the screen is not forced on them again; they can still finish later. */
-  async skip(customerId: string, now = new Date()): Promise<Onboarding> {
-    await this.prisma.$transaction(async (tx) => {
-      // Locked like `complete`, so a skip racing a finish cannot turn COMPLETED back into SKIPPED.
-      await lockAccount(tx, customerId);
-      if ((await this.statusOf(tx, customerId)) === 'COMPLETED') {
-        throw alreadyCompleted();
-      }
-      await writePreferences(tx, customerId, {
-        [ONBOARDING_KEYS.status]: 'SKIPPED',
-        [ONBOARDING_KEYS.at]: now.toISOString(),
-      });
-    });
-    return this.get(customerId);
-  }
-
   /**
    * The hotel step: hotels in the cities picked that fit the style, amenities and views picked, best fit first, so a
    * customer cannot pick a hotel that contradicts what they just said (docs/api/onboarding.md). With no city picked

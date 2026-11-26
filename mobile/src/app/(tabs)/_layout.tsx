@@ -1,5 +1,4 @@
-import { useEffect } from 'react';
-import { Redirect, router } from 'expo-router';
+import { Redirect } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { Tabs } from 'expo-router/js-tabs';
 import { Role } from '@stayreco/shared';
@@ -8,19 +7,12 @@ import { colors } from '@/constants/theme';
 import { getOnboarding } from '@/services/recommendations.service';
 import { useAuthStore } from '@/stores/auth.store';
 
-// Mỗi lần mở app chỉ mời onboarding một lần, kể cả khi khách thoát bằng nút quay lại mà không bấm "Để sau".
-let onboardingShown = false;
-
 export default function TabsLayout() {
   const role = useAuthStore((s) => s.account?.role);
-  // Khách hàng có onboarding `NEW` được mời chọn sở thích (nhận voucher chào mừng) ngay sau khi đăng nhập.
+  // Khách hàng có onboarding `NEW` phải chọn sở thích trước (bắt buộc từ 2026-11-26, không bỏ qua được): gợi ý của
+  // khách chưa ở lần nào bắt đầu từ các câu trả lời này. Quay lại từ màn hình đó cũng chỉ về lại đó.
   const onboarding = useQuery({ queryKey: ['onboarding'], queryFn: getOnboarding, enabled: role === Role.CUSTOMER });
-  const isNew = onboarding.data?.status === 'NEW';
-  useEffect(() => {
-    if (!isNew || onboardingShown) return;
-    onboardingShown = true;
-    router.push('/onboarding');
-  }, [isNew]);
+  if (role === Role.CUSTOMER && onboarding.data?.status === 'NEW') return <Redirect href="/onboarding" />;
   // Nhân viên khách sạn dùng portal staff; áp dụng cả khi đăng nhập lẫn khi khôi phục phiên.
   if (role === Role.HOTEL_STAFF) return <Redirect href="/staff" />;
 

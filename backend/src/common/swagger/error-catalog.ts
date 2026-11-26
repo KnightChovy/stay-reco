@@ -310,6 +310,10 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorInfo> = {
     description:
       'Onboarding was already completed; the picks are changed with PUT /me/preferences',
   },
+  ONBOARDING_REQUIRED: {
+    status: 403,
+    description: 'Onboarding cannot be skipped: a new customer answers it',
+  },
   LOYALTY_PROGRAM_NOT_FOUND: {
     status: 404,
     description: 'No loyalty programme is running, so points cannot be used',

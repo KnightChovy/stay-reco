@@ -91,7 +91,3 @@ export function useCompleteOnboarding() {
   });
 }
 
-export function useSkipOnboarding() {
-  const settle = useOnboardingSettled();
-  return useMutation({ mutationFn: service.skipOnboarding, onSuccess: settle });
-}

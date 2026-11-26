@@ -395,7 +395,7 @@ describe('Onboarding and the welcome voucher (e2e)', () => {
     );
   });
 
-  it('remembers a skip, and finishing later still earns the code', async () => {
+  it('cannot be skipped: a new customer stays NEW until they finish, and still earns the code', async () => {
     await hotel();
     const guest = await t.signIn('CUSTOMER', 'guest@mail.test');
 
@@ -403,12 +403,14 @@ describe('Onboarding and the welcome voucher (e2e)', () => {
       .api()
       .post('/api/v1/me/onboarding/skip')
       .set(auth(guest.token))
+      .expect(403);
+    expect(skipped.body.code).toBe('ONBOARDING_REQUIRED');
+    const still = await t
+      .api()
+      .get('/api/v1/me/onboarding')
+      .set(auth(guest.token))
       .expect(200);
-    expect(skipped.body.data).toMatchObject({
-      status: 'SKIPPED',
-      voucher: null,
-    });
-    expect(skipped.body.data.options).not.toBeNull();
+    expect(still.body.data.status).toBe('NEW');
 
     const done = await complete(guest.token, {
       cities: ['Đà Nẵng'],

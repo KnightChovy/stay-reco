@@ -16,7 +16,7 @@ NEW ──skip──→ SKIPPED ──finish──→ COMPLETED
 | GET | `/me/onboarding` | customer | | `Onboarding` |
 | GET | `/me/onboarding/hotels` | customer | `?cities=&travelStyles=&roomAmenities=&viewIds=&budgetPerNight=` (`onboardingHotelsQuerySchema`, lists repeated) | `OnboardingHotelSuggestion[]` |
 | POST | `/me/onboarding` | customer | `completeOnboardingSchema` | `Onboarding` (200) |
-| POST | `/me/onboarding/skip` | customer | | `Onboarding` (200) |
+| POST | `/me/onboarding/skip` | customer | | always 403 `ONBOARDING_REQUIRED` (skipping was removed 2026-11-26) |
 
 ```jsonc
 // GET /me/onboarding
@@ -44,7 +44,7 @@ NEW ──skip──→ SKIPPED ──finish──→ COMPLETED
 
 ## What the frontend needs to know
 
-- **A new customer must finish it** (decided 2026-11-26): the web shows it on `NEW` with no "Để sau" and does not let Escape close it, because the recommendations of a customer with no stays start from these answers. `POST /me/onboarding/skip` stays for older clients (and the account page's offer, which can still be closed).
+- **A new customer must finish it** (decided 2026-11-26): the recommendations of a customer with no stays start from these answers. `POST /me/onboarding/skip` answers `403 ONBOARDING_REQUIRED`; the web shows the screen on `NEW` with no "Để sau" and Escape does not close it, and the app sends a `NEW` customer to it before the tabs. `SKIPPED` remains only for accounts that skipped before and for guests from before onboarding: their account page still offers it, and that screen can be closed.
 - **When to show it.** After sign-in, on `status: "NEW"` only. A customer with no answer saved who has already completed a stay (an account from before onboarding) reads `SKIPPED`, not `NEW`: the screen is for newcomers, and the account page still offers it. Offer it again from the account page on `SKIPPED`; finishing it then still earns the code. On `COMPLETED` the picks are edited on `/account/preferences` (`PUT /me/preferences`).
 - **The order of the screen: destinations, then taste, then hotels.** Hotels come last so a customer cannot pick one that contradicts what they just said (a resort lover ticking three homestays, decision W11). The hotel step asks `GET /me/onboarding/hotels` with the answers given so far; when the customer goes back and changes one, drop the hotels they had ticked, since those were offered for the old answers.
 - **Hotels that fit the answers** (`GET /me/onboarding/hotels`):

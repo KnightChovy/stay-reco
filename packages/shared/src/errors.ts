@@ -160,6 +160,8 @@ export const ErrorCode = {
   // First-login preferences and the welcome voucher
   /** Onboarding was already completed; change the picks with PUT /me/preferences instead. */
   ONBOARDING_ALREADY_COMPLETED: 'ONBOARDING_ALREADY_COMPLETED',
+  /** Onboarding cannot be skipped: a new customer must answer it (decided 2026-11-26). */
+  ONBOARDING_REQUIRED: 'ONBOARDING_REQUIRED',
 
   // Loyalty (BR-11)
   /** No loyalty programme is running, so points cannot be earned or spent. */

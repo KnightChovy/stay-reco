@@ -14,7 +14,7 @@ import { AMENITIES, BUDGETS, STYLES, toggle } from '@/features/recommendations/p
 import { images } from '@/lib/mock-data';
 import { formatVnd } from '@/lib/stay';
 import { apiErrorMessage } from '@/services/ApiService';
-import { completeOnboarding, getOnboarding, getOnboardingHotels, skipOnboarding } from '@/services/recommendations.service';
+import { completeOnboarding, getOnboarding, getOnboardingHotels } from '@/services/recommendations.service';
 
 type Picks = { cities: string[]; hotelIds: string[]; viewIds: string[]; travelStyles: string[]; roomAmenities: string[]; budget: string };
 const EMPTY: Picks = { cities: [], hotelIds: [], viewIds: [], travelStyles: [], roomAmenities: [], budget: '' };
@@ -119,8 +119,8 @@ function WelcomeDone({ voucher }: { voucher: Voucher | null }) {
  * Sở thích lần đầu đăng nhập (docs/api/onboarding.md): điểm đến, rồi gu, tiện nghi, tầm nhìn và ngân sách, cuối cùng là
  * khách sạn hợp với các câu trả lời đó (`GET /me/onboarding/hotels`), để khách không chọn khách sạn trái với gu vừa chọn.
  * Đổi một câu trả lời ở bước trước thì xoá các khách sạn đã chọn, vì chúng được gợi ý cho câu trả lời cũ.
- * Chọn ít nhất `ONBOARDING_LIMITS.minPicks` mục để hoàn tất và nhận voucher chào mừng. "Để sau" ghi nhận bỏ qua;
- * có thể làm lại từ /account/preferences và vẫn nhận mã.
+ * Chọn ít nhất `ONBOARDING_LIMITS.minPicks` mục để hoàn tất và nhận voucher chào mừng. Khách mới (`NEW`) bắt buộc làm
+ * xong, không có "Để sau"; mở lại từ /account/preferences (tài khoản đã bỏ qua trước đây) thì vẫn đóng được.
  */
 export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
@@ -151,11 +151,6 @@ export default function OnboardingScreen() {
       setVoucher(result.voucher);
     },
   });
-  const skip = useMutation({
-    mutationFn: skipOnboarding,
-    onSuccess: done,
-    onSettled: () => (router.canGoBack() ? router.back() : router.replace('/')),
-  });
 
   const onboarding = query.data;
   if (voucher !== undefined) return <WelcomeDone voucher={voucher} />;
@@ -166,7 +161,6 @@ export default function OnboardingScreen() {
           Không tải được câu hỏi. Vui lòng kiểm tra kết nối.
         </Text>
         <Button label="Thử lại" variant="secondary" size="sm" onPress={() => void query.refetch()} />
-        <Button label="Để sau" variant="ghost" size="sm" onPress={() => router.back()} />
       </View>
     );
   }
@@ -191,7 +185,7 @@ export default function OnboardingScreen() {
   const isLast = stepIndex >= steps.length - 1;
   const picked = countPicks(picks);
   const enough = picked >= ONBOARDING_LIMITS.minPicks;
-  const busy = complete.isPending || skip.isPending;
+  const busy = complete.isPending;
   const edit = (next: (prev: Picks) => Picks) => {
     complete.reset();
     setPicks(next);
@@ -202,11 +196,10 @@ export default function OnboardingScreen() {
     setStepIndex(index);
     setOnHotelStep(steps[Math.min(index, steps.length - 1)].key === 'hotels');
   };
-  // Bỏ qua lần nữa sau khi đã bỏ qua không đổi gì: chỉ khách NEW mới ghi nhận.
+  // Chỉ khi mở lại từ trang Sở thích: đóng lại, không ghi gì (không bỏ qua được onboarding).
+  const required = onboarding.status === 'NEW';
   const later = () => {
-    if (busy) return;
-    if (onboarding.status === 'NEW') skip.mutate();
-    else router.back();
+    if (!busy) router.back();
   };
 
   return (
@@ -216,11 +209,13 @@ export default function OnboardingScreen() {
           <Text variant="caption" weight="semibold" color={colors.primary}>
             Bước {stepIndex + 1}/{steps.length}
           </Text>
-          <Pressable accessibilityRole="button" onPress={later} disabled={busy} hitSlop={8}>
-            <Text variant="small" weight="semibold" color={colors.onSurfaceVariant}>
-              {skip.isPending ? 'Đang lưu…' : 'Để sau'}
-            </Text>
-          </Pressable>
+          {!required && (
+            <Pressable accessibilityRole="button" onPress={later} disabled={busy} hitSlop={8}>
+              <Text variant="small" weight="semibold" color={colors.onSurfaceVariant}>
+                Để sau
+              </Text>
+            </Pressable>
+          )}
         </View>
         <Text variant="h2">
           {step === 'destinations' ? 'Bạn muốn đi đâu?' : step === 'hotels' ? 'Khách sạn hợp gu của bạn' : 'Gu nghỉ dưỡng của bạn'}

@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  ForbiddenException,
   Get,
   HttpCode,
   HttpStatus,
@@ -73,16 +74,19 @@ export class OnboardingController {
   }
 
   @ApiOperation({
-    summary: 'Skip onboarding for now',
+    summary: 'Skip onboarding (no longer allowed)',
     description:
-      'Saves only that it was skipped, so the screen is not forced on me again. Finishing it later still earns the welcome code.',
+      'Always refused with `ONBOARDING_REQUIRED`: a new customer must answer onboarding, since the recommendations of a customer with no stays start from it (decided 2026-11-26). Kept so an older app gets a clear answer instead of a 404.',
   })
   @ApiData(onboardingResponseSchema)
-  @ApiErrors(ErrorCode.ONBOARDING_ALREADY_COMPLETED)
+  @ApiErrors(ErrorCode.ONBOARDING_REQUIRED)
   @Roles(UserRole.CUSTOMER)
   @Post('skip')
   @HttpCode(HttpStatus.OK)
-  skip(@CurrentUser() user: AuthUser) {
-    return this.onboarding.skip(user.accountId);
+  skip(): never {
+    throw new ForbiddenException({
+      code: ErrorCode.ONBOARDING_REQUIRED,
+      message: 'Onboarding cannot be skipped',
+    });
   }
 }

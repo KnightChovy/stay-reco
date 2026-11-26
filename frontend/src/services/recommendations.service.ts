@@ -47,7 +47,3 @@ export async function completeOnboarding(input: CompleteOnboardingInput) {
   return data.data;
 }
 
-export async function skipOnboarding() {
-  const { data } = await api.post<APIResponse<Onboarding>>("/me/onboarding/skip");
-  return data.data;
-}

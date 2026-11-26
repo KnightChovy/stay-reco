@@ -56,11 +56,6 @@ export const completeOnboarding = async (input: CompleteOnboardingInput) => {
   return data.data;
 };
 
-export const skipOnboarding = async () => {
-  const { data } = await apiService.post<APIResponse<Onboarding>>("/me/onboarding/skip");
-  return data.data;
-};
-
 export const getMyPreferences = async () => {
   const { data } = await apiService.get<APIResponse<Preferences>>("/me/preferences");
   return data.data.preferences;
