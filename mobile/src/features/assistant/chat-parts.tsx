@@ -1,5 +1,6 @@
 import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
 import { Image } from 'expo-image';
+import { useQuery } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import type { AssistantHotel, AssistantMessage, BookingProposal, CancellationProposal } from '@stayreco/shared';
 import { Button } from '@/components/ui/button';
@@ -8,6 +9,7 @@ import { Text } from '@/components/ui/text';
 import { colors } from '@/constants/theme';
 import { images } from '@/lib/mock-data';
 import { formatDate, formatVnd } from '@/lib/stay';
+import { getBooking } from '@/services/bookings.service';
 
 /** Ngày lưu trú cuộc trò chuyện đã chốt (từ đề xuất gần nhất), để mở khách sạn đúng ngày. */
 export type StayDates = { checkIn: string; checkOut: string; guests: number; rooms: number } | null;
@@ -109,6 +111,43 @@ function HotelCards({ hotels, dates }: { hotels: AssistantHotel[]; dates: StayDa
   );
 }
 
+/** Thanh toán ngay trong khung chat (như ChatPayment bên web): QR chuyển khoản khi đơn còn chờ, rồi "Đã thanh toán". */
+function ChatPayment({ bookingId }: { bookingId: string }) {
+  const { data: b } = useQuery({
+    queryKey: ['bookings', bookingId],
+    queryFn: () => getBooking(bookingId),
+    // SePay báo đã nhận tiền qua webhook: đọc lại vài giây một lần khi đơn còn chờ.
+    refetchInterval: (q) => (q.state.data?.status === 'PENDING' ? 4000 : false),
+  });
+  if (!b) return <ActivityIndicator color={colors.primary} />;
+  const open = () => router.push({ pathname: b.status === 'PENDING' ? '/booking/payment' : '/booking/detail', params: { id: b.id } });
+  if (b.status !== 'PENDING' || !b.payment)
+    return (
+      <>
+        <Text variant="caption" weight="semibold" color={b.paidAt ? colors.tertiaryContainer : colors.onSurfaceVariant}>
+          {b.paidAt ? `Đã thanh toán · mã đặt phòng ${b.code}` : b.status === 'EXPIRED' ? 'Hết thời gian giữ phòng, chưa thanh toán.' : `Đơn ${b.code}`}
+        </Text>
+        <Button label="Xem đơn đặt phòng" variant="secondary" onPress={open} />
+      </>
+    );
+  const p = b.payment;
+  return (
+    <View className="gap-2 border-t border-surface-container-high pt-2.5">
+      <Text variant="caption" weight="bold" color={colors.primary}>
+        QUÉT MÃ ĐỂ CHUYỂN KHOẢN · giữ phòng đến {time(p.expiresAt)}
+      </Text>
+      <Image source={p.qrImageUrl} className="h-52 w-52 self-center rounded-md" contentFit="contain" accessibilityLabel={`Mã VietQR chuyển ${formatVnd(p.amount)}`} />
+      <Text variant="caption" color={colors.onSurfaceVariant}>
+        {p.bankName} · {p.accountNumber} · {p.accountName}
+      </Text>
+      <Text variant="caption">
+        Số tiền <Text variant="caption" weight="bold">{formatVnd(p.amount)}</Text>, nội dung <Text variant="caption" weight="bold">{p.transferContent}</Text>
+      </Text>
+      <Button label="Trả bằng ví hoặc xem chi tiết" variant="secondary" onPress={open} />
+    </View>
+  );
+}
+
 /** Đơn trợ lý đã tính giá. Trợ lý không tự đặt: khách bấm "Xác nhận đặt phòng" một lần, trong 30 phút. */
 function ProposalCard({ proposal, now, pending, onConfirm }: { proposal: BookingProposal; now: number; pending: boolean; onConfirm: () => void }) {
   const booked = proposal.bookingId !== null;
@@ -149,7 +188,7 @@ function ProposalCard({ proposal, now, pending, onConfirm }: { proposal: Booking
           </Text>
         </View>
         {booked ? (
-          <Button label="Xem chuyến đi" variant="secondary" onPress={() => router.push('/trips')} />
+          <ChatPayment bookingId={proposal.bookingId!} />
         ) : expired ? (
           <Text variant="caption" color={colors.onSurfaceVariant}>
             Đề xuất chỉ giữ giá 30 phút. Nhắn trợ lý “báo giá lại” để có đề xuất mới.
@@ -158,7 +197,7 @@ function ProposalCard({ proposal, now, pending, onConfirm }: { proposal: Booking
           <>
             <Button label={pending ? 'Đang đặt…' : 'Xác nhận đặt phòng'} disabled={pending} onPress={onConfirm} />
             <Text variant="caption" color={colors.onSurfaceVariant} center>
-              Bạn sẽ chuyển sang bước thanh toán, phòng được giữ 15 phút.
+              Mã QR chuyển khoản hiện ngay tại đây, phòng được giữ 15 phút.
             </Text>
           </>
         )}

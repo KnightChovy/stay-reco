@@ -109,8 +109,8 @@ export default function AssistantScreen() {
     mutationFn: ({ conversationId, proposalId }: { conversationId: string; proposalId: string }) => confirmProposal(conversationId, proposalId),
     onSuccess: (booking, { conversationId }) => {
       void queryClient.invalidateQueries({ queryKey: keys.one(conversationId) });
+      // QR chuyển khoản hiện ngay dưới đề xuất (ChatPayment), khách ở lại khung chat như bên web.
       void queryClient.invalidateQueries({ queryKey: ['bookings'] });
-      router.push({ pathname: '/booking/payment', params: { id: booking.id } });
     },
     onError: (e) => setError(chatErrorMessage(e)),
   });
