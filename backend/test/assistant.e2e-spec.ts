@@ -124,8 +124,104 @@ describe('Recommendations and assistant (e2e)', () => {
       const res = await t.api().get('/api/v1/recommendations').expect(200);
       expect(res.body.data).toEqual({
         personalized: false,
+        source: 'POPULAR',
         modelRun: null,
         items: [],
+      });
+    });
+
+    it('ranks a customer the run does not know from the preferences they just gave, at once', async () => {
+      const resort = await hotel('Sơn Trà Resort & Spa', 'a@hotel.test');
+      const kids = await hotel('Mỹ Khê Kids Club Hotel', 'b@hotel.test');
+      const away = await hotel('Hội An Beach Resort', 'c@hotel.test');
+      await t.prisma.hotel.update({
+        where: { hotelId: resort.hotelId },
+        data: {
+          description:
+            'Khu nghỉ dưỡng ven biển, hồ bơi vô cực, spa và villa để thư giãn.',
+        },
+      });
+      await t.prisma.hotel.update({
+        where: { hotelId: kids.hotelId },
+        data: {
+          description:
+            'Khách sạn gia đình, trẻ em, khu vui chơi, kids club và hồ bơi trẻ em.',
+        },
+      });
+      await t.prisma.hotel.update({
+        where: { hotelId: away.hotelId },
+        data: {
+          city: 'Hội An',
+          description: 'Khu nghỉ dưỡng ven biển, bãi biển riêng, spa, villa.',
+        },
+      });
+      const known = await t.signIn('CUSTOMER', 'known@guest.test');
+      // A run exists, but it was made before this customer signed up.
+      await run(known.id, [kids.hotelId]);
+      const me = await t.signIn('CUSTOMER', 'me@guest.test');
+      await t.prisma.customerPreference.createMany({
+        data: [
+          {
+            customerId: me.id,
+            preferenceKey: 'travelStyles',
+            preferenceValue: 'resort',
+          },
+          {
+            customerId: me.id,
+            preferenceKey: 'preferredCities',
+            preferenceValue: 'Đà Nẵng',
+          },
+        ],
+      });
+
+      const res = await t
+        .api()
+        .get('/api/v1/me/recommendations')
+        .set(auth(me.token))
+        .expect(200);
+      expect(res.body.data).toMatchObject({
+        personalized: true,
+        source: 'PREFERENCES',
+      });
+      const items = res.body.data.items as {
+        id: string;
+        reason: string;
+        recommendationId: unknown;
+      }[];
+      // The resort in the city picked, then the resort elsewhere, then the hotel of another style.
+      expect(items.map((h) => h.id)).toEqual([
+        resort.hotelId,
+        away.hotelId,
+        kids.hotelId,
+      ]);
+      expect(items[0].reason).toBe(
+        'Hợp sở thích bạn vừa chọn: phong cách nghỉ dưỡng & thư giãn; ở Đà Nẵng.',
+      );
+      expect(items[1].reason).toMatch(/^Ngoài điểm đến bạn chọn\./);
+      expect(items[0].recommendationId).toBeNull();
+
+      // The search's "Phù hợp nhất" follows the same order for this customer.
+      const search = await t
+        .api()
+        .get(
+          `/api/v1/hotels?destination=Đà Nẵng&checkIn=${day(10)}&checkOut=${day(12)}&guests=2`,
+        )
+        .set(auth(me.token))
+        .expect(200);
+      expect((search.body.data as { id: string }[]).map((h) => h.id)).toEqual([
+        resort.hotelId,
+        kids.hotelId,
+      ]);
+
+      // A customer the run knows keeps the model's list.
+      const theirs = await t
+        .api()
+        .get('/api/v1/me/recommendations')
+        .set(auth(known.token))
+        .expect(200);
+      expect(theirs.body.data).toMatchObject({
+        source: 'MODEL',
+        items: [{ id: kids.hotelId }],
       });
     });
 

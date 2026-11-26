@@ -69,6 +69,7 @@ describe('onboarding taste fit', () => {
       score: 0,
       fits: true,
       matches: [],
+      styles: [],
     });
   });
 });

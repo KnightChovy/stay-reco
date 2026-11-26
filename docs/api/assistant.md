@@ -15,7 +15,8 @@ Two features on one model:
 | GET | `/recommendations` | Public | same | `Recommendations` (the list for signed-out visitors) |
 
 - `items[]` (`RecommendedHotel`): card fields (`name`, `city`, `starRating`, `coverImageUrl`, `rating`, `reviewCount`, `pricePerNightFrom`), plus `rank`, `score` (predicted rating 1-5), `reason` (Vietnamese, show it under the card) and `isNew` (nobody has reviewed it yet; worth a "Mới" badge).
-- `personalized: false` on `/me/...` means the last training run did not know this customer yet (they signed up after it); they get the signed-out list until the next run.
+- `source` says where the list comes from. `MODEL`: the trained model's own list for this customer. `PREFERENCES`: the last training run does not know this customer yet (they signed up or gave their preferences after it), so the list is ranked on the spot from the preferences they gave (onboarding or `/me/preferences`), in the model's order: within budget, then of a chosen travel style, then in the cities picked, then how much of the preferences the hotel matches, then its rating; it fits them from their first minute and the next run replaces it. `POPULAR`: the signed-out list (a customer the run does not know and who gave no preference gets it too). The search sort `recommended` and the assistant use the same ranking.
+- `personalized` is `true` for `MODEL` and `PREFERENCES`, `false` for `POPULAR`. A `PREFERENCES` card has `recommendationId: null`.
 - `city` matches ignoring case and accents: `da lat`, `Đà Lạt` and `ĐÀ LẠT` are the same.
 - A personal card includes its `recommendationId`. Carry it through hotel and room links to `POST /bookings` for attribution. A public card has no personal recommendation ID.
 - `items` is empty and `modelRun` null until the recommender has run once. Hide the section rather than showing an empty one.

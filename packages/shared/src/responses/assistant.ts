@@ -27,6 +27,13 @@ export const recommendationsResponseSchema = z
     personalized: z
       .boolean()
       .describe('false: the list for signed-out visitors, served when this customer has no list of their own yet.'),
+    source: z
+      .enum(['MODEL', 'PREFERENCES', 'POPULAR'])
+      .describe(
+        "MODEL: the trained model's list for this customer. PREFERENCES: ranked on the spot from the preferences they " +
+          'just gave, until the next training run includes them (`modelRun` is still the run served to others). ' +
+          'POPULAR: the list for signed-out visitors.',
+      ),
     modelRun: z
       .object({ id: z.uuid(), algorithm: z.string(), version: z.string(), finishedAt: isoDateTime() })
       .nullable()

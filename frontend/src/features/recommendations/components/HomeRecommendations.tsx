@@ -29,7 +29,9 @@ export function HomeRecommendations() {
               {personalized ? "Chốn nghỉ hợp gu của bạn" : "Được khách yêu thích"}
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              {personalized
+              {query.data?.source === "PREFERENCES"
+                ? "Xếp hạng ngay theo sở thích bạn vừa chọn."
+                : personalized
                 ? "Xếp hạng theo những lần lưu trú, đánh giá và sở thích của bạn."
                 : isCustomer
                   ? "Danh sách riêng của bạn sẽ có sau lần cập nhật gợi ý tới."

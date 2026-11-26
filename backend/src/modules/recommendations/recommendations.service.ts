@@ -9,6 +9,7 @@ import { toNumber } from '../../common/http/decimal';
 import { PrismaService } from '../../prisma/prisma.service';
 import { basePriceWhere } from '../rooms/room.mapper';
 import { bookableHotel, sellableRoomType } from '../stays/bookable';
+import { PreferenceRanking } from './preference-ranking';
 
 /** What a card needs to show about a hotel, beyond what the recommendation row carries. */
 export interface HotelCard {
@@ -23,9 +24,10 @@ export interface HotelCard {
   pricePerNightFrom: number | null;
 }
 
-/** The model's opinion of one hotel for one customer. */
+/** The model's opinion of one hotel for one customer (or, before the model knows them, their preferences'). */
 export interface PersonalScore {
-  recommendationId: string;
+  /** null when ranked from the preferences: there is no recommendation row to link a booking to. */
+  recommendationId: string | null;
   rank: number;
   score: number;
   reason: string | null;
@@ -34,22 +36,74 @@ export interface PersonalScore {
 /**
  * Serves the lists the recommender (`recommender/train.py`) writes. Nothing is computed here: the model runs offline
  * as a batch, writes `recommendation` rows under a `model_run`, and the newest COMPLETED run is the one served. A
- * customer the run has no list for (signed up after it) gets the list it wrote for signed-out visitors.
+ * customer the run has no list for (signed up after it) is ranked on the spot from the preferences they gave
+ * (PreferenceRanking), until the next run includes them; one with no preferences either gets the list the run wrote
+ * for signed-out visitors.
  *
  * Hotels are re-checked against BR-01 when served, so a hotel suspended since the run is never shown.
  */
 @Injectable()
 export class RecommendationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly preferences: PreferenceRanking,
+  ) {}
 
   async list(
     customerId: string | null,
     query: RecommendationQuery,
   ): Promise<Recommendations> {
     const run = await this.latestRun();
-    if (!run) return { personalized: false, modelRun: null, items: [] };
-
     const inCity = query.city ? await this.hotelsInCity(query.city) : null;
+    const modelRun = run && {
+      id: run.modelRunId,
+      algorithm: run.algorithm,
+      version: run.version,
+      finishedAt: run.finishedAt!.toISOString(),
+    };
+
+    // A customer the newest run does not know: their own preferences, ranked now, rather than everyone's list.
+    if (
+      customerId &&
+      !(run && (await this.knownTo(run.modelRunId, customerId)))
+    ) {
+      const ranked = await this.preferences.rank(
+        customerId,
+        inCity ?? undefined,
+      );
+      if (ranked) {
+        const top = ranked.slice(0, query.limit);
+        const cards = await this.cards(top.map((r) => r.hotelId));
+        return {
+          personalized: true,
+          source: 'PREFERENCES',
+          modelRun,
+          items: top.flatMap((r) => {
+            const card = cards.get(r.hotelId);
+            return card
+              ? [
+                  {
+                    ...card,
+                    recommendationId: null,
+                    rank: r.rank,
+                    score: r.score,
+                    reason: r.reason,
+                    isNew: card.reviewCount === 0,
+                  },
+                ]
+              : [];
+          }),
+        };
+      }
+    }
+    if (!run) {
+      return {
+        personalized: false,
+        source: 'POPULAR',
+        modelRun: null,
+        items: [],
+      };
+    }
     const rowsFor = (customer: string | null) =>
       this.prisma.recommendation.findMany({
         where: {
@@ -111,23 +165,37 @@ export class RecommendationsService {
     });
     return {
       personalized,
-      modelRun: {
-        id: run.modelRunId,
-        algorithm: run.algorithm,
-        version: run.version,
-        finishedAt: run.finishedAt!.toISOString(),
-      },
+      source: personalized ? 'MODEL' : 'POPULAR',
+      modelRun,
       items,
     };
   }
 
-  /** The model's rank and reason for each of these hotels, for this customer; hotels outside their list are absent. */
+  /**
+   * The model's rank and reason for each of these hotels, for this customer; hotels outside their list are absent.
+   * A customer the newest run does not know is ranked from their preferences instead, so the search's "Phù hợp nhất"
+   * and the assistant fit them from their first minute too.
+   */
   async personalScores(
     customerId: string,
     hotelIds: string[],
   ): Promise<Map<string, PersonalScore>> {
+    if (!hotelIds.length) return new Map();
     const run = await this.latestRun();
-    if (!run || !hotelIds.length) return new Map();
+    if (!run || !(await this.knownTo(run.modelRunId, customerId))) {
+      const ranked = await this.preferences.rank(customerId, hotelIds);
+      return new Map(
+        (ranked ?? []).map((r) => [
+          r.hotelId,
+          {
+            recommendationId: null,
+            rank: r.rank,
+            score: r.score,
+            reason: r.reason,
+          },
+        ]),
+      );
+    }
     const rows = await this.prisma.recommendation.findMany({
       where: {
         modelRunId: run.modelRunId,
@@ -213,6 +281,15 @@ export class RecommendationsService {
           },
         ];
       }),
+    );
+  }
+
+  /** Whether the run wrote a list for this customer. */
+  private async knownTo(modelRunId: string, customerId: string) {
+    return (
+      (await this.prisma.recommendation.count({
+        where: { modelRunId, customerId },
+      })) > 0
     );
   }
 

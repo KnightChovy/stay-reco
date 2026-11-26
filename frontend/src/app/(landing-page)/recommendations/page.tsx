@@ -33,6 +33,7 @@ export default function RecommendationsPage() {
   );
   const items = query.data?.items ?? [];
   const personalized = !!query.data?.personalized;
+  const fromPreferences = query.data?.source === 'PREFERENCES';
 
   return (
     <div className="flex min-h-screen flex-col bg-background font-sans text-foreground antialiased">
@@ -56,7 +57,9 @@ export default function RecommendationsPage() {
                 {personalized ? 'Gợi ý chốn nghỉ hợp gu của bạn' : 'Chốn nghỉ được gợi ý'}
               </h1>
               <p className="max-w-2xl text-sm text-muted-foreground">
-                {personalized
+                {fromPreferences
+                  ? 'Xếp hạng ngay theo sở thích bạn vừa chọn: phong cách, điểm đến, tiện nghi và ngân sách.'
+                  : personalized
                   ? 'Mô hình gợi ý của StayReco xếp hạng dựa trên những lần lưu trú, đánh giá và sở thích bạn đã chọn.'
                   : 'Những khách sạn được khách đánh giá cao, xếp hạng bởi mô hình gợi ý của StayReco.'}
               </p>
@@ -78,6 +81,19 @@ export default function RecommendationsPage() {
               </Link>
             ) : null}
           </div>
+
+          {isCustomer && fromPreferences && items.length > 0 && (
+            <p className="flex items-start gap-2 rounded-xl border border-border bg-card p-3 text-sm text-muted-foreground">
+              <Info className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
+              <span>
+                Danh sách này dựa trên sở thích bạn vừa chọn. Sau lần cập nhật gợi ý tới, mô hình sẽ kết hợp thêm những
+                lần lưu trú và đánh giá của bạn.{' '}
+                <Link href="/account/preferences" className="font-semibold text-primary hover:underline">
+                  Sửa sở thích
+                </Link>
+              </span>
+            </p>
+          )}
 
           {isCustomer && query.data && !personalized && items.length > 0 && (
             <p className="flex items-start gap-2 rounded-xl border border-border bg-card p-3 text-sm text-muted-foreground">

@@ -197,6 +197,8 @@ export interface TasteFit {
   fits: boolean;
   /** Style and amenity labels, then view names, for the card. */
   matches: string[];
+  /** The chosen travel style ids the hotel is of. */
+  styles: string[];
 }
 
 /** How well one hotel fits the answers. `viewNames` names the views by id. */
@@ -209,6 +211,7 @@ export function tasteFit(
   const matches: string[] = [];
   let score = 0;
   let styleFits = 0;
+  const styles: string[] = [];
 
   // Every hotel also mentions a second style in passing (a business hotel near the beach, a resort with a café), so
   // a style fits only when it is one of the hotel's strongest, not merely mentioned.
@@ -226,6 +229,7 @@ export function tasteFit(
     const hits = hitsOf[id];
     if (hits >= STYLE_FIT_MIN_HITS && hits >= strongest * STYLE_DOMINANCE) {
       styleFits++;
+      styles.push(id);
       matches.push(style.label);
       score += Math.min(hits, STYLE_HITS_CAP);
     }
@@ -252,5 +256,5 @@ export function tasteFit(
     : answers.roomAmenities.length || answers.viewIds.length
       ? extras > 0
       : true;
-  return { score, fits, matches };
+  return { score, fits, matches, styles };
 }
