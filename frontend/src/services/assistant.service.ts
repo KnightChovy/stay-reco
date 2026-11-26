@@ -49,3 +49,14 @@ export async function confirmProposal(conversationId: string, proposalId: string
   });
   return data.data;
 }
+
+/**
+ * The customer's own click on "Xác nhận huỷ": cancels exactly like `POST /bookings/:id/cancel`. Nothing to refund
+ * cancels at once; a refund becomes a request the hotel approves, then the money reaches the wallet.
+ */
+export async function confirmCancellation(conversationId: string, proposalId: string) {
+  const { data } = await api.post<APIResponse<Booking>>(`/conversations/${conversationId}/confirm-cancellation`, {
+    proposalId,
+  });
+  return data.data;
+}

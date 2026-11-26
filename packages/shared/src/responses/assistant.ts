@@ -74,9 +74,52 @@ export const bookingProposalResponseSchema = z
     specialRequests: z.string().nullable(),
     expiresAt: isoDateTime().describe('After this, confirming answers BOOKING_PROPOSAL_INVALID.'),
     bookingId: z.uuid().nullable().describe('Set once confirmed: open the booking to pay.'),
+    // The breakdown, priced with POST /bookings/discount-quote. Absent on proposals made before it existed.
+    subtotal: z.number().optional().describe('Rooms plus the add-ons, before the discount and points.'),
+    discount: z
+      .object({ name: z.string(), code: z.string().nullable(), amount: z.number() })
+      .nullable()
+      .optional()
+      .describe('The campaign or voucher applied; null when none.'),
+    points: z
+      .object({ used: z.number().int(), amount: z.number() })
+      .nullable()
+      .optional()
+      .describe('StayMiles spent and what they took off; null when none.'),
+    addOns: z
+      .array(z.object({ id: z.uuid(), name: z.string(), quantity: z.number().int(), amount: z.number() }))
+      .optional()
+      .describe('Add-ons booked with the stay, never discounted.'),
   })
   .register(responseSchemas, { id: 'BookingProposal' });
 export type BookingProposal = z.infer<typeof bookingProposalResponseSchema>;
+
+/**
+ * A cancellation the assistant priced for one of the customer's bookings; the customer confirms it with one click
+ * (`POST /conversations/:id/confirm-cancellation`). The assistant never cancels.
+ */
+export const cancellationProposalResponseSchema = z
+  .object({
+    id: z.uuid(),
+    bookingId: z.uuid(),
+    bookingCode: z.string(),
+    hotelName: z.string(),
+    checkIn: z.iso.date(),
+    checkOut: z.iso.date(),
+    paid: z.number().describe('What the booking was paid, VND.'),
+    fee: z.number().describe('Kept by the hotel under its policy.'),
+    refund: z.number().describe('Back to the customer wallet; 0 when nothing comes back.'),
+    freeUntil: isoDateTime().nullable().describe('End of free cancellation; null when there is none.'),
+    needsApproval: z.boolean().describe('A refund waits for the hotel to approve it before it reaches the wallet.'),
+    reason: z.string(),
+    expiresAt: isoDateTime().describe('After this, confirming answers BOOKING_PROPOSAL_INVALID.'),
+    outcome: z
+      .enum(['CANCELLED', 'REFUND_PENDING'])
+      .nullable()
+      .describe('Set once confirmed: cancelled at once, or a refund request waiting for the hotel.'),
+  })
+  .register(responseSchemas, { id: 'CancellationProposal' });
+export type CancellationProposal = z.infer<typeof cancellationProposalResponseSchema>;
 
 export const assistantMessageResponseSchema = z
   .object({
@@ -85,6 +128,9 @@ export const assistantMessageResponseSchema = z
     content: z.string(),
     hotels: z.array(assistantHotelResponseSchema).describe('Hotels the reply talks about, to show as cards.'),
     proposal: bookingProposalResponseSchema.nullable(),
+    cancellation: cancellationProposalResponseSchema
+      .nullable()
+      .describe('A cancellation to confirm, shown as a card under the reply; null when none.'),
     createdAt: isoDateTime(),
   })
   .register(responseSchemas, { id: 'AssistantMessage' });

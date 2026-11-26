@@ -1,10 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { useRouter } from "next/navigation";
 import { getApiErrorCode } from "@/lib/api-error";
 import { useAuthStore } from "@/lib/auth-store";
 import {
+  useConfirmCancellation,
   useConfirmProposal,
   useConversation,
   useConversations,
@@ -41,10 +41,9 @@ function writeActive(id: string | null) {
 
 /**
  * Everything one chat window needs: which conversation is open, its messages, the message being sent (shown at
- * once, before the reply arrives), errors, and the booking confirmation. Shared by the floating bubble and /assistant.
+ * once, before the reply arrives), errors, and the customer's clicks on a booking or a cancellation proposal. Shared by the floating bubble and /assistant.
  */
 export function useAssistantChat(initialId?: string | null) {
-  const router = useRouter();
   const user = useAuthStore((state) => state.user);
   const isCustomer = user?.role === "customer";
 
@@ -77,6 +76,7 @@ export function useAssistantChat(initialId?: string | null) {
   const activeId = notFound ? null : candidateId;
   const send = useSendAssistantMessage();
   const confirm = useConfirmProposal();
+  const cancel = useConfirmCancellation();
 
   // Forget it in storage too, so the next visit starts clean (an external store, not React state).
   useEffect(() => {
@@ -123,13 +123,23 @@ export function useAssistantChat(initialId?: string | null) {
       setError(null);
       confirm.mutate(
         { conversationId: activeId, proposalId },
-        {
-          onSuccess: (booking) => router.push(`/booking/payment?id=${booking.id}`),
-          onError: (confirmError) => setError(chatErrorMessage(confirmError)),
-        },
+        // The booking stays in the chat: its proposal card now shows the transfer QR and the wallet button.
+        { onError: (confirmError) => setError(chatErrorMessage(confirmError)) },
       );
     },
-    [activeId, confirm, router],
+    [activeId, confirm],
+  );
+
+  const confirmCancellation = useCallback(
+    (proposalId: string) => {
+      if (!activeId || cancel.isPending) return;
+      setError(null);
+      cancel.mutate(
+        { conversationId: activeId, proposalId },
+        { onError: (cancelError) => setError(chatErrorMessage(cancelError)) },
+      );
+    },
+    [activeId, cancel],
   );
 
   return {
@@ -153,5 +163,7 @@ export function useAssistantChat(initialId?: string | null) {
     now,
     confirmingId: confirm.isPending ? (confirm.variables?.proposalId ?? null) : null,
     confirmProposal,
+    cancellingId: cancel.isPending ? (cancel.variables?.proposalId ?? null) : null,
+    confirmCancellation,
   };
 }

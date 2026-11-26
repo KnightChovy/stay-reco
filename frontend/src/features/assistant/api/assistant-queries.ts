@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AssistantReply, Conversation, ConversationSummary } from "@stayreco/shared";
 import * as assistantService from "@/services/assistant.service";
 import { bookingKeys } from "@/features/booking/api/booking-queries";
+import { rewardsKeys } from "@/features/account/api/rewards-queries";
 
 export const assistantKeys = {
   all: ["assistant"] as const,
@@ -69,6 +70,24 @@ export function useConfirmProposal() {
       queryClient.setQueryData(bookingKeys.detail(booking.id), booking);
       void queryClient.invalidateQueries({ queryKey: assistantKeys.conversation(conversationId) });
       void queryClient.invalidateQueries({ queryKey: [...bookingKeys.all, "my-trips"] });
+    },
+  });
+}
+
+/**
+ * "Xác nhận huỷ": the booking is cancelled, or its refund is waiting for the hotel. The conversation shows the outcome
+ * and a note; trips and the wallet are refreshed since both may have changed.
+ */
+export function useConfirmCancellation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ conversationId, proposalId }: { conversationId: string; proposalId: string }) =>
+      assistantService.confirmCancellation(conversationId, proposalId),
+    onSuccess: (booking, { conversationId }) => {
+      queryClient.setQueryData(bookingKeys.detail(booking.id), booking);
+      void queryClient.invalidateQueries({ queryKey: assistantKeys.conversation(conversationId) });
+      void queryClient.invalidateQueries({ queryKey: [...bookingKeys.all, "my-trips"] });
+      void queryClient.invalidateQueries({ queryKey: rewardsKeys.all });
     },
   });
 }

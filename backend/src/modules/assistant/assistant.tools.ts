@@ -3,14 +3,24 @@ import { HttpException, Injectable } from '@nestjs/common';
 import {
   type AssistantHotel,
   type BookingProposal,
+  type CancellationProposal,
   createBookingSchema,
   hotelSearchQuerySchema,
+  MY_BOOKING_TABS,
   stayQuerySchema,
 } from '@stayreco/shared';
 import { randomUUID } from 'crypto';
+import type { AuthUser } from '../../common/decorators/current-user.decorator';
+import { UserRole } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { BookingCancellationService } from '../bookings/booking-cancellation.service';
+import { BookingsService } from '../bookings/bookings.service';
+import { LoyaltyService } from '../loyalty/loyalty.service';
+import { PromotionsService } from '../promotions/promotions.service';
+import { StayDiscountService } from '../promotions/stay-discount.service';
 import { RecommendationsService } from '../recommendations/recommendations.service';
 import { StaysService } from '../stays/stays.service';
+import { CustomerWalletService } from '../wallets/customer-wallet.service';
 
 /** How long a priced proposal can be confirmed: prices and free rooms move, so it does not wait for ever. */
 export const PROPOSAL_TTL_MS = 30 * 60_000;
@@ -29,6 +39,8 @@ export interface TurnState {
   hotels: Map<string, AssistantHotel>;
   priorRecommendations: Map<string, string>;
   proposal: BookingProposal | null;
+  /** A cancellation the customer can confirm; like a booking, only ever proposed. */
+  cancellation: CancellationProposal | null;
   /** Room types looked at, so the next turn can book one by its real id instead of guessing it. */
   roomTypes: Map<string, { hotelName: string; name: string }>;
 }
@@ -38,8 +50,9 @@ export interface TurnState {
  * goes through the same service, so the assistant can only see what a customer could see on the website and cannot
  * skip a rule the website enforces.
  *
- * None of them writes anything. The one action with consequences, booking, is only *proposed* here; the booking is
- * made by POST /conversations/:id/confirm-booking, which is the customer's own click.
+ * None of them writes anything. The two actions with consequences are only *proposed* here: a booking, made by
+ * POST /conversations/:id/confirm-booking, and a cancellation, made by POST /conversations/:id/confirm-cancellation,
+ * each the customer's own click. The "my_" tools read the customer's own data only (vouchers, wallet, bookings).
  */
 export const TOOL_DECLARATIONS: FunctionDeclaration[] = [
   {
@@ -130,8 +143,75 @@ export const TOOL_DECLARATIONS: FunctionDeclaration[] = [
           description: 'Bắt buộc nếu tài khoản chưa có số điện thoại.',
         },
         specialRequests: { type: 'string' },
+        code: {
+          type: 'string',
+          description:
+            'Mã giảm giá (voucher) khách muốn dùng, lấy từ my_vouchers hoặc khách tự gõ. Bỏ trống thì hệ thống tự áp chiến dịch tốt nhất nếu có.',
+        },
+        pointsToUse: {
+          type: 'integer',
+          description:
+            'Số điểm StayMiles khách muốn dùng (xem my_wallet). Chỉ dùng khi khách nói muốn dùng điểm.',
+        },
+        addOns: {
+          type: 'array',
+          description:
+            'Dịch vụ đặt kèm (lấy id từ addOns của get_hotel_rooms, chỉ loại prebookable).',
+          items: {
+            type: 'object',
+            properties: {
+              addOnId: { type: 'string' },
+              quantity: { type: 'integer', description: 'Mặc định 1.' },
+            },
+            required: ['addOnId'],
+          },
+        },
       },
       required: ['hotelId', 'roomTypeId', 'checkIn', 'checkOut', 'guests'],
+    },
+  },
+  {
+    name: 'my_vouchers',
+    description:
+      'Các mã giảm giá (voucher) khách đang có và còn dùng được: mã, mức giảm, đơn tối thiểu, hạn dùng, khách sạn áp dụng. Dùng khi khách hỏi về mã giảm giá, khuyến mãi.',
+    parametersJsonSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'my_wallet',
+    description:
+      'Số dư ví StayReco và điểm StayMiles của khách (kèm giá trị quy ra tiền, hạng thành viên).',
+    parametersJsonSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'my_bookings',
+    description:
+      'Lịch sử đặt phòng của khách: mã đặt phòng, khách sạn, ngày, trạng thái, tiền. Dùng khi khách hỏi về đơn đã đặt, chuyến đi, hoặc trước khi huỷ.',
+    parametersJsonSchema: {
+      type: 'object',
+      properties: {
+        tab: {
+          type: 'string',
+          enum: ['upcoming', 'staying', 'completed', 'cancelled', 'all'],
+          description:
+            'upcoming: sắp tới (chờ thanh toán, đã xác nhận); staying: đang ở; completed: đã ở xong; cancelled: đã huỷ/hết hạn; all: tất cả. Mặc định all.',
+        },
+      },
+    },
+  },
+  {
+    name: 'propose_cancellation',
+    description:
+      'Tính phí huỷ và số tiền được hoàn cho một đơn đã thanh toán, rồi tạo đề xuất huỷ để khách tự bấm "Xác nhận huỷ". KHÔNG huỷ. Chỉ gọi khi khách nói muốn huỷ một đơn cụ thể.',
+    parametersJsonSchema: {
+      type: 'object',
+      properties: {
+        bookingCode: {
+          type: 'string',
+          description: 'Mã đặt phòng dạng SR-YYMMDD-XXXX (lấy từ my_bookings).',
+        },
+        reason: { type: 'string', description: 'Lý do huỷ khách nói, nếu có.' },
+      },
+      required: ['bookingCode'],
     },
   },
 ];
@@ -144,6 +224,12 @@ export class AssistantTools {
     private readonly prisma: PrismaService,
     private readonly stays: StaysService,
     private readonly recommendations: RecommendationsService,
+    private readonly stayDiscount: StayDiscountService,
+    private readonly promotions: PromotionsService,
+    private readonly loyalty: LoyaltyService,
+    private readonly wallet: CustomerWalletService,
+    private readonly bookings: BookingsService,
+    private readonly cancellations: BookingCancellationService,
   ) {}
 
   /** Runs one call. Errors become a result the model can read and explain, never an exception for the customer. */
@@ -163,6 +249,14 @@ export class AssistantTools {
           return await this.hotelRooms(args, state);
         case 'propose_booking':
           return await this.proposeBooking(args, customer, state);
+        case 'my_vouchers':
+          return await this.myVouchers(customer);
+        case 'my_wallet':
+          return await this.myWallet(customer);
+        case 'my_bookings':
+          return await this.myBookings(args, customer);
+        case 'propose_cancellation':
+          return await this.proposeCancellation(args, customer, state);
         default:
           return { error: `Không có công cụ ${name}` };
       }
@@ -329,6 +423,15 @@ export class AssistantTools {
         checkOutTime: h.checkOutTime,
         cancellationPolicy: h.cancellationPolicy,
       },
+      // Services sold with the stay; only prebookable ones can go on propose_booking, the rest are paid at the desk.
+      addOns: h.addOns.map((a) => ({
+        id: a.id,
+        name: a.name,
+        description: a.description,
+        price: a.price,
+        timing: a.timing,
+        prebookable: a.prebookable,
+      })),
       roomTypes: listing.roomTypes.map(({ roomType: rt, offer }) => ({
         id: rt.id,
         name: rt.name,
@@ -404,6 +507,21 @@ export class AssistantTools {
         ? args.specialRequests.trim()
         : undefined;
 
+    const code =
+      typeof args.code === 'string' && args.code.trim()
+        ? args.code.trim()
+        : undefined;
+    const pointsToUse =
+      Number.isInteger(args.pointsToUse) && Number(args.pointsToUse) > 0
+        ? Number(args.pointsToUse)
+        : undefined;
+    const addOns = Array.isArray(args.addOns)
+      ? (args.addOns as Args[]).map((a) => ({
+          addOnId: String(a.addOnId),
+          quantity: Number(a.quantity ?? 1),
+        }))
+      : undefined;
+
     // The request the confirm button will send, checked now so a proposal that cannot be booked is never shown.
     const input = createBookingSchema.safeParse({
       items: [{ roomTypeId: item.roomType.id, rooms }],
@@ -413,9 +531,33 @@ export class AssistantTools {
       guestName,
       contactPhone,
       specialRequests,
+      code,
+      pointsToUse,
+      addOns: addOns?.length ? addOns : undefined,
       expectedTotal: offer.total,
     });
     if (!input.success) return invalid(input.error);
+
+    // Priced exactly as the booking page prices it: the best campaign or the code, the points, the add-ons. A code
+    // that does not apply, or points the guest does not have, throw here and reach the model as an error to explain.
+    const quote = await this.stayDiscount.quote(customer.id, {
+      items: input.data.items,
+      checkIn: input.data.checkIn,
+      checkOut: input.data.checkOut,
+      code,
+      pointsToUse,
+      addOns: input.data.addOns,
+    });
+    const addOnNames = new Map(listing.hotel.addOns.map((a) => [a.id, a]));
+    const addOnLines = (input.data.addOns ?? []).map((line) => {
+      const a = addOnNames.get(line.addOnId);
+      return {
+        id: line.addOnId,
+        name: a?.name ?? 'Dịch vụ',
+        quantity: line.quantity,
+        amount: (a?.price ?? 0) * line.quantity,
+      };
+    });
 
     const proposal: BookingProposal = {
       id: randomUUID(),
@@ -430,13 +572,24 @@ export class AssistantTools {
       checkOut: stay.data.checkOut!,
       guests: stay.data.guests,
       rooms,
-      total: offer.total,
+      total: quote.expectedTotal,
       freeCancellationUntil: offer.freeCancellationUntil,
       guestName,
       contactPhone,
       specialRequests: specialRequests ?? null,
       expiresAt: new Date(Date.now() + PROPOSAL_TTL_MS).toISOString(),
       bookingId: null,
+      subtotal: quote.subtotal + quote.addOnsTotal,
+      discount: quote.discount && {
+        name: quote.discount.name,
+        code: quote.discount.code,
+        amount: quote.discount.amount,
+      },
+      points:
+        quote.points && quote.points.pointsUsed > 0
+          ? { used: quote.points.pointsUsed, amount: quote.points.amount }
+          : null,
+      addOns: addOnLines,
     };
     state.proposal = proposal;
     return {
@@ -447,11 +600,170 @@ export class AssistantTools {
       checkOut: proposal.checkOut,
       guests: proposal.guests,
       rooms: proposal.rooms,
+      rooms_total: quote.subtotal,
+      discount: proposal.discount,
+      points: proposal.points,
+      addOns: addOnLines.map((a) => `${a.quantity} × ${a.name}: ${a.amount}`),
       total: proposal.total,
       freeCancellationUntil: proposal.freeCancellationUntil,
       guestName,
       contactPhone,
-      note: 'Chưa đặt. Khách phải bấm nút "Xác nhận đặt phòng" hiện dưới tin nhắn trong 30 phút, sau đó thanh toán.',
+      note: 'Chưa đặt. Khách phải bấm nút "Xác nhận đặt phòng" hiện dưới tin nhắn trong 30 phút. Sau khi bấm, mã QR chuyển khoản hiện ngay trong khung chat, hoặc khách trả bằng ví StayReco.',
+    };
+  }
+
+  private async myVouchers(customer: ToolCustomer) {
+    const page = await this.promotions.listMine(customer.id, {
+      active: true,
+      page: 1,
+      pageSize: 20,
+    });
+    const vouchers = page.items;
+    const hotelIds = [
+      ...new Set(vouchers.map((v) => v.hotelId).filter(Boolean)),
+    ] as string[];
+    const hotels = await this.prisma.hotel.findMany({
+      where: { hotelId: { in: hotelIds } },
+      select: { hotelId: true, name: true },
+    });
+    const nameOf = new Map(hotels.map((h) => [h.hotelId, h.name]));
+    return {
+      vouchers: vouchers.map((v) => ({
+        code: v.code,
+        campaign: v.promotionName,
+        discount:
+          v.discountType === 'PERCENTAGE'
+            ? `${v.discountValue}%`
+            : `${v.discountValue} VND`,
+        maxDiscount: v.maxDiscount,
+        minBookingAmount: v.minBookingAmount,
+        expiresAt: v.expiresAt,
+        hotel: v.hotelId
+          ? (nameOf.get(v.hotelId) ?? 'một khách sạn')
+          : 'mọi khách sạn',
+      })),
+      note: vouchers.length
+        ? 'Khách chọn mã nào thì truyền vào code của propose_booking. Chiến dịch tự áp dụng (không cần mã) được tính sẵn khi đề xuất.'
+        : 'Khách chưa có mã nào. Chiến dịch tự áp dụng của khách sạn (nếu có) vẫn được tính khi đề xuất đặt phòng.',
+    };
+  }
+
+  private async myWallet(customer: ToolCustomer) {
+    const wallet = await this.wallet.balance(customer.id);
+    // No loyalty programme running is a normal state, not a reason to hide the wallet: the points part is then null.
+    const loyalty = await this.loyalty.account(customer.id).catch((err) => {
+      if (err instanceof HttpException) return null;
+      throw err;
+    });
+    return {
+      walletBalance: wallet.balanceAvailable,
+      walletPending: wallet.balancePending,
+      points: loyalty?.pointsBalance ?? null,
+      pointsValue: loyalty?.balanceValue ?? null,
+      pointValue: loyalty?.pointValue ?? null,
+      tier: loyalty?.tier ?? null,
+      note: loyalty
+        ? 'Ví trả được trọn một đơn (không trả một phần). Điểm dùng khi đặt phòng qua pointsToUse của propose_booking.'
+        : 'Ví trả được trọn một đơn (không trả một phần). Chương trình điểm StayMiles hiện chưa chạy.',
+    };
+  }
+
+  private async myBookings(args: Args, customer: ToolCustomer) {
+    const wanted =
+      typeof args.tab === 'string' &&
+      (MY_BOOKING_TABS as readonly string[]).includes(args.tab)
+        ? [args.tab as (typeof MY_BOOKING_TABS)[number]]
+        : [...MY_BOOKING_TABS];
+    const lists = await Promise.all(
+      wanted.map((tab) =>
+        this.bookings.listMine(asCustomer(customer), {
+          tab,
+          page: 1,
+          pageSize: 10,
+        }),
+      ),
+    );
+    return {
+      bookings: lists
+        .flatMap((l) => l.items)
+        .map((b) => ({
+          code: b.code,
+          hotel: b.hotel.name,
+          city: b.hotel.city,
+          checkIn: b.checkIn,
+          checkOut: b.checkOut,
+          nights: b.nights,
+          guests: b.guests,
+          status: b.status,
+          paymentStatus: b.paymentStatus,
+          total: b.totalAmount,
+        })),
+      note: 'PENDING = đang giữ phòng chờ thanh toán (tự hết hạn sau 15 phút, không cần huỷ). Chỉ huỷ được đơn CONFIRMED đã thanh toán và chưa nhận phòng.',
+    };
+  }
+
+  private async proposeCancellation(
+    args: Args,
+    customer: ToolCustomer,
+    state: TurnState,
+  ) {
+    const code =
+      typeof args.bookingCode === 'string' ? args.bookingCode.trim() : '';
+    // Found by code among the customer's own bookings only: another customer's code answers "not found".
+    const booking = await this.prisma.booking.findFirst({
+      where: {
+        customerId: customer.id,
+        invoice: { invoiceNumber: { equals: code, mode: 'insensitive' } },
+      },
+      select: {
+        bookingId: true,
+        checkInDate: true,
+        checkOutDate: true,
+        invoice: { select: { invoiceNumber: true } },
+        hotel: { select: { name: true } },
+      },
+    });
+    if (!booking) {
+      return {
+        error: `Không tìm thấy đơn ${code} của khách. Dùng my_bookings để xem mã đúng.`,
+      };
+    }
+    // Throws BOOKING_STATUS_CONFLICT / CANCELLATION_NOT_ALLOWED for a booking that cannot be cancelled.
+    const quote = await this.cancellations.quote(
+      asCustomer(customer),
+      booking.bookingId,
+    );
+    const reason =
+      typeof args.reason === 'string' && args.reason.trim()
+        ? args.reason.trim().slice(0, 200)
+        : 'Khách huỷ qua trợ lý StayReco';
+    const proposal: CancellationProposal = {
+      id: randomUUID(),
+      bookingId: booking.bookingId,
+      bookingCode: booking.invoice!.invoiceNumber,
+      hotelName: booking.hotel.name,
+      checkIn: booking.checkInDate.toISOString().slice(0, 10),
+      checkOut: booking.checkOutDate.toISOString().slice(0, 10),
+      paid: quote.paid,
+      fee: quote.fee,
+      refund: quote.refund,
+      freeUntil: quote.freeUntil,
+      needsApproval: quote.needsApproval,
+      reason,
+      expiresAt: new Date(Date.now() + PROPOSAL_TTL_MS).toISOString(),
+      outcome: null,
+    };
+    state.cancellation = proposal;
+    return {
+      proposalId: proposal.id,
+      bookingCode: proposal.bookingCode,
+      hotel: proposal.hotelName,
+      paid: quote.paid,
+      fee: quote.fee,
+      refund: quote.refund,
+      freeUntil: quote.freeUntil,
+      refundNeedsHotelApproval: quote.needsApproval,
+      note: 'Chưa huỷ. Khách phải bấm "Xác nhận huỷ" dưới tin nhắn. Nói rõ phí huỷ và số tiền hoàn: tiền hoàn về ví StayReco, sau khi khách sạn duyệt nếu refundNeedsHotelApproval.',
     };
   }
 
@@ -486,3 +798,10 @@ export const fold = (text: string) =>
     .replace(/đ/gi, 'd')
     .toLowerCase()
     .trim();
+
+/** The customer as the booking services expect a signed-in caller: the tools act only as them. */
+const asCustomer = (customer: ToolCustomer): AuthUser => ({
+  accountId: customer.id,
+  role: UserRole.CUSTOMER,
+  sessionId: 'assistant',
+});

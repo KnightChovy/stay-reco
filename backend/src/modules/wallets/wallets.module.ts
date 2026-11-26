@@ -17,6 +17,6 @@ import { WalletPaymentService } from './wallet-payment.service';
     CustomerWalletService,
     WalletPaymentService,
   ],
-  exports: [WalletLedger],
+  exports: [WalletLedger, CustomerWalletService],
 })
 export class WalletsModule {}

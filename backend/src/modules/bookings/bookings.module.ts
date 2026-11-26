@@ -53,6 +53,7 @@ import { SettlementService } from './settlement.service';
   ],
   exports: [
     BookingsService,
+    BookingCancellationService,
     BookingMailer,
     HoldExpiryService,
     RefundDecisionsService,

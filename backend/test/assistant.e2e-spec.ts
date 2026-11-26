@@ -1,3 +1,4 @@
+import { PaymentConfirmationService } from '../src/modules/payments/payment-confirmation.service';
 import { createTestApp } from './helpers';
 
 /**
@@ -65,7 +66,7 @@ describe('Recommendations and assistant (e2e)', () => {
       where: { hotelId },
       data: { status: 'ACTIVE' },
     });
-    return { hotelId, roomTypeId };
+    return { hotelId, roomTypeId, owner: partner.token };
   };
 
   /** A finished training run that ranks `hotelIds` for `customerId` (and for signed-out visitors), in that order. */
@@ -519,6 +520,306 @@ describe('Recommendations and assistant (e2e)', () => {
         .set(auth(other.token))
         .expect(200);
       expect(mine.body.data).toEqual([]);
+    });
+
+    it('keeps ids out of the model turns and out of every answer', async () => {
+      const a = await hotel('Biển Xanh', 'a@hotel.test');
+      const me = await t.signIn('CUSTOMER', 'me@guest.test');
+      await run(me.id, [a.hotelId]);
+      t.ai.script = [
+        { calls: [{ name: 'recommend_hotels', args: {} }] },
+        // The habit being fixed: the model copies an internal note, ids and all, under its answer.
+        {
+          text: `Bạn thử Biển Xanh nhé.\n[Đã hiển thị: Biển Xanh (hotelId=${a.hotelId})]`,
+        },
+      ];
+      const first = await start(me.token, 'Gợi ý giúp mình').expect(201);
+      expect(first.body.data.reply.content).toBe('Bạn thử Biển Xanh nhé.');
+      const { conversationId } = first.body.data as { conversationId: string };
+
+      t.ai.script = [{ text: 'Biển Xanh có hồ bơi.' }];
+      await t
+        .api()
+        .post(`/api/v1/conversations/${conversationId}/messages`)
+        .set(auth(me.token))
+        .send({ content: 'Cái đó có hồ bơi không?' })
+        .expect(201);
+
+      const sent = t.ai.chats.at(-1)!;
+      const modelText = sent.contents
+        .filter((c) => c.role === 'model')
+        .flatMap((c) => c.parts ?? [])
+        .map((p) => (typeof p.text === 'string' ? p.text : ''))
+        .join('\n');
+      // The id still reaches the model, as lookup data in the system instruction, not as its own words.
+      expect(modelText).not.toContain(a.hotelId);
+      expect(modelText).not.toContain('[');
+      expect(sent.system).toContain(`hotelId=${a.hotelId}`);
+      expect(sent.system).toContain('không viết id');
+    });
+
+    it('lists the guest vouchers and prices a proposal with a code, points and an add-on', async () => {
+      const a = await hotel('Biển Xanh', 'a@hotel.test');
+      const me = await t.signIn('CUSTOMER', 'me@guest.test');
+      const promo = await t
+        .api()
+        .post(`/api/v1/hotels/${a.hotelId}/promotions`)
+        .set(auth(a.owner))
+        .send({
+          name: 'Giảm 10%',
+          discountType: 'PERCENTAGE',
+          discountValue: 10,
+          requiresCode: true,
+        })
+        .expect(201);
+      const [voucher] = (
+        await t
+          .api()
+          .post(`/api/v1/promotions/${idOf(promo)}/vouchers`)
+          .set(auth(a.owner))
+          .send({ customerIds: [me.id], expiresAt: day(30) })
+          .expect(201)
+      ).body.data as { code: string }[];
+      const shuttle = idOf(
+        await t
+          .api()
+          .post(`/api/v1/hotels/${a.hotelId}/add-ons`)
+          .set(auth(a.owner))
+          .send({
+            name: 'Đưa đón sân bay',
+            price: 300000,
+            timing: 'BEFORE_STAY',
+            prebookable: true,
+          })
+          .expect(201),
+      );
+      t.ai.script = [
+        {
+          calls: [
+            { name: 'my_vouchers', args: {} },
+            { name: 'get_hotel_rooms', args: { hotelId: a.hotelId } },
+          ],
+        },
+        {
+          calls: [
+            {
+              name: 'propose_booking',
+              args: {
+                hotelId: a.hotelId,
+                roomTypeId: a.roomTypeId,
+                checkIn: day(10),
+                checkOut: day(12),
+                guests: 2,
+                contactPhone: '0901234567',
+                code: voucher.code,
+                addOns: [{ addOnId: shuttle, quantity: 1 }],
+              },
+            },
+          ],
+        },
+        { text: 'Đề xuất đã áp mã và thêm xe đưa đón.' },
+      ];
+      const res = await start(
+        me.token,
+        'Có mã giảm giá không, thêm xe đưa đón',
+      ).expect(201);
+
+      const looked = t.ai.chats[1].contents
+        .at(-1)!
+        .parts!.map(
+          (p) =>
+            (p as { functionResponse: { response: unknown } }).functionResponse
+              .response,
+        );
+      const vouchers = (
+        looked[0] as { vouchers: { code: string; discount: string }[] }
+      ).vouchers;
+      expect(vouchers).toEqual([
+        expect.objectContaining({ code: voucher.code, discount: '10%' }),
+      ]);
+      const addOns = (
+        looked[1] as { addOns: { id: string; prebookable: boolean }[] }
+      ).addOns;
+      expect(addOns).toEqual([
+        expect.objectContaining({ id: shuttle, prebookable: true }),
+      ]);
+
+      const proposal = res.body.data.reply.proposal as {
+        id: string;
+        total: number;
+        subtotal: number;
+        discount: { code: string; amount: number };
+        addOns: { name: string; amount: number }[];
+      };
+      // 2,000,000 of rooms less 10%, plus 300,000 of shuttle, which is never discounted.
+      expect(proposal).toMatchObject({
+        subtotal: 2300000,
+        total: 2100000,
+        discount: { code: voucher.code, amount: 200000 },
+        addOns: [{ name: 'Đưa đón sân bay', quantity: 1, amount: 300000 }],
+      });
+
+      const booked = await t
+        .api()
+        .post(
+          `/api/v1/conversations/${res.body.data.conversationId}/confirm-booking`,
+        )
+        .set(auth(me.token))
+        .send({ proposalId: proposal.id })
+        .expect(201);
+      expect(booked.body.data).toMatchObject({
+        status: 'PENDING',
+        invoice: { total: 2100000, discount: { code: voucher.code } },
+        payment: { amount: 2100000 },
+      });
+    });
+
+    it('tells the model why a code does not apply instead of proposing', async () => {
+      const a = await hotel('Biển Xanh', 'a@hotel.test');
+      const me = await t.signIn('CUSTOMER', 'me@guest.test');
+      t.ai.script = [
+        {
+          calls: [
+            {
+              name: 'propose_booking',
+              args: {
+                hotelId: a.hotelId,
+                roomTypeId: a.roomTypeId,
+                checkIn: day(10),
+                checkOut: day(12),
+                guests: 2,
+                contactPhone: '0901234567',
+                code: 'KHONGCO',
+              },
+            },
+          ],
+        },
+        { text: 'Mã này không dùng được.' },
+      ];
+      const res = await start(me.token, 'Đặt với mã KHONGCO').expect(201);
+      expect(t.ai.lastToolResults()[0].response).toMatchObject({
+        code: 'VOUCHER_NOT_FOUND',
+      });
+      expect(res.body.data.reply.proposal).toBeNull();
+    });
+
+    it("shows the guest's bookings and wallet, and cancels only on the guest's click", async () => {
+      const a = await hotel('Biển Xanh', 'a@hotel.test');
+      const me = await t.signIn('CUSTOMER', 'me@guest.test');
+      const other = await t.signIn('CUSTOMER', 'other@guest.test');
+      const booking = (
+        await t
+          .api()
+          .post('/api/v1/bookings')
+          .set(auth(me.token))
+          .send({
+            items: [{ roomTypeId: a.roomTypeId, rooms: 1 }],
+            checkIn: day(10),
+            checkOut: day(12),
+            guests: 2,
+            guestName: 'Khách',
+            contactPhone: '0901234567',
+            expectedTotal: 2000000,
+          })
+          .expect(201)
+      ).body.data as { id: string; code: string };
+      await t.app.get(PaymentConfirmationService).confirm({
+        code: booking.code,
+        amount: 2000000,
+        transactionId: `txn-${booking.code}`,
+        paidAt: new Date(),
+      });
+
+      // Another customer cannot even price a cancellation of it.
+      t.ai.script = [
+        {
+          calls: [
+            {
+              name: 'propose_cancellation',
+              args: { bookingCode: booking.code },
+            },
+          ],
+        },
+        { text: 'Không tìm thấy đơn.' },
+      ];
+      await start(other.token, `Huỷ đơn ${booking.code}`).expect(201);
+      expect(t.ai.lastToolResults()[0].response).toMatchObject({
+        error: expect.stringContaining('Không tìm thấy đơn'),
+      });
+
+      t.ai.script = [
+        {
+          calls: [
+            { name: 'my_bookings', args: {} },
+            { name: 'my_wallet', args: {} },
+            {
+              name: 'propose_cancellation',
+              args: {
+                bookingCode: booking.code.toLowerCase(),
+                reason: 'Đổi kế hoạch',
+              },
+            },
+          ],
+        },
+        {
+          text: 'Huỷ bây giờ được hoàn đủ 2.000.000 đ về ví sau khi khách sạn duyệt.',
+        },
+      ];
+      const res = await start(
+        me.token,
+        'Cho xem đơn của tôi rồi huỷ giúp',
+      ).expect(201);
+      const [mine, wallet] = t.ai.lastToolResults().map((r) => r.response);
+      expect(
+        (mine as { bookings: { code: string; status: string }[] }).bookings,
+      ).toEqual([
+        expect.objectContaining({ code: booking.code, status: 'CONFIRMED' }),
+      ]);
+      expect(wallet).toMatchObject({ walletBalance: 0, points: null });
+
+      const cancellation = res.body.data.reply.cancellation as {
+        id: string;
+        refund: number;
+        needsApproval: boolean;
+        outcome: string | null;
+      };
+      expect(cancellation).toMatchObject({
+        refund: 2000000,
+        needsApproval: true,
+        outcome: null,
+      });
+      // Proposed only: the booking is untouched until the click.
+      const untouched = await t.prisma.booking.findUniqueOrThrow({
+        where: { bookingId: booking.id },
+        select: { status: true },
+      });
+      expect(untouched.status).toBe('CONFIRMED');
+
+      const conversationId = res.body.data.conversationId as string;
+      const confirm = () =>
+        t
+          .api()
+          .post(`/api/v1/conversations/${conversationId}/confirm-cancellation`)
+          .set(auth(me.token))
+          .send({ proposalId: cancellation.id });
+      const done = await confirm().expect(201);
+      expect(done.body.data).toMatchObject({ paymentStatus: 'REFUND_PENDING' });
+      const again = await confirm().expect(409);
+      expect(again.body.code).toBe('BOOKING_PROPOSAL_INVALID');
+
+      const after = await t
+        .api()
+        .get(`/api/v1/conversations/${conversationId}`)
+        .set(auth(me.token))
+        .expect(200);
+      const messages = after.body.data.messages as {
+        role: string;
+        content: string;
+        cancellation: { outcome: string } | null;
+      }[];
+      expect(messages[1].cancellation!.outcome).toBe('REFUND_PENDING');
+      expect(messages[2]).toMatchObject({ role: 'SYSTEM' });
+      expect(messages[2].content).toContain('ví StayReco');
     });
 
     it('stores nothing when the customer is over the assistant budget', async () => {

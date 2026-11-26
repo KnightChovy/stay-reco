@@ -20,6 +20,10 @@ export const confirmBookingProposalSchema = z.strictObject({
 });
 export type ConfirmBookingProposalInput = z.infer<typeof confirmBookingProposalSchema>;
 
+/** `POST /conversations/:id/confirm-cancellation`: the cancellation proposal the customer confirms. */
+export const confirmCancellationProposalSchema = confirmBookingProposalSchema;
+export type ConfirmCancellationProposalInput = ConfirmBookingProposalInput;
+
 /** `GET /me/recommendations`, `GET /recommendations`. */
 export const recommendationQuerySchema = z.object({
   /** Only hotels in this city; matched ignoring case and Vietnamese accents. */
