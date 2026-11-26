@@ -1,5 +1,20 @@
 import { api } from "@/lib/axios";
 import type {
+  ContentReport,
+  DecideReportInput,
+  ReportListQuery,
+  Review,
+  CreateViolationInput,
+  EvidenceLink,
+  PolicyViolation,
+  PolicyViolationSummary,
+  SuspensionRequestInput,
+  UpdateViolationInput,
+  UploadedEvidence,
+  ViolationListQuery,
+  CommissionListQuery,
+  CommissionRow,
+  PlatformCashflow,
   HotelRevenueDetail,
   HotelRevenueListQuery,
   HotelRevenueRow,
@@ -113,6 +128,21 @@ export async function getHotelWalletTransactions(hotelId: string, params: HotelW
   return { transactions: data.data, meta: data.meta as PageMeta };
 }
 
+export type CommissionParams = Partial<CommissionListQuery>;
+
+export async function getCommissions(params: CommissionParams) {
+  const { data } = await api.get<APIResponse<CommissionRow[]>>("/platform/commissions", {
+    params,
+    paramsSerializer: { indexes: null },
+  });
+  return { commissions: data.data, meta: data.meta as PageMeta };
+}
+
+export async function getCashflow(params: PlatformRangeParams) {
+  const { data } = await api.get<APIResponse<PlatformCashflow>>("/platform/cashflow", { params });
+  return data.data;
+}
+
 function attachmentName(disposition: unknown) {
   if (typeof disposition !== "string") return undefined;
   return /filename="?([^";]+)"?/i.exec(disposition)?.[1];
@@ -135,6 +165,93 @@ export async function getPlatformHotels(params: PlatformHotelParams) {
     paramsSerializer: { indexes: null },
   });
   return { hotels: data.data, meta: data.meta as PageMeta };
+}
+
+// ── Compliance cases ────────────────────────────────────────
+
+export type ViolationParams = Partial<ViolationListQuery>;
+
+export async function getViolations(params: ViolationParams) {
+  const { data } = await api.get<APIResponse<PolicyViolationSummary[]>>("/policy-violations", {
+    params,
+    paramsSerializer: { indexes: null },
+  });
+  return { violations: data.data, meta: data.meta as PageMeta };
+}
+
+export async function getViolation(violationId: string) {
+  const { data } = await api.get<APIResponse<PolicyViolation>>(`/policy-violations/${violationId}`);
+  return data.data;
+}
+
+export async function createViolation(input: CreateViolationInput) {
+  const { data } = await api.post<APIResponse<PolicyViolation>>("/policy-violations", input);
+  return data.data;
+}
+
+export async function updateViolation(violationId: string, input: UpdateViolationInput) {
+  const { data } = await api.patch<APIResponse<PolicyViolation>>(`/policy-violations/${violationId}`, input);
+  return data.data;
+}
+
+export async function uploadViolationEvidence(file: File) {
+  const form = new FormData();
+  form.append("file", file);
+  const { data } = await api.post<APIResponse<UploadedEvidence>>("/policy-violations/evidence", form, {
+    headers: { "Content-Type": "multipart/form-data" },
+    timeout: 60_000,
+  });
+  return data.data;
+}
+
+export async function getViolationEvidenceLink(violationId: string, index: number) {
+  const { data } = await api.get<APIResponse<EvidenceLink>>(`/policy-violations/${violationId}/evidence/${index}`);
+  return data.data;
+}
+
+export async function requestSuspension(violationId: string, input: SuspensionRequestInput) {
+  const { data } = await api.post<APIResponse<PolicyViolation>>(
+    `/policy-violations/${violationId}/suspension-request`,
+    input,
+  );
+  return data.data;
+}
+
+// ── Content reports ─────────────────────────────────────────
+
+export type ContentReportParams = Partial<ReportListQuery>;
+
+export async function getContentReports(params: ContentReportParams) {
+  const { data } = await api.get<APIResponse<ContentReport[]>>("/content-reports", {
+    params,
+    paramsSerializer: { indexes: null },
+  });
+  return { reports: data.data, meta: data.meta as PageMeta };
+}
+
+export async function decideContentReport(reportId: string, input: DecideReportInput) {
+  const { data } = await api.post<APIResponse<ContentReport>>(`/content-reports/${reportId}/decide`, input);
+  return data.data;
+}
+
+export async function setReviewVisibility(reviewId: string, isVisible: boolean) {
+  const { data } = await api.patch<APIResponse<Review>>(`/reviews/${reviewId}/visibility`, { isVisible });
+  return data.data;
+}
+
+const REVIEW_SCAN_PAGES = 3;
+
+export async function findHotelReview(hotelId: string, reviewId: string) {
+  for (let page = 1; page <= REVIEW_SCAN_PAGES; page += 1) {
+    const { data } = await api.get<APIResponse<Review[]>>(`/hotels/${hotelId}/reviews`, {
+      params: { page, pageSize: 100, sort: "newest" },
+    });
+    const found = data.data.find((review) => review.id === reviewId);
+    if (found) return found;
+    const meta = data.meta as PageMeta;
+    if (page * meta.pageSize >= meta.total) break;
+  }
+  return null;
 }
 
 // ── Withdrawals ─────────────────────────────────────────────

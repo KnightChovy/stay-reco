@@ -29,6 +29,14 @@ export const managerKeys = {
     [...managerKeys.all, "hotel-revenue", hotelId, params] as const,
   hotelWallet: (hotelId: string, params: managerService.HotelWalletParams) =>
     [...managerKeys.all, "hotel-wallet", hotelId, params] as const,
+  commissions: (params: managerService.CommissionParams) => [...managerKeys.all, "commissions", params] as const,
+  cashflow: (params: managerService.PlatformRangeParams) => [...managerKeys.all, "cashflow", params] as const,
+  violationList: () => [...managerKeys.all, "violations"] as const,
+  violations: (params: managerService.ViolationParams) => [...managerKeys.violationList(), params] as const,
+  violation: (violationId: string) => [...managerKeys.all, "violation", violationId] as const,
+  reportList: () => [...managerKeys.all, "content-reports"] as const,
+  reports: (params: managerService.ContentReportParams) => [...managerKeys.reportList(), params] as const,
+  reportedReview: (reviewId: string) => [...managerKeys.all, "reported-review", reviewId] as const,
 };
 
 /** Codes whose shared message is written for the partner; the manager reads them from the other side. */
@@ -40,6 +48,11 @@ const managerErrorMessages: Record<string, string> = {
   PAYOUT_STATUS_CONFLICT:
     "Yêu cầu rút tiền này vừa được xử lý (bởi quản lý khác, hoặc đối tác đã huỷ). Dữ liệu đã được tải lại.",
   PAYOUT_NOT_FOUND: "Không tìm thấy yêu cầu rút tiền này.",
+  VIOLATION_STATUS_CONFLICT: "Hồ sơ đã đóng hoặc vừa được người khác cập nhật. Dữ liệu đã được tải lại.",
+  VIOLATION_NOT_FOUND: "Không tìm thấy hồ sơ vi phạm này.",
+  SUSPENSION_REQUEST_PENDING: "Đối tác này đã có một đề nghị tạm ngưng đang chờ admin quyết định.",
+  PARTNER_NOT_FOUND: "Không tìm thấy đối tác.",
+  REPORT_STATUS_CONFLICT: "Báo cáo này vừa được người khác xử lý. Dữ liệu đã được tải lại.",
 };
 
 export function getManagerErrorMessage(error: unknown) {
@@ -108,6 +121,54 @@ export function useHotelWalletTransactions(hotelId: string | undefined, params: 
     queryKey: managerKeys.hotelWallet(hotelId ?? "", params),
     queryFn: () => managerService.getHotelWalletTransactions(hotelId!, params),
     enabled: !!hotelId,
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useContentReports(params: managerService.ContentReportParams) {
+  return useQuery({
+    queryKey: managerKeys.reports(params),
+    queryFn: () => managerService.getContentReports(params),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useReportedReview(hotelId: string | undefined, reviewId: string | undefined) {
+  return useQuery({
+    queryKey: managerKeys.reportedReview(reviewId ?? ""),
+    queryFn: () => managerService.findHotelReview(hotelId!, reviewId!),
+    enabled: !!hotelId && !!reviewId,
+  });
+}
+
+export function useViolations(params: managerService.ViolationParams) {
+  return useQuery({
+    queryKey: managerKeys.violations(params),
+    queryFn: () => managerService.getViolations(params),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useViolation(violationId: string | undefined) {
+  return useQuery({
+    queryKey: managerKeys.violation(violationId ?? ""),
+    queryFn: () => managerService.getViolation(violationId!),
+    enabled: !!violationId,
+  });
+}
+
+export function useCommissions(params: managerService.CommissionParams) {
+  return useQuery({
+    queryKey: managerKeys.commissions(params),
+    queryFn: () => managerService.getCommissions(params),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useCashflow(params: managerService.PlatformRangeParams) {
+  return useQuery({
+    queryKey: managerKeys.cashflow(params),
+    queryFn: () => managerService.getCashflow(params),
     placeholderData: keepPreviousData,
   });
 }

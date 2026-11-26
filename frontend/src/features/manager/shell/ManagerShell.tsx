@@ -23,8 +23,6 @@ import { NotificationBell } from "@/features/notifications/components/Notificati
 import { useAuthStore } from "@/lib/auth-store";
 import { usePendingPayoutCount, usePendingVerificationCount } from "../api/manager-queries";
 
-/** Screens still built on the sample data of `@/lib/manager-data` until their APIs exist (Phase 6). */
-const DEMO_BADGE = "Mẫu";
 
 const navigation: Omit<SidebarItem, "isActive">[] = [
   {
@@ -49,7 +47,6 @@ const navigation: Omit<SidebarItem, "isActive">[] = [
     href: "/manager/compliance",
     label: "Tuân thủ & chất lượng",
     icon: ShieldAlert,
-    badge: DEMO_BADGE,
     section: "ĐỐI TÁC & RỦI RO",
   },
   {
@@ -62,7 +59,6 @@ const navigation: Omit<SidebarItem, "isActive">[] = [
     href: "/manager/cashflow",
     label: "Dòng tiền & đối soát",
     icon: Landmark,
-    badge: DEMO_BADGE,
     section: "TÀI CHÍNH NỀN TẢNG",
   },
   {
@@ -73,9 +69,8 @@ const navigation: Omit<SidebarItem, "isActive">[] = [
   },
   {
     href: "/manager/transactions",
-    label: "Giao dịch & quyết toán",
+    label: "Hoa hồng nền tảng",
     icon: WalletCards,
-    badge: DEMO_BADGE,
     section: "TÀI CHÍNH NỀN TẢNG",
   },
 ];
