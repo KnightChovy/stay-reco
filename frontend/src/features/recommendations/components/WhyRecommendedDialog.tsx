@@ -94,7 +94,7 @@ function reasonsFor(hotel: RecommendedHotel): Reason[] {
   return reasons;
 }
 
-/** "Hợp với bạn" on a recommended hotel: a short list of plain reasons why it suits this customer. */
+/** "Lý do gợi ý" on a recommended hotel: a short list of plain reasons why it suits this customer. */
 export function WhyRecommendedDialog({ hotel }: { hotel: RecommendedHotel }) {
   const reasons = reasonsFor(hotel);
   if (!reasons.length) return null;
@@ -110,7 +110,7 @@ export function WhyRecommendedDialog({ hotel }: { hotel: RecommendedHotel }) {
           />
         }
       >
-        <Lightbulb className="size-3.5 text-amber-500" aria-hidden /> Hợp với bạn
+        <Lightbulb className="size-3.5 text-amber-500" aria-hidden /> Lý do gợi ý
       </DialogTrigger>
       <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-md">
         <DialogHeader>
