@@ -56,7 +56,6 @@ const navigation: Omit<SidebarItem, "isActive">[] = [
     href: "/manager/revenue",
     label: "Doanh thu nền tảng",
     icon: ChartNoAxesCombined,
-    badge: DEMO_BADGE,
     section: "TÀI CHÍNH NỀN TẢNG",
   },
   {

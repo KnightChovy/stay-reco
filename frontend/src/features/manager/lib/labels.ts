@@ -8,6 +8,7 @@ import type {
   PayoutStatus,
   VerificationRequestType,
   VerificationStatus,
+  WalletTxnType,
 } from "@stayreco/shared";
 
 /** Badge classes built from the semantic status tokens in globals.css. */
@@ -52,7 +53,17 @@ export const regionLabels: Record<Region, string> = {
   OTHER: "Khác",
 };
 
-const moneyFormat =new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 });
+export const walletTxnTypeLabels: Record<WalletTxnType, string> = {
+  BOOKING_PAYMENT: "Thanh toán đặt phòng",
+  COMMISSION: "Hoa hồng nền tảng",
+  REFUND: "Hoàn tiền huỷ phòng",
+  SETTLEMENT: "Chuyển sang khả dụng",
+  PAYOUT: "Rút tiền",
+  ADJUSTMENT: "Điều chỉnh",
+  TOPUP: "Nạp tiền",
+};
+
+const moneyFormat = new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 });
 
 export function formatMoney(amount: number | null | undefined) {
   return amount == null ? "—" : moneyFormat.format(amount);

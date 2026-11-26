@@ -1,5 +1,13 @@
 import { api } from "@/lib/axios";
 import type {
+  HotelRevenueDetail,
+  HotelRevenueListQuery,
+  HotelRevenueRow,
+  PlatformExportQuery,
+  PlatformRevenue,
+  PlatformRevenueQuery,
+  WalletTransaction,
+  WalletTransactionListQuery,
   ManagerPayout,
   ManagerPayoutListQuery,
   PayoutPaidInput,
@@ -76,6 +84,47 @@ export type PlatformRangeParams = { from?: string; to?: string };
 export async function getPlatformOverview(params: PlatformRangeParams) {
   const { data } = await api.get<APIResponse<PlatformOverview>>("/platform/stats/overview", { params });
   return data.data;
+}
+
+export type PlatformRevenueParams = Partial<PlatformRevenueQuery>;
+export type HotelRevenueParams = Partial<HotelRevenueListQuery>;
+export type HotelWalletParams = Partial<WalletTransactionListQuery>;
+
+export async function getPlatformRevenue(params: PlatformRevenueParams) {
+  const { data } = await api.get<APIResponse<PlatformRevenue>>("/platform/stats/revenue", { params });
+  return data.data;
+}
+
+export async function getHotelRevenueList(params: HotelRevenueParams) {
+  const { data } = await api.get<APIResponse<HotelRevenueRow[]>>("/platform/stats/revenue/hotels", { params });
+  return { hotels: data.data, meta: data.meta as PageMeta };
+}
+
+export async function getHotelRevenue(hotelId: string, params: PlatformRangeParams) {
+  const { data } = await api.get<APIResponse<HotelRevenueDetail>>(`/platform/hotels/${hotelId}/revenue`, { params });
+  return data.data;
+}
+
+export async function getHotelWalletTransactions(hotelId: string, params: HotelWalletParams) {
+  const { data } = await api.get<APIResponse<WalletTransaction[]>>(`/platform/hotels/${hotelId}/wallet/transactions`, {
+    params,
+    paramsSerializer: { indexes: null },
+  });
+  return { transactions: data.data, meta: data.meta as PageMeta };
+}
+
+function attachmentName(disposition: unknown) {
+  if (typeof disposition !== "string") return undefined;
+  return /filename="?([^";]+)"?/i.exec(disposition)?.[1];
+}
+
+export async function exportPlatformReport(params: PlatformExportQuery) {
+  const response = await api.get<Blob>("/platform/stats/export", {
+    params,
+    responseType: "blob",
+    timeout: 60_000,
+  });
+  return { file: response.data, fileName: attachmentName(response.headers["content-disposition"]) };
 }
 
 export type PlatformHotelParams = Partial<PlatformHotelListQuery>;
