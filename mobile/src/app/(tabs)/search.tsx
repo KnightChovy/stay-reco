@@ -38,6 +38,9 @@ export default function SearchScreen() {
   const [freeCancellation, setFreeCancellation] = useState(false);
   const [starRating, setStarRating] = useState<number[]>([]);
   const [amenityIds, setAmenityIds] = useState<string[]>([]);
+  // Giá gõ trong ô chỉ áp dụng khi rời ô hoặc bấm Done, để không gọi API sau mỗi phím.
+  const [priceMinInput, setPriceMinInput] = useState('');
+  const [priceMaxInput, setPriceMaxInput] = useState('');
   const [priceMin, setPriceMin] = useState('');
   const [priceMax, setPriceMax] = useState('');
   // Danh mục tiện nghi ít đổi: chỉ tải khi mở bộ lọc.
@@ -177,10 +180,10 @@ export default function SearchScreen() {
               </Text>
               <View className="flex-row gap-2">
                 <View className="flex-1">
-                  <Input placeholder="Từ" keyboardType="number-pad" value={priceMin} onChangeText={(v) => setPriceMin(v.replace(/\D/g, ''))} accessibilityLabel="Giá thấp nhất" />
+                  <Input placeholder="Từ" keyboardType="number-pad" value={priceMinInput} onChangeText={(v) => setPriceMinInput(v.replace(/\D/g, ''))} onBlur={() => setPriceMin(priceMinInput)} onSubmitEditing={() => setPriceMin(priceMinInput)} returnKeyType="done" accessibilityLabel="Giá thấp nhất" />
                 </View>
                 <View className="flex-1">
-                  <Input placeholder="Đến" keyboardType="number-pad" value={priceMax} onChangeText={(v) => setPriceMax(v.replace(/\D/g, ''))} accessibilityLabel="Giá cao nhất" />
+                  <Input placeholder="Đến" keyboardType="number-pad" value={priceMaxInput} onChangeText={(v) => setPriceMaxInput(v.replace(/\D/g, ''))} onBlur={() => setPriceMax(priceMaxInput)} onSubmitEditing={() => setPriceMax(priceMaxInput)} returnKeyType="done" accessibilityLabel="Giá cao nhất" />
                 </View>
               </View>
             </View>
@@ -236,6 +239,8 @@ export default function SearchScreen() {
                 setAmenityIds([]);
                 setPriceMin('');
                 setPriceMax('');
+                setPriceMinInput('');
+                setPriceMaxInput('');
                 setFreeCancellation(false);
                 setSort('recommended');
               }}

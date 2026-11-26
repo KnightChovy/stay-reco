@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
+import { isAxiosError } from 'axios';
 import { resetPasswordSchema } from '@stayreco/shared';
 import { ScreenHeader } from '@/components/layout/AppHeader';
 import { Button } from '@/components/ui/button';
@@ -36,7 +37,9 @@ export default function ResetPasswordScreen() {
       await resetPassword(input.data);
       setDone(true);
     } catch (err) {
-      setError(apiErrorMessage(err, 'Liên kết đặt lại mật khẩu không hợp lệ hoặc đã hết hạn (chỉ có hiệu lực 30 phút).'));
+      const expired = 'Liên kết đặt lại mật khẩu không hợp lệ hoặc đã hết hạn (chỉ có hiệu lực 30 phút).';
+      // Backend trả thông báo tiếng Anh cho token sai/hết hạn; dùng câu tiếng Việt thay thế.
+      setError(isAxiosError(err) && (err.response?.data as { code?: string } | undefined)?.code === 'AUTH_TOKEN_INVALID' ? expired : apiErrorMessage(err, expired));
     } finally {
       setSubmitting(false);
     }

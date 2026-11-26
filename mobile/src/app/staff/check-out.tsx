@@ -144,6 +144,7 @@ export default function StaffCheckOutScreen() {
               ) : (
                 <KV label="Phí trả muộn" value="Không có" />
               )}
+              {quote.data.addOnsDue > 0 && <KV label="Dịch vụ phát sinh (thu tại quầy)" value={formatVnd(quote.data.addOnsDue)} strong color={accent} />}
             </>
           )}
           {checkOut.isError && <Text variant="small" color={colors.error}>{apiErrorMessage(checkOut.error, 'Check-out không thành công.')}</Text>}

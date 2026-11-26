@@ -116,7 +116,9 @@ export default function PaymentScreen() {
     );
   }
 
-  const subtotal = booking.items.reduce((sum, i) => sum + i.subtotal, 0);
+  // Tách theo hoá đơn của backend: dịch vụ đặt kèm không được giảm giá nên không suy ra từ tổng.
+  const { invoice } = booking;
+  const savings = (invoice.discount?.amount ?? 0) + (invoice.points?.amount ?? 0);
   // W1: ví chỉ trả được cả đơn, không trả một phần.
   const walletCovers = (wallet.data?.balanceAvailable ?? 0) >= payment.amount;
   const mm = `${Math.floor(secondsLeft / 60)}`.padStart(2, '0');
@@ -160,13 +162,14 @@ export default function PaymentScreen() {
             </View>
           </View>
           <View className="gap-2 rounded-md bg-surface-container-low p-3">
-            <PriceLine label={`Tiền phòng (${booking.nights} đêm)`} value={formatVnd(subtotal)} />
-            {subtotal > booking.totalAmount && (
+            <PriceLine label={`Tiền phòng (${booking.nights} đêm)`} value={formatVnd(invoice.subtotal - invoice.addOnsTotal)} />
+            {invoice.addOnsTotal > 0 && <PriceLine label="Dịch vụ đặt kèm" value={`+${formatVnd(invoice.addOnsTotal)}`} />}
+            {savings > 0 && (
               <PriceLine
                 label="Ưu đãi & điểm StayMiles"
                 icon="sell"
                 tone={colors.tertiary}
-                value={`-${formatVnd(subtotal - booking.totalAmount)}`}
+                value={`-${formatVnd(savings)}`}
               />
             )}
             <PriceLine label="Thuế VAT & Phí dịch vụ" value="Đã bao gồm" />

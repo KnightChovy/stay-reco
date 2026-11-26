@@ -194,7 +194,7 @@ export default function StaffBookingDetailScreen() {
             ) : (
               <>
                 <FilterChips items={catalogue.data.filter((a) => a.isActive).map((a) => ({ key: a.id, label: `${a.name} · ${formatVnd(a.price)}` }))} value={addOnId} onChange={setAddOnId} />
-                <View className={s.row}>
+                <View className="flex-row items-end gap-2">
                   <Input label="Số lượng" keyboardType="number-pad" value={quantity} onChangeText={setQuantity} className={s.flex} />
                   <Button
                     label="Thêm"

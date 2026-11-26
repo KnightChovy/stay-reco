@@ -188,7 +188,7 @@ function CancellationCard({ proposal, now, pending, onConfirm }: { proposal: Can
           ĐỀ XUẤT HUỶ PHÒNG
         </Text>
         {(done || expired) && (
-          <Text variant="caption" weight="semibold" color={colors.onSurfaceVariant}>
+          <Text variant="caption" weight="semibold" color={colors.onSurfaceVariant} className="flex-1 text-right">
             {done ? (proposal.outcome === 'REFUND_PENDING' ? 'Chờ khách sạn duyệt hoàn tiền' : 'Đã huỷ') : 'Đã hết hạn'}
           </Text>
         )}
