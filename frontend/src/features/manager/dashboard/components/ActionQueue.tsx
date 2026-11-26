@@ -58,7 +58,7 @@ export function ActionQueue({ queue }: { queue: PlatformOverview["queue"] }) {
       detail: waiting(contentReports.oldestCreatedAt, "Cũ nhất đã mở"),
       icon: Flag,
       tone: contentReports.open > 0 ? "warning" : "clear",
-      note: "Màn hình xử lý sắp có",
+      href: "/manager/compliance?view=reports",
     },
     {
       title: "Hồ sơ vi phạm",

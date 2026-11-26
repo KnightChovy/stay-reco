@@ -34,6 +34,9 @@ export const managerKeys = {
   violationList: () => [...managerKeys.all, "violations"] as const,
   violations: (params: managerService.ViolationParams) => [...managerKeys.violationList(), params] as const,
   violation: (violationId: string) => [...managerKeys.all, "violation", violationId] as const,
+  reportList: () => [...managerKeys.all, "content-reports"] as const,
+  reports: (params: managerService.ContentReportParams) => [...managerKeys.reportList(), params] as const,
+  reportedReview: (reviewId: string) => [...managerKeys.all, "reported-review", reviewId] as const,
 };
 
 /** Codes whose shared message is written for the partner; the manager reads them from the other side. */
@@ -49,6 +52,7 @@ const managerErrorMessages: Record<string, string> = {
   VIOLATION_NOT_FOUND: "Không tìm thấy hồ sơ vi phạm này.",
   SUSPENSION_REQUEST_PENDING: "Đối tác này đã có một đề nghị tạm ngưng đang chờ admin quyết định.",
   PARTNER_NOT_FOUND: "Không tìm thấy đối tác.",
+  REPORT_STATUS_CONFLICT: "Báo cáo này vừa được người khác xử lý. Dữ liệu đã được tải lại.",
 };
 
 export function getManagerErrorMessage(error: unknown) {
@@ -118,6 +122,22 @@ export function useHotelWalletTransactions(hotelId: string | undefined, params: 
     queryFn: () => managerService.getHotelWalletTransactions(hotelId!, params),
     enabled: !!hotelId,
     placeholderData: keepPreviousData,
+  });
+}
+
+export function useContentReports(params: managerService.ContentReportParams) {
+  return useQuery({
+    queryKey: managerKeys.reports(params),
+    queryFn: () => managerService.getContentReports(params),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useReportedReview(hotelId: string | undefined, reviewId: string | undefined) {
+  return useQuery({
+    queryKey: managerKeys.reportedReview(reviewId ?? ""),
+    queryFn: () => managerService.findHotelReview(hotelId!, reviewId!),
+    enabled: !!hotelId && !!reviewId,
   });
 }
 

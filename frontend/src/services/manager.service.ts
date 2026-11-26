@@ -1,5 +1,9 @@
 import { api } from "@/lib/axios";
 import type {
+  ContentReport,
+  DecideReportInput,
+  ReportListQuery,
+  Review,
   CreateViolationInput,
   EvidenceLink,
   PolicyViolation,
@@ -211,6 +215,43 @@ export async function requestSuspension(violationId: string, input: SuspensionRe
     input,
   );
   return data.data;
+}
+
+// ── Content reports ─────────────────────────────────────────
+
+export type ContentReportParams = Partial<ReportListQuery>;
+
+export async function getContentReports(params: ContentReportParams) {
+  const { data } = await api.get<APIResponse<ContentReport[]>>("/content-reports", {
+    params,
+    paramsSerializer: { indexes: null },
+  });
+  return { reports: data.data, meta: data.meta as PageMeta };
+}
+
+export async function decideContentReport(reportId: string, input: DecideReportInput) {
+  const { data } = await api.post<APIResponse<ContentReport>>(`/content-reports/${reportId}/decide`, input);
+  return data.data;
+}
+
+export async function setReviewVisibility(reviewId: string, isVisible: boolean) {
+  const { data } = await api.patch<APIResponse<Review>>(`/reviews/${reviewId}/visibility`, { isVisible });
+  return data.data;
+}
+
+const REVIEW_SCAN_PAGES = 3;
+
+export async function findHotelReview(hotelId: string, reviewId: string) {
+  for (let page = 1; page <= REVIEW_SCAN_PAGES; page += 1) {
+    const { data } = await api.get<APIResponse<Review[]>>(`/hotels/${hotelId}/reviews`, {
+      params: { page, pageSize: 100, sort: "newest" },
+    });
+    const found = data.data.find((review) => review.id === reviewId);
+    if (found) return found;
+    const meta = data.meta as PageMeta;
+    if (page * meta.pageSize >= meta.total) break;
+  }
+  return null;
 }
 
 // ── Withdrawals ─────────────────────────────────────────────

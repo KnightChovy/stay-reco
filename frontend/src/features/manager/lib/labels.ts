@@ -8,6 +8,7 @@ import type {
   Region,
   PayoutStatus,
   VerificationRequestType,
+  ReportReason,
   SuspensionRequestStatus,
   VerificationStatus,
   ViolationType,
@@ -89,6 +90,24 @@ export const suspensionStatusLabels: Record<SuspensionRequestStatus, Labelled> =
   PENDING: { label: "Chờ admin quyết định", tone: "warning" },
   APPROVED: { label: "Admin đã tạm ngưng", tone: "danger" },
   REJECTED: { label: "Admin đã từ chối", tone: "muted" },
+};
+
+export const reportReasonLabels: Record<ReportReason, string> = {
+  OFFENSIVE: "Xúc phạm, thô tục",
+  NOT_A_STAY: "Không phải khách đã ở",
+  PERSONAL_DATA: "Lộ thông tin cá nhân",
+  SPAM_OR_ADVERT: "Spam hoặc quảng cáo",
+  WRONG_HOTEL: "Sai khách sạn",
+  AI_GENERATED: "Do AI tạo",
+  OTHER: "Lý do khác",
+};
+
+export const reporterRoleLabels: Record<string, string> = {
+  CUSTOMER: "Khách hàng",
+  HOTEL_PARTNER: "Chủ khách sạn",
+  HOTEL_STAFF: "Nhân viên khách sạn",
+  PLATFORM_MANAGER: "Quản lý nền tảng",
+  ADMIN: "Admin",
 };
 
 export const commissionStatusLabels: Record<CommissionStatus, Labelled> = {

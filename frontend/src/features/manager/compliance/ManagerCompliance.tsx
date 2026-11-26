@@ -19,14 +19,63 @@ import {
   violationTypeLabels,
   type ViolationSeverity,
 } from "../lib/labels";
+import { ContentReports } from "./ContentReports";
 import { CreateViolationDialog } from "./CreateViolationDialog";
 import { ViolationDetailDialog } from "./ViolationDetailDialog";
 
 const PAGE_SIZE = 10;
 
 type CaseTab = "open" | "closed";
+type ComplianceView = "cases" | "reports";
 
 export default function ManagerCompliance() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const view: ComplianceView = useSearchParams().get("view") === "reports" ? "reports" : "cases";
+  const [creating, setCreating] = useState(false);
+
+  function changeView(next: ComplianceView) {
+    router.replace(next === "reports" ? `${pathname}?view=reports` : pathname, { scroll: false });
+  }
+
+  return (
+    <div className="space-y-6">
+      <ManagerTitle
+        title="Tuân thủ & chất lượng"
+        description="Hồ sơ vi phạm chính sách của đối tác, đề nghị tạm ngưng gửi admin, và báo cáo về đánh giá hoặc ảnh của khách."
+        action={
+          view === "cases" && (
+            <Button onClick={() => setCreating(true)}>
+              <Plus />
+              Mở hồ sơ vi phạm
+            </Button>
+          )
+        }
+      />
+
+      <Tabs value={view} onValueChange={(value) => changeView(value as ComplianceView)}>
+        <TabsList>
+          <TabsTrigger value="cases">Hồ sơ vi phạm</TabsTrigger>
+          <TabsTrigger value="reports">Báo cáo nội dung</TabsTrigger>
+        </TabsList>
+      </Tabs>
+
+      {view === "reports" ? (
+        <ContentReports />
+      ) : (
+        <ViolationCases creating={creating} onCreatingChange={setCreating} />
+      )}
+    </div>
+  );
+}
+
+function ViolationCases({
+  creating,
+  onCreatingChange,
+}: {
+  creating: boolean;
+  onCreatingChange: (open: boolean) => void;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -36,7 +85,6 @@ export default function ManagerCompliance() {
   const [severity, setSeverity] = useState<ViolationSeverity | "">("");
   const [page, setPage] = useState(1);
   const [openId, setOpenId] = useState<string>();
-  const [creating, setCreating] = useState(false);
 
   const params: Partial<ViolationListQuery> = {
     page,
@@ -126,18 +174,7 @@ export default function ManagerCompliance() {
   ];
 
   return (
-    <div className="space-y-6">
-      <ManagerTitle
-        title="Tuân thủ & chất lượng"
-        description="Hồ sơ vi phạm chính sách của đối tác: bằng chứng, quá trình điều tra và đề nghị tạm ngưng gửi admin. Nghiêm trọng nhất lên đầu, rồi đến hồ sơ cũ nhất."
-        action={
-          <Button onClick={() => setCreating(true)}>
-            <Plus />
-            Mở hồ sơ vi phạm
-          </Button>
-        }
-      />
-
+    <>
       <ManagerPanel className="overflow-hidden p-0">
         <div className="border-b px-5 pt-4">
           <Tabs value={tab} onValueChange={(value) => update(setTab)(value as CaseTab)}>
@@ -206,7 +243,11 @@ export default function ManagerCompliance() {
       </ManagerPanel>
 
       <ViolationDetailDialog violationId={openId} onOpenChange={(open) => !open && setOpenId(undefined)} />
-      <CreateViolationDialog open={creating} onOpenChange={setCreating} onCreated={(violation) => setOpenId(violation.id)} />
-    </div>
+      <CreateViolationDialog
+        open={creating}
+        onOpenChange={onCreatingChange}
+        onCreated={(violation) => setOpenId(violation.id)}
+      />
+    </>
   );
 }
