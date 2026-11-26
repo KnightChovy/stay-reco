@@ -10,6 +10,7 @@ import {
   Building2,
   CalendarDays,
   ChartNoAxesCombined,
+  FileCheck2,
   FolderKanban,
   LayoutDashboard,
   Megaphone,
@@ -29,6 +30,7 @@ import { NotificationBell } from "@/features/notifications/components/Notificati
 import { useAuthStore } from "@/lib/auth-store";
 import { useRefundQueueCount } from "../api/partner-queries";
 import { useConfirmDiscard, usePartnerHotel } from "../components";
+import { usePendingContentCount } from "../content-approvals/approval-queries";
 import { hotelStatusLabels } from "../lib/labels";
 
 /** Sidebar dropdowns, in display order; "Tổng quan" has no section, so it stays on top as a plain link. */
@@ -100,6 +102,12 @@ const navigation: Omit<SidebarItem, "isActive">[] = [
     section: "Tiếp thị & khách hàng",
   },
   {
+    href: "/partner/content-approvals",
+    label: "Duyệt bài marketing",
+    icon: FileCheck2,
+    section: "Tiếp thị & khách hàng",
+  },
+  {
     href: "/partner/staff",
     label: "Nhân viên & phân quyền",
     icon: UsersRound,
@@ -121,10 +129,15 @@ export function PartnerShell({ children }: { children: ReactNode }) {
   const confirmDiscard = useConfirmDiscard();
   // Refund requests wait for the partner's decision, so they are the bookings badge.
   const { count: refundQueue } = useRefundQueueCount(hotel?.id);
+  const pendingContent = usePendingContentCount(hotel?.myRole === "OWNER" ? hotel.id : undefined);
+  const badges: Record<string, number> = {
+    "/partner/bookings": refundQueue,
+    "/partner/content-approvals": pendingContent,
+  };
   const items = navigation.map((item) => ({
     ...item,
     isActive: pathname === item.href,
-    badge: item.href === "/partner/bookings" && refundQueue > 0 ? refundQueue : item.badge,
+    badge: badges[item.href] ? badges[item.href] : item.badge,
   }));
   const hotelMeta = hotel
     ? [hotel.starRating ? `${hotel.starRating}-Star` : null, hotel.city].filter(Boolean).join(" · ")

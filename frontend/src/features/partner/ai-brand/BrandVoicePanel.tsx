@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
-import { marketingKeys, useAiBudget, useBrandVoice } from "@/features/staff/api/marketing-queries";
+import { marketingKeys, useBrandVoice } from "@/features/staff/api/marketing-queries";
 import { getApiErrorMessage, getApiFieldErrors, validateWith, type FieldErrors } from "@/lib/api-error";
 import * as marketingService from "@/services/marketing.service";
 import { usePartnerMutation } from "../api/partner-queries";
@@ -41,8 +41,6 @@ const voiceFields = [
 type VoiceKey = (typeof voiceFields)[number]["key"];
 type VoiceDraft = Record<VoiceKey, string>;
 
-const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
-
 function toDraft(voice: BrandVoice): VoiceDraft {
   return {
     summary: voice.summary ?? "",
@@ -54,7 +52,6 @@ function toDraft(voice: BrandVoice): VoiceDraft {
 
 export function BrandVoicePanel({ hotelId }: { hotelId: string }) {
   const voice = useBrandVoice(hotelId);
-  const budget = useAiBudget(hotelId);
   const { canEdit } = usePartnerHotel();
   const [learnOpen, setLearnOpen] = useState(false);
 
@@ -66,11 +63,6 @@ export function BrandVoicePanel({ hotelId }: { hotelId: string }) {
           <p className="text-xs text-muted-foreground">
             AI dùng mô tả này mỗi khi viết bài cho khách sạn. Giọng văn dùng chung cho mọi khách sạn của bạn.
           </p>
-          {budget.data && (
-            <p className="mt-1 text-xs text-muted-foreground">
-              Ngân sách AI tháng này: {usd.format(budget.data.spentUsd)} / {usd.format(budget.data.limitUsd)}
-            </p>
-          )}
         </div>
         {canEdit && (
           <Button variant="outline" className="shrink-0" onClick={() => setLearnOpen(true)}>
