@@ -1,6 +1,12 @@
 import { format, formatDistanceToNowStrict } from "date-fns";
 import { vi } from "date-fns/locale";
-import type { DocumentType, VerificationRequestType, VerificationStatus } from "@stayreco/shared";
+import type {
+  DocumentType,
+  PartnerStatus,
+  PayoutStatus,
+  VerificationRequestType,
+  VerificationStatus,
+} from "@stayreco/shared";
 
 /** Badge classes built from the semantic status tokens in globals.css. */
 export type StatusTone = "success" | "warning" | "danger" | "info" | "muted";
@@ -14,6 +20,26 @@ export const toneClasses: Record<StatusTone, string> = {
 };
 
 type Labelled = { label: string; tone: StatusTone };
+
+export const payoutStatusLabels: Record<PayoutStatus, Labelled> = {
+  PENDING: { label: "Chờ chuyển tiền", tone: "warning" },
+  PAID: { label: "Đã chuyển", tone: "success" },
+  REJECTED: { label: "Đã từ chối", tone: "danger" },
+  CANCELLED: { label: "Đối tác đã huỷ", tone: "muted" },
+};
+
+export const partnerStatusLabels: Record<PartnerStatus, Labelled> = {
+  PENDING: { label: "Chờ duyệt", tone: "warning" },
+  APPROVED: { label: "Đang hoạt động", tone: "success" },
+  REJECTED: { label: "Bị từ chối", tone: "danger" },
+  SUSPENDED: { label: "Tạm ngưng", tone: "danger" },
+};
+
+const moneyFormat = new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 });
+
+export function formatMoney(amount: number | null | undefined) {
+  return amount == null ? "—" : moneyFormat.format(amount);
+}
 
 export const verificationStatusLabels: Record<VerificationStatus, Labelled> = {
   PENDING: { label: "Chờ thẩm định", tone: "warning" },

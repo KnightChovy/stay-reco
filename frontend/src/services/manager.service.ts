@@ -1,5 +1,9 @@
 import { api } from "@/lib/axios";
 import type {
+  ManagerPayout,
+  ManagerPayoutListQuery,
+  PayoutPaidInput,
+  PayoutRejectInput,
   VerificationFileLink,
   VerificationListQuery,
   VerificationRequest,
@@ -59,5 +63,32 @@ export async function requestVerificationChanges(requestId: string, reason: stri
 /** Active hotels only: creates a `RENEWAL` request in `NEEDS_REVISION`; the hotel stays active meanwhile. */
 export async function requestReverification(hotelId: string, reason: string) {
   const { data } = await api.post<APIResponse<VerificationRequest>>(`/hotels/${hotelId}/reverification`, { reason });
+  return data.data;
+}
+
+// ── Withdrawals ─────────────────────────────────────────────
+
+export type PayoutQueueParams = Partial<ManagerPayoutListQuery>;
+
+export async function getPayouts(params: PayoutQueueParams) {
+  const { data } = await api.get<APIResponse<ManagerPayout[]>>("/payouts", {
+    params,
+    paramsSerializer: { indexes: null },
+  });
+  return { payouts: data.data, meta: data.meta as PageMeta };
+}
+
+export async function getPayout(payoutId: string) {
+  const { data } = await api.get<APIResponse<ManagerPayout>>(`/payouts/${payoutId}`);
+  return data.data;
+}
+
+export async function markPayoutPaid(payoutId: string, input: PayoutPaidInput) {
+  const { data } = await api.post<APIResponse<ManagerPayout>>(`/payouts/${payoutId}/paid`, input);
+  return data.data;
+}
+
+export async function rejectPayout(payoutId: string, input: PayoutRejectInput) {
+  const { data } = await api.post<APIResponse<ManagerPayout>>(`/payouts/${payoutId}/reject`, input);
   return data.data;
 }

@@ -17,6 +17,9 @@ export const managerKeys = {
   verifications: (params: managerService.VerificationQueueParams) =>
     [...managerKeys.verificationQueue(), params] as const,
   verification: (requestId: string) => [...managerKeys.all, "verification", requestId] as const,
+  payoutQueue: () => [...managerKeys.all, "payout-queue"] as const,
+  payouts: (params: managerService.PayoutQueueParams) => [...managerKeys.payoutQueue(), params] as const,
+  payout: (payoutId: string) => [...managerKeys.all, "payout", payoutId] as const,
 };
 
 /** Codes whose shared message is written for the partner; the manager reads them from the other side. */
@@ -25,6 +28,9 @@ const managerErrorMessages: Record<string, string> = {
     "Đối tác đang bị tạm ngưng nên không thể duyệt hồ sơ xác minh lần đầu. Bạn vẫn có thể từ chối hoặc yêu cầu bổ sung.",
   HOTEL_STATUS_CONFLICT: "Chỉ yêu cầu tái xác minh được với khách sạn đang hoạt động.",
   VERIFICATION_PENDING: "Khách sạn đã có hồ sơ đang chờ thẩm định hoặc đã được yêu cầu tái xác minh.",
+  PAYOUT_STATUS_CONFLICT:
+    "Yêu cầu rút tiền này vừa được xử lý (bởi quản lý khác, hoặc đối tác đã huỷ). Dữ liệu đã được tải lại.",
+  PAYOUT_NOT_FOUND: "Không tìm thấy yêu cầu rút tiền này.",
 };
 
 export function getManagerErrorMessage(error: unknown) {
@@ -53,6 +59,28 @@ export function useVerificationRequest(requestId: string | undefined) {
     queryKey: managerKeys.verification(requestId ?? ""),
     queryFn: () => managerService.getVerificationRequest(requestId!),
     enabled: !!requestId,
+  });
+}
+
+export function usePayoutQueue(params: managerService.PayoutQueueParams) {
+  return useQuery({
+    queryKey: managerKeys.payouts(params),
+    queryFn: () => managerService.getPayouts(params),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function usePendingPayoutCount() {
+  const query = usePayoutQueue({ status: ["PENDING"], page: 1, pageSize: 1 });
+  return { ...query, count: query.data?.meta.total ?? 0 };
+}
+
+export function usePayout(payoutId: string | undefined) {
+  return useQuery({
+    queryKey: managerKeys.payout(payoutId ?? ""),
+    queryFn: () => managerService.getPayout(payoutId!),
+    enabled: !!payoutId,
+    staleTime: 0,
   });
 }
 
