@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { BadgeCheck, Building2, RotateCcw, Search, Star, X } from "lucide-react";
+import { BadgeCheck, Building2, FilePlus2, RotateCcw, Search, ShieldAlert, Star, X } from "lucide-react";
 import {
   LISTED_HOTEL_STATUSES,
   PARTNER_STATUSES,
@@ -22,6 +22,7 @@ import { usePlatformHotels } from "../api/manager-queries";
 import { ErrorPanel, ManagerPanel, ManagerTitle, StatusBadge } from "../components";
 import { periodPresetLabels, presetRange, type PeriodPreset } from "../lib/dates";
 import { formatMoney, hotelStatusLabels, partnerStatusLabels, regionLabels } from "../lib/labels";
+import { CreateViolationDialog, type ViolationTarget } from "../compliance/CreateViolationDialog";
 import { ReverificationDialog } from "./ReverificationDialog";
 
 const PAGE_SIZE = 10;
@@ -50,6 +51,7 @@ export default function ManagerPartners() {
   const [preset, setPreset] = useState<PeriodPreset>("30d");
   const [page, setPage] = useState(1);
   const [reverifying, setReverifying] = useState<PlatformHotelRow>();
+  const [reporting, setReporting] = useState<ViolationTarget>();
   const debouncedSearch = useDebounce(search.trim());
 
   const params: PlatformHotelParams = {
@@ -174,6 +176,20 @@ export default function ManagerPartners() {
               label: "Xem hồ sơ xác minh",
               icon: BadgeCheck,
               href: `/manager/verifications?search=${encodeURIComponent(hotel.name)}`,
+            },
+            {
+              label: "Xem hồ sơ vi phạm",
+              icon: ShieldAlert,
+              href: `/manager/compliance?partnerId=${hotel.partner.id}&partnerName=${encodeURIComponent(hotel.partner.name)}`,
+            },
+            {
+              label: "Mở hồ sơ vi phạm",
+              icon: FilePlus2,
+              onSelect: () =>
+                setReporting({
+                  partner: { id: hotel.partner.id, name: hotel.partner.name },
+                  hotel: { id: hotel.id, name: hotel.name },
+                }),
             },
             {
               label: "Yêu cầu tái xác minh",
@@ -306,6 +322,11 @@ export default function ManagerPartners() {
       </ManagerPanel>
 
       <ReverificationDialog hotel={reverifying} onClose={() => setReverifying(undefined)} />
+      <CreateViolationDialog
+        open={!!reporting}
+        onOpenChange={(open) => !open && setReporting(undefined)}
+        initialTarget={reporting}
+      />
     </div>
   );
 }

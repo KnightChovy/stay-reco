@@ -71,7 +71,7 @@ export function ActionQueue({ queue }: { queue: PlatformOverview["queue"] }) {
           : "Không có hồ sơ đang mở",
       icon: ShieldAlert,
       tone: complianceCases.critical > 0 ? "danger" : complianceCases.open > 0 ? "warning" : "clear",
-      note: "Màn hình xử lý sắp có",
+      href: "/manager/compliance",
     },
     {
       title: "Đề nghị tạm ngưng",

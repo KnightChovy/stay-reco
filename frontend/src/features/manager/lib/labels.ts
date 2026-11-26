@@ -8,9 +8,16 @@ import type {
   Region,
   PayoutStatus,
   VerificationRequestType,
+  SuspensionRequestStatus,
   VerificationStatus,
+  ViolationType,
   WalletTxnType,
+  VIOLATION_SEVERITIES,
+  VIOLATION_STATUSES,
 } from "@stayreco/shared";
+
+export type ViolationSeverity = (typeof VIOLATION_SEVERITIES)[number];
+export type ViolationStatus = (typeof VIOLATION_STATUSES)[number];
 
 /** Badge classes built from the semantic status tokens in globals.css. */
 export type StatusTone = "success" | "warning" | "danger" | "info" | "muted";
@@ -52,6 +59,36 @@ export const regionLabels: Record<Region, string> = {
   CENTRAL: "Miền Trung",
   SOUTH: "Miền Nam",
   OTHER: "Khác",
+};
+
+export const violationTypeLabels: Record<ViolationType, string> = {
+  FRAUD: "Gian lận",
+  FAKE_LISTING: "Thông tin cơ sở sai sự thật",
+  GUEST_SAFETY: "An toàn khách lưu trú",
+  LICENSE_EXPIRED: "Giấy phép hết hiệu lực",
+  PAYMENT_ABUSE: "Lạm dụng thanh toán",
+  REVIEW_MANIPULATION: "Thao túng đánh giá",
+  OTHER: "Khác",
+};
+
+export const violationSeverityLabels: Record<ViolationSeverity, Labelled> = {
+  LOW: { label: "Thấp", tone: "muted" },
+  MEDIUM: { label: "Trung bình", tone: "info" },
+  HIGH: { label: "Cao", tone: "warning" },
+  CRITICAL: { label: "Nghiêm trọng", tone: "danger" },
+};
+
+export const violationStatusLabels: Record<ViolationStatus, Labelled> = {
+  OPEN: { label: "Mới mở", tone: "warning" },
+  INVESTIGATING: { label: "Đang điều tra", tone: "info" },
+  RESOLVED: { label: "Đã xử lý", tone: "success" },
+  DISMISSED: { label: "Đã bác bỏ", tone: "muted" },
+};
+
+export const suspensionStatusLabels: Record<SuspensionRequestStatus, Labelled> = {
+  PENDING: { label: "Chờ admin quyết định", tone: "warning" },
+  APPROVED: { label: "Admin đã tạm ngưng", tone: "danger" },
+  REJECTED: { label: "Admin đã từ chối", tone: "muted" },
 };
 
 export const commissionStatusLabels: Record<CommissionStatus, Labelled> = {

@@ -1,15 +1,8 @@
 export { ManagerPanel } from "./ManagerPanel";
 export { ManagerActionProvider, useManagerActions } from "./ManagerActionProvider";
 export { ManagerTitle } from "./ManagerTitle";
-export { ManagerDemoBanner } from "./ManagerDemoBanner";
 export { ManagerNotice } from "./ManagerNotice";
 export type { ManagerNoticeTone } from "./ManagerNotice";
 export { StatusBadge, ErrorPanel } from "./ManagerUi";
 export { MetricDelta } from "./MetricDelta";
 export { ExportReportButton } from "./ExportReportButton";
-export { ManagerWorkspaceTable } from "./ManagerWorkspaceTable";
-export type { ManagerWorkspaceTableProps } from "./ManagerWorkspaceTable";
-export { ManagerWorkspaceSummary } from "./ManagerWorkspaceSummary";
-export type { ManagerWorkspaceSummaryProps } from "./ManagerWorkspaceSummary";
-export { ManagerQueueSummary } from "./ManagerQueueSummary";
-export type { ManagerQueueSummaryProps } from "./ManagerQueueSummary";

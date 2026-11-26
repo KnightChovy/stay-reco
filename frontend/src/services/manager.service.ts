@@ -1,5 +1,13 @@
 import { api } from "@/lib/axios";
 import type {
+  CreateViolationInput,
+  EvidenceLink,
+  PolicyViolation,
+  PolicyViolationSummary,
+  SuspensionRequestInput,
+  UpdateViolationInput,
+  UploadedEvidence,
+  ViolationListQuery,
   CommissionListQuery,
   CommissionRow,
   PlatformCashflow,
@@ -153,6 +161,56 @@ export async function getPlatformHotels(params: PlatformHotelParams) {
     paramsSerializer: { indexes: null },
   });
   return { hotels: data.data, meta: data.meta as PageMeta };
+}
+
+// ── Compliance cases ────────────────────────────────────────
+
+export type ViolationParams = Partial<ViolationListQuery>;
+
+export async function getViolations(params: ViolationParams) {
+  const { data } = await api.get<APIResponse<PolicyViolationSummary[]>>("/policy-violations", {
+    params,
+    paramsSerializer: { indexes: null },
+  });
+  return { violations: data.data, meta: data.meta as PageMeta };
+}
+
+export async function getViolation(violationId: string) {
+  const { data } = await api.get<APIResponse<PolicyViolation>>(`/policy-violations/${violationId}`);
+  return data.data;
+}
+
+export async function createViolation(input: CreateViolationInput) {
+  const { data } = await api.post<APIResponse<PolicyViolation>>("/policy-violations", input);
+  return data.data;
+}
+
+export async function updateViolation(violationId: string, input: UpdateViolationInput) {
+  const { data } = await api.patch<APIResponse<PolicyViolation>>(`/policy-violations/${violationId}`, input);
+  return data.data;
+}
+
+export async function uploadViolationEvidence(file: File) {
+  const form = new FormData();
+  form.append("file", file);
+  const { data } = await api.post<APIResponse<UploadedEvidence>>("/policy-violations/evidence", form, {
+    headers: { "Content-Type": "multipart/form-data" },
+    timeout: 60_000,
+  });
+  return data.data;
+}
+
+export async function getViolationEvidenceLink(violationId: string, index: number) {
+  const { data } = await api.get<APIResponse<EvidenceLink>>(`/policy-violations/${violationId}/evidence/${index}`);
+  return data.data;
+}
+
+export async function requestSuspension(violationId: string, input: SuspensionRequestInput) {
+  const { data } = await api.post<APIResponse<PolicyViolation>>(
+    `/policy-violations/${violationId}/suspension-request`,
+    input,
+  );
+  return data.data;
 }
 
 // ── Withdrawals ─────────────────────────────────────────────
