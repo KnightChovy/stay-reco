@@ -123,8 +123,8 @@ def load_customers(conn):
     prefs = _frame(conn, """
         SELECT customer_id::text AS user_id, preference_key, preference_value
         FROM customer_preference
-        WHERE preference_key IN ('likedHotels', 'favouriteCity', 'roomAmenities', 'preferredViews',
-                                 'travelStyles', 'budgetPerNight')
+        WHERE preference_key IN ('likedHotels', 'favouriteCity', 'preferredCities', 'roomAmenities',
+                                 'preferredViews', 'travelStyles', 'budgetPerNight')
     """)
     by_user = {u: dict(zip(g["preference_key"], g["preference_value"])) for u, g in prefs.groupby("user_id")}
 
@@ -209,10 +209,12 @@ def _json_default(value):
 
 
 def load_booked(conn):
+    """Hotels each customer has a stay coming up or under way at: suggesting the place they are about to sleep in
+    helps nobody. Stays that are over are not here; a hotel the guest liked may be suggested again (recommend)."""
     with conn.cursor() as cur:
         cur.execute("""
             SELECT DISTINCT customer_id::text, hotel_id::text FROM booking
-            WHERE status NOT IN ('CANCELLED', 'EXPIRED')
+            WHERE status IN ('PENDING', 'CONFIRMED', 'CHECKED_IN')
         """)
         booked = {}
         for customer, hotel in cur:

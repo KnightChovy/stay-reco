@@ -7,6 +7,9 @@
  * (`STYLE_WORDS` and `AMENITY_WORDS` in recommender/reco_pipeline.py), written as phrases so that "hồ bơi" does not
  * match every hotel on Hồ Xuân Hương street. Keep the two in step: a style the screen offers here is the style the
  * recommender then looks for.
+ *
+ * KEEP IN STEP with recommender/styles.py, which holds a copy of `STYLE_PHRASES`, `STYLE_FIT_MIN_HITS` and
+ * `STYLE_DOMINANCE` and ranks the recommendations by the same rule: change both files together.
  */
 
 /** The travel styles of the preferences screen (frontend `STYLES`), with the phrases a hotel of that style uses. */

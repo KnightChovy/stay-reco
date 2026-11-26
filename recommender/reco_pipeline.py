@@ -15,6 +15,7 @@ import pandas as pd
 
 from components import CollaborativeFilter, ContentBasedFilter, DemographicFilter
 from reco_db import fold
+from styles import hotel_styles
 from weights import weights
 
 HERE = Path(__file__).resolve().parent
@@ -34,6 +35,14 @@ BUDGET_SLACK = 1.2
 # The paper's split: 20% of hotels lose every rating, 30% of guests keep only their first 0-19 stays.
 SPLIT = dict(test_ratio=0.2, cold_user_ratio=0.3, max_cold_n=19, cold_item_ratio=0.2)
 K = 10
+# How much the stated preferences still count for a guest with stays: PREF_GAIN * PREF_K / (n + PREF_K) after n rated
+# stays (a guest with none gets them in full). The tuned pipeline of 2026-11-23 picked gain 0.5 with K = 3.
+PREF_GAIN = 0.5
+PREF_K = 3
+# A hotel the guest stayed at and rated at least LIKED_AGAIN is suggested again ("Bạn đã ở đây…"); one rated below
+# DISLIKED is never suggested to them.
+LIKED_AGAIN = 4.0
+DISLIKED = 3.0
 
 AMENITY_WORDS = {
     "pool": "hồ bơi", "view": "view biển view sông ban công", "breakfast": "bữa sáng",
@@ -58,6 +67,12 @@ PREFERENCE_KEYS = ("likedHotels", "favouriteCity", "roomAmenities", "preferredVi
 
 def _split(value):
     return [part.strip() for part in (value or "").split(",") if part.strip()]
+
+
+def cities_of(prefs):
+    """The cities the customer picked (onboarding keeps them all; the preferences page keeps one), folded."""
+    picked = _split(prefs.get("preferredCities")) or _split(prefs.get("favouriteCity"))
+    return {fold(city) for city in picked}
 
 
 def budget_of(prefs):
@@ -91,9 +106,17 @@ class Scorer:
         self.texts = hotels.set_index("item_id")["text"].to_dict()
         self.names = dict(zip(hotels["item_id"], hotels["name"]))
         self.cities = dict(zip(hotels["item_id"], hotels["city"]))
+        # The styles each hotel is (styles.py), the same reading the onboarding hotel step uses.
+        self.styles = {item: hotel_styles(text) for item, text in self.texts.items()}
         self.prefs = dict(zip(customers["user_id"], customers["preferences"]))
         liked = ratings[(ratings["rating"] >= 4) & ratings["item_id"].isin(self.content.index)]
         self.liked = {user: list(zip(group["item_id"], group["rating"])) for user, group in liked.groupby("user_id")}
+        # What each guest gave each hotel they stayed at: a liked one may be suggested again, a disliked one not.
+        self.own = {(u, i): float(r) for u, i, r in ratings[["user_id", "item_id", "rating"]].itertuples(index=False)}
+        self.disliked = {}
+        for (u, i), r in self.own.items():
+            if r < DISLIKED:
+                self.disliked.setdefault(u, set()).add(i)
         self.item_mean = ratings.groupby("item_id")["rating"].mean()
         self.global_mean = float(ratings["rating"].mean()) if len(ratings) else 3.0
 
@@ -115,7 +138,7 @@ class Scorer:
         a, b, g = weights(self.user_n.get(user, 0), self.item_n.reindex(items, fill_value=0).to_numpy(),
                           has_prefs, use_cf=self.cf is not None)
         cf = self.cf.predict_many(users, items) if self.cf is not None else np.zeros(len(items))
-        content = self.content.predict(user, items, self.profile(prefs))
+        content = self.content.predict(user, items, self.profile(prefs), pref_gain=PREF_GAIN, pref_k=PREF_K)
         demo = self.demographic.predict_many(users, items)
         served = np.round(np.clip(a * cf + b * content + g * demo, 1, 5), 3)
         return dict(cf=cf, content=content, demo=demo, served=served,
@@ -125,11 +148,20 @@ class Scorer:
     def popularity(self, items):
         return self.item_mean.reindex(items).fillna(self.global_mean).to_numpy()
 
-    def reason(self, user, item, a, b, g):
-        """One line the guest can read: which part of the score carried this hotel."""
+    def reason(self, user, item, a, b, g, *, away=False):
+        """One line the guest can read: which part of the score carried this hotel.
+
+        `away`: the hotel is outside the cities the guest picked, so it is listed after them and the line says why it
+        is there at all.
+        """
         new = "Khách sạn mới trên StayReco. " if self.item_n.get(item, 0) == 0 else ""
+        if away:
+            new = "Ngoài điểm đến bạn chọn. " + new
         if user is None:
             return new.strip() or "Được khách StayReco đánh giá cao."
+        mine = self.own.get((user, item))
+        if mine is not None and mine >= LIKED_AGAIN:
+            return new + f"Bạn đã ở đây và chấm {mine:.1f}★."
         if a >= max(b, g) and a > 0:
             return new + "Khách có gu giống bạn đánh giá cao nơi này."
         if b >= g:
@@ -142,11 +174,13 @@ class Scorer:
                     return new + f"Giống {self.names.get(best, 'nơi')} mà bạn đã chấm {rating:.1f}★."
             prefs = self.prefs.get(user, {})
             parts = []
-            styles = [STYLE_LABELS[s] for s in _split(prefs.get("travelStyles")) if s in STYLE_LABELS]
+            # Only the chosen styles this hotel actually is: a homestay is not "nghỉ dưỡng" because the guest chose it.
+            styles = [STYLE_LABELS[s] for s in _split(prefs.get("travelStyles"))
+                      if s in STYLE_LABELS and s in self.styles.get(item, ())]
             if styles:
                 parts.append("phong cách " + ", ".join(styles))
-            city = (prefs.get("favouriteCity") or "").strip()
-            if city and fold(city) in fold(self.cities.get(item, "")):
+            city = self.cities.get(item, "")
+            if city and fold(city) in cities_of(prefs):
                 parts.append(f"ở {city}")
             if parts:
                 return new + "Hợp sở thích của bạn: " + "; ".join(parts) + "."
@@ -157,24 +191,37 @@ class Scorer:
 def recommend(scorer, customers, booked, top_k=TOP_K):
     """Yields (customer, hotel, score, rank, reason): the top-K per customer, then the signed-out list.
 
-    A hotel the customer booked (not cancelled or expired) is left out of their list; search still shows it. A hotel
-    well over the customer's budget per night is ranked after the others rather than removed.
+    `booked` holds the hotels each customer has a stay coming up or under way at (reco_db.load_booked): those are left
+    out, as are hotels they rated below DISLIKED. A hotel they stayed at and liked stays in the list and may come back
+    ("Bạn đã ở đây…"); the score decides its place, as for any other hotel. Search shows every hotel anyway. Nothing is
+    removed for taste: hotels of none of the travel styles the customer chose come after the ones that are, hotels
+    outside the cities picked after the ones in them, and a hotel well over the budget per night after all of those,
+    so the list leads with what was asked for and still has the rest.
     """
     hotels = scorer.hotels
     if hotels.empty:
         return
     min_price = hotels.set_index("item_id")["min_price"]
+    city_of = hotels.set_index("item_id")["city"].map(fold)
     for user, prefs in [(None, {}), *zip(customers["user_id"], customers["preferences"])]:
-        items = hotels.loc[~hotels["item_id"].isin(booked.get(user, ())), "item_id"].to_numpy()
+        skip = set(booked.get(user, ())) | scorer.disliked.get(user, set())
+        items = hotels.loc[~hotels["item_id"].isin(skip), "item_id"].to_numpy()
         if not len(items):
             continue
         c = scorer.components(user, items)
         budget = budget_of(prefs)
         over = (min_price.reindex(items).fillna(0).to_numpy() > budget * BUDGET_SLACK) if budget else np.zeros(len(items))
-        order = np.lexsort((items, -c["served"], over))[:top_k]
+        cities = cities_of(prefs)
+        away = ~city_of.reindex(items).isin(cities).to_numpy() if cities else np.zeros(len(items), dtype=bool)
+        chosen = {s for s in _split(prefs.get("travelStyles")) if s in STYLE_LABELS}
+        off_style = (np.array([not (scorer.styles.get(i, set()) & chosen) for i in items])
+                     if chosen else np.zeros(len(items), dtype=bool))
+        # np.lexsort sorts by the last key first: within budget, then of a chosen style, then in a city picked, then
+        # by score. Style before city: a resort lover is better served by a resort elsewhere than a kids' club nearby.
+        order = np.lexsort((items, -c["served"], away, off_style, over))[:top_k]
         for rank, i in enumerate(order, 1):
             yield (user, items[i], float(c["served"][i]), rank,
-                   scorer.reason(user, items[i], c["a"][i], c["b"][i], c["g"][i]))
+                   scorer.reason(user, items[i], c["a"][i], c["b"][i], c["g"][i], away=bool(away[i])))
 
 
 def _predict_pairs(scorer, users, items):

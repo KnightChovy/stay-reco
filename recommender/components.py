@@ -155,19 +155,28 @@ class ContentBasedFilter:
             for user_id, group in history.groupby("user_id")
         }
 
-    def predict(self, user, items, profile):
+    def predict(self, user, items, profile, pref_gain=0.5, pref_k=3):
+        """Rating-scale content scores of `items` for `user`.
+
+        The stays the user rated steer the score (item kNN on their residuals); the stated preferences (`profile`)
+        steer it too, at full strength for a user with no stays and less as stays accumulate:
+        `pref_gain * pref_k / (n + pref_k)` after n rated stays. Never zero, so a regular who changes their
+        preferences sees the list change.
+        """
         indices = [self.index[item] for item in items]
         vectors = self.vectors[indices]
         baseline = self.mean + self.user_bias.get(user, 0) + np.array(
             [self.item_bias.get(item, 0) for item in items]
         )
+        n = 0
         if user in self.history:
             seen, residual = self.history[user]
+            n = len(seen)
             sims = (vectors @ self.vectors[seen].T).toarray()
             top = np.argsort(-sims, axis=1, kind="stable")[:, :30]
             similarity = np.take_along_axis(sims, top, axis=1)
             baseline += (similarity * residual[top]).sum(axis=1) / (similarity.sum(axis=1) + 1)
-        elif profile:
+        if profile:
             match = (vectors @ self.vectorizer.transform([profile]).T).toarray().ravel()
-            baseline += match
+            baseline += match * (1.0 if n == 0 else pref_gain * pref_k / (n + pref_k))
         return np.clip(baseline, 1, 5)

@@ -36,7 +36,8 @@ class RecommenderTest(unittest.TestCase):
         self.assertEqual(weights(0, 5, False), (0, 0, 1))
         self.assertEqual(weights(0, 5, True), (0, 1, 0))
         self.assertEqual(weights(40, 0, False), (0, 1, 0))
-        self.assertEqual(weights(40, 5, False)[0], 0.25)
+        # n_user / (n_user + 5) * n_item / (n_item + 5): an even history and an even hotel give a quarter to CF.
+        self.assertEqual(weights(5, 5, False)[0], 0.25)
         self.assertEqual(weights(40, 5, True, use_cf=False), (0, 1, 0))
         for has_prefs in (True, False):
             components = np.array(weights(3, np.array([0, 1, 10]), has_prefs))
@@ -70,6 +71,67 @@ class RecommenderTest(unittest.TestCase):
         prefs = {"roomAmenities": "pool", "budgetPerNight": "2000000"}
         personal = [row for row in run(NO_RATINGS, hotels, customer(prefs)) if row[0] == "guest"]
         self.assertEqual([row[1] for row in personal], ["hotel-0", "hotel-1"])
+
+    def test_cities_picked_lead_the_list_and_the_rest_stay(self):
+        # The beach hotel in Nha Trang fits the pool best, but the guest picked Đà Lạt and Hà Nội.
+        hotels = hotels_frame(["ho boi ho boi ho boi", "khach san ho boi", "khach san trung tam"],
+                              cities=["Nha Trang", "Đà Lạt", "Hà Nội"])
+        prefs = {"roomAmenities": "pool", "preferredCities": "Đà Lạt,Hà Nội", "favouriteCity": "Đà Lạt"}
+        personal = [row for row in run(NO_RATINGS, hotels, customer(prefs)) if row[0] == "guest"]
+        self.assertEqual([row[1] for row in personal], ["hotel-1", "hotel-2", "hotel-0"])
+        self.assertTrue(personal[2][4].startswith("Ngoài điểm đến bạn chọn."))
+        self.assertFalse(personal[0][4].startswith("Ngoài"))
+
+    def test_a_single_favourite_city_counts_as_picked(self):
+        # The preferences page keeps one city, under favouriteCity only.
+        hotels = hotels_frame(["ho boi ho boi", "khach san ho boi"], cities=["Nha Trang", "Đà Lạt"])
+        prefs = {"roomAmenities": "pool", "favouriteCity": "Đà Lạt"}
+        personal = [row[1] for row in run(NO_RATINGS, hotels, customer(prefs)) if row[0] == "guest"]
+        self.assertEqual(personal, ["hotel-1", "hotel-0"])
+
+    def test_a_regular_who_changes_preferences_sees_the_list_change(self):
+        # Six rated homestays, then two hotels the guest never stayed at: a resort and a family hotel.
+        texts = [f"homestay ca phe chup anh {i}" for i in range(6)] + [
+            "khu nghi duong ven bien ho boi spa villa", "gia dinh tre em khu vui choi phong gia dinh"]
+        hotels = hotels_frame(texts)
+        ratings = pd.DataFrame([{"user_id": "guest", "item_id": f"hotel-{i}", "rating": 4.5, "timestamp": i}
+                                for i in range(6)])
+
+        def top_unvisited(styles):
+            rows = run(ratings, hotels, customer({"travelStyles": styles}))
+            return [row[1] for row in rows if row[0] == "guest" and row[1] in ("hotel-6", "hotel-7")][0]
+
+        self.assertEqual(top_unvisited("resort"), "hotel-6")
+        self.assertEqual(top_unvisited("family"), "hotel-7")
+
+    def test_hotels_of_a_chosen_style_lead_and_say_so(self):
+        # The kids' club is in the city picked and shares "ho boi" with the guest's amenity; the resort is elsewhere.
+        hotels = hotels_frame([
+            "kids club hotel gia dinh tre em khu vui choi ho boi ho boi",
+            "resort and spa khu nghi duong ven bien spa villa",
+            "pho co homestay ca phe chup anh",
+        ], cities=["Đà Nẵng", "Hội An", "Đà Nẵng"])
+        prefs = {"travelStyles": "resort", "roomAmenities": "pool", "preferredCities": "Đà Nẵng"}
+        personal = [row for row in run(NO_RATINGS, hotels, customer(prefs)) if row[0] == "guest"]
+        self.assertEqual(personal[0][1], "hotel-1")
+        self.assertIn("phong cách nghỉ dưỡng", personal[0][4])
+        # Not a resort, so its reason does not claim the style the guest chose.
+        for row in personal[1:]:
+            self.assertNotIn("nghỉ dưỡng", row[4])
+
+    def test_a_hotel_liked_may_come_back_a_disliked_or_upcoming_one_not(self):
+        hotels = hotels_frame(["homestay ca phe", "homestay chup anh", "homestay decor", "homestay vintage"])
+        ratings = pd.DataFrame([
+            {"user_id": "guest", "item_id": "hotel-0", "rating": 4.8, "timestamp": 1},   # liked
+            {"user_id": "guest", "item_id": "hotel-1", "rating": 2.0, "timestamp": 2},   # disliked
+        ])
+        # hotel-2 is where the guest's next stay is booked.
+        rows = run(ratings, hotels, customer({"travelStyles": "chill"}), {"guest": {"hotel-2"}})
+        personal = {row[1]: row[4] for row in rows if row[0] == "guest"}
+        self.assertEqual(set(personal), {"hotel-0", "hotel-3"})
+        self.assertEqual(personal["hotel-0"], "Bạn đã ở đây và chấm 4.8★.")
+        # The signed-out list is everyone's: nothing is left out of it.
+        self.assertEqual(len([row for row in rows if row[0] is None]), 4)
 
     def test_top_k_caps_each_list(self):
         hotels = hotels_frame([f"hotel text {i}" for i in range(30)])
