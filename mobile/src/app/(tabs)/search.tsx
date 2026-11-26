@@ -9,10 +9,11 @@ import { AppHeader } from '@/components/layout/AppHeader';
 import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
 import { Icon } from '@/components/ui/icon';
+import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
 import { colors } from '@/constants/theme';
 import { formatDate, nightsBetween, stayFromParams } from '@/lib/stay';
-import { searchHotels } from '@/services/stays.service';
+import { getAmenities, searchHotels } from '@/services/stays.service';
 import { useAuthStore } from '@/stores/auth.store';
 
 type Sort = (typeof HOTEL_SORTS)[number];
@@ -36,6 +37,12 @@ export default function SearchScreen() {
   const [sort, setSort] = useState<Sort>('recommended');
   const [freeCancellation, setFreeCancellation] = useState(false);
   const [starRating, setStarRating] = useState<number[]>([]);
+  const [amenityIds, setAmenityIds] = useState<string[]>([]);
+  const [priceMin, setPriceMin] = useState('');
+  const [priceMax, setPriceMax] = useState('');
+  // Danh mục tiện nghi ít đổi: chỉ tải khi mở bộ lọc.
+  const amenities = useQuery({ queryKey: ['stays', 'amenities'], queryFn: getAmenities, staleTime: 60 * 60_000, enabled: filterOpen || amenityIds.length > 0 });
+  const toInt = (v: string) => (/^\d+$/.test(v) ? Number(v) : undefined);
 
   const query = {
     ...stay,
@@ -44,6 +51,9 @@ export default function SearchScreen() {
     pageSize: 20,
     ...(freeCancellation ? { freeCancellation: true } : {}),
     ...(starRating.length ? { starRating } : {}),
+    ...(amenityIds.length ? { amenityIds } : {}),
+    ...(toInt(priceMin) !== undefined ? { priceMin: toInt(priceMin) } : {}),
+    ...(toInt(priceMax) !== undefined ? { priceMax: toInt(priceMax) } : {}),
   };
   // shortcut: chỉ lấy trang đầu 20 kết quả, thêm tải tiếp khi điểm đến có nhiều khách sạn hơn.
   const { data, isPending, isPlaceholderData, isError, refetch } = useQuery({
@@ -58,7 +68,8 @@ export default function SearchScreen() {
   const toggleStar = (star: number) =>
     setStarRating((s) => (s.includes(star) ? s.filter((x) => x !== star) : [...s, star]));
   const nextSort = () => setSort((s) => HOTEL_SORTS[(HOTEL_SORTS.indexOf(s) + 1) % HOTEL_SORTS.length]);
-  const filterCount = starRating.length + (freeCancellation ? 1 : 0);
+  const toggleAmenity = (id: string) => setAmenityIds((a) => (a.includes(id) ? a.filter((x) => x !== id) : [...a, id]));
+  const filterCount = starRating.length + amenityIds.length + (freeCancellation ? 1 : 0) + (priceMin || priceMax ? 1 : 0);
 
   return (
     <View className="flex-1 bg-surface">
@@ -162,6 +173,37 @@ export default function SearchScreen() {
             </View>
             <View className="gap-2.5">
               <Text variant="label" weight="bold">
+                Giá mỗi đêm (₫)
+              </Text>
+              <View className="flex-row gap-2">
+                <View className="flex-1">
+                  <Input placeholder="Từ" keyboardType="number-pad" value={priceMin} onChangeText={(v) => setPriceMin(v.replace(/\D/g, ''))} accessibilityLabel="Giá thấp nhất" />
+                </View>
+                <View className="flex-1">
+                  <Input placeholder="Đến" keyboardType="number-pad" value={priceMax} onChangeText={(v) => setPriceMax(v.replace(/\D/g, ''))} accessibilityLabel="Giá cao nhất" />
+                </View>
+              </View>
+            </View>
+            <View className="gap-2.5">
+              <Text variant="label" weight="bold">
+                Tiện nghi
+              </Text>
+              {amenities.isPending ? (
+                <Text variant="caption" color={colors.onSurfaceVariant}>
+                  Đang tải tiện nghi…
+                </Text>
+              ) : amenities.isError ? (
+                <Button label="Tải lại tiện nghi" leadingIcon="refresh" variant="secondary" size="sm" onPress={() => void amenities.refetch()} />
+              ) : (
+                <View className="flex-row flex-wrap gap-2">
+                  {amenities.data.map((a) => (
+                    <Chip key={a.id} label={a.name} tone={amenityIds.includes(a.id) ? 'selected' : 'outline'} onPress={() => toggleAmenity(a.id)} />
+                  ))}
+                </View>
+              )}
+            </View>
+            <View className="gap-2.5">
+              <Text variant="label" weight="bold">
                 Chính sách hủy
               </Text>
               <View className="flex-row flex-wrap gap-2">
@@ -191,6 +233,9 @@ export default function SearchScreen() {
               className="flex-1"
               onPress={() => {
                 setStarRating([]);
+                setAmenityIds([]);
+                setPriceMin('');
+                setPriceMax('');
                 setFreeCancellation(false);
                 setSort('recommended');
               }}

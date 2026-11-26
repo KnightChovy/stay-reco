@@ -1,12 +1,20 @@
 import type {
   ActionItemList,
+  AddBookingAddOnInput,
   APIResponse,
+  AvailabilityDay,
+  AvailabilityQuery,
+  OccupancyForecast,
+  PricingRule,
+  RoomType,
+  RoomTypeListing,
   Booking,
   BookingSummary,
   CheckInInput,
   CheckOutInput,
   CheckOutQuote,
   ForwardRefundInput,
+  HotelAddOn,
   HotelBookingsQuery,
   HotelSummary,
   HotelTodayStats,
@@ -116,4 +124,54 @@ export const cleanRoom = async (roomId: string) => {
 export const getHotelPromotions = async (hotelId: string, params: Partial<PromotionListQuery> = {}) => {
   const { data } = await apiService.get<APIResponse<Promotion[]>>(`/hotels/${hotelId}/promotions`, { params });
   return { promotions: data.data, meta: data.meta as PageMeta };
+};
+
+export const getRoomTypes = async (hotelId: string) => {
+  const { data } = await apiService.get<APIResponse<RoomType[]>>(`/hotels/${hotelId}/room-types`);
+  return data.data;
+};
+
+/** Số phòng còn bán mỗi đêm theo hạng phòng. */
+export const getAvailability = async (hotelId: string, params: AvailabilityQuery) => {
+  const { data } = await apiService.get<APIResponse<AvailabilityDay[]>>(`/hotels/${hotelId}/availability`, { params });
+  return data.data;
+};
+
+/** Quy tắc giá, staff chỉ xem; ưu tiên cao nhất trước. */
+export const getPricingRules = async (hotelId: string) => {
+  const { data } = await apiService.get<APIResponse<PricingRule[]>>(`/hotels/${hotelId}/pricing-rules`);
+  return data.data;
+};
+
+/** Giá từng đêm như khách đặt hôm nay phải trả (cùng bộ tính giá với tìm kiếm). */
+export const getNightlyPrices = async (roomTypeId: string, checkIn: string, checkOut: string) => {
+  const { data } = await apiService.get<APIResponse<RoomTypeListing>>(`/room-types/${roomTypeId}/listing`, {
+    params: { checkIn, checkOut, guests: 1, rooms: 1 },
+  });
+  return data.data.offer?.nightlyPrices ?? [];
+};
+
+export const getOccupancyForecast = async (hotelId: string, days?: number) => {
+  const { data } = await apiService.get<APIResponse<OccupancyForecast>>(`/hotels/${hotelId}/stats/occupancy-forecast`, {
+    params: days ? { days } : undefined,
+  });
+  return data.data;
+};
+
+/** Danh mục dịch vụ của khách sạn (đang bán trước). */
+export const getHotelAddOns = async (hotelId: string) => {
+  const { data } = await apiService.get<APIResponse<HotelAddOn[]>>(`/hotels/${hotelId}/add-ons`);
+  return data.data;
+};
+
+/** Dịch vụ khách dùng trong kỳ lưu trú, thu tại quầy khi trả phòng (quyền FRONT_DESK). */
+export const addBookingAddOn = async (bookingId: string, input: AddBookingAddOnInput) => {
+  const { data } = await apiService.post<APIResponse<Booking>>(`/bookings/${bookingId}/add-ons`, input);
+  return data.data;
+};
+
+/** Chỉ bỏ được dòng `FRONT_DESK`. */
+export const removeBookingAddOn = async (bookingId: string, lineId: string) => {
+  const { data } = await apiService.delete<APIResponse<Booking>>(`/bookings/${bookingId}/add-ons/${lineId}`);
+  return data.data;
 };

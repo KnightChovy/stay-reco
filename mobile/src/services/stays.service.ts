@@ -1,4 +1,4 @@
-import type { APIResponse, HotelListing, HotelSearchQuery, HotelSearchResult, PageMeta, StayQuery } from "@stayreco/shared";
+import type { Amenity, APIResponse, HotelListing, HotelSearchQuery, HotelSearchResult, PageMeta, StayQuery } from "@stayreco/shared";
 import { apiService } from "./ApiService";
 
 /** Tìm kiếm và trang khách sạn công khai (docs/api/customer.md), giống frontend/src/services/stays.service.ts. */
@@ -6,7 +6,7 @@ import { apiService } from "./ApiService";
 export const searchHotels = async (query: HotelSearchQuery) => {
   const { data } = await apiService.get<APIResponse<HotelSearchResult[]>>("/hotels", {
     params: query,
-    // `starRating` lặp lại khóa (`?starRating=5&starRating=4`), không phải `starRating[]`.
+    // `starRating` / `amenityIds` lặp lại khóa (`?starRating=5&starRating=4`), không phải `starRating[]`.
     paramsSerializer: { indexes: null },
   });
   return { hotels: data.data, meta: data.meta as PageMeta };
@@ -22,3 +22,9 @@ export const hotelListingQuery = (hotelId: string, { checkIn, checkOut, guests, 
   queryKey: ["stays", "hotel", hotelId, { checkIn, checkOut, guests, rooms }],
   queryFn: () => getHotelListing(hotelId, { checkIn, checkOut, guests, rooms }),
 });
+
+/** Tiện nghi cho bộ lọc tìm kiếm (danh mục công khai). */
+export const getAmenities = async () => {
+  const { data } = await apiService.get<APIResponse<Amenity[]>>("/amenities");
+  return data.data;
+};

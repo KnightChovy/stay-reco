@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ScreenHeader } from '@/components/layout/AppHeader';
 import { Button } from '@/components/ui/button';
+import { Chip } from '@/components/ui/chip';
 import { Icon, type IconName } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
 import { colors } from '@/constants/theme';
@@ -226,6 +227,7 @@ export function SuccessSheet({ visible, onClose, title, text, rows, printLabel }
 export function CleanRoomButton({ roomId, roomNumber }: { roomId: string; roomNumber: string }) {
   const queryClient = useQueryClient();
   const clean = useMutation({ mutationFn: () => cleanRoom(roomId), onSuccess: () => queryClient.invalidateQueries({ queryKey: ['staff'] }) });
+  if (clean.isSuccess) return <Chip label="Đã dọn" tone="tertiary" />;
   return (
     <View className="items-end gap-1">
       <Button label={clean.isPending ? 'Đang lưu…' : 'Đã dọn xong'} leadingIcon="check" variant="secondary" size="sm" disabled={clean.isPending} onPress={() => clean.mutate()} />

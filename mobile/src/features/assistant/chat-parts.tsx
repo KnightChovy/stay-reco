@@ -1,7 +1,7 @@
 import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import type { AssistantHotel, AssistantMessage, BookingProposal } from '@stayreco/shared';
+import type { AssistantHotel, AssistantMessage, BookingProposal, CancellationProposal } from '@stayreco/shared';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
@@ -167,6 +167,68 @@ function ProposalCard({ proposal, now, pending, onConfirm }: { proposal: Booking
   );
 }
 
+/** Đề xuất huỷ đơn: trợ lý chỉ tính phí và tiền hoàn; khách tự bấm "Xác nhận huỷ" trong 30 phút. */
+function CancellationCard({ proposal, now, pending, onConfirm }: { proposal: CancellationProposal; now: number; pending: boolean; onConfirm: () => void }) {
+  const done = proposal.outcome !== null;
+  const expired = !done && Date.parse(proposal.expiresAt) <= now;
+  const row = (label: string, value: string, strong?: boolean) => (
+    <View className="flex-row items-baseline justify-between gap-2">
+      <Text variant="caption" weight={strong ? 'bold' : 'regular'} color={strong ? colors.onSurface : colors.onSurfaceVariant}>
+        {label}
+      </Text>
+      <Text variant={strong ? 'h3' : 'caption'} weight={strong ? 'bold' : 'regular'} color={strong ? colors.primary : colors.onSurfaceVariant}>
+        {value}
+      </Text>
+    </View>
+  );
+  return (
+    <View className="overflow-hidden rounded-lg border border-error-container bg-surface-container-lowest">
+      <View className="flex-row items-center justify-between gap-2 bg-error-container px-3.5 py-2.5">
+        <Text variant="caption" weight="bold" color={colors.error}>
+          ĐỀ XUẤT HUỶ PHÒNG
+        </Text>
+        {(done || expired) && (
+          <Text variant="caption" weight="semibold" color={colors.onSurfaceVariant}>
+            {done ? (proposal.outcome === 'REFUND_PENDING' ? 'Chờ khách sạn duyệt hoàn tiền' : 'Đã huỷ') : 'Đã hết hạn'}
+          </Text>
+        )}
+      </View>
+      <View className="gap-2 p-3.5">
+        <View>
+          <Text variant="label" weight="semibold">
+            {proposal.hotelName}
+          </Text>
+          <Text variant="caption" color={colors.onSurfaceVariant}>
+            {formatDate(proposal.checkIn)} → {formatDate(proposal.checkOut)} · {proposal.bookingCode}
+          </Text>
+        </View>
+        <View className="gap-1 border-t border-surface-container-high pt-2">
+          {row('Đã thanh toán', formatVnd(proposal.paid))}
+          {row('Phí huỷ', proposal.fee > 0 ? `−${formatVnd(proposal.fee)}` : 'Miễn phí')}
+          {row('Được hoàn về ví', formatVnd(proposal.refund), true)}
+        </View>
+        <Text variant="caption" color={colors.onSurfaceVariant} className="rounded-md bg-surface-container-low p-2.5">
+          {proposal.refund > 0
+            ? proposal.needsApproval
+              ? 'Tiền hoàn về ví StayReco sau khi khách sạn duyệt yêu cầu. Phòng vẫn giữ cho bạn tới lúc đó.'
+              : 'Tiền hoàn về ví StayReco ngay khi huỷ.'
+            : 'Theo chính sách huỷ, đơn này không được hoàn tiền.'}
+          {proposal.freeUntil ? ` Huỷ miễn phí đến ${new Date(proposal.freeUntil).toLocaleString('vi-VN')}.` : ''}
+        </Text>
+        {done ? (
+          <Button label="Xem đơn đặt phòng" variant="secondary" onPress={() => router.push({ pathname: '/booking/detail', params: { id: proposal.bookingId } })} />
+        ) : expired ? (
+          <Text variant="caption" color={colors.onSurfaceVariant}>
+            Đề xuất chỉ có hiệu lực 30 phút. Nhắn trợ lý “huỷ lại đơn {proposal.bookingCode}” để tính lại.
+          </Text>
+        ) : (
+          <Button label={pending ? 'Đang huỷ…' : 'Xác nhận huỷ'} leadingIcon="cancel" disabled={pending} onPress={onConfirm} style={{ backgroundColor: colors.error }} />
+        )}
+      </View>
+    </View>
+  );
+}
+
 export function AssistantAvatar({ size = 32 }: { size?: number }) {
   return (
     <View className="items-center justify-center rounded-full bg-primary-container" style={{ width: size, height: size }}>
@@ -198,12 +260,16 @@ export function MessageRow({
   now,
   confirmingId,
   onConfirm,
+  cancellingId,
+  onConfirmCancel,
 }: {
   message: AssistantMessage;
   dates: StayDates;
   now: number;
   confirmingId: string | null;
   onConfirm: (proposalId: string) => void;
+  cancellingId: string | null;
+  onConfirmCancel: (proposalId: string) => void;
 }) {
   if (message.role === 'SYSTEM') {
     return (
@@ -229,6 +295,14 @@ export function MessageRow({
             now={now}
             pending={confirmingId === message.proposal.id}
             onConfirm={() => onConfirm(message.proposal!.id)}
+          />
+        )}
+        {message.cancellation && (
+          <CancellationCard
+            proposal={message.cancellation}
+            now={now}
+            pending={cancellingId === message.cancellation.id}
+            onConfirm={() => onConfirmCancel(message.cancellation!.id)}
           />
         )}
         <Text variant="caption" color={colors.onSurfaceVariant}>

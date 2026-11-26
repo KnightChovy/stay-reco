@@ -43,6 +43,12 @@ export const confirmProposal = async (conversationId: string, proposalId: string
   return data.data;
 };
 
+/** Khách tự bấm "Xác nhận huỷ": hoàn 0đ thì huỷ ngay; có tiền hoàn thì thành yêu cầu chờ khách sạn duyệt. */
+export const confirmCancellation = async (conversationId: string, proposalId: string) => {
+  const { data } = await apiService.post<APIResponse<Booking>>(`/conversations/${conversationId}/confirm-cancellation`, { proposalId });
+  return data.data;
+};
+
 const errorCode = (error: unknown) =>
   isAxiosError(error) ? (error.response?.data as { code?: string } | undefined)?.code : undefined;
 
