@@ -65,10 +65,10 @@ export default function RecommendationsPage() {
               </h1>
               <p className="max-w-2xl text-sm text-muted-foreground">
                 {fromPreferences
-                  ? 'Xếp hạng ngay theo sở thích bạn vừa chọn: phong cách, điểm đến, tiện nghi và ngân sách.'
+                  ? 'Chọn riêng cho bạn theo những gì bạn vừa chọn: phong cách, điểm đến, tiện nghi và ngân sách.'
                   : personalized
-                  ? 'Mô hình gợi ý của StayReco xếp hạng dựa trên những lần lưu trú, đánh giá và sở thích bạn đã chọn.'
-                  : 'Những khách sạn được khách đánh giá cao, xếp hạng bởi mô hình gợi ý của StayReco.'}
+                  ? 'Chọn riêng cho bạn theo những chuyến đi, đánh giá và sở thích của bạn.'
+                  : 'Những nơi được nhiều khách StayReco đánh giá cao.'}
               </p>
             </div>
 
@@ -93,8 +93,7 @@ export default function RecommendationsPage() {
             <p className="flex items-start gap-2 rounded-xl border border-border bg-card p-3 text-sm text-muted-foreground">
               <Info className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
               <span>
-                Danh sách này dựa trên sở thích bạn vừa chọn. Sau lần cập nhật gợi ý tới, mô hình sẽ kết hợp thêm những
-                lần lưu trú và đánh giá của bạn.{' '}
+                Danh sách này dựa trên những gì bạn vừa chọn và sẽ được cập nhật thêm sau vài giây.{' '}
                 <Link href="/account/preferences" className="font-semibold text-primary hover:underline">
                   Sửa sở thích
                 </Link>
@@ -136,7 +135,7 @@ export default function RecommendationsPage() {
                 onClick={() => setComparing((open) => !open)}
               >
                 <ArrowLeftRight className="size-4 text-primary" aria-hidden />
-                {comparing ? 'Ẩn so sánh' : 'So với danh sách phổ biến'}
+                {comparing ? 'Ẩn so sánh' : 'So với gợi ý chung'}
               </Button>
               {comparing && <ComparePopular mine={all.data!.items} chosenStyles={chosenStyles} />}
             </div>
@@ -197,7 +196,7 @@ export default function RecommendationsPage() {
               description={
                 city
                   ? 'Thử điểm đến khác hoặc tìm phòng theo ngày bạn đi.'
-                  : 'Mô hình gợi ý chưa chạy lần nào. Trong lúc chờ, bạn có thể tìm phòng theo điểm đến và ngày đi.'
+                  : 'Gợi ý sẽ sớm có. Trong lúc chờ, bạn có thể tìm phòng theo điểm đến và ngày đi.'
               }
               action={
                 <Link href="/search" className={cn(buttonVariants(), 'h-10 px-5')}>

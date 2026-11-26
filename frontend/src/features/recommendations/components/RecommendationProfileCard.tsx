@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Brain, EyeOff, TriangleAlert } from "lucide-react";
+import { EyeOff, Sparkles, TriangleAlert } from "lucide-react";
 import type { RecommendationProfile, RecommendationQuery, Recommendations } from "@stayreco/shared";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { AMENITIES, STYLES } from "@/features/account/lib/preference-options";
@@ -10,30 +10,6 @@ import { cn } from "@/lib/utils";
 
 const styleLabel = (id: string) => STYLES.find((s) => s.id === id)?.title ?? id;
 const amenityLabel = (id: string) => AMENITIES.find((a) => a.id === id)?.label ?? id;
-const percent = (value: number) => `${Math.round(value * 100)}%`;
-
-/** One share of the score as a bar: the label, the share, and what it means. */
-function ShareBar({ label, hint, value, className }: { label: string; hint: string; value: number; className: string }) {
-  return (
-    <div className="space-y-1" title={`${label}: ${percent(value)}`}>
-      <div className="flex items-baseline justify-between gap-3 text-xs">
-        <span className="font-semibold text-foreground">{label}</span>
-        <span className="font-bold tabular-nums text-foreground">{percent(value)}</span>
-      </div>
-      <div
-        className="h-2.5 overflow-hidden rounded-full bg-muted"
-        role="meter"
-        aria-label={label}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={Math.round(value * 100)}
-      >
-        <div className={cn("h-full rounded-full", className)} style={{ width: `${Math.max(value * 100, value > 0 ? 2 : 0)}%` }} />
-      </div>
-      <p className="text-xs text-muted-foreground">{hint}</p>
-    </div>
-  );
-}
 
 /**
  * "Hệ thống hiểu bạn thế nào": what the customer's list is built from (`profile` of `GET /me/recommendations`): how
@@ -52,8 +28,13 @@ export function RecommendationProfileCard({
   onShowStyle?: (style: NonNullable<RecommendationQuery["style"]>) => void;
 }) {
   const { stays, weights, preferences, excluded, budgetConflict } = profile;
-  const history = weights.history;
-  const content = weights.content + weights.group;
+  // In words, not shares: what the list leans on. A new customer has only their answers; a regular mostly their trips.
+  const basis =
+    stays === 0
+      ? "Bạn chưa có chuyến đi nào trên StayReco, nên gợi ý dựa trên những gì bạn chọn khi đăng ký."
+      : weights.history >= 0.5
+        ? `Gợi ý chủ yếu dựa trên ${stays} chuyến đi bạn đã đánh giá, và những khách có cùng sở thích với bạn.`
+        : `Gợi ý dựa trên ${stays} chuyến đi bạn đã đánh giá và những gì bạn chọn khi đăng ký.`;
   const liked = [
     ...preferences.travelStyles.map(styleLabel),
     ...preferences.cities,
@@ -61,25 +42,23 @@ export function RecommendationProfileCard({
     ...(preferences.budgetPerNight ? [`dưới ${formatMoney(preferences.budgetPerNight)}/đêm`] : []),
   ];
   const left = [
-    excluded.disliked > 0 && `${excluded.disliked} nơi bạn chấm dưới 3★`,
-    excluded.upcoming > 0 && `${excluded.upcoming} nơi bạn đã đặt sắp ở`,
+    excluded.disliked > 0 && `${excluded.disliked} nơi bạn không hài lòng`,
+    excluded.upcoming > 0 && `${excluded.upcoming} nơi bạn sắp đến ở`,
   ].filter(Boolean) as string[];
 
   return (
     <section className="space-y-4 rounded-2xl border border-border bg-card p-4 shadow-xs sm:p-5" aria-labelledby="reco-profile">
       <div className="flex items-start gap-3">
         <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
-          <Brain className="size-5" aria-hidden />
+          <Sparkles className="size-5" aria-hidden />
         </span>
         <div className="min-w-0">
           <h2 id="reco-profile" className="text-base font-bold text-foreground">
-            Hệ thống hiểu bạn thế nào
+            Vì sao bạn thấy những gợi ý này
           </h2>
           <p className="text-sm text-muted-foreground">
-            {stays === 0
-              ? "Bạn chưa có lượt ở nào được chấm điểm, nên danh sách dựa hoàn toàn vào sở thích bạn chọn và mô tả của khách sạn."
-              : `Dựa trên ${stays} lượt ở bạn đã chấm điểm, cùng với sở thích bạn chọn.`}
-            {source === "PREFERENCES" && " Mô hình đang tính riêng cho bạn, danh sách sẽ tự cập nhật sau vài giây."}
+            {basis}
+            {source === "PREFERENCES" && " Danh sách sẽ được cập nhật thêm sau vài giây."}
           </p>
         </div>
       </div>
@@ -102,7 +81,7 @@ export function RecommendationProfileCard({
                   <strong>{formatMoney(budgetConflict.cheapest)}</strong>.
                 </>
               )}{" "}
-              Danh sách đang ưu tiên khách sạn trong ngân sách của bạn.
+              Vì vậy chúng tôi đang ưu tiên những nơi vừa túi tiền của bạn.
             </span>
           </p>
           <div className="flex flex-wrap gap-2 pl-6">
@@ -121,24 +100,9 @@ export function RecommendationProfileCard({
         </div>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <ShareBar
-          label="Từ lịch sử của bạn và khách cùng gu"
-          hint="Những nơi bạn đã ở, và nơi khách có gu giống bạn đánh giá cao."
-          value={history}
-          className="bg-primary"
-        />
-        <ShareBar
-          label="Từ sở thích và mô tả khách sạn"
-          hint="Phong cách, điểm đến, tiện nghi bạn chọn, so với mô tả của từng khách sạn."
-          value={content}
-          className="bg-amber-500"
-        />
-      </div>
-
       <div className="grid gap-3 border-t border-border pt-4 text-sm sm:grid-cols-2">
         <div>
-          <p className="text-xs font-semibold uppercase text-muted-foreground">Bạn thích</p>
+          <p className="text-xs font-semibold uppercase text-muted-foreground">Bạn đã chọn</p>
           {liked.length ? (
             <ul className="mt-1.5 flex flex-wrap gap-1.5">
               {liked.map((item) => (
@@ -154,7 +118,7 @@ export function RecommendationProfileCard({
             </ul>
           ) : (
             <p className="mt-1 text-xs text-muted-foreground">
-              Chưa chọn sở thích.{" "}
+              Bạn chưa chọn gì.{" "}
               <Link href="/account/preferences" className="font-semibold text-primary hover:underline">
                 Chọn ngay
               </Link>
@@ -163,9 +127,9 @@ export function RecommendationProfileCard({
         </div>
         <div>
           <p className="flex items-center gap-1 text-xs font-semibold uppercase text-muted-foreground">
-            <EyeOff className="size-3.5" aria-hidden /> Cố ý bỏ khỏi danh sách
+            <EyeOff className="size-3.5" aria-hidden /> Không gợi ý lại
           </p>
-          <p className="mt-1.5 text-xs text-foreground">{left.length ? left.join(" · ") : "Không có nơi nào."}</p>
+          <p className="mt-1.5 text-xs text-foreground">{left.length ? left.join(" · ") : "Không có."}</p>
         </div>
       </div>
     </section>

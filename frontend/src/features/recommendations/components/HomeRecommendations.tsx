@@ -30,11 +30,11 @@ export function HomeRecommendations() {
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
               {query.data?.source === "PREFERENCES"
-                ? "Xếp hạng ngay theo sở thích bạn vừa chọn."
+                ? "Chọn riêng cho bạn theo những gì bạn vừa chọn."
                 : personalized
-                ? "Xếp hạng theo những lần lưu trú, đánh giá và sở thích của bạn."
+                ? "Chọn riêng cho bạn theo những chuyến đi và sở thích của bạn."
                 : isCustomer
-                  ? "Danh sách riêng của bạn sẽ có sau lần cập nhật gợi ý tới."
+                  ? "Chọn sở thích để nhận gợi ý riêng cho bạn."
                   : "Đăng nhập để nhận gợi ý theo sở thích của riêng bạn."}
             </p>
           </div>

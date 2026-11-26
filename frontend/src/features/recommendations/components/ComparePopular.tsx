@@ -47,7 +47,7 @@ function Column({
               </Link>
               <p className="truncate text-xs text-muted-foreground">
                 {hotel.city}
-                {!shared.has(hotel.id) && personal && <span className="font-semibold text-primary"> · chỉ có trong danh sách của bạn</span>}
+                {!shared.has(hotel.id) && personal && <span className="font-semibold text-primary"> · riêng cho bạn</span>}
               </p>
               <StyleBadges styles={hotel.styles} chosen={chosenStyles} className="mt-1" />
             </div>
@@ -82,14 +82,14 @@ export function ComparePopular({ mine, chosenStyles = [] }: { mine: RecommendedH
         <>
           <p className="text-sm text-foreground">
             <strong>
-              {differ}/{mineTop.length}
+              {differ} trong {mineTop.length}
             </strong>{" "}
-            khách sạn đầu danh sách của bạn khác với danh sách phổ biến mà ai cũng thấy.
+            gợi ý đầu tiên được chọn riêng cho bạn, khác với gợi ý chung mà ai cũng thấy.
           </p>
           <div className="grid gap-3 md:grid-cols-2">
             <Column
               title="Dành cho bạn"
-              hint="Xếp theo lịch sử và sở thích của riêng bạn."
+              hint="Theo những chuyến đi và sở thích của bạn."
               icon={Sparkles}
               items={mineTop}
               shared={shared}
@@ -97,8 +97,8 @@ export function ComparePopular({ mine, chosenStyles = [] }: { mine: RecommendedH
               chosenStyles={chosenStyles}
             />
             <Column
-              title="Danh sách phổ biến"
-              hint="Khách chưa đăng nhập thấy danh sách này: khách sạn được đánh giá cao nói chung."
+              title="Gợi ý chung"
+              hint="Ai cũng thấy: những nơi được nhiều khách đánh giá cao."
               icon={Users}
               items={theirs}
               shared={shared}
