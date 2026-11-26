@@ -1,5 +1,8 @@
 import { Injectable } from '@nestjs/common';
+import { toNumber } from '../../common/http/decimal';
 import { PrismaService } from '../../prisma/prisma.service';
+import { basePriceWhere } from '../rooms/room.mapper';
+import { bookableHotel, sellableRoomType } from '../stays/bookable';
 import { hotelStyles } from '../onboarding/onboarding-taste';
 
 /**
@@ -30,5 +33,36 @@ export class HotelStyles {
                  WHERE rt.hotel_id = h.hotel_id)) AS text
       FROM hotel h WHERE h.hotel_id = ANY(${hotelIds}::uuid[])`;
     return new Map(rows.map((r) => [r.hotel_id, hotelStyles(r.text ?? '')]));
+  }
+
+  /** Every bookable hotel with its city, styles and cheapest base price per night (null when none is set). */
+  async catalogue(): Promise<
+    { hotelId: string; city: string; styles: string[]; from: number | null }[]
+  > {
+    const hotels = await this.prisma.hotel.findMany({
+      where: bookableHotel,
+      select: {
+        hotelId: true,
+        city: true,
+        roomTypes: {
+          where: sellableRoomType,
+          select: {
+            prices: { where: basePriceWhere, select: { pricePerNight: true } },
+          },
+        },
+      },
+    });
+    const styles = await this.of(hotels.map((h) => h.hotelId));
+    return hotels.map((h) => {
+      const prices = h.roomTypes
+        .flatMap((rt) => rt.prices.map((p) => toNumber(p.pricePerNight)))
+        .filter((p): p is number => p !== null);
+      return {
+        hotelId: h.hotelId,
+        city: h.city,
+        styles: styles.get(h.hotelId) ?? [],
+        from: prices.length ? Math.min(...prices) : null,
+      };
+    });
   }
 }

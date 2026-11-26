@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { Brain, EyeOff } from "lucide-react";
-import type { RecommendationProfile, Recommendations } from "@stayreco/shared";
+import { Brain, EyeOff, TriangleAlert } from "lucide-react";
+import type { RecommendationProfile, RecommendationQuery, Recommendations } from "@stayreco/shared";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { AMENITIES, STYLES } from "@/features/account/lib/preference-options";
 import { formatMoney } from "@/features/stays/lib/format";
 import { cn } from "@/lib/utils";
@@ -43,11 +44,14 @@ function ShareBar({ label, hint, value, className }: { label: string; hint: stri
 export function RecommendationProfileCard({
   profile,
   source,
+  onShowStyle,
 }: {
   profile: RecommendationProfile;
   source: Recommendations["source"];
+  /** Shows only hotels of this style (the "Xem khách sạn đúng gu" button). */
+  onShowStyle?: (style: NonNullable<RecommendationQuery["style"]>) => void;
 }) {
-  const { stays, weights, preferences, excluded } = profile;
+  const { stays, weights, preferences, excluded, budgetConflict } = profile;
   const history = weights.history;
   const content = weights.content + weights.group;
   const liked = [
@@ -79,6 +83,43 @@ export function RecommendationProfileCard({
           </p>
         </div>
       </div>
+
+      {budgetConflict && (
+        <div role="status" className="space-y-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
+          <p className="flex gap-2">
+            <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-600" aria-hidden />
+            <span>
+              {budgetConflict.cheapest === null ? (
+                <>
+                  Chưa có khách sạn <strong>{budgetConflict.styles.map(styleLabel).join(", ")}</strong>
+                  {budgetConflict.cities.length ? ` ở ${budgetConflict.cities.join(", ")}` : ""}.
+                </>
+              ) : (
+                <>
+                  Không có khách sạn <strong>{budgetConflict.styles.map(styleLabel).join(", ")}</strong> nào dưới{" "}
+                  <strong>{formatMoney(budgetConflict.budgetPerNight)}/đêm</strong>
+                  {budgetConflict.cities.length ? ` ở ${budgetConflict.cities.join(", ")}` : ""}. Rẻ nhất từ{" "}
+                  <strong>{formatMoney(budgetConflict.cheapest)}</strong>.
+                </>
+              )}{" "}
+              Danh sách đang ưu tiên khách sạn trong ngân sách của bạn.
+            </span>
+          </p>
+          <div className="flex flex-wrap gap-2 pl-6">
+            {budgetConflict.cheapest !== null && onShowStyle && (
+              <Button
+                className="h-10"
+                onClick={() => onShowStyle(budgetConflict.styles[0] as NonNullable<RecommendationQuery["style"]>)}
+              >
+                Xem khách sạn đúng gu
+              </Button>
+            )}
+            <Link href="/account/preferences" className={cn(buttonVariants({ variant: "outline" }), "h-10 bg-card")}>
+              Sửa ngân sách
+            </Link>
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2">
         <ShareBar

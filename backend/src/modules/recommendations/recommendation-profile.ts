@@ -2,9 +2,13 @@ import { Injectable } from '@nestjs/common';
 import type { RecommendationProfile, RecommendedHotel } from '@stayreco/shared';
 import { toNumber } from '../../common/http/decimal';
 import { PrismaService } from '../../prisma/prisma.service';
+import { fold } from '../onboarding/onboarding-taste';
+import { HotelStyles } from './hotel-styles';
 
 /** The recommender's shrinkage constant for the history part (recommender/weights.py K_USER). */
 const K_USER = 5;
+/** A hotel this far over the budget per night still counts as within it (recommender BUDGET_SLACK). */
+const BUDGET_SLACK = 1.2;
 
 const split = (value: string | undefined) =>
   (value ?? '')
@@ -20,7 +24,10 @@ const split = (value: string | undefined) =>
  */
 @Injectable()
 export class RecommendationProfiles {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly hotelStyles: HotelStyles,
+  ) {}
 
   async of(
     customerId: string,
@@ -58,6 +65,10 @@ export class RecommendationProfiles {
     // What is not history goes to their preferences, or to their group when they gave none.
     const stated = explained.some((e) => e.weights.group === 0);
     const round = (value: number) => Math.round(value * 1000) / 1000;
+    const cities = split(pref.preferredCities).length
+      ? split(pref.preferredCities)
+      : split(pref.favouriteCity);
+    const budget = Number(pref.budgetPerNight) || null;
 
     return {
       stays,
@@ -67,20 +78,54 @@ export class RecommendationProfiles {
         group: round(stated || !explained.length ? 0 : 1 - history),
       },
       preferences: {
-        cities: split(pref.preferredCities).length
-          ? split(pref.preferredCities)
-          : split(pref.favouriteCity),
+        cities,
         travelStyles: split(pref.travelStyles),
         roomAmenities: split(pref.roomAmenities),
-        budgetPerNight: Number(pref.budgetPerNight) || null,
+        budgetPerNight: budget,
         pickedHotels: split(pref.likedHotels).length,
       },
+      budgetConflict: await this.budgetConflict(
+        split(pref.travelStyles),
+        cities,
+        budget,
+      ),
       excluded: {
         disliked: ratings.filter(
           (r) => (toNumber(r._avg.overallRating ?? null) ?? 5) < 3,
         ).length,
         upcoming: upcoming.length,
       },
+    };
+  }
+
+  /**
+   * When no hotel of a chosen style in the cities picked is within the budget, the list leads with hotels within
+   * budget of other styles (the recommender ranks budget before style), and the customer should be told why, with
+   * the cheapest hotel of their style there. Null when the list can honour both.
+   */
+  private async budgetConflict(
+    styles: string[],
+    cities: string[],
+    budget: number | null,
+  ): Promise<RecommendationProfile['budgetConflict']> {
+    if (!budget || !styles.length) return null;
+    const picked = new Set(cities.map(fold));
+    const ofStyle = (await this.hotelStyles.catalogue()).filter(
+      (h) =>
+        h.styles.some((s) => styles.includes(s)) &&
+        (!picked.size || picked.has(fold(h.city))),
+    );
+    if (
+      ofStyle.some((h) => h.from !== null && h.from <= budget * BUDGET_SLACK)
+    ) {
+      return null;
+    }
+    const prices = ofStyle.flatMap((h) => (h.from === null ? [] : [h.from]));
+    return {
+      styles,
+      cities,
+      budgetPerNight: budget,
+      cheapest: prices.length ? Math.min(...prices) : null,
     };
   }
 }

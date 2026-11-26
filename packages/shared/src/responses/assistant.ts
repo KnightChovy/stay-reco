@@ -83,6 +83,28 @@ export const recommendationProfileResponseSchema = z
       budgetPerNight: z.number().nullable(),
       pickedHotels: z.number().int().describe("Hotels ticked at onboarding."),
     }),
+    budgetConflict: z
+      .object({
+        styles: z
+          .array(z.string())
+          .describe("The travel styles chosen that no hotel within budget is."),
+        cities: z
+          .array(z.string())
+          .describe(
+            "Where it looked: the cities picked, or empty for everywhere.",
+          ),
+        budgetPerNight: z.number(),
+        cheapest: z
+          .number()
+          .nullable()
+          .describe(
+            "Cheapest base price per night of a hotel of those styles there; null when there is none at all.",
+          ),
+      })
+      .nullable()
+      .describe(
+        "Set when no hotel of a chosen style, in the cities picked, is within the budget (20% slack): the list then leads with hotels within budget of other styles, and the screen should say so.",
+      ),
     excluded: z.object({
       disliked: z
         .number()

@@ -214,7 +214,7 @@ describe('Recommendations and assistant (e2e)', () => {
 
       // Each card says what style the hotel is, read from its own description.
       expect(
-        res.body.data.items.map((h: { styles: string[] }) => h.styles),
+        (res.body.data.items as { styles: string[] }[]).map((h) => h.styles),
       ).toEqual([['resort'], ['resort'], ['family']]);
 
       // The search's "Phù hợp nhất" follows the same order for this customer.
@@ -342,12 +342,81 @@ describe('Recommendations and assistant (e2e)', () => {
           budgetPerNight: null,
           pickedHotels: 1,
         },
+        budgetConflict: null,
         excluded: { disliked: 0, upcoming: 1 },
       });
 
       // The signed-out list has nothing to explain about a person.
       const pub = await t.api().get('/api/v1/recommendations').expect(200);
       expect(pub.body.data.profile).toBeNull();
+    });
+
+    it('says when no hotel of the chosen style is within budget, and lists hotels of one style on request', async () => {
+      const kids = await hotel('Mỹ Khê Kids Club Hotel', 'a@hotel.test');
+      const cafe = await hotel('Trại Mát Coffee House', 'b@hotel.test');
+      await t.prisma.hotel.update({
+        where: { hotelId: kids.hotelId },
+        data: {
+          description:
+            'Khách sạn gia đình, trẻ em, khu vui chơi, kids club và hồ bơi trẻ em.',
+        },
+      });
+      await t.prisma.hotel.update({
+        where: { hotelId: cafe.hotelId },
+        data: {
+          description: 'Homestay cà phê, góc chụp ảnh, decor vintage.',
+        },
+      });
+      const me = await t.signIn('CUSTOMER', 'me@guest.test');
+      await t.prisma.customerPreference.createMany({
+        data: [
+          ['travelStyles', 'family'],
+          ['preferredCities', 'Đà Nẵng'],
+          // Every room of the test hotels is 1,000,000 a night: over 500,000 with its 20% slack.
+          ['budgetPerNight', '500000'],
+        ].map(([preferenceKey, preferenceValue]) => ({
+          customerId: me.id,
+          preferenceKey,
+          preferenceValue,
+        })),
+      });
+
+      const res = await t
+        .api()
+        .get('/api/v1/me/recommendations')
+        .set(auth(me.token))
+        .expect(200);
+      expect(res.body.data.profile.budgetConflict).toEqual({
+        styles: ['family'],
+        cities: ['Đà Nẵng'],
+        budgetPerNight: 500000,
+        cheapest: 1000000,
+      });
+      expect(
+        (res.body.data.items as { styles: string[] }[]).map((h) => h.styles),
+      ).toEqual(expect.arrayContaining([['family'], ['chill']]));
+
+      const family = await t
+        .api()
+        .get('/api/v1/me/recommendations?style=family')
+        .set(auth(me.token))
+        .expect(200);
+      expect(
+        (family.body.data.items as { id: string }[]).map((h) => h.id),
+      ).toEqual([kids.hotelId]);
+      expect(family.body.data.items[0].explanation.overBudget).toBe(true);
+
+      // Within budget, nothing to warn about.
+      await t.prisma.customerPreference.updateMany({
+        where: { customerId: me.id, preferenceKey: 'budgetPerNight' },
+        data: { preferenceValue: '2000000' },
+      });
+      const fine = await t
+        .api()
+        .get('/api/v1/me/recommendations')
+        .set(auth(me.token))
+        .expect(200);
+      expect(fine.body.data.profile.budgetConflict).toBeNull();
     });
 
     it('shows the admin how the served run did offline, its long tail and the bookings it brought', async () => {

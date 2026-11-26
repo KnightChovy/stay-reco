@@ -101,6 +101,11 @@ export function RecommendedHotelCard({
                   {formatMoney(hotel.pricePerNightFrom)}
                 </span>
                 <span className="text-xs text-muted-foreground"> / đêm</span>
+                {hotel.explanation?.overBudget && (
+                  <span className="block text-xs font-semibold text-amber-700">
+                    Trên ngân sách bạn đặt
+                  </span>
+                )}
               </p>
             ) : (
               <span className="text-xs text-muted-foreground">

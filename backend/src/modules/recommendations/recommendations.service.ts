@@ -62,6 +62,16 @@ export class RecommendationsService {
   ): Promise<Recommendations> {
     const run = await this.latestRun();
     const inCity = query.city ? await this.hotelsInCity(query.city) : null;
+    // Hotels of one travel style, read from their text as the recommender reads it ("Xem khách sạn đúng gu").
+    const ofStyle = query.style
+      ? (await this.styles.catalogue())
+          .filter((h) => h.styles.includes(query.style!))
+          .map((h) => h.hotelId)
+      : null;
+    const scope =
+      inCity && ofStyle
+        ? inCity.filter((id) => ofStyle.includes(id))
+        : (inCity ?? ofStyle);
     const modelRun = run && {
       id: run.modelRunId,
       algorithm: run.algorithm,
@@ -76,7 +86,7 @@ export class RecommendationsService {
     ) {
       const ranked = await this.preferences.rank(
         customerId,
-        inCity ?? undefined,
+        scope ?? undefined,
       );
       if (ranked) {
         const top = ranked.slice(0, query.limit);
@@ -120,7 +130,7 @@ export class RecommendationsService {
         where: {
           modelRunId: run.modelRunId,
           customerId: customer,
-          hotelId: inCity ? { in: inCity } : { not: null },
+          hotelId: scope ? { in: scope } : { not: null },
           hotel: {
             ...bookableHotel,
             // Only where their next stay already is, as the recommender leaves out: a hotel they stayed at and liked

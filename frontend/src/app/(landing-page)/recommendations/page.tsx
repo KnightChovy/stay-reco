@@ -2,7 +2,9 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeftRight, Info, SlidersHorizontal, Sparkles } from 'lucide-react';
+import { ArrowLeftRight, Info, SlidersHorizontal, Sparkles, X } from 'lucide-react';
+import type { RecommendationQuery } from '@stayreco/shared';
+import { STYLES } from '@/features/account/lib/preference-options';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import AppBreadcrumb from '@/components/common/breadcrumb/AppBreadcrumb';
@@ -25,11 +27,12 @@ export default function RecommendationsPage() {
   const isCustomer = user?.role === 'customer';
   const [city, setCity] = useState<string | null>(null);
   const [comparing, setComparing] = useState(false);
+  const [style, setStyle] = useState<RecommendationQuery['style'] | null>(null);
 
   // The cities come from the whole list, so the filter keeps its choices while one city is shown.
   const all = useRecommendations({ limit: LIMIT });
-  const filtered = useRecommendations({ limit: LIMIT, city: city ?? undefined });
-  const query = city ? filtered : all;
+  const filtered = useRecommendations({ limit: LIMIT, city: city ?? undefined, style: style ?? undefined });
+  const query = city || style ? filtered : all;
   const cities = useMemo(
     () => [...new Set((all.data?.items ?? []).map((hotel) => hotel.city))],
     [all.data],
@@ -114,7 +117,14 @@ export default function RecommendationsPage() {
           )}
 
           {isCustomer && all.data?.profile && (
-            <RecommendationProfileCard profile={all.data.profile} source={all.data.source} />
+            <RecommendationProfileCard
+              profile={all.data.profile}
+              source={all.data.source}
+              onShowStyle={(id) => {
+                setStyle(id);
+                setCity(null);
+              }}
+            />
           )}
 
           {isCustomer && personalized && (all.data?.items.length ?? 0) > 0 && (
@@ -129,6 +139,21 @@ export default function RecommendationsPage() {
                 {comparing ? 'Ẩn so sánh' : 'So với danh sách phổ biến'}
               </Button>
               {comparing && <ComparePopular mine={all.data!.items} chosenStyles={chosenStyles} />}
+            </div>
+          )}
+
+          {style && (
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <span className="text-muted-foreground">Đang xem:</span>
+              <button
+                type="button"
+                onClick={() => setStyle(null)}
+                className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-primary bg-primary/10 px-4 font-semibold text-primary hover:bg-primary/15"
+              >
+                Chỉ phong cách {STYLES.find((s) => s.id === style)?.title ?? style}
+                <X className="size-4" aria-hidden />
+                <span className="sr-only">Bỏ lọc phong cách</span>
+              </button>
             </div>
           )}
 

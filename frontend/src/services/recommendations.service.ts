@@ -4,6 +4,7 @@ import type {
   Onboarding,
   OnboardingHotelSuggestion,
   OnboardingHotelsQuery,
+  RecommendationQuery,
   Recommendations,
 } from "@stayreco/shared";
 import type { APIResponse } from "@/types/response.type";
@@ -13,7 +14,7 @@ import type { APIResponse } from "@/types/response.type";
  * feed them, with the platform's welcome voucher (docs/api/onboarding.md).
  */
 
-export type RecommendationParams = { city?: string; limit?: number };
+export type RecommendationParams = { city?: string; limit?: number; style?: RecommendationQuery["style"] };
 
 /** A signed-in customer gets their own list (`/me/...`); everyone else the signed-out one. */
 export async function getRecommendations(params: RecommendationParams, personal: boolean) {
