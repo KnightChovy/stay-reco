@@ -339,11 +339,15 @@ describe('Assistant edge cases (e2e)', () => {
         .send({ content: 'Chỗ đầu tiên có phòng gì?' })
         .expect(201);
 
-      const sent = JSON.stringify(t.ai.chats.at(-1)!.contents);
+      const last = t.ai.chats.at(-1)!;
+      const sent = JSON.stringify(last.contents);
       expect(sent).toContain('Đà Nẵng 2 đêm');
       expect(sent).toContain('Có Biển Xanh nhé.');
-      expect(sent).toContain(`hotelId=${h.hotelId}`);
       expect(sent).toContain('Chỗ đầu tiên có phòng gì?');
+      // The hotel's id still reaches the model, as lookup data in the system instruction, never in the model's own
+      // turns, where the model learned to copy it into its answers.
+      expect(last.system).toContain(`hotelId=${h.hotelId}`);
+      expect(sent).not.toContain(h.hotelId);
 
       const thread = await t
         .api()

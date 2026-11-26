@@ -11,6 +11,7 @@ import type {
   AssistantReply,
   Booking,
   BookingProposal,
+  CancellationProposal,
   Conversation,
   ConversationSummary,
   SendAssistantMessageInput,
@@ -21,8 +22,10 @@ import { isUuid } from '../../common/hotel-access/hotel-access.service';
 import { todayInVietnam } from '../../common/http/calendar-date';
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { BookingCancellationService } from '../bookings/booking-cancellation.service';
 import { BookingsService } from '../bookings/bookings.service';
 import { AiService } from '../marketing/ai.service';
+import { stripInternalNotes } from './assistant-text';
 import { systemPrompt } from './assistant.prompt';
 import {
   AssistantTools,
@@ -40,6 +43,7 @@ const HISTORY = 20;
 interface MessageMeta {
   hotels?: AssistantHotel[];
   proposal?: BookingProposal & { claimedAt?: string };
+  cancellation?: CancellationProposal & { claimedAt?: string };
   /** Room types the tools looked at this turn: replayed to the model, not shown to the customer. */
   roomTypes?: { id: string; hotelName: string; name: string }[];
 }
@@ -67,6 +71,7 @@ export class AssistantService {
     private readonly ai: AiService,
     private readonly tools: AssistantTools,
     private readonly bookings: BookingsService,
+    private readonly cancellations: BookingCancellationService,
   ) {}
 
   async listMine(customerId: string): Promise<ConversationSummary[]> {
@@ -181,6 +186,16 @@ export class AssistantService {
         guestName: proposal.guestName,
         contactPhone: proposal.contactPhone,
         specialRequests: proposal.specialRequests ?? undefined,
+        // What the proposal was priced with, sent again so the booking is priced the same way (or answers
+        // BOOKING_PRICE_CHANGED, VOUCHER_* when the code went in between).
+        code: proposal.discount?.code ?? undefined,
+        pointsToUse: proposal.points?.used || undefined,
+        addOns: proposal.addOns?.length
+          ? proposal.addOns.map((a) => ({
+              addOnId: a.id,
+              quantity: a.quantity,
+            }))
+          : undefined,
         expectedTotal: proposal.total,
       });
     } catch (err) {
@@ -208,8 +223,90 @@ export class AssistantService {
         data: {
           conversationId,
           role: 'SYSTEM',
-          content: `Đã giữ phòng ${proposal.roomTypeName} tại ${proposal.hotelName}, mã đặt phòng ${booking.code}. Vui lòng thanh toán để hoàn tất.`,
+          content: `Đã giữ phòng ${proposal.roomTypeName} tại ${proposal.hotelName}, mã đặt phòng ${booking.code}. Quét mã QR bên dưới hoặc trả bằng ví trong 15 phút để hoàn tất.`,
         },
+      }),
+    ]);
+    return booking;
+  }
+
+  /**
+   * The customer pressed "Xác nhận huỷ" on a cancellation proposal: cancels through the same service as
+   * POST /bookings/:id/cancel, so the policy, the refund and the hotel's approval are exactly the website's.
+   *
+   * Claimed first like a booking proposal, so a double click cancels once. The outcome is stored on the proposal and
+   * said in a system note: cancelled at once (nothing to refund), or a refund request waiting for the hotel, after
+   * which the money reaches the customer wallet.
+   */
+  async confirmCancellation(
+    user: AuthUser,
+    conversationId: string,
+    proposalId: string,
+  ): Promise<Booking> {
+    await this.own(user.accountId, conversationId);
+    const message = await this.prisma.message.findFirst({
+      where: {
+        conversationId,
+        metadata: { path: ['cancellation', 'id'], equals: proposalId },
+      },
+      select: { messageId: true, metadata: true },
+    });
+    if (!message) {
+      throw new NotFoundException({
+        code: ErrorCode.BOOKING_PROPOSAL_NOT_FOUND,
+        message: 'Cancellation proposal not found',
+      });
+    }
+    const proposal = (message.metadata as MessageMeta).cancellation!;
+    const invalid = (why: string) =>
+      new ConflictException({
+        code: ErrorCode.BOOKING_PROPOSAL_INVALID,
+        message: why,
+      });
+    if (proposal.outcome) throw invalid('This booking is already cancelled');
+    if (new Date(proposal.expiresAt) < new Date()) {
+      throw invalid('This proposal has expired; ask the assistant again');
+    }
+
+    const claimed = await this.prisma.$executeRaw`
+      UPDATE message
+      SET metadata = jsonb_set(metadata, '{cancellation,claimedAt}', to_jsonb(now()::text))
+      WHERE message_id = ${message.messageId}::uuid AND NOT (metadata->'cancellation' ? 'claimedAt')`;
+    if (!claimed) throw invalid('This cancellation is being processed already');
+
+    let booking: Booking;
+    try {
+      booking = await this.cancellations.cancel(user, proposal.bookingId, {
+        reason: proposal.reason,
+      });
+    } catch (err) {
+      await this.prisma.$executeRaw`
+        UPDATE message SET metadata = metadata #- '{cancellation,claimedAt}'
+        WHERE message_id = ${message.messageId}::uuid`;
+      throw err;
+    }
+
+    const outcome: CancellationProposal['outcome'] =
+      booking.paymentStatus === 'REFUND_PENDING'
+        ? 'REFUND_PENDING'
+        : 'CANCELLED';
+    const money = (n: number) => `${n.toLocaleString('vi-VN')} đ`;
+    const note =
+      outcome === 'REFUND_PENDING'
+        ? `Đã gửi yêu cầu huỷ đơn ${proposal.bookingCode}. Khách sạn sẽ duyệt hoàn ${money(proposal.refund)}; tiền về ví StayReco ngay khi được duyệt. Phòng vẫn giữ cho bạn tới lúc đó.`
+        : `Đã huỷ đơn ${proposal.bookingCode}.${proposal.refund > 0 ? ` ${money(proposal.refund)} đã về ví StayReco.` : ' Đơn này không được hoàn tiền theo chính sách huỷ.'}`;
+    await this.prisma.$transaction([
+      this.prisma.message.update({
+        where: { messageId: message.messageId },
+        data: {
+          metadata: {
+            ...(message.metadata as object),
+            cancellation: { ...proposal, claimedAt: undefined, outcome },
+          },
+        },
+      }),
+      this.prisma.message.create({
+        data: { conversationId, role: 'SYSTEM', content: note },
       }),
     ]);
     return booking;
@@ -224,9 +321,9 @@ export class AssistantService {
   ): Promise<AssistantReply> {
     const customer = await this.customer(user.accountId);
     const priorRecommendations = new Map<string, string>();
-    const history = conversationId
+    const { contents: history, lookup } = conversationId
       ? await this.history(conversationId, priorRecommendations)
-      : [];
+      : { contents: [], lookup: [] };
     const contents: Content[] = merge([
       ...history,
       { role: 'user', parts: [{ text: input.content }] },
@@ -235,6 +332,7 @@ export class AssistantService {
       hotels: new Map(),
       priorRecommendations,
       proposal: null,
+      cancellation: null,
       roomTypes: new Map(),
     };
     const calls: Prisma.AiFunctionCallCreateManyInput[] = [];
@@ -247,6 +345,7 @@ export class AssistantService {
       customerName: customer.fullName,
       hasPhone: customer.phone !== null,
       preferences: customer.preferences,
+      lookup,
     });
 
     let text = '';
@@ -258,7 +357,8 @@ export class AssistantService {
       });
       const requested = response.functionCalls ?? [];
       if (!requested.length) {
-        text = response.text?.trim() ?? '';
+        // The last layer: whatever the model wrote, no internal note with an id is stored or shown.
+        text = stripInternalNotes(response.text ?? '');
         break;
       }
       const modelTurn = response.candidates?.[0]?.content;
@@ -289,7 +389,9 @@ export class AssistantService {
     if (!text) {
       text = state.proposal
         ? 'Mình đã chuẩn bị đề xuất đặt phòng bên dưới, bạn kiểm tra và bấm "Xác nhận đặt phòng" nhé.'
-        : 'Xin lỗi, mình chưa tìm được câu trả lời. Bạn có thể nói rõ hơn nơi đến, ngày và số khách không?';
+        : state.cancellation
+          ? 'Mình đã chuẩn bị đề xuất huỷ bên dưới, bạn kiểm tra số tiền hoàn rồi bấm "Xác nhận huỷ" nếu đồng ý nhé.'
+          : 'Xin lỗi, mình chưa tìm được câu trả lời. Bạn có thể nói rõ hơn nơi đến, ngày và số khách không?';
     }
 
     const meta: MessageMeta = {
@@ -297,6 +399,7 @@ export class AssistantService {
         mentions(text, h.name, state),
       ),
       ...(state.proposal && { proposal: state.proposal }),
+      ...(state.cancellation && { cancellation: state.cancellation }),
       ...(state.roomTypes.size && {
         roomTypes: [...state.roomTypes].map(([id, rt]) => ({ id, ...rt })),
       }),
@@ -349,48 +452,58 @@ export class AssistantService {
     };
   }
 
-  /** The stored messages as model turns. Hotels and proposals shown earlier are restated with their ids, so the
-   * model can refer back to "the second one" without searching again. */
+  /**
+   * The stored messages as model turns, and the ids of what was shown in them as separate lookup lines.
+   *
+   * The model needs the ids to act on "the second one" without searching again, but they go in the system
+   * instruction (`lookup`), never in its own past turns: written into a model turn, they taught the model to write
+   * such notes into its answers, ids and all (FE request "Trợ lý AI lộ ghi chú nội bộ có ID").
+   */
   private async history(
     conversationId: string,
     priorRecommendations: Map<string, string>,
-  ): Promise<Content[]> {
+  ): Promise<{ contents: Content[]; lookup: string[] }> {
     const rows = await this.prisma.message.findMany({
       where: { conversationId },
       orderBy: { createdAt: 'desc' },
       take: HISTORY,
     });
-    return rows.reverse().map((m) => {
+    const lookup: string[] = [];
+    const contents: Content[] = rows.reverse().map((m) => {
       if (m.role === 'USER')
         return { role: 'user', parts: [{ text: m.content }] };
       const meta = (m.metadata ?? {}) as MessageMeta;
-      const notes: string[] = [];
-      if (meta.hotels?.length) {
-        for (const hotel of meta.hotels) {
-          if (hotel.recommendationId)
-            priorRecommendations.set(hotel.id, hotel.recommendationId);
-        }
-        notes.push(
-          `[Đã hiển thị: ${meta.hotels.map((h) => `${h.name} (hotelId=${h.id})`).join('; ')}]`,
-        );
+      for (const hotel of meta.hotels ?? []) {
+        if (hotel.recommendationId)
+          priorRecommendations.set(hotel.id, hotel.recommendationId);
+        lookup.push(`khách sạn ${hotel.name}: hotelId=${hotel.id}`);
       }
-      if (meta.roomTypes?.length) {
-        notes.push(
-          `[Loại phòng đã xem: ${meta.roomTypes.map((r) => `${r.name} tại ${r.hotelName} (roomTypeId=${r.id})`).join('; ')}]`,
+      for (const r of meta.roomTypes ?? []) {
+        lookup.push(
+          `loại phòng ${r.name} tại ${r.hotelName}: roomTypeId=${r.id}`,
         );
       }
       if (meta.proposal) {
         const p = meta.proposal;
-        notes.push(
-          `[Đề xuất ${p.id}: ${p.roomTypeName} (roomTypeId=${p.roomTypeId}) tại ${p.hotelName}, ${p.checkIn} → ${p.checkOut}, ${p.guests} khách, ${p.total} VND, ${p.bookingId ? 'ĐÃ ĐẶT' : 'chưa xác nhận'}]`,
+        lookup.push(
+          `đề xuất đặt ${p.roomTypeName} tại ${p.hotelName} (roomTypeId=${p.roomTypeId}), ${p.checkIn} → ${p.checkOut}, ${p.guests} khách, ${p.total} VND: ${p.bookingId ? 'khách ĐÃ XÁC NHẬN, đang chờ thanh toán hoặc đã thanh toán' : 'chưa xác nhận'}`,
         );
       }
-      const prefix = m.role === 'SYSTEM' ? '[Hệ thống] ' : '';
+      if (meta.cancellation) {
+        const c = meta.cancellation;
+        lookup.push(
+          `đề xuất huỷ đơn ${c.bookingCode}, hoàn ${c.refund} VND: ${c.outcome ? `khách ĐÃ XÁC NHẬN (${c.outcome})` : 'chưa xác nhận'}`,
+        );
+      }
+      // A system note (a booking made, a cancellation done) is the platform speaking: said as the model's own turn,
+      // in words, with no ids, so there is nothing for the model to imitate.
       return {
         role: 'model',
-        parts: [{ text: [prefix + m.content, ...notes].join('\n') }],
+        parts: [{ text: stripInternalNotes(m.content) }],
       };
     });
+    // The newest first: when the same hotel comes back, the latest line is the one to read.
+    return { contents, lookup: [...new Set(lookup.reverse())].slice(0, 40) };
   }
 
   private async own(customerId: string, conversationId: string) {
@@ -453,12 +566,19 @@ function toMessage(m: {
     proposal = { ...meta.proposal };
     delete (proposal as MessageMeta['proposal'])!.claimedAt;
   }
+  let cancellation: CancellationProposal | null = null;
+  if (meta.cancellation) {
+    cancellation = { ...meta.cancellation };
+    delete (cancellation as MessageMeta['cancellation'])!.claimedAt;
+  }
   return {
     id: m.messageId,
     role: m.role,
-    content: m.content,
+    // Answers stored before the notes were kept out of model turns may carry one: never shown.
+    content: m.role === 'ASSISTANT' ? stripInternalNotes(m.content) : m.content,
     hotels: meta.hotels ?? [],
     proposal,
+    cancellation,
     createdAt: m.createdAt.toISOString(),
   };
 }

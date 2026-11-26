@@ -96,6 +96,7 @@ export function AssistantChat({
         content: chat.pendingText,
         hotels: [],
         proposal: null,
+        cancellation: null,
         createdAt: new Date(0).toISOString(),
       }
     : null;
@@ -126,6 +127,8 @@ export function AssistantChat({
             now={chat.now}
             confirmingId={chat.confirmingId}
             onConfirm={chat.confirmProposal}
+            cancellingId={chat.cancellingId}
+            onConfirmCancel={chat.confirmCancellation}
           />
         ))}
         {pendingMessage && (

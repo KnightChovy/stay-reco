@@ -24,11 +24,15 @@ import {
   type AssistantHotel,
   type AssistantMessage,
   type BookingProposal,
+  type CancellationProposal,
   type ConversationSummary,
 } from "@stayreco/shared";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { getApiErrorMessage } from "@/lib/api-error";
 import { formatDate, formatDateTime, formatMoney } from "@/features/stays/lib/format";
+import { useBooking } from "@/features/booking/api/booking-queries";
+import { useMyWallet, usePayWithWallet } from "@/features/account/api/rewards-queries";
 import { ChatMarkdown } from "../lib/chat-markdown";
 import { VoiceButton } from "../AssistantChatParts";
 import type { useSpeechInput } from "../use-speech-input";
@@ -166,17 +170,39 @@ export function ProposalCard({
             ? `Huỷ miễn phí đến ${formatDateTime(proposal.freeCancellationUntil)}`
             : "Không huỷ miễn phí"}
         </p>
+        {(proposal.addOns?.length || proposal.discount || proposal.points) && (
+          <dl className="space-y-1 border-t border-border pt-2 text-xs">
+            {proposal.addOns?.map((addOn) => (
+              <div key={addOn.id} className="flex justify-between gap-2 text-muted-foreground">
+                <dt>
+                  {addOn.quantity} × {addOn.name}
+                </dt>
+                <dd>{formatMoney(addOn.amount)}</dd>
+              </div>
+            ))}
+            {proposal.discount && (
+              <div className="flex justify-between gap-2 text-emerald-700">
+                <dt>
+                  {proposal.discount.name}
+                  {proposal.discount.code ? ` (${proposal.discount.code})` : ""}
+                </dt>
+                <dd>−{formatMoney(proposal.discount.amount)}</dd>
+              </div>
+            )}
+            {proposal.points && (
+              <div className="flex justify-between gap-2 text-emerald-700">
+                <dt>{proposal.points.used.toLocaleString("vi-VN")} điểm StayMiles</dt>
+                <dd>−{formatMoney(proposal.points.amount)}</dd>
+              </div>
+            )}
+          </dl>
+        )}
         <div className="flex items-baseline justify-between border-t border-border pt-2">
           <span className="text-xs text-muted-foreground">Tổng tiền</span>
           <span className="text-lg font-bold text-primary">{formatMoney(proposal.total)}</span>
         </div>
         {booked ? (
-          <Link
-            href={`/account/bookings/${proposal.bookingId}`}
-            className={cn(buttonVariants({ variant: "outline" }), "h-10 w-full")}
-          >
-            Xem đơn đặt phòng
-          </Link>
+          <ChatPayment bookingId={proposal.bookingId!} />
         ) : expired ? (
           <p className="rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">
             Đề xuất chỉ giữ giá 30 phút. Nhắn trợ lý “báo giá lại” để có đề xuất mới.
@@ -188,7 +214,188 @@ export function ProposalCard({
           </Button>
         )}
         {!booked && !expired && (
-          <p className="text-center text-xs text-muted-foreground">Bạn sẽ chuyển sang bước thanh toán, phòng được giữ 15 phút.</p>
+          <p className="text-center text-xs text-muted-foreground">
+            Sau khi xác nhận, mã QR chuyển khoản hiện ngay tại đây; phòng được giữ 15 phút.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Paying a booking made in the chat, without leaving it: while it waits for payment, the VietQR of the transfer
+ * (amount and content filled in) and the wallet button; once paid, a line saying so. Polls like the payment page,
+ * so a transfer that lands shows here within seconds. The full payment page stays one link away.
+ */
+function ChatPayment({ bookingId }: { bookingId: string }) {
+  const bookingQuery = useBooking(bookingId, { poll: true });
+  const walletQuery = useMyWallet();
+  const payWithWallet = usePayWithWallet();
+  const booking = bookingQuery.data;
+  const detailsLink = (
+    <Link href={`/account/bookings/${bookingId}`} className={cn(buttonVariants({ variant: "outline" }), "h-10 w-full")}>
+      Xem đơn đặt phòng
+    </Link>
+  );
+  if (!booking) {
+    return bookingQuery.isLoading ? (
+      <p className="flex items-center justify-center gap-2 py-2 text-xs text-muted-foreground">
+        <Loader2 className="size-3.5 animate-spin" aria-hidden /> Đang tải thông tin thanh toán…
+      </p>
+    ) : (
+      detailsLink
+    );
+  }
+  const payment = booking.payment;
+  if (booking.status !== "PENDING" || !payment) {
+    const paid = booking.paymentStatus === "PAID";
+    return (
+      <div className="space-y-2">
+        {paid && (
+          <p className="flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800">
+            <CheckCircle2 className="size-4" aria-hidden /> Đã thanh toán. Mã đặt phòng {booking.code}.
+          </p>
+        )}
+        {detailsLink}
+      </div>
+    );
+  }
+  const balance = walletQuery.data?.balanceAvailable ?? 0;
+  const canWallet = balance >= payment.amount;
+  return (
+    <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-3">
+      <p className="text-xs font-semibold text-foreground">
+        Chuyển khoản trước {new Date(payment.expiresAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })} để
+        giữ phòng
+      </p>
+      <a href={payment.qrImageUrl} target="_blank" rel="noreferrer" className="mx-auto block w-44">
+        {/* A third-party VietQR image (qr.sepay.vn): a plain img, as on the payment page. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={payment.qrImageUrl} alt={`Mã QR chuyển khoản ${formatMoney(payment.amount)}`} className="w-44 rounded-md bg-white" />
+      </a>
+      <dl className="space-y-1 text-xs">
+        <div className="flex justify-between gap-2">
+          <dt className="text-muted-foreground">Ngân hàng</dt>
+          <dd className="text-right font-medium">{payment.bankName}</dd>
+        </div>
+        <div className="flex justify-between gap-2">
+          <dt className="text-muted-foreground">Số tài khoản</dt>
+          <dd className="font-mono font-medium select-all">{payment.accountNumber}</dd>
+        </div>
+        <div className="flex justify-between gap-2">
+          <dt className="text-muted-foreground">Chủ tài khoản</dt>
+          <dd className="text-right font-medium">{payment.accountName}</dd>
+        </div>
+        <div className="flex justify-between gap-2">
+          <dt className="text-muted-foreground">Số tiền</dt>
+          <dd className="font-bold text-primary">{formatMoney(payment.amount)}</dd>
+        </div>
+        <div className="flex justify-between gap-2">
+          <dt className="text-muted-foreground">Nội dung</dt>
+          <dd className="font-mono font-bold select-all">{payment.transferContent}</dd>
+        </div>
+      </dl>
+      {canWallet && (
+        <Button
+          type="button"
+          variant="outline"
+          className="h-10 w-full"
+          disabled={payWithWallet.isPending}
+          onClick={() => payWithWallet.mutate(booking.id)}
+        >
+          {payWithWallet.isPending && <Loader2 className="size-4 animate-spin" />}
+          Trả bằng ví ({formatMoney(balance)})
+        </Button>
+      )}
+      {payWithWallet.error && (
+        <p role="alert" className="text-xs text-destructive">
+          {getApiErrorMessage(payWithWallet.error, "Không trả được bằng ví. Vui lòng chuyển khoản.")}
+        </p>
+      )}
+      <Link
+        href={`/booking/payment?id=${booking.id}`}
+        className="block text-center text-xs font-semibold text-primary underline-offset-2 hover:underline"
+      >
+        Mở trang thanh toán đầy đủ
+      </Link>
+    </div>
+  );
+}
+
+/**
+ * A cancellation the assistant priced: what was paid, the fee, the refund and whether the hotel must approve it.
+ * The assistant never cancels: the customer's click on "Xác nhận huỷ" does, once, while the proposal is fresh.
+ */
+export function CancellationCard({
+  proposal,
+  now,
+  pending,
+  onConfirm,
+}: {
+  proposal: CancellationProposal;
+  now: number;
+  pending: boolean;
+  onConfirm: () => void;
+}) {
+  const done = proposal.outcome !== null;
+  const expired = !done && Date.parse(proposal.expiresAt) <= now;
+  return (
+    <div className="w-full max-w-sm overflow-hidden rounded-xl border border-destructive/25 bg-card shadow-xs">
+      <div className="flex items-center justify-between gap-2 border-b border-border bg-destructive/5 px-3.5 py-2.5">
+        <p className="text-xs font-bold tracking-wide text-destructive uppercase">Đề xuất huỷ phòng</p>
+        {done ? (
+          <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700">
+            <CheckCircle2 className="size-3.5" aria-hidden />
+            {proposal.outcome === "REFUND_PENDING" ? "Chờ khách sạn duyệt hoàn tiền" : "Đã huỷ"}
+          </span>
+        ) : expired ? (
+          <span className="text-xs font-semibold text-muted-foreground">Đã hết hạn</span>
+        ) : null}
+      </div>
+      <div className="space-y-2 p-3.5 text-sm">
+        <div>
+          <p className="font-semibold text-foreground">{proposal.hotelName}</p>
+          <p className="flex items-center gap-1 text-xs text-muted-foreground">
+            <CalendarDays className="size-3.5" aria-hidden /> {formatDate(proposal.checkIn)} → {formatDate(proposal.checkOut)} ·{" "}
+            {proposal.bookingCode}
+          </p>
+        </div>
+        <dl className="space-y-1 border-t border-border pt-2 text-xs">
+          <div className="flex justify-between gap-2 text-muted-foreground">
+            <dt>Đã thanh toán</dt>
+            <dd>{formatMoney(proposal.paid)}</dd>
+          </div>
+          <div className="flex justify-between gap-2 text-muted-foreground">
+            <dt>Phí huỷ</dt>
+            <dd>{proposal.fee > 0 ? `−${formatMoney(proposal.fee)}` : "Miễn phí"}</dd>
+          </div>
+          <div className="flex items-baseline justify-between gap-2 pt-1">
+            <dt className="font-semibold text-foreground">Được hoàn về ví</dt>
+            <dd className="text-base font-bold text-primary">{formatMoney(proposal.refund)}</dd>
+          </div>
+        </dl>
+        <p className="rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">
+          {proposal.refund > 0
+            ? proposal.needsApproval
+              ? "Tiền hoàn về ví StayReco sau khi khách sạn duyệt yêu cầu. Phòng vẫn giữ cho bạn tới lúc đó."
+              : "Tiền hoàn về ví StayReco ngay khi huỷ."
+            : "Theo chính sách huỷ, đơn này không được hoàn tiền."}
+          {proposal.freeUntil && ` Huỷ miễn phí đến ${formatDateTime(proposal.freeUntil)}.`}
+        </p>
+        {done ? (
+          <Link href={`/account/bookings/${proposal.bookingId}`} className={cn(buttonVariants({ variant: "outline" }), "h-10 w-full")}>
+            Xem đơn đặt phòng
+          </Link>
+        ) : expired ? (
+          <p className="rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">
+            Đề xuất chỉ có hiệu lực 30 phút. Nhắn trợ lý “huỷ lại đơn {proposal.bookingCode}” để tính lại.
+          </p>
+        ) : (
+          <Button type="button" variant="destructive" onClick={onConfirm} disabled={pending} className="h-10 w-full gap-1.5">
+            {pending && <Loader2 className="size-4 animate-spin" />}
+            Xác nhận huỷ
+          </Button>
         )}
       </div>
     </div>
@@ -201,12 +408,16 @@ export function MessageRow({
   now,
   confirmingId,
   onConfirm,
+  cancellingId = null,
+  onConfirmCancel = () => {},
 }: {
   message: AssistantMessage;
   dates: StayDates;
   now: number;
   confirmingId: string | null;
   onConfirm: (proposalId: string) => void;
+  cancellingId?: string | null;
+  onConfirmCancel?: (proposalId: string) => void;
 }) {
   if (message.role === "SYSTEM") {
     return (
@@ -240,6 +451,14 @@ export function MessageRow({
             now={now}
             pending={confirmingId === message.proposal.id}
             onConfirm={() => onConfirm(message.proposal!.id)}
+          />
+        )}
+        {message.cancellation && (
+          <CancellationCard
+            proposal={message.cancellation}
+            now={now}
+            pending={cancellingId === message.cancellation.id}
+            onConfirm={() => onConfirmCancel(message.cancellation!.id)}
           />
         )}
       </div>

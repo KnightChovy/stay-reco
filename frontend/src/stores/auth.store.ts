@@ -2,7 +2,7 @@
 
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import type { Account, PartnerStatus } from '@stayreco/shared';
+import type { Account, PartnerStatus, RegisterPartnerInput } from '@stayreco/shared';
 import * as authService from '@/services/auth.service';
 import type { AxiosError } from 'axios';
 
@@ -35,6 +35,7 @@ type AuthState = {
   hydrate: () => Promise<void>;
   login: (email: string, password: string) => Promise<AuthResult>;
   register: (input: { name: string; email: string; password: string }) => Promise<RegisterResult>;
+  registerPartner: (input: RegisterPartnerInput) => Promise<RegisterResult>;
   verifyEmail: (input: { email: string; code: string }) => Promise<AuthResult>;
   /** Invited staff / platform manager: set a password from the emailed link and sign in. */
   acceptInvitation: (input: { token: string; password: string }) => Promise<AuthResult>;
@@ -187,6 +188,19 @@ export const useAuthStore = create<AuthState>()(
             password,
           });
           // No tokens yet: the account is PENDING_VERIFICATION until the emailed code is entered.
+          return { success: true, email: res.data.account.email };
+        } catch (err) {
+          return {
+            success: false,
+            message: getErrorMessage(err),
+            code: getErrorCode(err),
+          };
+        }
+      },
+
+      registerPartner: async (input) => {
+        try {
+          const res = await authService.registerPartner(input);
           return { success: true, email: res.data.account.email };
         } catch (err) {
           return {

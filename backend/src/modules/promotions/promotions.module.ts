@@ -11,6 +11,6 @@ import { StayDiscountService } from './stay-discount.service';
   imports: [PricingModule, LoyaltyModule, AddOnsModule],
   controllers: [PromotionsController],
   providers: [PromotionsService, DiscountService, StayDiscountService],
-  exports: [DiscountService, StayDiscountService],
+  exports: [DiscountService, StayDiscountService, PromotionsService],
 })
 export class PromotionsModule {}

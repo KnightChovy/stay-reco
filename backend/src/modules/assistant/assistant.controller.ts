@@ -105,4 +105,25 @@ export class AssistantController {
   ) {
     return this.assistant.confirmBooking(user, id, dto.proposalId);
   }
+  @ApiOperation({
+    summary: 'Cancel a booking the assistant proposed to cancel',
+    description:
+      'The customer\x27s click on "Xác nhận huỷ". Cancels exactly as `POST /bookings/:id/cancel` does, with the reason the customer gave: nothing to refund cancels at once; a refund becomes a request the hotel approves, after which the money reaches the customer wallet (the booking stays CONFIRMED until then). The proposal records the outcome (`CANCELLED` or `REFUND_PENDING`) and a system note says it. A proposal cancels once and expires after 30 minutes.',
+  })
+  @ApiData(bookingResponseSchema, HttpStatus.CREATED)
+  @ApiErrors(
+    ErrorCode.CONVERSATION_NOT_FOUND,
+    ErrorCode.BOOKING_PROPOSAL_NOT_FOUND,
+    ErrorCode.BOOKING_PROPOSAL_INVALID,
+    ErrorCode.BOOKING_STATUS_CONFLICT,
+    ErrorCode.CANCELLATION_NOT_ALLOWED,
+  )
+  @Post('conversations/:id/confirm-cancellation')
+  confirmCancellation(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body() dto: ConfirmBookingProposalDto,
+  ) {
+    return this.assistant.confirmCancellation(user, id, dto.proposalId);
+  }
 }
