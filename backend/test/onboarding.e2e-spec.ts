@@ -357,6 +357,44 @@ describe('Onboarding and the welcome voucher (e2e)', () => {
     expect(await t.prisma.voucher.count()).toBe(0);
   });
 
+  it('does not stop a guest who has already stayed, but still lets them finish it', async () => {
+    const h = await hotel();
+    const regular = await t.signIn('CUSTOMER', 'regular@mail.test');
+    const booking = (status: 'COMPLETED' | 'CANCELLED') =>
+      t.prisma.booking.create({
+        data: {
+          customerId: regular.id,
+          hotelId: h.hotelId,
+          checkInDate: new Date('2026-10-10T00:00:00Z'),
+          checkOutDate: new Date('2026-10-11T00:00:00Z'),
+          totalAmount: 1000000,
+          status,
+          guestName: 'Khách',
+          contactPhone: '0905123456',
+          cancelFeePercent: 100,
+          commissionRate: 8,
+        },
+      });
+
+    // A cancelled booking is not a stay: still a newcomer.
+    await booking('CANCELLED');
+    expect((await onboarding(regular.token)).body.data.status).toBe('NEW');
+
+    await booking('COMPLETED');
+    const res = (await onboarding(regular.token)).body.data as Onboarding;
+    expect(res.status).toBe('SKIPPED');
+    expect(res.options).not.toBeNull();
+
+    await complete(regular.token, {
+      cities: ['Đà Nẵng'],
+      viewIds: [seaView],
+      roomAmenities: ['pool'],
+    }).expect(200);
+    expect((await onboarding(regular.token)).body.data.status).toBe(
+      'COMPLETED',
+    );
+  });
+
   it('remembers a skip, and finishing later still earns the code', async () => {
     await hotel();
     const guest = await t.signIn('CUSTOMER', 'guest@mail.test');

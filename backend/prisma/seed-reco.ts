@@ -975,7 +975,14 @@ async function main() {
     const guest: GenGuest = { ...g, id: account.userAccountId };
     guests.push(guest);
 
-    if (random() < PREFERENCE_SHARE) {
+    // Regulars, not newcomers: the first-login screen is not for them (it saves the same keys when finished).
+    const answered = random() < PREFERENCE_SHARE;
+    preferenceRows.push({
+      customerId: guest.id,
+      preferenceKey: 'onboardingStatus',
+      preferenceValue: answered ? 'COMPLETED' : 'SKIPPED',
+    });
+    if (answered) {
       const styles = STYLES.filter((s) => g.taste[s] > 0).sort(
         (a, b) => g.taste[b] - g.taste[a],
       );

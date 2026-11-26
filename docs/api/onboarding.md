@@ -44,7 +44,7 @@ NEW ──skip──→ SKIPPED ──finish──→ COMPLETED
 
 ## What the frontend needs to know
 
-- **When to show it.** After sign-in, on `status: "NEW"` only. Offer it again from the account page on `SKIPPED`; finishing it then still earns the code. On `COMPLETED` the picks are edited on `/account/preferences` (`PUT /me/preferences`).
+- **When to show it.** After sign-in, on `status: "NEW"` only. A customer with no answer saved who has already completed a stay (an account from before onboarding) reads `SKIPPED`, not `NEW`: the screen is for newcomers, and the account page still offers it. Offer it again from the account page on `SKIPPED`; finishing it then still earns the code. On `COMPLETED` the picks are edited on `/account/preferences` (`PUT /me/preferences`).
 - **The order of the screen: destinations, then taste, then hotels.** Hotels come last so a customer cannot pick one that contradicts what they just said (a resort lover ticking three homestays, decision W11). The hotel step asks `GET /me/onboarding/hotels` with the answers given so far; when the customer goes back and changes one, drop the hotels they had ticked, since those were offered for the old answers.
 - **Hotels that fit the answers** (`GET /me/onboarding/hotels`):
   - Only bookable hotels in the cities picked; every city when none was picked.
