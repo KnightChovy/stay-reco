@@ -29,6 +29,8 @@ export const managerKeys = {
     [...managerKeys.all, "hotel-revenue", hotelId, params] as const,
   hotelWallet: (hotelId: string, params: managerService.HotelWalletParams) =>
     [...managerKeys.all, "hotel-wallet", hotelId, params] as const,
+  commissions: (params: managerService.CommissionParams) => [...managerKeys.all, "commissions", params] as const,
+  cashflow: (params: managerService.PlatformRangeParams) => [...managerKeys.all, "cashflow", params] as const,
 };
 
 /** Codes whose shared message is written for the partner; the manager reads them from the other side. */
@@ -108,6 +110,22 @@ export function useHotelWalletTransactions(hotelId: string | undefined, params: 
     queryKey: managerKeys.hotelWallet(hotelId ?? "", params),
     queryFn: () => managerService.getHotelWalletTransactions(hotelId!, params),
     enabled: !!hotelId,
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useCommissions(params: managerService.CommissionParams) {
+  return useQuery({
+    queryKey: managerKeys.commissions(params),
+    queryFn: () => managerService.getCommissions(params),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useCashflow(params: managerService.PlatformRangeParams) {
+  return useQuery({
+    queryKey: managerKeys.cashflow(params),
+    queryFn: () => managerService.getCashflow(params),
     placeholderData: keepPreviousData,
   });
 }

@@ -1,6 +1,7 @@
 import { format, formatDistanceToNowStrict } from "date-fns";
 import { vi } from "date-fns/locale";
 import type {
+  CommissionStatus,
   DocumentType,
   HotelStatus,
   PartnerStatus,
@@ -51,6 +52,11 @@ export const regionLabels: Record<Region, string> = {
   CENTRAL: "Miền Trung",
   SOUTH: "Miền Nam",
   OTHER: "Khác",
+};
+
+export const commissionStatusLabels: Record<CommissionStatus, Labelled> = {
+  CHARGED: { label: "Đã thu", tone: "success" },
+  EXPECTED: { label: "Dự kiến", tone: "info" },
 };
 
 export const walletTxnTypeLabels: Record<WalletTxnType, string> = {

@@ -62,7 +62,6 @@ const navigation: Omit<SidebarItem, "isActive">[] = [
     href: "/manager/cashflow",
     label: "Dòng tiền & đối soát",
     icon: Landmark,
-    badge: DEMO_BADGE,
     section: "TÀI CHÍNH NỀN TẢNG",
   },
   {
@@ -73,9 +72,8 @@ const navigation: Omit<SidebarItem, "isActive">[] = [
   },
   {
     href: "/manager/transactions",
-    label: "Giao dịch & quyết toán",
+    label: "Hoa hồng nền tảng",
     icon: WalletCards,
-    badge: DEMO_BADGE,
     section: "TÀI CHÍNH NỀN TẢNG",
   },
 ];

@@ -1,5 +1,8 @@
 import { api } from "@/lib/axios";
 import type {
+  CommissionListQuery,
+  CommissionRow,
+  PlatformCashflow,
   HotelRevenueDetail,
   HotelRevenueListQuery,
   HotelRevenueRow,
@@ -111,6 +114,21 @@ export async function getHotelWalletTransactions(hotelId: string, params: HotelW
     paramsSerializer: { indexes: null },
   });
   return { transactions: data.data, meta: data.meta as PageMeta };
+}
+
+export type CommissionParams = Partial<CommissionListQuery>;
+
+export async function getCommissions(params: CommissionParams) {
+  const { data } = await api.get<APIResponse<CommissionRow[]>>("/platform/commissions", {
+    params,
+    paramsSerializer: { indexes: null },
+  });
+  return { commissions: data.data, meta: data.meta as PageMeta };
+}
+
+export async function getCashflow(params: PlatformRangeParams) {
+  const { data } = await api.get<APIResponse<PlatformCashflow>>("/platform/cashflow", { params });
+  return data.data;
 }
 
 function attachmentName(disposition: unknown) {
