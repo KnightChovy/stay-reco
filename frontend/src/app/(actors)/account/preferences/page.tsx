@@ -7,9 +7,11 @@ import {
   Compass,
   Loader2,
   MapPin,
+  Plus,
   Save,
   Sparkles,
   Wallet,
+  X,
 } from 'lucide-react';
 import AppBreadcrumb from '@/components/common/breadcrumb/AppBreadcrumb';
 import { ErrorState, LoadingState } from '@/components/common/StateViews';
@@ -33,19 +35,27 @@ import { OnboardingOffer } from '@/features/recommendations/components/Onboardin
 const KEYS = {
   styles: 'travelStyles',
   amenities: 'roomAmenities',
+  // Onboarding saves every city picked in `preferredCities` and the first one in `favouriteCity`; the recommender
+  // and the ranking read `preferredCities` first, so this screen edits both or a change here would be ignored.
+  cities: 'preferredCities',
   city: 'favouriteCity',
   budget: 'budgetPerNight',
 } as const;
 
-type FormState = { styles: string[]; amenities: string[]; city: string; budget: string };
+/** Cities this screen lets a customer add; a longer list saved by onboarding is kept and shown in full. */
+const MAX_CITIES = 5;
 
-const splitList = (value: string | undefined) => (value ? value.split(',').filter(Boolean) : []);
+type FormState = { styles: string[]; amenities: string[]; cities: string[]; budget: string };
+
+const splitList = (value: string | undefined) =>
+  value ? value.split(',').map((item) => item.trim()).filter(Boolean) : [];
 
 function toForm(preferences: Preferences): FormState {
+  const cities = splitList(preferences[KEYS.cities]);
   return {
     styles: splitList(preferences[KEYS.styles]),
     amenities: splitList(preferences[KEYS.amenities]),
-    city: preferences[KEYS.city] ?? '',
+    cities: cities.length ? cities : splitList(preferences[KEYS.city]),
     budget: preferences[KEYS.budget] ?? '',
   };
 }
@@ -55,7 +65,8 @@ function toPayload(form: FormState): Record<string, string | null> {
   return {
     [KEYS.styles]: form.styles.length ? form.styles.join(',') : null,
     [KEYS.amenities]: form.amenities.length ? form.amenities.join(',') : null,
-    [KEYS.city]: form.city.trim() || null,
+    [KEYS.cities]: form.cities.length ? form.cities.join(',') : null,
+    [KEYS.city]: form.cities[0] ?? null,
     [KEYS.budget]: form.budget || null,
   };
 }
@@ -76,18 +87,32 @@ function SectionTitle({ id, icon: Icon, title, hint }: { id: string; icon: typeo
 function PreferencesForm({ initial }: { initial: FormState }) {
   const [form, setForm] = useState<FormState>(initial);
   const [justSaved, setJustSaved] = useState(false);
+  const [cityDraft, setCityDraft] = useState('');
   const update = useUpdatePreferences();
-  // Lists compared as sets: picking the same items in another order is not a change.
+  // Lists compared as sets: picking the same items in another order is not a change. Cities keep their order, the
+  // first one is the favourite.
   const sameList = (a: string[], b: string[]) => a.length === b.length && a.every((item) => b.includes(item));
   const dirty =
     !sameList(form.styles, initial.styles) ||
     !sameList(form.amenities, initial.amenities) ||
-    form.city.trim() !== initial.city ||
+    form.cities.join(',') !== initial.cities.join(',') ||
     form.budget !== initial.budget;
 
   const edit = (next: (prev: FormState) => FormState) => {
     setJustSaved(false);
     setForm(next);
+  };
+
+  // A comma would split one city into two when stored, so it is dropped; the same city twice (any case) is ignored.
+  const draft = cityDraft.replace(/,/g, ' ').replace(/\s+/g, ' ').trim();
+  const canAddCity =
+    draft.length > 0 &&
+    form.cities.length < MAX_CITIES &&
+    !form.cities.some((city) => city.toLocaleLowerCase('vi') === draft.toLocaleLowerCase('vi'));
+  const addCity = () => {
+    if (!canAddCity) return;
+    edit((prev) => ({ ...prev, cities: [...prev.cities, draft] }));
+    setCityDraft('');
   };
 
   const submit = (event: FormEvent) => {
@@ -180,17 +205,56 @@ function PreferencesForm({ initial }: { initial: FormState }) {
           <Label htmlFor="favouriteCity" className="flex items-center gap-1.5 text-sm font-bold text-foreground">
             <MapPin className="size-4 text-primary" aria-hidden /> Điểm đến hay đi
           </Label>
-          <Input
-            id="favouriteCity"
-            value={form.city}
-            maxLength={100}
-            onChange={(event) => edit((prev) => ({ ...prev, city: event.target.value }))}
-            placeholder="Ví dụ: Đà Nẵng"
-            aria-describedby="favouriteCity-hint"
-            className="h-11 text-base sm:text-sm"
-          />
+          {form.cities.length > 0 && (
+            <ul className="flex flex-wrap gap-2" aria-label="Điểm đến đã chọn">
+              {form.cities.map((city) => (
+                <li
+                  key={city}
+                  className="flex min-h-10 items-center gap-1 rounded-full border border-primary bg-primary/5 pr-1 pl-3.5 text-sm font-semibold text-foreground"
+                >
+                  {city}
+                  <button
+                    type="button"
+                    aria-label={`Bỏ ${city}`}
+                    onClick={() => edit((prev) => ({ ...prev, cities: prev.cities.filter((item) => item !== city) }))}
+                    className="flex size-8 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
+                  >
+                    <X className="size-4" aria-hidden />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {form.cities.length < MAX_CITIES && (
+            <div className="flex gap-2">
+              <Input
+                id="favouriteCity"
+                value={cityDraft}
+                maxLength={100}
+                onChange={(event) => setCityDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  // Enter adds the city instead of submitting the whole form.
+                  if (event.key !== 'Enter') return;
+                  event.preventDefault();
+                  addCity();
+                }}
+                placeholder={form.cities.length ? 'Thêm điểm đến khác' : 'Ví dụ: Đà Nẵng'}
+                aria-describedby="favouriteCity-hint"
+                className="h-11 text-base sm:text-sm"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                disabled={!canAddCity}
+                onClick={addCity}
+                className="h-11 shrink-0 gap-1.5 px-4"
+              >
+                <Plus className="size-4" aria-hidden /> Thêm
+              </Button>
+            </div>
+          )}
           <p id="favouriteCity-hint" className="text-xs text-muted-foreground">
-            Ghi tên tỉnh hoặc thành phố, ví dụ &ldquo;Đà Nẵng&rdquo;, &ldquo;Hà Nội&rdquo;.
+            Chọn tối đa {MAX_CITIES} nơi, ví dụ &ldquo;Đà Nẵng&rdquo;, &ldquo;Hà Nội&rdquo;. Nơi đầu tiên được ưu tiên nhất.
           </p>
         </div>
         <div className="space-y-2">
