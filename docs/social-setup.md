@@ -59,7 +59,7 @@ POST /hotels/:hotelId/social-accounts/facebook/connect
 ```
 META_APP_ID=…
 META_APP_SECRET=…
-META_OAUTH_REDIRECT_URI=http://localhost:3001/staff/social/facebook/callback
+META_OAUTH_REDIRECT_URI=http://localhost:5173/staff/social/facebook/callback
 ```
 
 Leave `META_APP_ID` empty and those three endpoints answer `503 SOCIAL_OAUTH_DISABLED` while pasting keeps working.
