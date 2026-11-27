@@ -16,7 +16,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { getApiErrorMessage } from '@/lib/api-error';
-import { useAmenities, useHotelSearch } from '@/features/stays/api/stays-queries';
+import { useAmenities, useFilterSuggestions, useHotelSearch } from '@/features/stays/api/stays-queries';
+import { STYLES } from '@/features/account/lib/preference-options';
+import { Check, Loader2, Plus, X } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import type { FilterSuggestion } from '@stayreco/shared';
 import { formatDate, formatMoney } from '@/features/stays/lib/format';
 import { buildSearchHref, nightsBetween, parseHotelSearchParams } from '@/features/stays/lib/params';
 import { StyleBadges } from '@/features/stays/components/StyleBadges';
@@ -38,9 +42,13 @@ function SearchContent() {
   const query = parseHotelSearchParams(new URLSearchParams(searchParams.toString()));
   const { data, isLoading, isFetching, error, refetch } = useHotelSearch(query);
   const amenities = useAmenities();
+  const suggestions = useFilterSuggestions(query);
 
   const [priceMin, setPriceMin] = useState(query.priceMin ? String(query.priceMin) : '');
   const [priceMax, setPriceMax] = useState(query.priceMax ? String(query.priceMax) : '');
+  // The chip just tapped: it spins while the results it asked for load (the old ones stay, dimmed).
+  const [tapped, setTapped] = useState<string | null>(null);
+  const updating = isFetching && !isLoading;
 
   const navigate = (changes: Record<string, string | number | boolean | string[] | number[] | undefined>) => {
     const next = {
@@ -57,9 +65,42 @@ function SearchContent() {
       starRating: query.starRating,
       amenityIds: query.amenityIds,
       freeCancellation: query.freeCancellation || undefined,
+      style: query.style,
       ...changes,
     };
     router.push(buildSearchHref(next));
+  };
+
+  // A suggestion is only offered, never applied by itself: tapping it sets that filter like the sidebar would.
+  // The same key as the applied filter it sets (see `activeFilters`), so an applied one is shown once, on its chip.
+  const suggestionKey = (s: FilterSuggestion) =>
+    s.kind === 'style' ? 'style' : s.kind === 'freeCancellation' ? 'free' : `${s.kind}-${s.value}`;
+  const isApplied = (s: FilterSuggestion) => {
+    switch (s.kind) {
+      case 'style':
+        return query.style === s.value;
+      case 'amenity':
+        return (query.amenityIds ?? []).includes(s.value);
+      case 'star':
+        return (query.starRating ?? []).includes(Number(s.value));
+      case 'freeCancellation':
+        return query.freeCancellation === true;
+    }
+  };
+  // A chip turns its filter on and off where it stands, like Airbnb's filter bar.
+  const toggleSuggestion = (s: FilterSuggestion) => {
+    const on = !isApplied(s);
+    setTapped(suggestionKey(s));
+    switch (s.kind) {
+      case 'style':
+        return navigate({ style: on ? s.value : undefined, page: 1 });
+      case 'amenity':
+        return toggleAmenity(s.value);
+      case 'star':
+        return toggleStar(Number(s.value));
+      case 'freeCancellation':
+        return navigate({ freeCancellation: on || undefined, page: 1 });
+    }
   };
 
   const toggleStar = (star: number) => {
@@ -95,14 +136,52 @@ function SearchContent() {
   const hotels = data?.hotels ?? [];
   const meta = data?.meta;
   const nights = nightsBetween(query.checkIn, query.checkOut);
-  const activeFilters = [
-    query.destination,
-    ...(query.starRating ?? []).map((star) => `${star} sao`),
-    ...(query.amenityIds ?? []).map((id) => amenities.data?.find((item) => item.id === id)?.name ?? 'Tiện nghi'),
-    ...(query.freeCancellation ? ['Miễn phí huỷ'] : []),
-    ...(query.priceMin ? [`Từ ${formatMoney(query.priceMin)}`] : []),
-    ...(query.priceMax ? [`Đến ${formatMoney(query.priceMax)}`] : []),
+  // Each applied filter with how to take it off alone (the destination is the search itself, shown in the title).
+  const activeFilters: { key: string; label: string; remove: () => void }[] = [
+    ...(query.style
+      ? [{
+          key: 'style',
+          label: STYLES.find((item) => item.id === query.style)?.title ?? query.style,
+          remove: () => navigate({ style: undefined, page: 1 }),
+        }]
+      : []),
+    ...(query.starRating ?? []).map((star) => ({
+      key: `star-${star}`,
+      label: `${star} sao`,
+      remove: () => toggleStar(star),
+    })),
+    ...(query.amenityIds ?? []).map((id) => ({
+      key: `amenity-${id}`,
+      label: amenities.data?.find((item) => item.id === id)?.name ?? 'Tiện nghi',
+      remove: () => toggleAmenity(id),
+    })),
+    ...(query.freeCancellation
+      ? [{ key: 'free', label: 'Miễn phí huỷ', remove: () => navigate({ freeCancellation: undefined, page: 1 }) }]
+      : []),
+    ...(query.priceMin
+      ? [{
+          key: 'priceMin',
+          label: `Từ ${formatMoney(query.priceMin)}/đêm`,
+          remove: () => {
+            setPriceMin('');
+            navigate({ priceMin: undefined, page: 1 });
+          },
+        }]
+      : []),
+    ...(query.priceMax
+      ? [{
+          key: 'priceMax',
+          label: `Đến ${formatMoney(query.priceMax)}/đêm`,
+          remove: () => {
+            setPriceMax('');
+            navigate({ priceMax: undefined, page: 1 });
+          },
+        }]
+      : []),
   ];
+  const suggested = suggestions.data ?? [];
+  const shownOnChips = new Set(suggested.filter(isApplied).map(suggestionKey));
+  const otherFilters = activeFilters.filter((filter) => !shownOnChips.has(filter.key));
 
   return (
     <div className="min-h-screen flex flex-col bg-[#fafbfc] text-[#2D3748]">
@@ -134,7 +213,11 @@ function SearchContent() {
             <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
               <span className="inline-flex items-center gap-1.5">
                 <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                {isLoading ? 'Đang tìm…' : `Tìm thấy ${meta?.total ?? hotels.length} chỗ nghỉ còn phòng`}
+                {isLoading
+                  ? 'Đang tìm…'
+                  : updating
+                    ? 'Đang cập nhật…'
+                    : `Tìm thấy ${meta?.total ?? hotels.length} chỗ nghỉ còn phòng`}
               </span>
               <span>{formatDate(query.checkIn)} – {formatDate(query.checkOut)}</span>
               <span>{nights} đêm · {query.guests} khách · {query.rooms} phòng</span>
@@ -162,19 +245,67 @@ function SearchContent() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 py-2 mb-6">
-          <span className="text-xs text-gray-500 font-normal mr-1">Bộ lọc đang chọn:</span>
-          {activeFilters.map((label) => (
-            <span key={label} className="inline-flex items-center text-xs bg-[#EAF2F7] text-[#1b4360] font-medium px-2.5 py-1 rounded">
-              {label}
-            </span>
-          ))}
-          {activeFilters.length > 1 && (
-            <button onClick={clearFilters} className="text-xs text-[#df7a42] hover:underline font-semibold ml-2">
-              Xóa tất cả bộ lọc
-            </button>
-          )}
-        </div>
+        {/*
+          One filter bar, as Airbnb's: the filters suggested for this customer first, always the same and in the same
+          place for this search, each turned on and off where it stands (why it is offered, and how many stays the
+          search had with it, is in the tooltip); then any other filter applied from the sidebar, with ×.
+        */}
+        {(activeFilters.length > 0 || suggested.length > 0) && (
+          <div className="mb-6 flex flex-wrap items-center gap-2">
+            {suggested.length > 0 && <span className="mr-0.5 text-sm text-gray-500">Gợi ý cho bạn:</span>}
+            {suggested.map((suggestion) => {
+              const on = isApplied(suggestion);
+              return (
+                <button
+                  key={`${suggestion.kind}-${suggestion.value}`}
+                  type="button"
+                  aria-pressed={on}
+                  title={`${suggestion.reason} · ${suggestion.count} chỗ nghỉ`}
+                  onClick={() => toggleSuggestion(suggestion)}
+                  className={cn(
+                    'inline-flex h-9 items-center gap-1 rounded-full border pr-3.5 pl-3 text-sm font-medium transition-colors',
+                    on
+                      ? 'border-[#1b4360] bg-[#EAF2F7] text-[#1b4360] hover:bg-[#dbe8f1]'
+                      : 'border-gray-300 bg-white text-gray-700 hover:border-[#1b4360] hover:text-[#1b4360]',
+                  )}
+                >
+                  {updating && tapped === suggestionKey(suggestion) ? (
+                    <Loader2 className="size-3.5 animate-spin" aria-hidden />
+                  ) : on ? (
+                    <Check className="size-3.5" aria-hidden />
+                  ) : (
+                    <Plus className="size-3.5" aria-hidden />
+                  )}
+                  {suggestion.label}
+                </button>
+              );
+            })}
+            {otherFilters.map((filter) => (
+              <button
+                key={filter.key}
+                type="button"
+                onClick={() => {
+                  setTapped(filter.key);
+                  filter.remove();
+                }}
+                aria-label={`Bỏ bộ lọc ${filter.label}`}
+                className="inline-flex h-9 items-center gap-1.5 rounded-full border border-[#1b4360] bg-[#EAF2F7] pr-2.5 pl-3.5 text-sm font-medium text-[#1b4360] transition-colors hover:bg-[#dbe8f1]"
+              >
+                {filter.label}
+                <X className="size-3.5" aria-hidden />
+              </button>
+            ))}
+            {activeFilters.length > 1 && (
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="ml-auto text-sm text-gray-500 underline-offset-2 hover:text-gray-900 hover:underline"
+              >
+                Xoá tất cả bộ lọc
+              </button>
+            )}
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           <aside className="order-2 space-y-6 rounded-xl border border-gray-200 bg-white p-5 shadow-xs lg:order-1 lg:col-span-3">
@@ -217,6 +348,23 @@ function SearchContent() {
               >
                 Áp dụng giá
               </button>
+            </div>
+
+            <div className="pt-4 border-t border-gray-100">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-gray-900 mb-3">Phong cách</h3>
+              <div className="space-y-2.5">
+                {STYLES.map((item) => (
+                  <label key={item.id} className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer">
+                    <Checkbox
+                      checked={query.style === item.id}
+                      onCheckedChange={() =>
+                        navigate({ style: query.style === item.id ? undefined : item.id, page: 1 })
+                      }
+                    />
+                    <span>{item.title}</span>
+                  </label>
+                ))}
+              </div>
             </div>
 
             <div className="pt-4 border-t border-gray-100">
@@ -296,6 +444,18 @@ function SearchContent() {
               </div>
             )}
 
+            {/*
+              The old results stay, dimmed, while the new ones load; a new list fades in (keyed by its hotels) instead
+              of swapping at once.
+            */}
+            <div
+              key={hotels.map((hotel) => hotel.id).join()}
+              aria-busy={updating}
+              className={cn(
+                'space-y-4 transition-opacity duration-200 animate-in fade-in',
+                updating && 'pointer-events-none opacity-50',
+              )}
+            >
             {hotels.map((hotel) => (
               <HotelCard
                 key={hotel.id}
@@ -318,6 +478,7 @@ function SearchContent() {
                 badges={<StyleBadges styles={hotel.styles} chosen={chosenStyles} />}
               />
             ))}
+            </div>
 
             {meta && meta.totalPages > 1 && (
               <div className="pt-6 pb-2">
@@ -329,12 +490,9 @@ function SearchContent() {
               </div>
             )}
 
-            {isFetching && !isLoading && (
-              <p className="text-center text-[11px] text-gray-400">Đang cập nhật kết quả…</p>
-            )}
-
             <p className="text-center text-[11px] text-gray-400">
-              Giá hiển thị là tổng cho {nights} đêm. <Link href="/" className="underline">Về trang chủ</Link>
+              Giá hiển thị là tổng cho {nights} đêm; khoảng giá lọc theo giá mỗi đêm.{' '}
+              <Link href="/" className="underline">Về trang chủ</Link>
             </p>
           </section>
         </div>

@@ -120,6 +120,19 @@ export const hotelSearchResultResponseSchema = z
   .register(responseSchemas, { id: "HotelSearchResult" });
 export type HotelSearchResult = z.infer<typeof hotelSearchResultResponseSchema>;
 
+export const filterSuggestionResponseSchema = z
+  .object({
+    kind: z
+      .enum(["style", "amenity", "star", "freeCancellation"])
+      .describe("Which search filter it sets: `style`, one of `amenityIds`, one of `starRating`, `freeCancellation`."),
+    value: z.string().describe("The value to set: a style id, an amenity id, a star count, or `true`."),
+    label: z.string(),
+    reason: z.string().describe("Why it is suggested to this customer, in Vietnamese."),
+    count: z.number().int().describe("Hotels the search would still show with it applied."),
+  })
+  .register(responseSchemas, { id: "FilterSuggestion" });
+export type FilterSuggestion = z.infer<typeof filterSuggestionResponseSchema>;
+
 const nightlyPriceResponseSchema = z.object({
   date: calendarDate(),
   price: z.number(),

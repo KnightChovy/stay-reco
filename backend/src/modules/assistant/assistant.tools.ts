@@ -6,7 +6,9 @@ import {
   type BookingProposal,
   type CancellationProposal,
   createBookingSchema,
+  daysBetween,
   hotelSearchQuerySchema,
+  isCalendarDate,
   MY_BOOKING_TABS,
   stayQuerySchema,
 } from '@stayreco/shared';
@@ -76,10 +78,10 @@ export const TOOL_DECLARATIONS: FunctionDeclaration[] = [
         checkOut: { type: 'string', description: 'YYYY-MM-DD' },
         guests: { type: 'integer', description: 'Tổng số khách, mặc định 2.' },
         rooms: { type: 'integer', description: 'Số phòng, mặc định 1.' },
-        priceMax: {
+        pricePerNightMax: {
           type: 'number',
           description:
-            'Tổng tiền tối đa cho CẢ kỳ ở (VND), không phải giá mỗi đêm.',
+            'Giá tối đa MỖI ĐÊM (VND), đúng như khách nói, ví dụ "dưới 2 triệu một đêm" là 2000000. Không tự nhân với số đêm.',
         },
         starRating: {
           type: 'array',
@@ -309,13 +311,24 @@ export class AssistantTools {
     state: TurnState,
   ) {
     const amenityIds = await this.amenityIds(args.amenities);
+    // The search filters on the total of the stay; the customer speaks of a price per night, so the code multiplies
+    // (the model was asked to before, and could not be relied on to).
+    const perNight = Number(args.pricePerNightMax);
+    const nights =
+      typeof args.checkIn === 'string' &&
+      typeof args.checkOut === 'string' &&
+      isCalendarDate(args.checkIn) &&
+      isCalendarDate(args.checkOut)
+        ? daysBetween(args.checkIn, args.checkOut)
+        : 0;
     const parsed = hotelSearchQuerySchema.safeParse({
       destination: args.destination,
       checkIn: args.checkIn,
       checkOut: args.checkOut,
       guests: args.guests ?? 2,
       rooms: args.rooms ?? 1,
-      priceMax: args.priceMax,
+      priceMax:
+        perNight > 0 && nights > 0 ? Math.round(perNight * nights) : undefined,
       starRating: args.starRating,
       amenityIds: amenityIds.length ? amenityIds : undefined,
       freeCancellation:

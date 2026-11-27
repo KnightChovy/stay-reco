@@ -109,7 +109,7 @@ The model is given nine tools, all read-only, each going through the same servic
 
 | Tool | Does | Same as |
 |---|---|---|
-| `search_hotels` | Hotels with free rooms for a stay, **the customer's recommendations first**, then by stars, price and name | `GET /hotels` |
+| `search_hotels` | Hotels with free rooms for a stay, **the customer's recommendations first**, then by stars, price and name. The model gives `pricePerNightMax` as the customer said it; the code multiplies it by the nights into `priceMax` (2026-11-27: asking the model to do it was not reliable) | `GET /hotels` |
 | `recommend_hotels` | The customer's recommendation list, optionally for one city | `GET /me/recommendations` |
 | `get_hotel_rooms` | A hotel's description, amenities, cancellation policy, add-ons (with `prebookable`) and room types, priced when dates are given | `GET /hotels/:id/listing` |
 | `propose_booking` | Prices one room type for a stay, with an optional voucher `code`, `pointsToUse` and prebookable `addOns`, and checks it could be booked; makes the proposal | `POST /bookings/discount-quote` and the checks of `POST /bookings` |

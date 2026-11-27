@@ -33,6 +33,9 @@ export const BOOKING_LIMITS = {
 } as const;
 
 export const HOTEL_SORTS = ['recommended', 'price-asc', 'price-desc', 'star-desc'] as const;
+/** The travel style ids of the preferences screen, of hotel badges and of the recommender. */
+export const TRAVEL_STYLES = ['resort', 'nature', 'foodie', 'business', 'family', 'chill'] as const;
+export type TravelStyle = (typeof TRAVEL_STYLES)[number];
 
 interface Stay {
   checkIn: string;
@@ -77,6 +80,8 @@ export const hotelSearchQuerySchema = listQuerySchema
     starRating: repeatedQuery(z.coerce.number().int().min(1).max(5)).optional(),
     amenityIds: repeatedQuery(z.uuid()).pipe(z.array(z.uuid()).max(20)).optional(),
     freeCancellation: z.stringbool().optional(),
+    /** Only hotels of this travel style, read from their own text by the rule the recommender ranks by. */
+    style: z.enum(TRAVEL_STYLES).optional(),
     sort: z.enum(HOTEL_SORTS).default('recommended'),
   })
   .superRefine((v, ctx) => {

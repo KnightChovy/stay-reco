@@ -1,4 +1,4 @@
-import type { HotelSearchQuery, StayQuery } from "@stayreco/shared";
+import { TRAVEL_STYLES, type HotelSearchQuery, type StayQuery, type TravelStyle } from "@stayreco/shared";
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -75,6 +75,7 @@ export function parseHotelSearchParams(params: URLSearchParams): HotelSearchQuer
   const priceMin = Number(params.get("priceMin"));
   const priceMax = Number(params.get("priceMax"));
   const amenityIds = listParam(params, "amenityIds");
+  const style = params.get("style");
 
   return {
     destination,
@@ -92,6 +93,20 @@ export function parseHotelSearchParams(params: URLSearchParams): HotelSearchQuer
     ...(starRatings.length > 0 ? { starRating: starRatings } : {}),
     ...(amenityIds.length > 0 ? { amenityIds } : {}),
     ...(params.get("freeCancellation") === "true" ? { freeCancellation: true } : {}),
+    ...(TRAVEL_STYLES.includes(style as TravelStyle) ? { style: style as TravelStyle } : {}),
+  };
+}
+
+/**
+ * The page's `priceMin` / `priceMax` are per night, as the customer thinks of them (and as the URL keeps them, so they
+ * still mean the same after changing the dates); `GET /hotels` filters on the total of the stay, so multiply.
+ */
+export function toApiSearch(query: HotelSearchQuery): HotelSearchQuery {
+  const nights = nightsBetween(query.checkIn, query.checkOut) || 1;
+  return {
+    ...query,
+    ...(query.priceMin !== undefined ? { priceMin: query.priceMin * nights } : {}),
+    ...(query.priceMax !== undefined ? { priceMax: query.priceMax * nights } : {}),
   };
 }
 

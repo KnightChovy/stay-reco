@@ -1,6 +1,7 @@
 import { api } from "@/lib/axios";
 import type {
   Amenity,
+  FilterSuggestion,
   HotelListing,
   HotelSearchQuery,
   HotelSearchResult,
@@ -21,6 +22,15 @@ export async function searchHotels(query: HotelSearchQuery) {
     paramsSerializer: { indexes: null },
   });
   return { hotels: data.data, meta: data.meta as PageMeta };
+}
+
+/** Customer only: up to 4 filters suggested for this search, best first (`GET /me/filter-suggestions`). */
+export async function getFilterSuggestions(query: HotelSearchQuery) {
+  const { data } = await api.get<APIResponse<FilterSuggestion[]>>("/me/filter-suggestions", {
+    params: query,
+    paramsSerializer: { indexes: null },
+  });
+  return data.data;
 }
 
 export async function getHotelListing(hotelId: string, query: StayQuery = { guests: 2, rooms: 1 }) {

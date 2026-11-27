@@ -25,7 +25,10 @@ import {
   toHotel,
 } from '../hotels/hotel.mapper';
 import { HotelStyles } from '../recommendations/hotel-styles';
-import { RecommendationsService } from '../recommendations/recommendations.service';
+import {
+  type PersonalScore,
+  RecommendationsService,
+} from '../recommendations/recommendations.service';
 import { PriceEngine } from '../pricing/price-engine';
 import { roomTypeNotFound } from '../rooms/room-types.service';
 import {
@@ -69,6 +72,28 @@ export class StaysService {
     query: HotelSearchQuery,
     customerId?: string,
   ): Promise<Paginated<HotelSearchResult>> {
+    const { matching } = await this.ranked(query, customerId);
+    const start = (query.page - 1) * query.pageSize;
+    const page = matching.slice(start, start + query.pageSize);
+    // Read for the page shown only: it parses each hotel's text.
+    const styles = await this.styles.of(page.map((hotel) => hotel.id));
+    return Paginated.of(
+      page.map((hotel) => ({ ...hotel, styles: styles.get(hotel.id) ?? [] })),
+      { ...query, total: matching.length },
+    );
+  }
+
+  /**
+   * Every hotel the search shows, in the order it shows them (without `styles`), with the customer's personal ranks
+   * when the order is theirs. Shared with the filter suggestions, which need the whole result, not one page.
+   */
+  async ranked(
+    query: HotelSearchQuery,
+    customerId?: string,
+  ): Promise<{
+    matching: HotelSearchResult[];
+    scores: Map<string, PersonalScore> | null;
+  }> {
     assertBookableDates(query.checkIn);
     const personalized = query.sort === 'recommended' && customerId;
     const hotels = await this.prisma.hotel.findMany({
@@ -140,7 +165,7 @@ export class StaysService {
       });
     }
 
-    const matching = results
+    let matching = results
       .filter(
         (r) => query.priceMin === undefined || r.fromTotal >= query.priceMin,
       )
@@ -148,6 +173,12 @@ export class StaysService {
         (r) => query.priceMax === undefined || r.fromTotal <= query.priceMax,
       )
       .filter((r) => !query.freeCancellation || r.freeCancellation);
+    if (query.style) {
+      const styles = await this.styles.of(matching.map((r) => r.id));
+      matching = matching.filter((r) =>
+        styles.get(r.id)?.includes(query.style!),
+      );
+    }
     const scores = personalized
       ? await this.recommendations.personalScores(
           personalized,
@@ -162,14 +193,7 @@ export class StaysService {
       const right = scores?.get(b.id)?.rank ?? Infinity;
       return left === right ? compare(a, b) : left - right;
     });
-    const start = (query.page - 1) * query.pageSize;
-    const page = matching.slice(start, start + query.pageSize);
-    // Read for the page shown only: it parses each hotel's text.
-    const styles = await this.styles.of(page.map((hotel) => hotel.id));
-    return Paginated.of(
-      page.map((hotel) => ({ ...hotel, styles: styles.get(hotel.id) ?? [] })),
-      { ...query, total: matching.length },
-    );
+    return { matching, scores };
   }
 
   /** Every sellable room type is listed; one that is full or too small shows its offer instead of disappearing. */

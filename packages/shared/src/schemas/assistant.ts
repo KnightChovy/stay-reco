@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TRAVEL_STYLES } from "./booking";
 
 /** Longest message a customer can send the assistant; a question, not a document. */
 export const ASSISTANT_MESSAGE_MAX = 2000;
@@ -39,9 +40,7 @@ export const recommendationQuerySchema = z.object({
   /** Only hotels in this city; matched ignoring case and Vietnamese accents. */
   city: z.string().trim().min(1).max(100).optional(),
   /** Only hotels of this travel style (`resort`, `nature`, `foodie`, `business`, `family`, `chill`), read from their text. */
-  style: z
-    .enum(["resort", "nature", "foodie", "business", "family", "chill"])
-    .optional(),
+  style: z.enum(TRAVEL_STYLES).optional(),
   limit: z.coerce.number().int().min(1).max(20).default(10),
 });
 export type RecommendationQuery = z.infer<typeof recommendationQuerySchema>;

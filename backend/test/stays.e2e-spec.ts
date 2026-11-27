@@ -304,6 +304,87 @@ describe('Search and listings (e2e)', () => {
       expect(page2.body.meta).toMatchObject({ total: 3, totalPages: 2 });
     });
 
+    it('filters by travel style and suggests filters that fit the customer', async () => {
+      const pool = (
+        await t.prisma.amenity.create({
+          data: { name: 'Hồ bơi', category: 'Khách sạn' },
+        })
+      ).amenityId;
+      const resort = {
+        description: 'Khu nghỉ dưỡng ven biển, spa và hồ bơi vô cực',
+      };
+      const city = {
+        description: 'Khách sạn trung tâm cho doanh nhân, phòng họp',
+      };
+      const resorts: Awaited<ReturnType<typeof hotel>>[] = [];
+      for (const name of ['Resort A', 'Resort B', 'Resort C']) {
+        resorts.push(
+          await hotel({ name, ...resort }, [{ basePrice: 1000000, rooms: 1 }]),
+        );
+      }
+      for (const name of ['City A', 'City B']) {
+        await hotel({ name, ...city }, [{ basePrice: 900000, rooms: 1 }]);
+      }
+      for (const r of resorts) {
+        await t
+          .api()
+          .put(`/api/v1/hotels/${r.hotelId}/amenities`)
+          .set(auth(r.token))
+          .send({ amenityIds: [pool] })
+          .expect(200);
+      }
+      const base = `destination=da nang&${stay}&guests=1`;
+
+      const resortsOnly = await search(`${base}&style=resort&sort=price-asc`);
+      expect(names(resortsOnly.body).sort()).toEqual([
+        'Resort A',
+        'Resort B',
+        'Resort C',
+      ]);
+      expect(resortsOnly.body.meta.total).toBe(3);
+      await t.api().get(`/api/v1/hotels?${base}&style=spa`).expect(400);
+
+      const customer = await t.signIn('CUSTOMER', 'filters@guest.test');
+      await t
+        .api()
+        .put('/api/v1/me/preferences')
+        .set(auth(customer.token))
+        .send({
+          preferences: { travelStyles: 'resort', roomAmenities: 'pool' },
+        })
+        .expect(200);
+
+      const res = await t
+        .api()
+        .get(`/api/v1/me/filter-suggestions?${base}`)
+        .set(auth(customer.token))
+        .expect(200);
+      expect(res.body.data).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: 'style',
+            value: 'resort',
+            label: 'Nghỉ dưỡng & thư giãn',
+            count: 3,
+          }),
+          expect.objectContaining({ kind: 'amenity', value: pool, count: 3 }),
+        ]),
+      );
+      // A filter already applied is not suggested again.
+      const applied = await t
+        .api()
+        .get(`/api/v1/me/filter-suggestions?${base}&style=resort`)
+        .set(auth(customer.token))
+        .expect(200);
+      expect(
+        (applied.body.data as { kind: string }[]).some(
+          (s) => s.kind === 'style',
+        ),
+      ).toBe(false);
+
+      await t.api().get(`/api/v1/me/filter-suggestions?${base}`).expect(401);
+    });
+
     it('checks the dates against today in Vietnam', async () => {
       const res = await t
         .api()
