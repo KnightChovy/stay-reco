@@ -66,8 +66,9 @@ function PostRow({
     <li
       ref={ref}
       className={cn(
-        "space-y-3 rounded-xl border bg-card p-4 shadow-2xs",
-        highlighted ? "border-primary ring-2 ring-primary/20" : "border-border",
+        // A firm border, a coloured left edge and a real shadow, so two posts read as two cards.
+        "space-y-3 rounded-xl border border-l-4 border-l-primary bg-card p-5 shadow-sm",
+        highlighted ? "border-primary ring-2 ring-primary/20" : "border-slate-300",
       )}
     >
       <div className="flex items-start justify-between gap-2">
@@ -78,7 +79,7 @@ function PostRow({
           </div>
           <Link
             href={`/staff/marketing/content/${schedule.contentId}`}
-            className="block text-sm font-semibold text-foreground hover:text-primary"
+            className="block text-base font-bold text-foreground hover:text-primary"
           >
             {schedule.title || "(Chưa có tiêu đề)"}
           </Link>
@@ -120,7 +121,7 @@ function PostRow({
         </>
       ) : (
         <p className="rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
-          Chưa có số liệu. Bấm “Cập nhật số liệu” để lấy số mới nhất từ {schedule.platform === "INSTAGRAM" ? "Instagram" : "Facebook"}.
+          Chưa có số liệu. Bấm “Cập nhật số liệu” để lấy số mới nhất từ Facebook.
         </p>
       )}
       {refresh.error && <p className="text-xs text-destructive">{getMarketingErrorMessage(refresh.error)}</p>}
@@ -222,7 +223,7 @@ function AnalyticsContent() {
               }
             />
           ) : (
-            <ul className="space-y-3">
+            <ul className="space-y-5">
               {schedules.map((schedule, index) => (
                 <PostRow
                   key={schedule.id}
