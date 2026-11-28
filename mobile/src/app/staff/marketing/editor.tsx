@@ -70,7 +70,7 @@ function Stepper({ label, onMinus, onPlus }: { label: string; onMinus: () => voi
 
 /**
  * Đưa bài đã duyệt lên lịch và liệt kê các lịch của bài. Trang do chủ khách sạn kết nối, nhân viên chỉ chọn.
- * Không có endpoint "đăng ngay": đăng ngay là lên lịch không kèm giờ, job chạy mỗi phút sẽ đăng (M14).
+ * "Đăng ngay" gửi `publishNow: true`: backend đăng ngay trong request và trả về PUBLISHED hoặc FAILED (M14, sửa 2026-11-28).
  */
 function SchedulePanel({ hotelId, content }: { hotelId: string; content: MarketingContent }) {
   const changed = useMarketingChanged();
@@ -85,11 +85,23 @@ function SchedulePanel({ hotelId, content }: { hotelId: string; content: Marketi
   const [mode, setMode] = useState<'later' | 'now'>('later');
   // shortcut: chỉnh ngày/giờ bằng nút ± (bước 30 phút) để khỏi thêm thư viện date picker; thêm picker native nếu cần phút lẻ.
   const [at, setAt] = useState(tomorrowAt9);
-  const [done, setDone] = useState(false);
+  // Kết quả lần bấm gần nhất: đã lên lịch, đã đăng, hoặc nền tảng từ chối (kèm lời của nền tảng).
+  const [done, setDone] = useState<{ failed: boolean; text: string } | null>(null);
   const schedule = useMutation({
-    mutationFn: () => scheduleContent(content.id, { socialAccountId: accountId!, scheduledAt: mode === 'later' ? at.toISOString() : null }),
-    onSuccess: () => {
-      setDone(true);
+    mutationFn: () =>
+      scheduleContent(
+        content.id,
+        mode === 'now' ? { socialAccountId: accountId!, publishNow: true } : { socialAccountId: accountId!, scheduledAt: at.toISOString() },
+      ),
+    onSuccess: (row) => {
+      const page = `${platformLabels[row.platform]} (${row.accountName})`;
+      setDone(
+        row.status === 'PUBLISHED'
+          ? { failed: false, text: `Đã đăng lên ${page}. Có thể đăng thêm lên trang khác.` }
+          : row.status === 'FAILED'
+            ? { failed: true, text: `Không đăng được lên ${page}: ${row.failureReason ?? 'nền tảng từ chối'}` }
+            : { failed: false, text: 'Đã lên lịch. Có thể đăng thêm lên trang khác.' },
+      );
       setAccountId(null);
       changed();
     },
@@ -168,12 +180,12 @@ function SchedulePanel({ hotelId, content }: { hotelId: string; content: Marketi
               </Text>
             )}
             {done && !schedule.isPending && (
-              <Text variant="small" weight="semibold" color="#0b5a36">
-                Đã lên lịch. Có thể đăng thêm lên trang khác.
+              <Text variant="small" weight="semibold" color={done.failed ? colors.error : '#0b5a36'}>
+                {done.text}
               </Text>
             )}
             <Button
-              label={schedule.isPending ? 'Đang lên lịch…' : mode === 'now' ? 'Đăng ngay' : 'Lên lịch đăng'}
+              label={schedule.isPending ? (mode === 'now' ? 'Đang đăng…' : 'Đang lên lịch…') : mode === 'now' ? 'Đăng ngay' : 'Lên lịch đăng'}
               leadingIcon="send"
               style={{ backgroundColor: accent }}
               disabled={!accountId || schedule.isPending}
