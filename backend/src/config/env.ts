@@ -108,10 +108,13 @@ const envSchema = z
       (v) => (v === '' ? undefined : v),
       z.coerce.number().positive().default(5),
     ),
-    /** Spend cap of the assistant chat per customer per calendar month, in US dollars. */
+    /**
+     * Spend cap of the assistant chat per customer per calendar month, in US dollars. Unset (the default) means no cap,
+     * for demos; set it (e.g. 0.5, about 70 messages) once real customers use the chat.
+     */
     AI_ASSISTANT_MONTHLY_BUDGET_USD: z.preprocess(
       (v) => (v === '' ? undefined : v),
-      z.coerce.number().positive().default(0.5),
+      z.coerce.number().positive().optional(),
     ),
     /** SMTP for real emails. Leave SMTP_HOST empty to print emails to the console instead (dev, tests). */
     SMTP_HOST: z.string().optional(),

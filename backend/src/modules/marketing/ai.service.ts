@@ -119,7 +119,8 @@ export class AiService {
   private readonly model: string;
   private readonly imageModel: string;
   private readonly monthlyBudget: number;
-  private readonly assistantBudget: number;
+  /** Undefined: the assistant chat has no cap. */
+  private readonly assistantBudget: number | undefined;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -148,9 +149,13 @@ export class AiService {
     return this.spend({ hotelId }, this.monthlyBudget, now);
   }
 
-  /** What a customer's assistant chat has spent this calendar month, and what is left of its cap. */
+  /** What a customer's assistant chat has spent this calendar month, and what is left of its cap (none: no cap set). */
   customerBudget(customerId: string, now = new Date()) {
-    return this.spend({ customerId }, this.assistantBudget, now);
+    return this.spend(
+      { customerId },
+      this.assistantBudget ?? Number.POSITIVE_INFINITY,
+      now,
+    );
   }
 
   private async spend(
@@ -344,6 +349,13 @@ export class AiService {
 
   /** Refuses a hotel or a customer over its monthly cap before anything is spent. */
   private async assertBudget(context: CallContext) {
+    // The assistant chat is uncapped unless AI_ASSISTANT_MONTHLY_BUDGET_USD is set; its cost is still recorded.
+    if (
+      context.customerId !== undefined &&
+      this.assistantBudget === undefined
+    ) {
+      return;
+    }
     const { remainingUsd, limitUsd } =
       context.customerId !== undefined
         ? await this.customerBudget(context.customerId)
