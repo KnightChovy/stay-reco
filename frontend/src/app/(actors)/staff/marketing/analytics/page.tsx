@@ -4,7 +4,7 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useQueries } from "@tanstack/react-query";
-import { Eye, Heart, Info, LineChart, Loader2, MessageCircle, RefreshCw, Share2 } from "lucide-react";
+import { Heart, Info, LineChart, Loader2, MessageCircle, RefreshCw, Share2 } from "lucide-react";
 import type { ContentMetric, ContentSchedule } from "@stayreco/shared";
 import Pagination from "@/components/common/pagination/Pagination";
 import { EmptyState } from "@/components/common/StateViews";
@@ -21,8 +21,9 @@ import { MarketingErrorPanel, MarketingHeader, PlatformPill } from "@/features/s
 
 const PAGE_SIZE = 10;
 
+// Views are left out: Facebook updates them hours late, so a fresh post shows 0 beside real likes and shares.
+// The API still returns them (`views`).
 const FIGURES = [
-  { key: "views", label: "Lượt xem", icon: Eye },
   { key: "likes", label: "Lượt thích", icon: Heart },
   { key: "shares", label: "Chia sẻ", icon: Share2 },
   { key: "comments", label: "Bình luận", icon: MessageCircle },
@@ -95,7 +96,7 @@ function PostRow({
         <Skeleton className="h-14 rounded-lg" />
       ) : latest ? (
         <>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {FIGURES.map(({ key, label, icon: Icon }) => (
               <div key={key} className="rounded-lg bg-muted/50 px-3 py-2">
                 <span className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -170,7 +171,7 @@ function AnalyticsContent() {
         <MarketingErrorPanel error={schedulesQuery.error} />
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <div className="rounded-xl border border-border bg-card p-4 shadow-2xs">
               <span className="text-xs font-semibold uppercase text-muted-foreground">Bài đã đăng</span>
               <span className="mt-1 block text-2xl font-bold text-foreground">{meta?.total ?? "…"}</span>
@@ -189,8 +190,8 @@ function AnalyticsContent() {
           <div role="note" className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
             <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
             <p>
-              <strong>Đọc số liệu cho đúng:</strong> lượt xem Facebook cập nhật chậm, bài mới đăng có thể vẫn là 0 trong vài
-              giờ. Một số liệu bị nền tảng từ chối cũng được ghi là 0, nên 0 chưa chắc là không có ai tương tác.
+              <strong>Đọc số liệu cho đúng:</strong> một số liệu bị nền tảng từ chối cũng được ghi là 0, nên 0 chưa chắc là
+              không có ai tương tác.
             </p>
           </div>
 

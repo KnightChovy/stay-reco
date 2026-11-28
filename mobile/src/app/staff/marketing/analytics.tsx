@@ -11,8 +11,8 @@ import { ErrorCard, dateTime, marketingError, platformLabels, useMarketingChange
 import { Banner, Card, Grid, KV, Section, StaffScreen, Stat, accent, s, useStaffHotel } from '@/features/staff/ui';
 import { getScheduleMetrics, getSchedules, refreshScheduleMetrics } from '@/services/marketing.service';
 
-const figures: { key: 'views' | 'likes' | 'shares' | 'comments'; label: string; icon: IconName }[] = [
-  { key: 'views', label: 'Lượt xem', icon: 'visibility' },
+// Không hiện lượt xem: Facebook cập nhật số này chậm vài giờ, bài mới luôn ra 0 bên cạnh like và chia sẻ thật.
+const figures: { key: 'likes' | 'shares' | 'comments'; label: string; icon: IconName }[] = [
   { key: 'likes', label: 'Lượt thích', icon: 'favorite' },
   { key: 'shares', label: 'Chia sẻ', icon: 'share' },
   { key: 'comments', label: 'Bình luận', icon: 'chat_bubble_outline' },
@@ -89,7 +89,7 @@ export default function StaffMarketingAnalyticsScreen() {
         icon="info"
         tone="blue"
         title="Lưu ý về số liệu"
-        text="Lượt xem Facebook cập nhật chậm, bài mới đăng có thể vẫn là 0 trong vài giờ. Một số liệu bị nền tảng từ chối cũng được ghi là 0."
+        text="Một số liệu bị nền tảng từ chối cũng được ghi là 0, nên 0 chưa chắc là không có ai tương tác."
       />
 
       <Section title="Bài đã đăng" />
