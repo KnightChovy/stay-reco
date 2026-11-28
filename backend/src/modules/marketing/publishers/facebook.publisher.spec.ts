@@ -94,6 +94,22 @@ describe('FacebookPublisher metrics', () => {
     expect(calls).toHaveLength(2);
   });
 
+  it('asks for the comment total only, which needs no permission to read comments', async () => {
+    stub([
+      { when: (p) => p.endsWith('/insights'), body: { data: [] } },
+      {
+        when: (p) => p === POST,
+        body: { comments: { summary: { total_count: 1 } } },
+      },
+    ]);
+    await publisher().metrics(target, POST);
+    const read = calls.find((c) => c.path === POST)!;
+    // Without limit(0) Meta also fetches the comments and refuses the field for want of pages_read_user_content.
+    expect(read.params.get('fields')).toContain(
+      'comments.limit(0).summary(true)',
+    );
+  });
+
   it('still reports shares when comments are behind a permission nobody can hold', async () => {
     stub([
       { when: (p) => p.endsWith('/insights'), body: { data: [] } },

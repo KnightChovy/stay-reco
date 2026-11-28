@@ -17,6 +17,9 @@ import type {
  * by URL, which is why generated content keeps its `mediaUrl` as a Cloudinary link rather than a local file - Meta
  * fetches it itself.
  */
+/** The comment total without the comments: readable with `pages_read_engagement` (see `metrics`). */
+const COMMENT_COUNT = 'comments.limit(0).summary(true)';
+
 @Injectable()
 export class FacebookPublisher implements SocialPublisher {
   readonly platform = SocialPlatform.FACEBOOK;
@@ -48,8 +51,10 @@ export class FacebookPublisher implements SocialPublisher {
    *
    * Every figure is fetched so that a refusal costs only that figure. Meta hands these out behind three different
    * permissions, and an app rarely holds all of them: `shares` needs none, `likes.summary` needs
-   * `pages_read_engagement`, and `comments.summary` needs `pages_read_user_content` - which Meta's own OAuth
-   * dialog rejects as an invalid scope, so on a Page connected today comments are simply not obtainable. Asking
+   * `pages_read_engagement`, and the comments themselves need `pages_read_user_content`, which Meta's own OAuth
+   * dialog rejects as an invalid scope. The comment *count* does not: `comments.limit(0).summary(true)` asks for
+   * the total and no comment, and a Page token with `pages_read_engagement` may read it (checked against the live
+   * API on 2026-11-28). Without `limit(0)` Meta fetches the comments too, and refuses the whole field. Asking
    * for all three in one call, as this used to, meant one forbidden figure took the other two with it and a post
    * with real shares reported nothing.
    *
@@ -78,13 +83,13 @@ export class FacebookPublisher implements SocialPublisher {
     const together = await this.field<CountsAnswer>(
       target,
       postId,
-      'likes.summary(true),comments.summary(true),shares',
+      `likes.summary(true),${COMMENT_COUNT},shares`,
     );
     if (together) return shapeCounts(together);
 
     const [likes, comments, shares] = await Promise.all([
       this.field<CountsAnswer>(target, postId, 'likes.summary(true)'),
-      this.field<CountsAnswer>(target, postId, 'comments.summary(true)'),
+      this.field<CountsAnswer>(target, postId, COMMENT_COUNT),
       this.field<CountsAnswer>(target, postId, 'shares'),
     ]);
     return {

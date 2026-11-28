@@ -189,8 +189,8 @@ function AnalyticsContent() {
           <div role="note" className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
             <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
             <p>
-              <strong>Đọc số liệu cho đúng:</strong> số bình luận thường là 0 vì Meta không còn cấp quyền đọc bình luận cho
-              trang kết nối mới. Một số liệu bị nền tảng từ chối cũng được ghi là 0, nên 0 chưa chắc là không có ai tương tác.
+              <strong>Đọc số liệu cho đúng:</strong> lượt xem Facebook cập nhật chậm, bài mới đăng có thể vẫn là 0 trong vài
+              giờ. Một số liệu bị nền tảng từ chối cũng được ghi là 0, nên 0 chưa chắc là không có ai tương tác.
             </p>
           </div>
 

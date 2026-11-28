@@ -89,7 +89,7 @@ export default function StaffMarketingAnalyticsScreen() {
         icon="info"
         tone="blue"
         title="Lưu ý về số liệu"
-        text="Số bình luận thường là 0 vì Meta không còn cấp quyền đọc bình luận cho trang kết nối mới. Một số liệu bị nền tảng từ chối cũng được ghi là 0."
+        text="Lượt xem Facebook cập nhật chậm, bài mới đăng có thể vẫn là 0 trong vài giờ. Một số liệu bị nền tảng từ chối cũng được ghi là 0."
       />
 
       <Section title="Bài đã đăng" />

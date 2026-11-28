@@ -185,7 +185,7 @@ The token is encrypted on the way in and has **no field in any response**: it is
 | `Error validating access token: Session has expired` | the platform rejected it. A user token was pasted instead of a Page token, or the password changed |
 | `(#200) Requires pages_manage_posts` | step 2's permissions were not all granted |
 | Published fine, every figure `0` | the token may read none of them. `likes` needs `pages_read_engagement`, `views` needs `read_insights`; `shares` needs nothing, so a non-zero `shares` beside zero likes points at a permission, not a quiet post |
-| `comments` always `0`, the rest right | expected, and nothing to fix. `comments.summary` sits behind `pages_read_user_content`, which Meta's own OAuth dialog rejects as an invalid scope - ask for it and the dialog answers `Invalid Scopes`. It cannot be held on a Page connected today |
+| `comments` always `0`, the rest right | fixed 2026-11-28. The count is read as `comments.limit(0).summary(true)`, which `pages_read_engagement` allows; without `limit(0)` Meta also fetches the comments, which need `pages_read_user_content` (rejected by Meta's own OAuth dialog as `Invalid Scopes`), and refuses the field. A count still at 0 after that points at a token without `pages_read_engagement` |
 | `503 SOCIAL_OAUTH_DISABLED` | `META_APP_ID`, `META_APP_SECRET` or `META_OAUTH_REDIRECT_URI` is empty on the server |
 | `400 SOCIAL_OAUTH_INVALID`, "not one we started" | the `state` or `connectionToken` was not signed by this server, or the key changed |
 | `400 SOCIAL_OAUTH_INVALID`, "expired" | more than 15 minutes on the consent screen, or 10 minutes picking pages. Start again |

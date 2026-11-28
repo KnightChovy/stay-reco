@@ -102,7 +102,7 @@ A draft went from Gemini through approval and the job onto a live Page on 2026-1
 
 Two findings worth keeping, because both are Meta contradicting itself and both cost an afternoon:
 
-- **`comments.summary` requires a permission that cannot be granted.** `pages_read_user_content` was retired from the OAuth dialog - ask for it and the dialog answers `Invalid Scopes` - but the Graph API still demands it to read a comment count. Comments are therefore unobtainable on a Page connected today, regardless of what the app asks for.
+- **`comments.summary` requires a permission that cannot be granted.** `pages_read_user_content` was retired from the OAuth dialog - ask for it and the dialog answers `Invalid Scopes` - but the Graph API still demands it to read a comment count. Comments are therefore unobtainable on a Page connected today, regardless of what the app asks for. *Corrected 2026-11-28: that holds for the comments, not their count. `comments.summary(true)` also fetches the comments, which is what needs the permission; `comments.limit(0).summary(true)` asks for the total alone and is answered with `pages_read_engagement`. The count is read that way now.*
 - **`post_impressions` was retired in June 2026 across every API version**, replaced by `post_media_view`. It does not fail loudly: it answers `(#100) The value must be a valid insights metric`, which the `catch` around insights turned into a permanent, silent zero. A test with a fake publisher would never have caught it, and neither would a reviewer - the code looked right. This is the argument for publishing to a real page once before calling a feature done.
 
 A figure we are refused is still recorded as zero, which the API documents as "check the token's scopes" rather than "nobody engaged". Distinguishing the two needs a nullable column and is open below.
@@ -244,7 +244,7 @@ POST /hotels/:id/social-accounts/facebook/connect     { connectionToken, pages: 
 - `POST /marketing-content/:id/schedule` takes a future time; a job picks it up **within a minute** of it, so the row is not published the instant the request returns. Poll or refresh; `status` and `failureReason` on the `ContentSchedule` are what the calendar shows.
 - `failureReason` carries the platform's own words. Show it verbatim - it is the only thing that distinguishes an expired token from a refused photo.
 - `GET /content-schedules/:id/metrics` for likes, comments, shares and views; `POST .../metrics/refresh` to fetch them again. Two honest caveats to put in the UI rather than hide:
-  - **`comments` is always 0** and cannot be fixed from here. It sits behind a permission Meta's own OAuth dialog rejects as invalid. Label it accordingly or leave it out.
+  - **`comments` is the count only** (since 2026-11-28; it read 0 before). `comments.limit(0).summary(true)` gives the total with `pages_read_engagement`; the comments themselves still sit behind `pages_read_user_content`, which Meta's OAuth dialog rejects, so their text is not read.
   - **A refused figure is stored as `0`**, indistinguishable from a real zero. A non-zero `shares` next to zero likes points at a token permission, not a quiet post.
 - `GET /hotels/:id/ai-budget` next to every generate button. A draft costs about $0.0009, so the cap is reached by looping, not by one careless click.
 
