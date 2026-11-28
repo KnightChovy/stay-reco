@@ -51,8 +51,14 @@ const STYLES = [
 ] as const;
 type Style = (typeof STYLES)[number];
 
-const HOTELS_PER_STYLE = 11;
-const CUSTOMERS = 900;
+/** A positive whole number from the environment, or the default: the size can be raised without editing the file. */
+const sized = (name: string, fallback: number) => {
+  const value = Number(process.env[name]);
+  return Number.isInteger(value) && value > 0 ? value : fallback;
+};
+/** `RECO_HOTELS_PER_STYLE=25 RECO_CUSTOMERS=5000 npm run db:seed:reco` for a larger set (about 150 hotels). */
+const HOTELS_PER_STYLE = sized('RECO_HOTELS_PER_STYLE', 11);
+const CUSTOMERS = sized('RECO_CUSTOMERS', 900);
 /** Share of hotels listed recently, with no stay yet. */
 const NEW_HOTEL_SHARE = 0.2;
 /** Share of guests who have never stayed. */
