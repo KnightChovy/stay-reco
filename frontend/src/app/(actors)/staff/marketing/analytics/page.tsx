@@ -4,7 +4,7 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useQueries } from "@tanstack/react-query";
-import { Heart, Info, LineChart, Loader2, MessageCircle, RefreshCw, Share2 } from "lucide-react";
+import { Heart, LineChart, Loader2, MessageCircle, RefreshCw, Share2 } from "lucide-react";
 import type { ContentMetric, ContentSchedule } from "@stayreco/shared";
 import Pagination from "@/components/common/pagination/Pagination";
 import { EmptyState } from "@/components/common/StateViews";
@@ -185,14 +185,6 @@ function AnalyticsContent() {
                 <span className="mt-1 block text-2xl font-bold text-foreground">{formatCount(totals[key])}</span>
               </div>
             ))}
-          </div>
-
-          <div role="note" className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
-            <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
-            <p>
-              <strong>Đọc số liệu cho đúng:</strong> một số liệu bị nền tảng từ chối cũng được ghi là 0, nên 0 chưa chắc là
-              không có ai tương tác.
-            </p>
           </div>
 
           {hotelLoading || schedulesQuery.isLoading ? (

@@ -8,7 +8,7 @@ import type { IconName } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
 import { colors } from '@/constants/theme';
 import { ErrorCard, dateTime, marketingError, platformLabels, useMarketingChanged } from '@/features/staff/marketing';
-import { Banner, Card, Grid, KV, Section, StaffScreen, Stat, accent, s, useStaffHotel } from '@/features/staff/ui';
+import { Card, Grid, KV, Section, StaffScreen, Stat, accent, s, useStaffHotel } from '@/features/staff/ui';
 import { getScheduleMetrics, getSchedules, refreshScheduleMetrics } from '@/services/marketing.service';
 
 // Không hiện lượt xem: Facebook cập nhật số này chậm vài giờ, bài mới luôn ra 0 bên cạnh like và chia sẻ thật.
@@ -85,13 +85,6 @@ export default function StaffMarketingAnalyticsScreen() {
           <Stat key={key} icon={icon} label={label} value={count(total(key))} unit="" foot={`${schedules.length}/${published.data?.meta.total ?? 0} bài đã đăng`} tint={accent} />
         ))}
       </Grid>
-      <Banner
-        icon="info"
-        tone="blue"
-        title="Lưu ý về số liệu"
-        text="Một số liệu bị nền tảng từ chối cũng được ghi là 0, nên 0 chưa chắc là không có ai tương tác."
-      />
-
       <Section title="Bài đã đăng" />
       {published.isPending ? (
         <ActivityIndicator color={colors.primary} />
