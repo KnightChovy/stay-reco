@@ -66,3 +66,43 @@ export function splitSuggestions(text: string): {
     suggestions,
   };
 }
+
+// ── Card numbers ─────────────────────────────────────────────
+
+/** 13 to 19 digits, possibly grouped by spaces or dashes, as a card number is written. */
+const CARD_LIKE = /\b\d(?:[ -]?\d){12,18}\b/g;
+/** The security code after its usual labels. */
+const SECURITY_CODE = /\b(CVV2?|CVC2?|CSC|mã bảo mật)(\s*[:=]?\s*)\d{3,4}\b/gi;
+
+/** The Luhn checksum every payment card number passes, so an order or phone number is not taken for one. */
+function passesLuhn(digits: string): boolean {
+  let sum = 0;
+  for (let i = 0; i < digits.length; i++) {
+    let d = Number(digits[digits.length - 1 - i]);
+    if (i % 2 === 1) {
+      d *= 2;
+      if (d > 9) d -= 9;
+    }
+    sum += d;
+  }
+  return sum % 10 === 0;
+}
+
+/**
+ * A customer message with any payment card number and security code hidden, applied before the message is stored or
+ * sent to the model: the chat never takes payment, and a card typed into it must not end up in the database or with
+ * the model provider. The last four digits stay so the assistant can still say which card it hid.
+ */
+export function maskCardNumbers(text: string): string {
+  return text
+    .replace(CARD_LIKE, (match) => {
+      const digits = match.replace(/[ -]/g, '');
+      return digits.length >= 13 && digits.length <= 19 && passesLuhn(digits)
+        ? `•••• ${digits.slice(-4)}`
+        : match;
+    })
+    .replace(
+      SECURITY_CODE,
+      (_m, label: string, gap: string) => `${label}${gap}•••`,
+    );
+}

@@ -89,6 +89,8 @@ A failure before the first event (not the customer's conversation, budget used u
 
 ### Cost
 
+A payment card number (13 to 19 digits passing the Luhn check) and a `CVV`/`CVC` code in a customer message are hidden before the message is stored or sent to the model (`•••• 1111`, `CVV •••`): a conversation read back shows the masked text. The chat never takes payment. The assistant sees only the signed-in customer's account and says so when asked about anyone else; text inside hotel data (descriptions, reviews) is treated as data, never as instructions.
+
 Each customer has a monthly assistant budget (`AI_ASSISTANT_MONTHLY_BUDGET_USD`, default $0.50, about 60-80 messages). Over it, messages answer `AI_BUDGET_EXCEEDED` (403) until the next calendar month (UTC). Without `GEMINI_API_KEY` the assistant answers `AI_UNAVAILABLE` (503): hide the chat button.
 
 ### Errors

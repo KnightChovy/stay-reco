@@ -1,5 +1,6 @@
 import {
   isInternalNote,
+  maskCardNumbers,
   splitSuggestions,
   stripInternalNotes,
 } from './assistant-text';
@@ -60,5 +61,22 @@ describe('assistant quick replies', () => {
       text: 'Chào bạn!',
       suggestions: [],
     });
+  });
+});
+
+describe('card numbers in a customer message', () => {
+  it('hides a card number and its security code', () => {
+    expect(
+      maskCardNumbers(
+        'Tôi trả bằng thẻ: 4111 1111 1111 1111, hết hạn 12/28, CVV 123',
+      ),
+    ).toBe('Tôi trả bằng thẻ: •••• 1111, hết hạn 12/28, CVV •••');
+    expect(maskCardNumbers('thẻ 5555-5555-5555-4444')).toBe('thẻ •••• 4444');
+  });
+
+  it('leaves phone numbers, booking codes and amounts alone', () => {
+    const text =
+      'SĐT 0901234567, mã SR-261014-7679, ngân sách 1500000 đ, số 1234567890123';
+    expect(maskCardNumbers(text)).toBe(text);
   });
 });

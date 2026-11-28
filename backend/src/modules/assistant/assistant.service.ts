@@ -25,7 +25,11 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { BookingCancellationService } from '../bookings/booking-cancellation.service';
 import { BookingsService } from '../bookings/bookings.service';
 import { AiService } from '../marketing/ai.service';
-import { splitSuggestions, stripInternalNotes } from './assistant-text';
+import {
+  maskCardNumbers,
+  splitSuggestions,
+  stripInternalNotes,
+} from './assistant-text';
 import { systemPrompt } from './assistant.prompt';
 import {
   AssistantTools,
@@ -378,6 +382,8 @@ export class AssistantService {
     input: SendAssistantMessageInput,
     events?: TurnEvents,
   ): Promise<AssistantReply> {
+    // A card typed into the chat is hidden before it is stored or reaches the model (the chat never takes payment).
+    input = { ...input, content: maskCardNumbers(input.content) };
     const customer = await this.customer(user.accountId);
     const priorRecommendations = new Map<string, string>();
     const { contents: history, lookup } = conversationId
