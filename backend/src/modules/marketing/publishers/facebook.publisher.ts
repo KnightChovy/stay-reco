@@ -10,16 +10,27 @@ import type {
   SocialPublisher,
 } from './social-publisher';
 
+/** The comment total without the comments: readable with `pages_read_engagement` (see `metrics`). */
+const COMMENT_COUNT = 'comments.limit(0).summary(true)';
+/**
+ * Likes are read as reactions (like, love, haha...): on a Page post node Graph v26 has no `likes` field at all
+ * ("Tried accessing nonexisting field"). `likes` remains on a photo node, which is what a photo post's id pointed
+ * at until 2026-11-28, so it is the fallback for those rows.
+ */
+const REACTION_COUNT = 'reactions.limit(0).summary(true)';
+const LIKE_COUNT = 'likes.limit(0).summary(true)';
+
 /**
  * A Facebook Page post (M11).
  *
  * The simplest of the three: one call to `/{page-id}/feed` with the text, and the post exists. A photo is attached
  * by URL, which is why generated content keeps its `mediaUrl` as a Cloudinary link rather than a local file - Meta
  * fetches it itself.
+ *
+ * A photo post answers two ids: the photo's (`id`) and the post's (`post_id`). The post's is the one kept, because
+ * the figures belong to the post: a photo has no `shares` at all ("Tried accessing nonexisting field"), so keeping
+ * the photo's id made every shared photo post read 0 shares (found on a live post, 2026-11-28).
  */
-/** The comment total without the comments: readable with `pages_read_engagement` (see `metrics`). */
-const COMMENT_COUNT = 'comments.limit(0).summary(true)';
-
 @Injectable()
 export class FacebookPublisher implements SocialPublisher {
   readonly platform = SocialPlatform.FACEBOOK;
@@ -32,7 +43,7 @@ export class FacebookPublisher implements SocialPublisher {
   async publish(target: PublishTarget, post: PublishablePost): Promise<string> {
     // The title is prepended rather than sent separately: a Page post has one text field, not a headline and a body.
     const message = post.title ? `${post.title}\n\n${post.body}` : post.body;
-    const { id } = await graphCall<{ id: string }>(
+    const answer = await graphCall<{ id: string; post_id?: string }>(
       'Facebook',
       this.version,
       `${target.accountName}/${post.mediaUrl ? 'photos' : 'feed'}`,
@@ -43,14 +54,14 @@ export class FacebookPublisher implements SocialPublisher {
           : { message }),
       },
     );
-    return id;
+    return answer.post_id ?? answer.id;
   }
 
   /**
    * How the post did.
    *
    * Every figure is fetched so that a refusal costs only that figure. Meta hands these out behind three different
-   * permissions, and an app rarely holds all of them: `shares` needs none, `likes.summary` needs
+   * permissions, and an app rarely holds all of them: `shares` needs none, the reaction count needs
    * `pages_read_engagement`, and the comments themselves need `pages_read_user_content`, which Meta's own OAuth
    * dialog rejects as an invalid scope. The comment *count* does not: `comments.limit(0).summary(true)` asks for
    * the total and no comment, and a Page token with `pages_read_engagement` may read it (checked against the live
@@ -83,15 +94,18 @@ export class FacebookPublisher implements SocialPublisher {
     const together = await this.field<CountsAnswer>(
       target,
       postId,
-      `likes.summary(true),${COMMENT_COUNT},shares`,
+      `${REACTION_COUNT},${COMMENT_COUNT},shares`,
     );
     if (together) return shapeCounts(together);
 
-    const [likes, comments, shares] = await Promise.all([
-      this.field<CountsAnswer>(target, postId, 'likes.summary(true)'),
+    const [reactions, comments, shares] = await Promise.all([
+      this.field<CountsAnswer>(target, postId, REACTION_COUNT),
       this.field<CountsAnswer>(target, postId, COMMENT_COUNT),
       this.field<CountsAnswer>(target, postId, 'shares'),
     ]);
+    // A photo id (posts stored before 2026-11-28) has likes and no reactions.
+    const likes =
+      reactions ?? (await this.field<CountsAnswer>(target, postId, LIKE_COUNT));
     return {
       likes: shapeCounts(likes).likes,
       comments: shapeCounts(comments).comments,
@@ -141,6 +155,7 @@ export class FacebookPublisher implements SocialPublisher {
 }
 
 interface CountsAnswer {
+  reactions?: { summary?: { total_count?: number } };
   likes?: { summary?: { total_count?: number } };
   comments?: { summary?: { total_count?: number } };
   shares?: { count?: number };
@@ -153,7 +168,10 @@ interface InsightsAnswer {
 /** Meta leaves a field out entirely when it is zero, so a missing count and a count of zero are the same thing. */
 function shapeCounts(answer: CountsAnswer | null) {
   return {
-    likes: answer?.likes?.summary?.total_count ?? 0,
+    likes:
+      answer?.reactions?.summary?.total_count ??
+      answer?.likes?.summary?.total_count ??
+      0,
     comments: answer?.comments?.summary?.total_count ?? 0,
     shares: answer?.shares?.count ?? 0,
   };

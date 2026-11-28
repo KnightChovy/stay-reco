@@ -68,6 +68,38 @@ describe('FacebookPublisher metrics', () => {
     globalThis.fetch = realFetch;
   });
 
+  it('keeps the post id of a photo post, not the photo id', async () => {
+    stub([
+      {
+        when: (p) => p.endsWith('/photos'),
+        body: {
+          id: '122105811453557013',
+          post_id: '61596710414421_122105811531557013',
+        },
+      },
+    ]);
+    const id = await publisher().publish(target, {
+      title: 'Phố cổ',
+      body: 'Một sớm thong dong',
+      mediaUrl: 'https://res.cloudinary.com/demo/image/upload/hotel.jpg',
+    });
+    // A photo has no shares; the figures live on the post.
+    expect(id).toBe('61596710414421_122105811531557013');
+  });
+
+  it('keeps the id a text post answers', async () => {
+    stub([
+      { when: (p) => p.endsWith('/feed'), body: { id: '61596710414421_1' } },
+    ]);
+    expect(
+      await publisher().publish(target, {
+        title: null,
+        body: 'Chào',
+        mediaUrl: null,
+      }),
+    ).toBe('61596710414421_1');
+  });
+
   it('reads all four figures in two calls when nothing is refused', async () => {
     stub([
       {
@@ -77,7 +109,7 @@ describe('FacebookPublisher metrics', () => {
       {
         when: (p) => p === POST,
         body: {
-          likes: { summary: { total_count: 9 } },
+          reactions: { summary: { total_count: 9 } },
           comments: { summary: { total_count: 2 } },
           shares: { count: 3 },
         },
@@ -120,8 +152,9 @@ describe('FacebookPublisher metrics', () => {
         ok: false,
       },
       {
-        when: (p, q) => p === POST && q.get('fields') === 'likes.summary(true)',
-        body: { likes: { summary: { total_count: 9 } } },
+        when: (p, q) =>
+          p === POST && q.get('fields') === 'reactions.limit(0).summary(true)',
+        body: { reactions: { summary: { total_count: 9 } } },
       },
       {
         when: (p, q) => p === POST && q.get('fields') === 'shares',
@@ -168,6 +201,44 @@ describe('FacebookPublisher metrics', () => {
     // metric", which the catch turns into a permanent, silent zero.
     expect(insights.params.get('metric')).toBe('post_media_view');
     expect(insights.params.get('metric')).not.toBe('post_impressions');
+  });
+
+  it('reads likes on a photo id stored before posts kept their post id', async () => {
+    const nonexisting = (field: string) => ({
+      error: {
+        message: `(#100) Tried accessing nonexisting field (${field})`,
+        code: 100,
+      },
+    });
+    stub([
+      { when: (p) => p.endsWith('/insights'), body: { data: [] } },
+      {
+        when: (p, q) => p === POST && q.get('fields')!.includes('reactions'),
+        body: nonexisting('reactions'),
+        ok: false,
+      },
+      {
+        when: (p, q) =>
+          p === POST && q.get('fields') === 'likes.limit(0).summary(true)',
+        body: { likes: { summary: { total_count: 1 } } },
+      },
+      {
+        when: (p, q) =>
+          p === POST && q.get('fields') === 'comments.limit(0).summary(true)',
+        body: { comments: { summary: { total_count: 1 } } },
+      },
+      {
+        when: (p, q) => p === POST && q.get('fields') === 'shares',
+        body: nonexisting('shares'),
+        ok: false,
+      },
+    ]);
+    expect(await publisher().metrics(target, POST)).toEqual({
+      views: 0,
+      likes: 1,
+      comments: 1,
+      shares: 0,
+    });
   });
 
   it('treats a figure Meta left out as zero', async () => {
