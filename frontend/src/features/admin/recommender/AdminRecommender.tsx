@@ -16,16 +16,18 @@ type MethodKey = Method["key"];
 /** Categorical slots, fixed order (validated: CVD and normal-vision separation, values always labelled). */
 const SERIES = ["#2a78d6", "#eb6834", "#1baf7a"] as const;
 
-const METHOD_LABELS: Record<MethodKey, { name: string; hint: string }> = {
-  served: { name: "StayReco (đang chạy)", hint: "Lịch sử + sở thích + nhóm khách, trộn theo lượng dữ liệu" },
-  content: { name: "Chỉ nội dung", hint: "Chỉ so mô tả khách sạn với sở thích" },
-  cf: { name: "Chỉ lịch sử (SVD++)", hint: "Chỉ dựa vào điểm khách đã chấm" },
-  popularity: { name: "Phổ biến", hint: "Ai cũng thấy cùng một danh sách" },
-  random: { name: "Ngẫu nhiên", hint: "Mức nền: không biết gì về khách" },
+// Plain words for an admin who knows no formula; the technical names are only in tooltips (`term`).
+const METHOD_LABELS: Record<MethodKey, { name: string; hint: string; term: string }> = {
+  served: { name: "StayReco (đang dùng)", hint: "Kết hợp lịch sử đặt phòng, sở thích và khách có gu giống", term: "Two-sided shrinkage" },
+  content: { name: "Chỉ theo sở thích", hint: "So mô tả khách sạn với sở thích khách khai báo", term: "Content-based (TF-IDF)" },
+  cf: { name: "Chỉ theo lịch sử", hint: "Chỉ dựa vào những nơi khách đã chấm điểm", term: "Collaborative filtering (SVD++)" },
+  popularity: { name: "Gợi ý chung", hint: "Ai cũng thấy cùng một danh sách được thích nhất", term: "Popularity" },
+  random: { name: "Chọn bừa", hint: "Mốc thấp nhất để so sánh", term: "Random" },
 };
+// New guests who gave no preferences ("0-none") are not shown: onboarding is required since 2026-11-26, so a new
+// guest always has answers; the few left are accounts from before, still counted in the overall figures.
 const GROUP_LABELS: Record<string, string> = {
-  "0-prefs": "Khách mới, có khai báo sở thích",
-  "0-none": "Khách mới, không khai báo gì",
+  "0-prefs": "Khách mới (đã trả lời câu hỏi sở thích)",
   "1-4": "Đã ở 1–4 lần",
   "5+": "Đã ở 5 lần trở lên",
 };
@@ -33,17 +35,42 @@ const GROUP_SERIES: MethodKey[] = ["served", "popularity", "random"];
 
 const pct = (value: number | null | undefined, digits = 0) =>
   value === null || value === undefined ? "—" : `${(value * 100).toFixed(digits)}%`;
+/**
+ * A share (0 to 1) read as "how many out of 10": Recall@10 0.303 reads "3/10", i.e. of 10 hotels a guest likes, the
+ * top 10 finds 3. Below one in ten reads "dưới 1/10" rather than a fraction nobody pictures.
+ */
+const outOf10 = (value: number | null | undefined) => {
+  if (value === null || value === undefined) return "—";
+  return value * 10 < 0.95 ? "dưới 1/10" : `${Math.round(value * 10)}/10`;
+};
+/** The same with one decimal for bars, so methods a few points apart do not read the same ("1,7/10" and "2,3/10"). */
+const outOf10Exact = (value: number) => `${(value * 10).toFixed(1).replace(".", ",")}/10`;
+/** How many times better, one decimal, written the Vietnamese way ("2,9"). */
+const times = (a: number | null | undefined, b: number | null | undefined) =>
+  a && b ? (a / b).toFixed(1).replace(".", ",").replace(",0", "") : null;
 
-/** A horizontal bar with its value written beside it; the row is its own hover target. */
-function Bar({ label, value, max, color, strong }: { label: ReactNode; value: number; max: number; color: string; strong?: boolean }) {
+/** A horizontal bar with its value written beside it as "x/10"; the row's tooltip keeps the exact share. */
+function Bar({ label, value, max, color, strong }: { label: string; value: number; max: number; color: string; strong?: boolean }) {
   const width = max > 0 ? (value / max) * 100 : 0;
   return (
-    <div className="group grid grid-cols-[minmax(0,11rem)_1fr_3.5rem] items-center gap-3 text-xs" title={`${typeof label === "string" ? label : ""} ${pct(value, 1)}`}>
+    <div className="group grid grid-cols-[minmax(0,11rem)_1fr_5rem] items-center gap-3 text-xs" title={`${label}: ${pct(value, 1)}`}>
       <span className={cn("truncate", strong ? "font-semibold text-foreground" : "text-muted-foreground")}>{label}</span>
       <div className="h-3 rounded-r-[4px] bg-transparent">
         <div className="h-3 rounded-r-[4px] transition-opacity group-hover:opacity-80" style={{ width: `${Math.max(width, value > 0 ? 1 : 0)}%`, background: color }} />
       </div>
-      <span className={cn("text-right tabular-nums", strong ? "font-bold text-foreground" : "text-foreground")}>{pct(value, 1)}</span>
+      <span className={cn("text-right tabular-nums", strong ? "font-bold text-foreground" : "text-foreground")}>{outOf10Exact(value)}</span>
+    </div>
+  );
+}
+
+/** Two plain bars for the long-tail bands, which are shares of slots, not hits: written as percentages. */
+function ShareBar({ label, value, max, color }: { label: string; value: number; max: number; color: string }) {
+  const width = max > 0 ? (value / max) * 100 : 0;
+  return (
+    <div className="grid grid-cols-[minmax(0,11rem)_1fr_5rem] items-center gap-3 text-xs" title={`${label}: ${pct(value, 1)}`}>
+      <span className="truncate text-muted-foreground">{label}</span>
+      <div className="h-3 rounded-r-[4px]" style={{ width: `${Math.max(width, value > 0 ? 1 : 0)}%`, background: color }} />
+      <span className="text-right tabular-nums text-foreground">{pct(value)}</span>
     </div>
   );
 }
@@ -60,10 +87,10 @@ function Legend({ items }: { items: { label: string; color: string }[] }) {
   );
 }
 
-function Headline({ icon: Icon, label, value, hint }: { icon: typeof Target; label: string; value: string; hint: ReactNode }) {
+function Headline({ icon: Icon, label, value, hint, term }: { icon: typeof Target; label: string; value: string; hint: ReactNode; term?: string }) {
   return (
     <Panel className="gap-0 p-5">
-      <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground" title={term}>
         <Icon className="size-4 text-primary" aria-hidden /> {label}
       </p>
       <p className="mt-2 text-[32px] font-bold leading-10 tabular-nums text-primary">{value}</p>
@@ -97,8 +124,8 @@ export default function AdminRecommender() {
     <div className="space-y-6">
       <PageTitle
         eyebrow="Hệ thống gợi ý"
-        title="Đánh giá mô hình gợi ý"
-        description="Mỗi lần train, hệ thống giấu bớt những nơi khách thật sự đã ở rồi kiểm tra mô hình có đoán ra không, so với các cách gợi ý đơn giản hơn."
+        title="Gợi ý có đúng không?"
+        description="Hệ thống gợi ý có đoán đúng nơi khách thích không, và tốt hơn những cách gợi ý đơn giản bao nhiêu."
       />
       {query.isLoading ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -109,7 +136,7 @@ export default function AdminRecommender() {
       ) : query.error ? (
         <ErrorState error={query.error} onRetry={() => void query.refetch()} />
       ) : !data?.run ? (
-        <EmptyState icon={BarChart3} title="Mô hình chưa train lần nào" description="Chạy recommender/train.py để có số liệu." />
+        <EmptyState icon={BarChart3} title="Chưa có số liệu" description="Hệ thống gợi ý chưa chạy lần nào. Số liệu sẽ có sau lần chạy đầu tiên." />
       ) : (
         <Evaluation data={data} />
       )}
@@ -122,9 +149,9 @@ function Evaluation({ data }: { data: RecommenderEvaluation }) {
   const served = by.served;
   const popular = by.popularity;
   const random = by.random;
-  const times = served?.recall && popular?.recall ? served.recall / popular.recall : null;
+  const better = times(served?.recall, popular?.recall);
+  const higher = times(served?.ndcg, popular?.ndcg);
   const maxRecall = Math.max(...data.methods.map((m) => m.recall ?? 0));
-  const maxNdcg = Math.max(...data.methods.map((m) => m.ndcg ?? 0));
   // Cold start first: a new guest who answered onboarding, then one who did not, then guests with stays.
   const groups = Object.keys(GROUP_LABELS).filter((group) => served?.byGroup.some((g) => g.group === group));
   const maxGroup = Math.max(
@@ -136,78 +163,66 @@ function Evaluation({ data }: { data: RecommenderEvaluation }) {
   return (
     <>
       <p className="text-xs text-muted-foreground">
-        Lần train {formatDateTime(data.run!.finishedAt)} · {data.run!.customers.toLocaleString("vi-VN")} khách có danh sách
-        riêng · {data.run!.hotels} khách sạn
+        Cập nhật lần cuối {formatDateTime(data.run!.finishedAt)} · {data.run!.customers.toLocaleString("vi-VN")} khách có
+        danh sách gợi ý riêng · {data.run!.hotels} khách sạn
       </p>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Headline
           icon={Target}
-          label="Đoán trúng nơi khách thích"
-          value={pct(served?.recall)}
-          hint={
-            <>
-              Phổ biến: {pct(popular?.recall)} · ngẫu nhiên: {pct(random?.recall)}
-              {times && <strong className="text-foreground"> · gấp {times.toFixed(1)} lần phổ biến</strong>}
-            </>
-          }
+          label="Gợi ý có trúng không"
+          term={`Recall@10 = ${pct(served?.recall, 1)}`}
+          value={outOf10(served?.recall)}
+          hint={`Cứ 10 nơi khách thích, hệ thống đoán trúng ${outOf10(served?.recall).replace("/10", "")} nơi trong 10 gợi ý đầu tiên.`}
         />
         <Headline
           icon={BarChart3}
-          label="Xếp đúng lên đầu (NDCG@10)"
-          value={served?.ndcg?.toFixed(3) ?? "—"}
-          hint={`Phổ biến: ${popular?.ndcg?.toFixed(3) ?? "—"} · ngẫu nhiên: ${random?.ndcg?.toFixed(3) ?? "—"}`}
+          label="So với cách đơn giản"
+          term={`Recall@10: ${pct(served?.recall, 1)} so với ${pct(popular?.recall, 1)}`}
+          value={better ? `Gấp ${better} lần` : "—"}
+          hint={`Trúng nhiều hơn gợi ý cùng một danh sách cho mọi khách (${outOf10(popular?.recall)}) · chọn bừa: ${outOf10(random?.recall)}.`}
         />
         <Headline
           icon={Sparkles}
           label="Khách sạn mới được gợi ý"
-          value={pct(served?.coldstartCoverage)}
-          hint={`Khách sạn chưa ai đánh giá vẫn lên top 10 · chỉ lịch sử: ${pct(by.cf?.coldstartCoverage)}`}
+          term={`Cold-start item coverage = ${pct(served?.coldstartCoverage, 1)}`}
+          value={outOf10(served?.coldstartCoverage)}
+          hint={`Cứ 10 khách sạn chưa có đánh giá nào, ${outOf10(served?.coldstartCoverage).replace("/10", "")} nơi vẫn được gợi ý cho khách hợp gu · nếu chỉ theo lịch sử: ${outOf10(by.cf?.coldstartCoverage)}.`}
         />
         <Headline
           icon={BookOpenCheck}
-          label="Booking từ gợi ý (30 ngày)"
+          label="Đặt phòng từ gợi ý (30 ngày)"
           value={`${data.bookings.fromRecommendations}/${data.bookings.total}`}
           hint={
             data.bookings.medianRank !== null
-              ? `Khách sạn được đặt thường đứng hạng ${data.bookings.medianRank} trong gợi ý`
-              : "Chưa có booking nào bấm từ gợi ý"
+              ? `Khách sạn được đặt thường đứng thứ ${data.bookings.medianRank} trong danh sách gợi ý`
+              : "Chưa có lượt đặt phòng nào đến từ gợi ý"
           }
         />
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        <Section
-          title="Gợi ý trúng bao nhiêu nơi khách thật sự thích"
-          description="Recall@10: trong những khách sạn khách đã chấm từ 4★ (bị giấu khi train), bao nhiêu phần nằm trong top 10 gợi ý."
-        >
-          <div className="space-y-2.5">
-            {data.methods.map((m) => (
-              <Bar key={m.key} label={METHOD_LABELS[m.key].name} value={m.recall ?? 0} max={maxRecall} color={SERIES[0]} strong={m.key === "served"} />
-            ))}
-          </div>
-        </Section>
-        <Section
-          title="Nơi khách thích có nằm đầu danh sách không"
-          description="NDCG@10: càng cao khi những nơi khách thích càng đứng gần đầu top 10."
-        >
-          <div className="space-y-2.5">
-            {data.methods.map((m) => (
-              <div key={m.key} className="grid grid-cols-[minmax(0,11rem)_1fr_3.5rem] items-center gap-3 text-xs" title={`${METHOD_LABELS[m.key].name}: ${m.ndcg?.toFixed(3)}`}>
-                <span className={cn("truncate", m.key === "served" ? "font-semibold text-foreground" : "text-muted-foreground")}>
-                  {METHOD_LABELS[m.key].name}
-                </span>
-                <div className="h-3 rounded-r-[4px]" style={{ width: `${maxNdcg ? ((m.ndcg ?? 0) / maxNdcg) * 100 : 0}%`, background: SERIES[0] }} />
-                <span className={cn("text-right tabular-nums", m.key === "served" && "font-bold")}>{m.ndcg?.toFixed(3) ?? "—"}</span>
-              </div>
-            ))}
-          </div>
-        </Section>
-      </div>
+      <Section
+        title="Cứ 10 nơi khách thích, mỗi cách gợi ý đoán trúng mấy nơi"
+        description={
+          higher ? (
+            <span title={`NDCG@10: ${served?.ndcg?.toFixed(3)} so với ${popular?.ndcg?.toFixed(3)}`}>
+              Khi đoán trúng, StayReco cũng đưa nơi khách thích lên gần đầu danh sách hơn: tốt gấp {higher} lần gợi ý chung.
+            </span>
+          ) : (
+            "Càng nhiều càng tốt."
+          )
+        }
+      >
+        <div className="space-y-2.5">
+          {data.methods.map((m) => (
+            <Bar key={m.key} label={METHOD_LABELS[m.key].name} value={m.recall ?? 0} max={maxRecall} color={SERIES[0]} strong={m.key === "served"} />
+          ))}
+        </div>
+      </Section>
 
       <Section
-        title="Theo lượng dữ liệu về khách (cold start)"
-        description="Recall@10 theo nhóm khách. Khách mới có khai báo sở thích ở popup vẫn được gợi ý trúng hơn hẳn; khách mới không khai báo gì thì không cách nào đoán được."
+        title="Theo từng nhóm khách"
+        description="Khách càng ở nhiều, gợi ý càng trúng. Khách mới chưa ở lần nào, nhờ trả lời câu hỏi sở thích, vẫn được gợi ý trúng hơn gợi ý chung."
       >
         <Legend items={GROUP_SERIES.map((key, i) => ({ label: METHOD_LABELS[key].name, color: SERIES[i] }))} />
         <div className="grid gap-5 md:grid-cols-2">
@@ -233,79 +248,35 @@ function Evaluation({ data }: { data: RecommenderEvaluation }) {
       </Section>
 
       <Section
-        title="Long-tail: gợi ý có dồn vào vài khách sạn nổi tiếng không"
+        title="Gợi ý có dồn vào vài khách sạn nổi tiếng không"
         description={
           <>
-            Khách sạn chia 5 nhóm theo số đánh giá. So phần lượt đánh giá của mỗi nhóm với phần suất top 10 mà danh sách đang
-            chạy dành cho nhóm đó. Độ phủ: {pct(served?.coverage)} khách sạn lọt top 10 của ít nhất một khách (phổ biến:{" "}
-            {pct(popular?.coverage)}); {pct(served?.tailShare)} suất dành cho khách sạn ngoài 20% nổi tiếng nhất.
+            Gợi ý có chia cho nhiều khách sạn hay chỉ dồn vào vài nơi nổi tiếng. {pct(served?.coverage)} khách sạn được gợi ý
+            cho ít nhất một khách (gợi ý chung: {pct(popular?.coverage)}).
           </>
         }
       >
         <Legend
           items={[
-            { label: "% lượt đánh giá", color: SERIES[0] },
-            { label: "% suất trong top 10 gợi ý", color: SERIES[1] },
+            { label: "Phần đánh giá", color: SERIES[0] },
+            { label: "Phần chỗ trong gợi ý", color: SERIES[1] },
           ]}
         />
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {data.longTail.map((band) => (
             <div key={band.band} className="space-y-1.5">
               <p className="text-sm font-semibold text-foreground">
-                {band.band === 1 ? "Nổi tiếng nhất" : band.band === data.longTail.length ? "Ít đánh giá nhất" : `Nhóm ${band.band}`}{" "}
+                {band.band === 1 ? "Nhiều đánh giá nhất" : band.band === data.longTail.length ? "Ít đánh giá nhất" : `Nhóm ${band.band}`}{" "}
                 <span className="text-xs font-normal text-muted-foreground">
                   ({band.hotels} khách sạn, {band.minReviews}–{band.maxReviews} đánh giá)
                 </span>
               </p>
               <div className="space-y-[2px]">
-                <Bar label="Lượt đánh giá" value={band.reviewShare} max={maxShare} color={SERIES[0]} />
-                <Bar label="Suất gợi ý" value={band.slotShare} max={maxShare} color={SERIES[1]} />
+                <ShareBar label="Phần đánh giá" value={band.reviewShare} max={maxShare} color={SERIES[0]} />
+                <ShareBar label="Phần chỗ trong gợi ý" value={band.slotShare} max={maxShare} color={SERIES[1]} />
               </div>
             </div>
           ))}
-        </div>
-      </Section>
-
-      <Section
-        title="Bảng số đầy đủ"
-        description={
-          data.split
-            ? `Train ${data.split.train.toLocaleString("vi-VN")} đánh giá, kiểm tra trên ${data.split.test.toLocaleString("vi-VN")} đánh giá bị giấu của ${data.split.rankedUsers} khách; ${data.split.hiddenHotels} khách sạn bị giấu toàn bộ đánh giá (giả làm khách sạn mới); xếp hạng trên toàn bộ ${data.split.catalog} khách sạn, top ${data.split.k}, "thích" = chấm từ ${data.split.threshold}★.`
-            : "Lần train này có quá ít đánh giá để kiểm tra."
-        }
-      >
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px] text-left text-xs">
-            <thead className="text-muted-foreground">
-              <tr className="border-b border-border">
-                <th className="py-2 pr-3 font-semibold">Phương pháp</th>
-                <th className="px-2 py-2 text-right font-semibold">RMSE ↓</th>
-                <th className="px-2 py-2 text-right font-semibold">P@10</th>
-                <th className="px-2 py-2 text-right font-semibold">R@10</th>
-                <th className="px-2 py-2 text-right font-semibold">NDCG@10</th>
-                <th className="px-2 py-2 text-right font-semibold">KS mới lên gợi ý</th>
-                <th className="px-2 py-2 text-right font-semibold">Độ phủ</th>
-                <th className="py-2 pl-2 text-right font-semibold">Suất long-tail</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.methods.map((m) => (
-                <tr key={m.key} className={cn("border-b border-border last:border-0", m.key === "served" && "bg-primary/5 font-semibold")}>
-                  <td className="py-2 pr-3">
-                    <p className="text-foreground">{METHOD_LABELS[m.key].name}</p>
-                    <p className="font-normal text-muted-foreground">{METHOD_LABELS[m.key].hint}</p>
-                  </td>
-                  <td className="px-2 py-2 text-right tabular-nums">{m.rmse?.toFixed(3) ?? "—"}</td>
-                  <td className="px-2 py-2 text-right tabular-nums">{m.precision?.toFixed(3) ?? "—"}</td>
-                  <td className="px-2 py-2 text-right tabular-nums">{m.recall?.toFixed(3) ?? "—"}</td>
-                  <td className="px-2 py-2 text-right tabular-nums">{m.ndcg?.toFixed(3) ?? "—"}</td>
-                  <td className="px-2 py-2 text-right tabular-nums">{pct(m.coldstartCoverage)}</td>
-                  <td className="px-2 py-2 text-right tabular-nums">{pct(m.coverage)}</td>
-                  <td className="py-2 pl-2 text-right tabular-nums">{pct(m.tailShare)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </div>
       </Section>
     </>
