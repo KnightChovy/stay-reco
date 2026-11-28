@@ -153,12 +153,19 @@ export type FacebookConnectInput = z.infer<typeof facebookConnectSchema>;
  * `POST /marketing-content/:id/schedule`: puts approved content on a calendar (M9).
  *
  * `scheduledAt` in the past, or left out, means publish at the next run of the job rather than refusing: a staff
- * member clicking "post now" and a staff member picking a time two minutes ago want the same thing.
+ * member picking a time two minutes ago wants it out now. `publishNow: true` ("Đăng ngay") posts during the request
+ * instead, so the answer already says PUBLISHED or FAILED; it takes no `scheduledAt`.
  */
-export const scheduleContentSchema = z.strictObject({
-  socialAccountId: z.uuid(),
-  scheduledAt: z.iso.datetime().nullable().optional(),
-});
+export const scheduleContentSchema = z
+  .strictObject({
+    socialAccountId: z.uuid(),
+    scheduledAt: z.iso.datetime().nullable().optional(),
+    publishNow: z.boolean().optional(),
+  })
+  .refine((v) => !(v.publishNow && v.scheduledAt), {
+    path: ['scheduledAt'],
+    message: 'publishNow takes no scheduledAt',
+  });
 export type ScheduleContentInput = z.infer<typeof scheduleContentSchema>;
 
 /** `GET /hotels/:hotelId/content-schedules`: the posting calendar, soonest first. */

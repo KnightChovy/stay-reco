@@ -102,9 +102,11 @@ function ScheduleRow({ schedule }: { schedule: ContentSchedule }) {
           ? `Đã đăng lúc ${formatDateTime(schedule.publishedAt)}`
           : schedule.scheduledAt
             ? `Hẹn đăng ${formatDateTime(schedule.scheduledAt)}`
-            : schedule.status === "SCHEDULED" || schedule.status === "PUBLISHING"
-              ? "Đăng ở lượt chạy kế tiếp (trong vòng 1 phút)"
-              : "Đăng ngay (không hẹn giờ)"}
+            : schedule.status === "PUBLISHING"
+              ? "Đang đăng…"
+              : schedule.status === "SCHEDULED"
+                ? "Đang chờ đăng (trong vòng 1 phút)"
+                : "Đăng ngay (không hẹn giờ)"}
       </p>
       {schedule.failureReason && (
         <p className="rounded bg-destructive/10 px-2 py-1 text-xs text-destructive">Lý do: {schedule.failureReason}</p>
@@ -131,8 +133,8 @@ function ScheduleRow({ schedule }: { schedule: ContentSchedule }) {
 /**
  * Puts a piece on the calendar (`POST /marketing-content/:id/schedule`) and lists where it already goes. There is no
  * approval step: a draft is scheduled directly. Pages are connected under "Lịch đăng & Kết nối kênh". `unsaved`
- * holds it back while the editor has changes, so what goes out is what is on screen. There is no publish-now endpoint: "Đăng ngay" schedules for
- * the next run of the publisher (M14).
+ * holds it back while the editor has changes, so what goes out is what is on screen. "Đăng ngay" schedules with no time,
+ * sent with `publishNow`, which the backend posts during the request: the answer already says whether it went out (M14, revised 2026-11-28).
  */
 export function SchedulePanel({
   hotelId,
@@ -151,7 +153,8 @@ export function SchedulePanel({
   const [date, setDate] = useState(todayInVietnam());
   const [time, setTime] = useState("09:00");
   const [formError, setFormError] = useState<string | null>(null);
-  const [done, setDone] = useState(false);
+  /** What the last submit led to: put on the calendar, posted now, or refused by the platform (with its words). */
+  const [done, setDone] = useState<{ kind: "scheduled" | "published" | "failed"; text: string } | null>(null);
 
   const schedules = schedulesQuery.data?.schedules ?? [];
 
@@ -178,7 +181,7 @@ export function SchedulePanel({
 
   const submit = () => {
     setFormError(null);
-    setDone(false);
+    setDone(null);
     if (!accountId) {
       setFormError("Chọn trang sẽ đăng bài.");
       return;
@@ -196,10 +199,17 @@ export function SchedulePanel({
       }
     }
     scheduleContent.mutate(
-      { contentId: content.id, input: { socialAccountId: accountId, scheduledAt } },
+      { contentId: content.id, input: mode === "now" ? { socialAccountId: accountId, publishNow: true } : { socialAccountId: accountId, scheduledAt } },
       {
-        onSuccess: () => {
-          setDone(true);
+        onSuccess: (schedule) => {
+          const page = `${platformLabels[schedule.platform]} (${schedule.accountName})`;
+          setDone(
+            schedule.status === "PUBLISHED"
+              ? { kind: "published", text: `Đã đăng lên ${page}. Có thể đăng thêm lên trang khác.` }
+              : schedule.status === "FAILED"
+                ? { kind: "failed", text: `Không đăng được lên ${page}: ${schedule.failureReason ?? "nền tảng từ chối"}` }
+                : { kind: "scheduled", text: "Đã lên lịch. Có thể đăng thêm lên trang khác." },
+          );
           setAccountId(null);
         },
         onError: (error) => setFormError(getMarketingErrorMessage(error, "Không lên lịch được. Vui lòng thử lại.")),
@@ -283,11 +293,16 @@ export function SchedulePanel({
               {formError}
             </p>
           )}
-          {done && (
-            <p className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700" role="status">
-              <CheckCircle2 className="size-4" /> Đã lên lịch. Có thể đăng thêm lên trang khác.
-            </p>
-          )}
+          {done &&
+            (done.kind === "failed" ? (
+              <p className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive" role="alert">
+                {done.text}
+              </p>
+            ) : (
+              <p className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700" role="status">
+                <CheckCircle2 className="size-4" /> {done.text}
+              </p>
+            ))}
 
           {unsaved && (
             <p className="text-xs font-semibold text-amber-700" role="status">
@@ -300,7 +315,7 @@ export function SchedulePanel({
             className="h-10 w-full gap-1.5"
           >
             {scheduleContent.isPending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
-            {mode === "now" ? "Đăng ngay" : "Lên lịch đăng"}
+            {mode === "now" ? (scheduleContent.isPending ? "Đang đăng…" : "Đăng ngay") : "Lên lịch đăng"}
           </Button>
         </div>
       )}

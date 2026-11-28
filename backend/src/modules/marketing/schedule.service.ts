@@ -113,11 +113,10 @@ const reasonOf = (err: unknown): string => {
  * Only approved content can be scheduled (M10): a draft the owner has not seen must not reach the hotel's own page,
  * and the text is frozen on approval so what is posted is what was approved.
  *
- * There is no "publish now" endpoint, deliberately (decision M14). Scheduling with no time means the next run of
- * the job, which is within a minute, so "post now" is the same button with a null `scheduledAt`. Keeping the job as
- * the only writer is what makes a double post impossible without a lease column or a PUBLISHING state: a request
- * and a job firing in the same second would otherwise both see a SCHEDULED row and both post it, and a hotel's
- * followers would see the post twice.
+ * "Post now" (`publishNow: true`, since 2026-11-28) is sent during the request, so staff see at once whether it went
+ * out instead of waiting up to a minute for the job (M14, revised); with no time and no flag the job still sends it
+ * on its next run. A double post stays impossible: `publishOne` claims the row (SCHEDULED -> PUBLISHING) before calling the platform, so the
+ * job firing in the same second finds it claimed and skips it.
  */
 @Injectable()
 export class ScheduleService {
@@ -216,9 +215,27 @@ export class ScheduleService {
       scheduleId: row.contentScheduleId,
       contentId,
       socialAccountId: input.socialAccountId,
-      scheduledAt: row.scheduledAt?.toISOString() ?? 'next run',
+      scheduledAt:
+        row.scheduledAt?.toISOString() ??
+        (input.publishNow ? 'now' : 'next run'),
     });
-    return toSchedule(row);
+    if (!input.publishNow) return toSchedule(row);
+
+    // Post now: sent here, so the answer already says PUBLISHED or FAILED (with the platform's reason). Should this
+    // throw (the database, not the platform), the row is left to the job like any due post.
+    try {
+      await this.publishOne(row.contentScheduleId);
+    } catch (err) {
+      this.logger.error(
+        `Posting ${row.contentScheduleId} now threw: ${String(err)}`,
+      );
+    }
+    return toSchedule(
+      await this.prisma.contentSchedule.findUniqueOrThrow({
+        where: { contentScheduleId: row.contentScheduleId },
+        include: scheduleInclude,
+      }),
+    );
   }
 
   async list(
@@ -312,7 +329,8 @@ export class ScheduleService {
   }
 
   /**
-   * Sends one post to its platform and writes down what happened. Called by the job, and by nothing else.
+   * Sends one post to its platform and writes down what happened. Called by the job, and by `schedule` for a post
+   * sent now (`publishNow`).
    *
    * A failure is recorded on the row rather than thrown, because the caller is a timer with nobody to tell. The
    * status becomes FAILED and `failureReason` carries the platform's own words, so the calendar can say "Session

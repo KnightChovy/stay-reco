@@ -162,7 +162,7 @@ export class SocialController {
   @ApiOperation({
     summary: 'Schedule content',
     description:
-      'Any piece, a draft included (there is no approval step), aimed at one connected page. Leave `scheduledAt` out, or set it in the past, to go out at the next run of the publisher, which is within a minute - that is what a "post now" button sends. One piece can be scheduled to several pages.',
+      'Any piece, a draft included (there is no approval step), aimed at one connected page. Leave `scheduledAt` out, or set it in the past, to go out at the next run of the publisher (within a minute). `publishNow: true` posts during this request instead: the answer is already `PUBLISHED`, or `FAILED` with the platform reason (a few seconds) - that is what the "Đăng ngay" button sends. One piece can be scheduled to several pages.',
   })
   @ApiHotelAccess('member', ErrorCode.CONTENT_NOT_FOUND)
   @ApiData(contentScheduleResponseSchema, HttpStatus.CREATED)

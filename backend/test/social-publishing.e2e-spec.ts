@@ -370,6 +370,52 @@ describe('Social accounts, scheduling and publishing (e2e)', () => {
       expect(res.body.data.publishedAt).not.toBeNull();
     });
 
+    it('posts during the request with publishNow, and the job finds nothing left to send', async () => {
+      const h = await hotel('owner@hotel.test');
+      const accountId = idOf(await connect(h.token, h.hotelId).expect(201));
+      const contentId = await approvedContent(h.token, h.hotelId);
+
+      const res = await schedule(h.token, contentId, {
+        socialAccountId: accountId,
+        publishNow: true,
+      }).expect(201);
+      expect(res.body.data).toMatchObject({
+        status: 'PUBLISHED',
+        externalPostId: 'post_1',
+        failureReason: null,
+      });
+      expect(t.publisher.posts).toHaveLength(1);
+      // Claimed by the request: the timer firing next must not post it a second time.
+      expect(await runJob()).toEqual({ published: 0, failed: 0 });
+      expect(t.publisher.posts).toHaveLength(1);
+    });
+
+    it('answers a refused post-now with FAILED and the platform words', async () => {
+      const h = await hotel('owner@hotel.test');
+      const accountId = idOf(await connect(h.token, h.hotelId).expect(201));
+      const contentId = await approvedContent(h.token, h.hotelId);
+      t.publisher.failWith = 'Error validating access token: Session expired';
+
+      const res = await schedule(h.token, contentId, {
+        socialAccountId: accountId,
+        publishNow: true,
+      }).expect(201);
+      expect(res.body.data.status).toBe('FAILED');
+      expect(res.body.data.failureReason).toContain('Session expired');
+    });
+
+    it('refuses publishNow together with a time', async () => {
+      const h = await hotel('owner@hotel.test');
+      const accountId = idOf(await connect(h.token, h.hotelId).expect(201));
+      const contentId = await approvedContent(h.token, h.hotelId);
+      await schedule(h.token, contentId, {
+        socialAccountId: accountId,
+        publishNow: true,
+        scheduledAt: new Date(Date.now() + 3_600_000).toISOString(),
+      }).expect(400);
+      expect(t.publisher.posts).toHaveLength(0);
+    });
+
     it('moves the content to PUBLISHED too', async () => {
       const h = await readyToPublish();
       await runJob();

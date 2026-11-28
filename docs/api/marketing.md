@@ -24,7 +24,7 @@ Three things are worth knowing before reading the table.
 
 **Suggestions cost nothing.** `marketing-content/ideas` is database queries, not a model call. A booking system already knows what is worth posting about — which rooms are empty this week, which discount is running, which guest just left five stars — so staff pick an idea instead of inventing one.
 
-**There is no "publish now".** Scheduling with no `scheduledAt` means the next run of the publisher, which is within a minute. That *is* the post-now button (M14).
+**"Post now" is `publishNow: true`.** Since 2026-11-28 the post is sent during the request, so the answer is already `PUBLISHED` (or `FAILED` with the platform's reason). Scheduling with no `scheduledAt` and no flag still waits for the publisher's next run, within a minute (M14, revised).
 
 ## Endpoints
 
@@ -238,6 +238,7 @@ The job **claims** a row before calling the platform (`SCHEDULED → PUBLISHING`
 // POST /marketing-content/:id/schedule
 { "socialAccountId": "…", "scheduledAt": "2026-11-15T10:00:00.000Z" }
 // scheduledAt null, absent, or in the past → the next run of the job (within a minute)
+// { "socialAccountId": "…", "publishNow": true } → posted during this request: the answer is PUBLISHED or FAILED
 
 // → ContentSchedule
 { "id": "…", "status": "SCHEDULED", "platform": "FACEBOOK",
@@ -249,7 +250,7 @@ Any piece can be scheduled, a draft included: there is no approval step. One pie
 
 **Once per page.** While a piece is waiting for a page, being sent to it or already out on it, scheduling it there again is `409 SCHEDULE_STATUS_CONFLICT`: it would be a duplicate post. A post that was cancelled or failed there does not count, so sending it again is how a failure is retried.
 
-A job picks up due posts every minute and is the **only** thing that publishes. That is what makes a double post impossible: a request and a timer firing in the same second would both see a `SCHEDULED` row, and the hotel's followers would see the post twice (M14).
+A job picks up due posts every minute; "post now" is sent by the request itself. Both go through the same claim (`SCHEDULED → PUBLISHING`), so a request and the timer firing in the same second cannot both send it: whoever claims first posts, the other skips (M14, revised 2026-11-28).
 
 When a platform refuses, the post becomes `FAILED` and `failureReason` carries **the platform's own words** — `Error validating access token: Session has expired` is the one thing that tells an owner what to do next. A failed post is **not retried**: a token that expired at 09:00 is still expired at 09:01, and a retry loop against Meta is how an app meets its rate limit.
 
