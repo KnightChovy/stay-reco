@@ -35,7 +35,8 @@ const tabs: { key: Tab; label: string; status?: ContentStatus[] }[] = [
 
 const types: ContentType[] = ['POST', 'PROMOTION', 'CAPTION', 'BLOG'];
 // TikTok chỉ nhận video nên không mời viết cho nó (M12); undefined là "Chung".
-const platforms: (SocialPlatform | undefined)[] = ['FACEBOOK', 'INSTAGRAM', undefined];
+// Không mời viết cho Instagram trên màn hình (2026-11-28).
+const platforms: (SocialPlatform | undefined)[] = ['FACEBOOK', undefined];
 
 /**
  * Nhờ AI viết: backend tự thêm giọng thương hiệu và số liệu khách sạn, nên một câu mô tả là đủ. AI viết 3 phiên bản

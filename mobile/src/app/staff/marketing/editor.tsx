@@ -128,7 +128,7 @@ function SchedulePanel({ hotelId, content }: { hotelId: string; content: Marketi
           </Text>
         ) : accounts.data.length === 0 ? (
           <Text variant="small" color="#7a4600">
-            Khách sạn chưa kết nối trang Facebook / Instagram nào. Chủ khách sạn cần kết nối trang trước khi lên lịch.
+            Khách sạn chưa kết nối trang Facebook nào. Chủ khách sạn cần kết nối trang trước khi lên lịch.
           </Text>
         ) : (
           <>
@@ -320,7 +320,7 @@ function Workspace({ content, hotelId, generated }: { content: MarketingContent;
           <Image source={content.mediaUrl} className="h-[200px] rounded-md bg-surface-container" contentFit="cover" accessibilityLabel="Ảnh minh hoạ bài đăng" />
         ) : (
           <Text variant="caption" color={colors.onSurfaceVariant}>
-            Chưa có ảnh. Instagram bắt buộc phải có ảnh.
+            Chưa có ảnh.
           </Text>
         )}
         {editable && (

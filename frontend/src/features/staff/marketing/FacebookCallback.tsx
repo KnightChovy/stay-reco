@@ -130,16 +130,7 @@ export function FacebookCallback() {
                       {page.name}
                       {page.connected && <span className="text-xs font-normal text-muted-foreground">(kết nối lại)</span>}
                     </label>
-                    {page.instagramId && (
-                      <label className="ml-7 flex min-h-10 items-center gap-2.5 text-xs">
-                        <Checkbox
-                          checked={pick.instagram}
-                          disabled={!pick.page}
-                          onCheckedChange={(checked) => update({ instagram: checked })}
-                        />
-                        Kết nối cả Instagram liên kết với trang
-                      </label>
-                    )}
+                    {/* Instagram is not offered on screen (decided 2026-11-28); the API still takes `instagram: true`. */}
                   </li>
                 );
               })}

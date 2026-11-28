@@ -153,7 +153,7 @@ export default function StaffMarketingCalendarPage() {
         title="Lịch đăng & kênh"
         icon={<CalendarDays className="size-7 shrink-0 text-primary" aria-hidden />}
         crumbs={[{ label: "Lịch đăng" }]}
-        description="Các bài đã lên lịch đăng lên trang Facebook / Instagram của khách sạn. Hệ thống tự đăng mỗi phút; bài lỗi ghi rõ lý do từ nền tảng và không tự thử lại."
+        description="Các bài đã lên lịch đăng lên trang Facebook của khách sạn. Hệ thống tự đăng mỗi phút; bài lỗi ghi rõ lý do từ nền tảng và không tự thử lại."
         actions={
           !forbidden && (
             <Button

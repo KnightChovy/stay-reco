@@ -147,7 +147,7 @@ export default function StaffMarketingContentPage() {
         description={
           <>
             Nhờ AI viết bài theo giọng thương hiệu của khách sạn, chỉnh sửa, thêm ảnh rồi <strong>lên lịch đăng</strong> lên
-            Facebook / Instagram.
+            Facebook.
           </>
         }
         actions={

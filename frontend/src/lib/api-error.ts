@@ -81,7 +81,7 @@ const errorMessages: Record<string, string> = {
   SCHEDULE_NOT_FOUND: "Không tìm thấy lịch đăng. Danh sách đã được tải lại.",
   SCHEDULE_STATUS_CONFLICT: "Lịch đăng đã thay đổi trạng thái (đã đăng hoặc đã huỷ).",
   SOCIAL_PUBLISH_FAILED: "Nền tảng mạng xã hội từ chối hoặc không phản hồi.",
-  SOCIAL_PLATFORM_UNSUPPORTED: "Nền tảng này chưa hỗ trợ đăng bài (TikTok, hoặc Instagram khi chưa có ảnh).",
+  SOCIAL_PLATFORM_UNSUPPORTED: "Nền tảng này chưa hỗ trợ đăng bài.",
 };
 
 /** Custom messages written in the shared zod schemas (packages/shared/src/schemas), also returned in `details`. */

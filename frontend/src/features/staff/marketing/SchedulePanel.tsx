@@ -235,7 +235,7 @@ export function SchedulePanel({
         <p className="flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-xs text-amber-800">
           <AlertTriangle className="mt-0.5 size-4 shrink-0" />
           <span>
-            Khách sạn chưa kết nối trang Facebook / Instagram nào.{" "}
+            Khách sạn chưa kết nối trang Facebook nào.{" "}
             <Link href="/staff/marketing/calendar" className="font-semibold underline">
               Kết nối trang
             </Link>{" "}
@@ -331,7 +331,7 @@ export function SchedulePanel({
         </div>
       )}
       <p className="text-xs text-muted-foreground">
-        Đăng lên: {Object.values(platformLabels).slice(0, 2).join(", ")}. TikTok chỉ nhận video nên chưa hỗ trợ.
+        Đăng lên: {platformLabels.FACEBOOK}.
       </p>
     </section>
   );

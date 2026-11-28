@@ -25,8 +25,8 @@ import { contentTypeLabels, platformLabels } from "../lib/marketing-labels";
 import { getMarketingErrorMessage } from "../lib/marketing-errors";
 
 const TYPES: ContentType[] = ["POST", "PROMOTION", "CAPTION", "BLOG"];
-// TikTok takes video only, so the writer is not offered for it (M12).
-const PLATFORMS: Array<SocialPlatform | undefined> = ["FACEBOOK", "INSTAGRAM", undefined];
+// TikTok takes video only, so the writer is not offered for it (M12); Instagram is not offered on screen (2026-11-28).
+const PLATFORMS: Array<SocialPlatform | undefined> = ["FACEBOOK", undefined];
 
 function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (

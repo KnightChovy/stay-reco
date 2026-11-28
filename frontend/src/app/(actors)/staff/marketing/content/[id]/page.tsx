@@ -195,7 +195,7 @@ function ContentWorkspace({
       ? [
           {
             label: "Gỡ ảnh",
-            description: "Bài sẽ không còn ảnh; Instagram bắt buộc có ảnh.",
+            description: "Bài sẽ không còn ảnh.",
             icon: Trash2,
             destructive: true,
             onSelect: () => editor.removeImage.mutate(content.id),
@@ -318,7 +318,7 @@ function ContentWorkspace({
               <img src={content.mediaUrl} alt="Ảnh minh hoạ bài đăng" className="max-h-72 w-full rounded-lg object-cover" />
             ) : (
               <div className="flex h-32 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-border bg-muted/40 text-xs text-muted-foreground">
-                <ImageIcon className="size-6" aria-hidden /> Chưa có ảnh. Instagram bắt buộc phải có ảnh.
+                <ImageIcon className="size-6" aria-hidden /> Chưa có ảnh.
               </div>
             )}
             {(editor.upload.isPending || editor.removeImage.isPending || drawImage.isPending) && (
