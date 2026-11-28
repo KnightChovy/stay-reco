@@ -4,7 +4,7 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useQueries } from "@tanstack/react-query";
-import { Heart, LineChart, Loader2, MessageCircle, RefreshCw, Share2 } from "lucide-react";
+import { Heart, LineChart, Send, Loader2, MessageCircle, RefreshCw, Share2 } from "lucide-react";
 import type { ContentMetric, ContentSchedule } from "@stayreco/shared";
 import Pagination from "@/components/common/pagination/Pagination";
 import { EmptyState } from "@/components/common/StateViews";
@@ -23,10 +23,11 @@ const PAGE_SIZE = 10;
 
 // Views are left out: Facebook updates them hours late, so a fresh post shows 0 beside real likes and shares.
 // The API still returns them (`views`).
+// Each figure keeps one soft tint, on its icon and its tile only; the numbers stay in the text colour.
 const FIGURES = [
-  { key: "likes", label: "Lượt thích", icon: Heart },
-  { key: "shares", label: "Chia sẻ", icon: Share2 },
-  { key: "comments", label: "Bình luận", icon: MessageCircle },
+  { key: "likes", label: "Lượt thích", icon: Heart, chip: "bg-rose-100 text-rose-600", tile: "bg-rose-50/70" },
+  { key: "shares", label: "Chia sẻ", icon: Share2, chip: "bg-sky-100 text-sky-600", tile: "bg-sky-50/70" },
+  { key: "comments", label: "Bình luận", icon: MessageCircle, chip: "bg-violet-100 text-violet-600", tile: "bg-violet-50/70" },
 ] as const;
 
 type FigureKey = (typeof FIGURES)[number]["key"];
@@ -97,10 +98,13 @@ function PostRow({
       ) : latest ? (
         <>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {FIGURES.map(({ key, label, icon: Icon }) => (
-              <div key={key} className="rounded-lg bg-muted/50 px-3 py-2">
-                <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <Icon className="size-3" /> {label}
+            {FIGURES.map(({ key, label, icon: Icon, chip, tile }) => (
+              <div key={key} className={cn("rounded-lg px-3 py-2", tile)}>
+                <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <span className={cn("grid size-5 place-items-center rounded-full", chip)}>
+                    <Icon className="size-3" aria-hidden />
+                  </span>
+                  {label}
                 </span>
                 <span className="flex items-baseline gap-1.5">
                   <span className="text-base font-bold text-foreground">{formatCount(latest[key])}</span>
@@ -173,14 +177,22 @@ function AnalyticsContent() {
         <>
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <div className="rounded-xl border border-border bg-card p-4 shadow-2xs">
-              <span className="text-xs font-semibold uppercase text-muted-foreground">Bài đã đăng</span>
+              <span className="flex items-center gap-2 text-xs font-semibold uppercase text-muted-foreground">
+                <span className="grid size-7 place-items-center rounded-full bg-primary/10 text-primary">
+                  <Send className="size-3.5" aria-hidden />
+                </span>
+                Bài đã đăng
+              </span>
               <span className="mt-1 block text-2xl font-bold text-foreground">{meta?.total ?? "…"}</span>
               <span className="text-xs text-muted-foreground">{measured} bài trang này có số liệu</span>
             </div>
-            {FIGURES.map(({ key, label, icon: Icon }) => (
+            {FIGURES.map(({ key, label, icon: Icon, chip }) => (
               <div key={key} className="rounded-xl border border-border bg-card p-4 shadow-2xs">
-                <span className="flex items-center gap-1 text-xs font-semibold uppercase text-muted-foreground">
-                  <Icon className="size-3.5 text-primary" /> {label}
+                <span className="flex items-center gap-2 text-xs font-semibold uppercase text-muted-foreground">
+                  <span className={cn("grid size-7 place-items-center rounded-full", chip)}>
+                    <Icon className="size-3.5" aria-hidden />
+                  </span>
+                  {label}
                 </span>
                 <span className="mt-1 block text-2xl font-bold text-foreground">{formatCount(totals[key])}</span>
               </div>
