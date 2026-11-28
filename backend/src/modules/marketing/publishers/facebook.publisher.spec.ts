@@ -241,6 +241,40 @@ describe('FacebookPublisher metrics', () => {
     });
   });
 
+  it('reads the counts at the id in the post link when the stored id is refused', async () => {
+    const ALIAS = '122105840667557013_122105838357557013';
+    stub([
+      { when: (p) => p.endsWith('/insights'), body: { data: [] } },
+      {
+        when: (p, q) => p === POST && q.get('fields') === 'permalink_url',
+        body: {
+          permalink_url:
+            'https://www.facebook.com/122105840667557013/posts/122105838357557013',
+        },
+      },
+      // Under the stored id Meta refuses everything but shares, as it did on a live post.
+      {
+        when: (p, q) => p === POST && q.get('fields') !== 'shares',
+        body: refusal('pages_read_user_content'),
+        ok: false,
+      },
+      { when: (p) => p === POST, body: {} },
+      {
+        when: (p) => p === ALIAS,
+        body: {
+          reactions: { summary: { total_count: 1 } },
+          comments: { summary: { total_count: 1 } },
+        },
+      },
+    ]);
+    expect(await publisher().metrics(target, POST)).toEqual({
+      views: 0,
+      likes: 1,
+      comments: 1,
+      shares: 0,
+    });
+  });
+
   it('treats a figure Meta left out as zero', async () => {
     // Meta omits `shares` entirely rather than sending nought, which is the shape a real post with no shares has.
     stub([

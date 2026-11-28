@@ -85,18 +85,38 @@ export class FacebookPublisher implements SocialPublisher {
   }
 
   /**
-   * The three engagement counts: one call when the token may read all of them, otherwise one call each.
+   * The three engagement counts, read at the stored id and, if Meta refuses every one of them there, at the id the
+   * post's own link names.
+   *
+   * A Page on Facebook's new Pages experience answers to more than one id. Asked as `{page-id}_{post}` (the id the
+   * page token posts under, and the one stored), Meta may refuse the reactions and comments for want of
+   * `pages_read_user_content`, yet answer the same fields for the same post asked as `{owner}_{post}`, the id in its
+   * `permalink_url` - which is readable either way. Seen on a live post, 2026-11-28: refused under one id, one
+   * reaction and one comment under the other.
+   */
+  private async counts(target: PublishTarget, postId: string) {
+    const first = await this.countsAt(target, postId);
+    if (first.readable) return first.counts;
+    const alias = await this.permalinkId(target, postId);
+    if (!alias) return first.counts;
+    const second = await this.countsAt(target, alias);
+    return second.readable ? second.counts : first.counts;
+  }
+
+  /**
+   * The counts at one id: one call when the token may read all of them, otherwise one call each. `readable` says
+   * whether Meta answered the reactions or comments at all, as opposed to refusing both.
    *
    * The combined call is tried first because that is one request instead of three on a page where everything is
    * permitted, and the fallback only runs on the refusal.
    */
-  private async counts(target: PublishTarget, postId: string) {
+  private async countsAt(target: PublishTarget, postId: string) {
     const together = await this.field<CountsAnswer>(
       target,
       postId,
       `${REACTION_COUNT},${COMMENT_COUNT},shares`,
     );
-    if (together) return shapeCounts(together);
+    if (together) return { readable: true, counts: shapeCounts(together) };
 
     const [reactions, comments, shares] = await Promise.all([
       this.field<CountsAnswer>(target, postId, REACTION_COUNT),
@@ -107,10 +127,27 @@ export class FacebookPublisher implements SocialPublisher {
     const likes =
       reactions ?? (await this.field<CountsAnswer>(target, postId, LIKE_COUNT));
     return {
-      likes: shapeCounts(likes).likes,
-      comments: shapeCounts(comments).comments,
-      shares: shapeCounts(shares).shares,
+      readable: likes !== null || comments !== null,
+      counts: {
+        likes: shapeCounts(likes).likes,
+        comments: shapeCounts(comments).comments,
+        shares: shapeCounts(shares).shares,
+      },
     };
+  }
+
+  /** `{owner}_{post}` from the post's own link, when it differs from the id asked with; null otherwise. */
+  private async permalinkId(target: PublishTarget, postId: string) {
+    const answer = await this.field<{ permalink_url?: string }>(
+      target,
+      postId,
+      'permalink_url',
+    );
+    const match = answer?.permalink_url?.match(
+      /facebook\.com\/(\d+)\/posts\/(\d+)/,
+    );
+    const alias = match ? `${match[1]}_${match[2]}` : null;
+    return alias && alias !== postId ? alias : null;
   }
 
   /**
