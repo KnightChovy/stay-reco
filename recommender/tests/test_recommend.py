@@ -3,6 +3,7 @@ import unittest
 import numpy as np
 import pandas as pd
 
+import longtail
 from reco_pipeline import Scorer, evaluate, recommend
 from weights import weights
 
@@ -159,13 +160,40 @@ class RecommenderTest(unittest.TestCase):
             for u in users for i in rng.choice(20, 8, replace=False)
         ])
         customers = pd.concat([customer({}, u) for u in users], ignore_index=True)
-        metrics, comparison, split = evaluate(ratings, hotels, customers, {}, log=lambda *_: None)
+        metrics, comparison, split, rerank = evaluate(ratings, hotels, customers, {}, log=lambda *_: None)
         self.assertIn("StayReco two-sided (served)", comparison)
+        self.assertIn("StayReco before long-tail re-rank", comparison)
         self.assertIn("Popularity", comparison)
+        self.assertIn(rerank["lambda"], longtail.LAMBDAS)
         self.assertEqual(metrics["k"], 10)
         for key in ("rmse", "precision", "recall", "ndcg"):
             self.assertTrue(np.isfinite(metrics[key]), key)
         self.assertGreater(split["test"], 0)
+
+    def test_rerank_without_lambda_keeps_the_model_order(self):
+        np.testing.assert_array_equal(longtail.rerank([5, 4, 3], [False, True, True], 1.0, 0.0), [0, 1, 2])
+
+    def test_rerank_brings_a_tail_hotel_up_for_a_guest_who_likes_them(self):
+        # Close scores, the tail hotel fifth (not the worst of the list, which scales to 0).
+        scores = [5.0, 4.9, 4.8, 4.7, 4.6, 1.0]
+        tail = [False, False, False, False, True, False]
+        order = longtail.rerank(scores, tail, tendency=0.8, lam=0.3)
+        self.assertLess(list(order).index(4), 4)
+        # A guest who only ever stays at well-known hotels keeps them first.
+        np.testing.assert_array_equal(longtail.rerank(scores, tail, tendency=0.0, lam=0.3), [0, 1, 2, 3, 4, 5])
+
+    def test_rerank_keeps_the_tiers(self):
+        # The tail hotel is in a worse tier (say over budget): it cannot jump above the better tier.
+        order = longtail.rerank([5, 4, 3], [False, False, True], 1.0, 0.9, tiers=[0, 0, 1])
+        np.testing.assert_array_equal(order, [0, 1, 2])
+
+    def test_choose_lambda_stays_within_the_ndcg_loss(self):
+        grid = [(0.0, 0.30, 0.40), (0.1, 0.295, 0.50), (0.2, 0.28, 0.70)]
+        self.assertEqual(longtail.choose_lambda(grid), 0.1)
+
+    def test_head_is_the_most_rated_fifth(self):
+        ratings = pd.DataFrame({"item_id": ["a"] * 5 + ["b"] * 3 + ["c"], "user_id": "u", "rating": 5.0})
+        self.assertEqual(longtail.head_items(ratings, ["a", "b", "c", "d", "e"]), {"a"})
 
     def test_evaluate_skips_with_too_few_ratings(self):
         hotels = hotels_frame(["a", "b"])

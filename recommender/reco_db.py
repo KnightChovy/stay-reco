@@ -202,6 +202,18 @@ def finish_run(conn, run_id, algorithm, rows, metrics=None, hyperparameters=None
     conn.commit()
 
 
+def served_rerank_lambda(conn, algorithm):
+    """The long-tail λ (longtail.py) the served run was re-ranked with; 0 before any run chose one."""
+    with conn.cursor() as cur:
+        cur.execute("""
+            SELECT hyperparameters #>> '{rerank,lambda}' FROM model_run
+            WHERE algorithm = %s AND status = 'COMPLETED' AND finished_at IS NOT NULL
+            ORDER BY started_at DESC, model_run_id DESC LIMIT 1
+        """, (algorithm,))
+        row = cur.fetchone()
+    return float(row[0]) if row and row[0] is not None else 0.0
+
+
 def latest_completed_run(conn, algorithm):
     """The run the API serves (RecommendationsService.latestRun): the newest COMPLETED one, or None."""
     with conn.cursor() as cur:

@@ -11,4 +11,4 @@ dependencies = [
 ]
 
 [tool.setuptools]
-py-modules = ["components", "reco_db", "reco_pipeline", "styles", "train", "weights"]
+py-modules = ["components", "longtail", "reco_db", "reco_pipeline", "styles", "train", "weights"]

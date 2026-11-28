@@ -8,6 +8,7 @@ rather than after the next nightly run.
 
 import argparse
 import sys
+from collections import Counter
 from datetime import datetime, timezone
 
 import reco_db
@@ -57,14 +58,24 @@ def main():
             evaluation = reco_pipeline.evaluate(ratings, hotels, customers, amenities, seed=args.seed)
             if evaluation:
                 _print_comparison(evaluation[1])
+            metrics, comparison, split, rerank = evaluation or (None, None, None, None)
+            # The λ chosen on validation now; without an evaluation, the one the served run uses.
+            if rerank is None:
+                rerank = {"lambda": reco_db.served_rerank_lambda(conn, ALGORITHM), "grid": []}
+                conn.commit()
             scorer = reco_pipeline.Scorer(ratings, hotels, customers, amenities, seed=args.seed)
-            rows = reco_pipeline.recommend(scorer, customers, booked, top_k=args.top_k)
+            scorer.rerank_lambda = rerank["lambda"]
+            print(f"Long-tail re-ranking with λ = {scorer.rerank_lambda}.", flush=True)
+            # Filled while the rows are written: every customer's top 10 as the model alone ordered it.
+            before = Counter()
+            rows = reco_pipeline.recommend(scorer, customers, booked, top_k=args.top_k, before=before)
             if args.dry_run:
                 print(f"Dry run scored {sum(1 for _ in rows):,} recommendations.", flush=True)
                 return
-            metrics, comparison, split = evaluation or (None, None, None)
-            reco_db.finish_run(conn, run_id, ALGORITHM, rows, metrics,
-                               {"comparison": comparison, "split": split} if evaluation else None)
+            reco_db.finish_run(conn, run_id, ALGORITHM, rows, metrics, {
+                **({"comparison": comparison, "split": split} if evaluation else {}),
+                "rerank": {**rerank, "slots_before": before},
+            })
         except BaseException as error:
             if run_id:
                 reco_db.fail_run(conn, run_id, error)
@@ -87,6 +98,8 @@ def score_customers(customer_ids, *, seed, top_k, dry_run):
         conn.commit()
         # Fitted on everyone, exactly as the nightly run: the demographic groups and the CF factors need all of them.
         scorer = reco_pipeline.Scorer(ratings, hotels, customers, amenities, seed=seed)
+        scorer.rerank_lambda = reco_db.served_rerank_lambda(conn, ALGORITHM)
+        conn.commit()
         wanted = customers[customers["user_id"].isin(customer_ids)]
         for user in sorted(set(customer_ids) - set(wanted["user_id"])):
             print(f"Customer {user} is not an active customer; skipped.", flush=True)

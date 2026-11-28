@@ -13,6 +13,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+import longtail
 from components import CollaborativeFilter, ContentBasedFilter, DemographicFilter
 from reco_db import fold
 from styles import hotel_styles
@@ -121,6 +122,13 @@ class Scorer:
                 self.disliked.setdefault(u, set()).add(i)
         self.item_mean = ratings.groupby("item_id")["rating"].mean()
         self.global_mean = float(ratings["rating"].mean()) if len(ratings) else 3.0
+        # Long tail (longtail.py): which hotels are the short head, how much each guest goes for the rest, and the λ the
+        # lists are re-ranked with (0 = the model's order; train.py sets the one chosen on the validation split).
+        catalog = hotels["item_id"].to_numpy()
+        self.head = longtail.head_items(ratings[ratings["item_id"].isin(catalog)], catalog)
+        self.tendency, self.default_tendency = longtail.tail_tendency(
+            ratings[ratings["item_id"].isin(catalog)], self.head)
+        self.rerank_lambda = 0.0
 
     def profile(self, prefs):
         """The preferences as a query in the hotel text's vocabulary."""
@@ -242,9 +250,13 @@ class Scorer:
         return new + "Được khách cùng nhóm tuổi, giới tính và quốc tịch với bạn đánh giá cao."
 
 
-def recommend(scorer, customers, booked, top_k=TOP_K, include_public=True):
+def recommend(scorer, customers, booked, top_k=TOP_K, include_public=True, before=None):
     """Yields (customer, hotel, score, rank, reason, explanation): the signed-out list (unless `include_public` is off), then the
     top-K per customer.
+
+    Each list is then re-ranked for the long tail with `scorer.rerank_lambda` (longtail.py), within each tier of the
+    order below. `before`, a Counter when given, counts the hotels of every customer's top 10 as the model ordered
+    them, so the admin page can show the long tail before and after.
 
     `booked` holds the hotels each customer has a stay coming up or under way at (reco_db.load_booked): those are left
     out, as are hotels they rated below DISLIKED. A hotel they stayed at and liked stays in the list and may come back
@@ -274,7 +286,13 @@ def recommend(scorer, customers, booked, top_k=TOP_K, include_public=True):
                      if chosen else np.zeros(len(items), dtype=bool))
         # np.lexsort sorts by the last key first: within budget, then of a chosen style, then in a city picked, then
         # by score. Style before city: a resort lover is better served by a resort elsewhere than a kids' club nearby.
-        order = np.lexsort((items, -c["served"], away, off_style, over))[:top_k]
+        order = np.lexsort((items, -c["served"], away, off_style, over))
+        if before is not None and user is not None:
+            before.update(items[order[:K]].tolist())
+        tiers = (over.astype(int) * 4 + off_style.astype(int) * 2 + away.astype(int))[order]
+        tail = ~np.isin(items[order], list(scorer.head))
+        tendency = scorer.tendency.get(user, scorer.default_tendency)
+        order = order[longtail.rerank(c["served"][order], tail, tendency, scorer.rerank_lambda, tiers=tiers)][:top_k]
         for rank, i in enumerate(order, 1):
             yield (user, items[i], float(c["served"][i]), rank,
                    scorer.reason(user, items[i], c["a"][i], c["b"][i], c["g"][i], away=bool(away[i])),
@@ -328,8 +346,17 @@ def evaluate(ratings, hotels, customers, amenities, seed=42, log=print):
     cold = frame["item_n"].to_numpy() == 0
     n_cold = len(set(frame.loc[cold, "item_id"]))
     # Long tail: the head is the 20% of hotels with the most ratings in train, the tail everything else.
-    counts = train.groupby("item_id").size().reindex(catalog, fill_value=0).sort_values(ascending=False)
-    head = set(counts.index[: max(1, int(round(len(counts) * 0.2)))])
+    head = longtail.head_items(train, catalog)
+
+    # The long-tail re-ranking (longtail.py): λ chosen on a validation split of the training ratings, never on test,
+    # then the served formula is measured re-ranked with it, and as the model alone ("before re-rank").
+    rerank_info = _choose_rerank_lambda(train, hotels, customers, amenities, catalog, seed, log)
+    lam = rerank_info["lambda"]
+    raw = on_frame["served"]
+    on_frame["served"] = longtail.rerank_frame(frame, raw, scorer.head, scorer.tendency, scorer.default_tendency,
+                                               lam, K)
+    on_frame["before_rerank"] = raw
+    on_test["before_rerank"] = on_test["served"]
     # Users by how much the model knows about them: the cold-start groups of the paper, with the guests of no stay
     # split by whether they answered onboarding, since those answers are all the model has for them.
     stays = frame.groupby("user_id")["n"].first()
@@ -337,8 +364,8 @@ def evaluate(ratings, hotels, customers, amenities, seed=42, log=print):
     stated = lambda user: any(prefs.get(user, {}).get(key) for key in PREFERENCE_KEYS)
     user_groups = pd.Series({user: ("0-prefs" if stated(user) else "0-none") if n == 0 else ("1-4" if n < 5 else "5+")
                              for user, n in stays.items()})
-    names = {"served": "StayReco two-sided (served)", "cf": "CF only (SVD++)",
-             "content": "Content only", "pop": "Popularity", "random": "Random"}
+    names = {"served": "StayReco two-sided (served)", "before_rerank": "StayReco before long-tail re-rank",
+             "cf": "CF only (SVD++)", "content": "Content only", "pop": "Popularity", "random": "Random"}
     comparison = {}
     for key, name in names.items():
         if np.isnan(on_test[key]).any():
@@ -364,7 +391,33 @@ def evaluate(ratings, hotels, customers, amenities, seed=42, log=print):
     metrics = {**comparison[names["served"]], "k": K, "threshold": RELEVANCE_THRESHOLD}
     split = {**SPLIT, "train": len(train), "test": len(test), "ranked_users": int(len(n_rel)),
              "catalog": int(len(catalog)), "hidden_or_new_hotels": n_cold}
-    return metrics, comparison, split
+    return metrics, comparison, split, rerank_info
+
+
+def _choose_rerank_lambda(train, hotels, customers, amenities, catalog, seed, log):
+    """λ for the long-tail re-ranking, tried on a validation split carved out of `train` the way test was carved out.
+
+    Returns {"lambda", "grid": [{"lambda", "ndcg", "tail_share"}]}; λ = 0 when the split leaves nothing to rank.
+    """
+    from data.preprocessor import simulate_cold_start
+    from evaluation.ranking import RELEVANCE_THRESHOLD, build_candidate_frame, rank_metrics
+
+    fit, valid = simulate_cold_start(train, seed=seed + 1, **SPLIT)
+    if len(fit) < MIN_RATINGS or not (valid["rating"] >= RELEVANCE_THRESHOLD).any():
+        log("Long-tail re-ranking: too few ratings for a validation split, λ = 0.")
+        return {"lambda": 0.0, "grid": []}
+    scorer = Scorer(fit, hotels, customers, amenities, seed)
+    frame, n_rel = build_candidate_frame(fit, valid, catalog)
+    pred = _predict_pairs(scorer, frame["user_id"], frame["item_id"])["served"]
+    grid = []
+    for lam in longtail.LAMBDAS:
+        p = longtail.rerank_frame(frame, pred, scorer.head, scorer.tendency, scorer.default_tendency, lam, K)
+        ndcg = rank_metrics(frame, p, n_rel, top_k=(K,), n_catalog=len(catalog))[f"ndcg@{K}"]
+        grid.append({"lambda": float(lam), "ndcg": float(ndcg), "tail_share": _tail_share(frame, p, scorer.head)})
+    lam = longtail.choose_lambda([(g["lambda"], g["ndcg"], g["tail_share"]) for g in grid])
+    tried = ", ".join("{}: NDCG {:.3f} tail {:.2f}".format(g["lambda"], g["ndcg"], g["tail_share"]) for g in grid)
+    log(f"Long-tail re-ranking: λ = {lam} chosen on validation ({tried})")
+    return {"lambda": float(lam), "grid": grid}
 
 
 def _mean_of_draws(draws, test, frame, n_rel, catalog, head, user_groups, n_cold):
