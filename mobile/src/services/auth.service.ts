@@ -7,6 +7,7 @@ import type {
   LoginInput,
   RegisterCustomerInput,
   RegisterResult,
+  ResetPasswordInput,
   SessionInfo,
   UpdateProfileInput,
   VerifyEmailInput,
@@ -48,6 +49,11 @@ export const resendVerification = async (payload: EmailInput): Promise<void> => 
 
 export const forgotPassword = async (payload: EmailInput): Promise<void> => {
   await apiService.post("/auth/forgot-password", payload);
+};
+
+/** Token lấy từ liên kết trong email, hiệu lực 30 phút. */
+export const resetPassword = async (payload: ResetPasswordInput): Promise<void> => {
+  await apiService.post("/auth/reset-password", payload);
 };
 
 export const getMe = async (): Promise<APIResponse<Account>> => {

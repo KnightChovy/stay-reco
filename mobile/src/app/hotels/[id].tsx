@@ -81,7 +81,7 @@ function HotelDetailSkeleton({ bottomInset }: { bottomInset: number }) {
 
 const bookable = ({ offer }: RoomTypeListing) => !!offer && offer.available > 0 && offer.fitsGuests;
 
-function RoomCard({ room, nights, onBook }: { room: RoomTypeListing; nights: number; onBook: () => void }) {
+function RoomCard({ room, nights, onBook, onDetail }: { room: RoomTypeListing; nights: number; onBook: () => void; onDetail: () => void }) {
   const { roomType, offer } = room;
   const beds = roomType.beds.map((b) => `${b.quantity} ${b.name}`).join(', ');
   return (
@@ -102,10 +102,11 @@ function RoomCard({ room, nights, onBook }: { room: RoomTypeListing; nights: num
           <Meta icon="group" label={`Tối đa ${roomType.maxOccupancy} khách`} />
         </View>
         {!!roomType.description && (
-          <Text variant="caption" color={colors.onSurfaceVariant}>
+          <Text variant="caption" color={colors.onSurfaceVariant} numberOfLines={2}>
             {roomType.description}
           </Text>
         )}
+        <Button label="Xem chi tiết phòng" variant="ghost" size="sm" onPress={onDetail} />
         {offer && (
           <View className={`gap-2.5 rounded-md bg-surface-container-low p-3 ${bookable(room) ? 'border border-primary-fixed' : ''}`}>
             <View className="flex-row items-center justify-between gap-2">
@@ -256,7 +257,13 @@ export default function HotelDetailScreen() {
             </Text>
           </View>
           {roomTypes.map((room) => (
-            <RoomCard key={room.roomType.id} room={room} nights={nights} onBook={() => book(room.roomType.id)} />
+            <RoomCard
+              key={room.roomType.id}
+              room={room}
+              nights={nights}
+              onBook={() => book(room.roomType.id)}
+              onDetail={() => router.push({ pathname: '/hotels/room', params: { ...stay, hotelId: params.id, roomTypeId: room.roomType.id } })}
+            />
           ))}
         </View>
 

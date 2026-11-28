@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { Booking, BookingStatus, PaymentStatus } from '@stayreco/shared';
+import { ADD_ON_LIMITS, type AddOnPayment, type Booking, type BookingStatus, type PaymentStatus } from '@stayreco/shared';
 import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
 import { Icon } from '@/components/ui/icon';
@@ -10,11 +10,13 @@ import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
 import { colors } from '@/constants/theme';
 import type { Tone } from '@/features/staff/data';
-import { Card, KV, StaffScreen, accent, s } from '@/features/staff/ui';
+import { BookingInvoice, addOnTimingLabel, bookingEventLabel } from '@/features/booking/BookingInvoice';
+import { Card, FilterChips, KV, StaffScreen, accent, s } from '@/features/staff/ui';
+import { alert } from '@/lib/alert';
 import { bookingStatusLabel, dateInput, formatDate, formatVnd } from '@/lib/stay';
 import { apiErrorMessage } from '@/services/ApiService';
 import { getBooking } from '@/services/bookings.service';
-import { acceptBookingChange, forwardRefund, markNoShow, rejectBookingChange } from '@/services/staff.service';
+import { acceptBookingChange, addBookingAddOn, forwardRefund, getHotelAddOns, markNoShow, rejectBookingChange, removeBookingAddOn } from '@/services/staff.service';
 
 // Cùng nhãn/tone với frontend/src/features/staff/lib/labels.ts.
 const statusTone: Record<BookingStatus, Tone> = {
@@ -34,6 +36,8 @@ const payment: Record<PaymentStatus, { label: string; tone: Tone }> = {
   REFUNDED: { label: 'Đã hoàn tiền', tone: 'neutral' },
   FAILED: { label: 'Thanh toán thất bại', tone: 'danger' },
 };
+
+const paymentLabel: Record<AddOnPayment, string> = { PREPAID: 'Đã trả cùng tiền phòng', FRONT_DESK: 'Thu tại quầy khi trả phòng' };
 
 const dateTime = (iso: string | null) => (iso ? new Date(iso).toLocaleString('vi-VN') : '—');
 
@@ -59,6 +63,11 @@ export default function StaffBookingDetailScreen() {
   const { data: b, isPending, isError, refetch } = useQuery({ queryKey: ['staff', 'booking', id], queryFn: () => getBooking(id) });
   const [changeReason, setChangeReason] = useState('');
   const [refundNote, setRefundNote] = useState('');
+  const [addOnId, setAddOnId] = useState('');
+  const [quantity, setQuantity] = useState('1');
+  // Giống canAddFrontDeskAddOn bên web: đơn đã trả tiền và chưa trả phòng.
+  const addOnEditable = !!b && ((b.status === 'CONFIRMED' && b.paymentStatus === 'PAID') || b.status === 'CHECKED_IN');
+  const catalogue = useQuery({ queryKey: ['staff', 'add-ons', b?.hotel.id], queryFn: () => getHotelAddOns(b!.hotel.id), enabled: addOnEditable });
   // Mỗi thao tác trả về booking mới: ghi thẳng vào cache, rồi làm mới danh sách và dashboard.
   const action = useMutation({
     mutationFn: (run: () => Promise<Booking>) => run(),
@@ -124,17 +133,88 @@ export default function StaffBookingDetailScreen() {
       </Card>
 
       <Card>
-        <Text variant="h3">Quyết toán tài chính</Text>
-        <Text variant="caption" color={colors.onSurfaceVariant}>
-          Giá đã chốt tại thời điểm đặt phòng
-        </Text>
-        {b.nightlyPrices.map((n) => (
-          <KV key={n.date} label={formatDate(n.date)} value={formatVnd(n.price)} />
-        ))}
-        <View className={s.divider} />
-        <KV label="Tổng tiền" value={formatVnd(b.totalAmount)} strong />
+        <Text variant="h3">Hoá đơn</Text>
+        <BookingInvoice booking={b} />
         <KV label="Miễn phí huỷ trước" value={b.cancellation.freeUntil ? dateTime(b.cancellation.freeUntil) : 'Không áp dụng'} />
         <KV label="Phí huỷ sau hạn" value={`${b.cancellation.feePercent}%`} />
+      </Card>
+
+      <Card>
+        <Text variant="h3">Dịch vụ đi kèm</Text>
+        {b.addOns.length === 0 ? (
+          <Text variant="small" color={colors.onSurfaceVariant}>
+            Chưa có dịch vụ nào trên đơn này.
+          </Text>
+        ) : (
+          b.addOns.map((line) => (
+            <View key={line.id} className={s.between}>
+              <View className={s.flex}>
+                <Text variant="small" weight="semibold">
+                  {line.name} × {line.quantity}
+                </Text>
+                <Text variant="caption" color={colors.onSurfaceVariant}>
+                  {addOnTimingLabel[line.timing]} · {paymentLabel[line.payment]}
+                </Text>
+              </View>
+              <Text variant="small" weight="bold">
+                {formatVnd(line.amount)}
+              </Text>
+              {addOnEditable && line.payment === 'FRONT_DESK' && (
+                <Button
+                  label="Bỏ"
+                  variant="ghost"
+                  size="sm"
+                  disabled={action.isPending}
+                  onPress={() =>
+                    alert('Bỏ dịch vụ', `Bỏ "${line.name}" khỏi đơn ${b.code}?`, [
+                      { text: 'Huỷ', style: 'cancel' },
+                      { text: 'Bỏ', style: 'destructive', onPress: () => action.mutate(() => removeBookingAddOn(b.id, line.id)) },
+                    ])
+                  }
+                />
+              )}
+            </View>
+          ))
+        )}
+        {addOnEditable && (
+          <View className={`gap-2 ${s.box}`}>
+            <Text variant="small" weight="semibold">
+              Thêm dịch vụ khách dùng tại khách sạn
+            </Text>
+            {catalogue.isPending ? (
+              <ActivityIndicator color={colors.primary} />
+            ) : catalogue.isError ? (
+              <Text variant="caption" color={colors.error}>
+                {apiErrorMessage(catalogue.error, 'Không tải được danh mục dịch vụ.')}
+              </Text>
+            ) : !catalogue.data.some((a) => a.isActive) ? (
+              <Text variant="caption" color={colors.onSurfaceVariant}>
+                Khách sạn chưa có dịch vụ nào đang bán.
+              </Text>
+            ) : (
+              <>
+                <FilterChips items={catalogue.data.filter((a) => a.isActive).map((a) => ({ key: a.id, label: `${a.name} · ${formatVnd(a.price)}` }))} value={addOnId} onChange={setAddOnId} />
+                <View className="flex-row items-end gap-2">
+                  <Input label="Số lượng" keyboardType="number-pad" value={quantity} onChangeText={setQuantity} className={s.flex} />
+                  <Button
+                    label="Thêm"
+                    leadingIcon="add"
+                    style={{ backgroundColor: accent }}
+                    disabled={!addOnId || action.isPending}
+                    onPress={() =>
+                      action.mutate(() =>
+                        addBookingAddOn(b.id, { addOnId, quantity: Math.min(ADD_ON_LIMITS.maxQuantity, Math.max(1, Number(quantity) || 1)) }).then((r) => (setAddOnId(''), setQuantity('1'), r)),
+                      )
+                    }
+                  />
+                </View>
+                <Text variant="caption" color={colors.onSurfaceVariant}>
+                  Thu tại quầy khi khách trả phòng; không tính vào tiền khách đã thanh toán.
+                </Text>
+              </>
+            )}
+          </View>
+        )}
       </Card>
 
       <Card>
@@ -207,7 +287,7 @@ export default function StaffBookingDetailScreen() {
               <View className="h-2 w-2 rounded bg-primary" />
               <View className={s.flex}>
                 <Text variant="small" weight="semibold">
-                  {t.event}
+                  {bookingEventLabel(t.event)}
                 </Text>
                 <Text variant="caption" color={colors.onSurfaceVariant}>
                   {dateTime(t.at)}

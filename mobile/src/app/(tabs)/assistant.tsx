@@ -14,6 +14,7 @@ import { useVoiceInput } from '@/features/assistant/use-voice-input';
 import { Sheet } from '@/features/staff/ui';
 import {
   chatErrorMessage,
+  confirmCancellation,
   confirmProposal,
   getConversation,
   getConversations,
@@ -108,8 +109,17 @@ export default function AssistantScreen() {
     mutationFn: ({ conversationId, proposalId }: { conversationId: string; proposalId: string }) => confirmProposal(conversationId, proposalId),
     onSuccess: (booking, { conversationId }) => {
       void queryClient.invalidateQueries({ queryKey: keys.one(conversationId) });
+      // QR chuyển khoản hiện ngay dưới đề xuất (ChatPayment), khách ở lại khung chat như bên web.
       void queryClient.invalidateQueries({ queryKey: ['bookings'] });
-      router.push({ pathname: '/booking/payment', params: { id: booking.id } });
+    },
+    onError: (e) => setError(chatErrorMessage(e)),
+  });
+
+  const cancel = useMutation({
+    mutationFn: ({ conversationId, proposalId }: { conversationId: string; proposalId: string }) => confirmCancellation(conversationId, proposalId),
+    onSuccess: (_booking, { conversationId }) => {
+      void queryClient.invalidateQueries({ queryKey: keys.one(conversationId) });
+      void queryClient.invalidateQueries({ queryKey: ['bookings'] });
     },
     onError: (e) => setError(chatErrorMessage(e)),
   });
@@ -247,6 +257,8 @@ export default function AssistantScreen() {
             now={now}
             confirmingId={confirm.isPending ? (confirm.variables?.proposalId ?? null) : null}
             onConfirm={(proposalId) => activeId && !confirm.isPending && confirm.mutate({ conversationId: activeId, proposalId })}
+            cancellingId={cancel.isPending ? (cancel.variables?.proposalId ?? null) : null}
+            onConfirmCancel={(proposalId) => activeId && !cancel.isPending && cancel.mutate({ conversationId: activeId, proposalId })}
           />
         ))}
         {pendingText && (

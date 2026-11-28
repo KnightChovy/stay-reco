@@ -1,4 +1,4 @@
-import { ActivityIndicator, Pressable, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
 import { router, type Href } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import type { ActionItem } from '@stayreco/shared';
@@ -10,7 +10,7 @@ import { colors } from '@/constants/theme';
 import type { Tone } from '@/features/staff/data';
 import { Avatar, Card, CleanRoomButton, Grid, KV, Section, Stat, StaffTabScreen, accent, s, useStaffHotel } from '@/features/staff/ui';
 import { bookingStatusLabel, formatDate } from '@/lib/stay';
-import { getActionItems, getRooms, getTodayStats } from '@/services/staff.service';
+import { getActionItems, getOccupancyForecast, getRooms, getTodayStats } from '@/services/staff.service';
 
 const quick: { icon: IconName; label: string; href: Href }[] = [
   { icon: 'key', label: 'Check-in', href: '/staff/check-in' },
@@ -33,7 +33,13 @@ const roomLegend = [
   { key: 'MAINTENANCE', label: 'Bảo trì', color: colors.outline },
 ] as const;
 
-const initials = (name: string) =>
+const FORECAST_DAYS = 14;
+const WEEKDAY = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+// Cùng ngưỡng với OccupancyStrip bên web.
+const occupancyTone = (rate: number | null) =>
+  rate == null ? ['bg-surface-container', colors.onSurfaceVariant] : rate >= 90 ? ['bg-error-container', '#8c0009'] : rate >= 70 ? ['bg-[#fff0d9]', '#7a4600'] : rate >= 40 ? ['bg-[#e3f4ea]', '#0b5a36'] : ['bg-surface-container-low', colors.onSurfaceVariant];
+
+const initials =(name: string) =>
   name
     .split(/\s+/)
     .slice(-2)
@@ -45,6 +51,7 @@ export default function StaffDashboardScreen() {
   const today = useQuery({ queryKey: ['staff', 'today', hotelId], queryFn: () => getTodayStats(hotelId!), enabled: !!hotelId });
   const items = useQuery({ queryKey: ['staff', 'action-items', hotelId], queryFn: () => getActionItems(hotelId!), enabled: !!hotelId });
   const cleaning = useQuery({ queryKey: ['staff', 'rooms', hotelId, 'CLEANING'], queryFn: () => getRooms(hotelId!, { status: 'CLEANING', pageSize: 100 }), enabled: !!hotelId });
+  const forecast = useQuery({ queryKey: ['staff', 'occupancy-forecast', hotelId], queryFn: () => getOccupancyForecast(hotelId!, FORECAST_DAYS), enabled: !!hotelId });
   const t = today.data;
   const tasks = items.data?.items.filter((i) => actionLabels[i.type]) ?? [];
 
@@ -160,7 +167,38 @@ export default function StaffDashboardScreen() {
             ))
           )}
 
-          <Section title="Tình trạng phòng" />
+          <Section title={`Công suất ${FORECAST_DAYS} ngày tới`} />
+          {forecast.isError ? (
+            <Text variant="small" color={colors.error}>
+              Không tải được dự báo công suất.
+            </Text>
+          ) : !forecast.data ? (
+            <ActivityIndicator color={colors.primary} />
+          ) : (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="gap-2">
+              {forecast.data.days.map((d) => {
+                const [bg, fg] = occupancyTone(d.occupancyRate);
+                return (
+                  <View key={d.date} accessible accessibilityLabel={`${formatDate(d.date)}: ${d.booked} đã đặt, ${d.held} đang giữ, ${d.free} trống`} className={`w-[62px] items-center rounded-lg px-1 py-2 ${bg}`}>
+                    <Text variant="caption" weight="semibold" color={fg}>
+                      {WEEKDAY[new Date(`${d.date}T00:00:00`).getDay()]}
+                    </Text>
+                    <Text variant="caption" color={fg}>
+                      {formatDate(d.date).slice(0, 5)}
+                    </Text>
+                    <Text variant="label" weight="bold" color={fg}>
+                      {d.occupancyRate == null ? '—' : `${d.occupancyRate}%`}
+                    </Text>
+                    <Text variant="caption" color={fg}>
+                      {d.free} trống
+                    </Text>
+                  </View>
+                );
+              })}
+            </ScrollView>
+          )}
+
+          <Section title="Tình trạng phòng" action="Xem phòng" onAction={() => router.push('/staff/rooms')} />
           <Card>
             <Text variant="label" weight="bold">
               Tổng {t!.rooms.total} phòng

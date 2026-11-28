@@ -8,7 +8,7 @@ import { Chip } from '@/components/ui/chip';
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
 import { colors } from '@/constants/theme';
-import { Banner, Card, CardHead, KV, StaffScreen, SuccessSheet, accent, s, success, useStaffHotel } from '@/features/staff/ui';
+import { Banner, Card, CardHead, CleanRoomButton, KV, StaffScreen, SuccessSheet, accent, s, success, useStaffHotel } from '@/features/staff/ui';
 import { bookingStatusLabel, formatDate, formatVnd } from '@/lib/stay';
 import { apiErrorMessage } from '@/services/ApiService';
 import { checkOutBooking, getCheckOutQuote, lookupBooking, toLookup } from '@/services/staff.service';
@@ -144,6 +144,7 @@ export default function StaffCheckOutScreen() {
               ) : (
                 <KV label="Phí trả muộn" value="Không có" />
               )}
+              {quote.data.addOnsDue > 0 && <KV label="Dịch vụ phát sinh (thu tại quầy)" value={formatVnd(quote.data.addOnsDue)} strong color={accent} />}
             </>
           )}
           {checkOut.isError && <Text variant="small" color={colors.error}>{apiErrorMessage(checkOut.error, 'Check-out không thành công.')}</Text>}
@@ -160,6 +161,14 @@ export default function StaffCheckOutScreen() {
           <>
             <KV label="Mã đặt phòng" value={`#${booking?.code ?? ''}`} strong />
             <KV label="Phí trả muộn đã thu" value={formatVnd(checkOut.data?.lateCheckout?.fee ?? 0)} strong color={accent} />
+            {checkOut.data?.assignedRooms.map((r) => (
+              <View key={r.id} className={s.between}>
+                <Text variant="small" weight="bold">
+                  Phòng {r.roomNumber}
+                </Text>
+                <CleanRoomButton roomId={r.id} roomNumber={r.roomNumber} />
+              </View>
+            ))}
           </>
         }
       />

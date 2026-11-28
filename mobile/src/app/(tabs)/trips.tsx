@@ -148,6 +148,7 @@ function TripCard({ booking }: { booking: BookingSummary }) {
             {formatVnd(booking.totalAmount)}
           </Text>
         </View>
+        <Button label="Chi tiết & hoá đơn" leadingIcon="receipt_long" variant="secondary" onPress={() => router.push({ pathname: '/booking/detail', params: { id: booking.id } })} />
         {booking.status === 'PENDING' && (
           <Button
             label="Tiếp tục thanh toán"

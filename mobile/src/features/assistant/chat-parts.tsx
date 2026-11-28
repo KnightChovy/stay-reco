@@ -1,13 +1,15 @@
 import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
 import { Image } from 'expo-image';
+import { useQuery } from '@tanstack/react-query';
 import { router } from 'expo-router';
-import type { AssistantHotel, AssistantMessage, BookingProposal } from '@stayreco/shared';
+import type { AssistantHotel, AssistantMessage, BookingProposal, CancellationProposal } from '@stayreco/shared';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
 import { colors } from '@/constants/theme';
 import { images } from '@/lib/mock-data';
 import { formatDate, formatVnd } from '@/lib/stay';
+import { getBooking } from '@/services/bookings.service';
 
 /** Ngày lưu trú cuộc trò chuyện đã chốt (từ đề xuất gần nhất), để mở khách sạn đúng ngày. */
 export type StayDates = { checkIn: string; checkOut: string; guests: number; rooms: number } | null;
@@ -109,6 +111,43 @@ function HotelCards({ hotels, dates }: { hotels: AssistantHotel[]; dates: StayDa
   );
 }
 
+/** Thanh toán ngay trong khung chat (như ChatPayment bên web): QR chuyển khoản khi đơn còn chờ, rồi "Đã thanh toán". */
+function ChatPayment({ bookingId }: { bookingId: string }) {
+  const { data: b } = useQuery({
+    queryKey: ['bookings', bookingId],
+    queryFn: () => getBooking(bookingId),
+    // SePay báo đã nhận tiền qua webhook: đọc lại vài giây một lần khi đơn còn chờ.
+    refetchInterval: (q) => (q.state.data?.status === 'PENDING' ? 4000 : false),
+  });
+  if (!b) return <ActivityIndicator color={colors.primary} />;
+  const open = () => router.push({ pathname: b.status === 'PENDING' ? '/booking/payment' : '/booking/detail', params: { id: b.id } });
+  if (b.status !== 'PENDING' || !b.payment)
+    return (
+      <>
+        <Text variant="caption" weight="semibold" color={b.paidAt ? colors.tertiaryContainer : colors.onSurfaceVariant}>
+          {b.paidAt ? `Đã thanh toán · mã đặt phòng ${b.code}` : b.status === 'EXPIRED' ? 'Hết thời gian giữ phòng, chưa thanh toán.' : `Đơn ${b.code}`}
+        </Text>
+        <Button label="Xem đơn đặt phòng" variant="secondary" onPress={open} />
+      </>
+    );
+  const p = b.payment;
+  return (
+    <View className="gap-2 border-t border-surface-container-high pt-2.5">
+      <Text variant="caption" weight="bold" color={colors.primary}>
+        QUÉT MÃ ĐỂ CHUYỂN KHOẢN · giữ phòng đến {time(p.expiresAt)}
+      </Text>
+      <Image source={p.qrImageUrl} className="h-52 w-52 self-center rounded-md" contentFit="contain" accessibilityLabel={`Mã VietQR chuyển ${formatVnd(p.amount)}`} />
+      <Text variant="caption" color={colors.onSurfaceVariant}>
+        {p.bankName} · {p.accountNumber} · {p.accountName}
+      </Text>
+      <Text variant="caption">
+        Số tiền <Text variant="caption" weight="bold">{formatVnd(p.amount)}</Text>, nội dung <Text variant="caption" weight="bold">{p.transferContent}</Text>
+      </Text>
+      <Button label="Trả bằng ví hoặc xem chi tiết" variant="secondary" onPress={open} />
+    </View>
+  );
+}
+
 /** Đơn trợ lý đã tính giá. Trợ lý không tự đặt: khách bấm "Xác nhận đặt phòng" một lần, trong 30 phút. */
 function ProposalCard({ proposal, now, pending, onConfirm }: { proposal: BookingProposal; now: number; pending: boolean; onConfirm: () => void }) {
   const booked = proposal.bookingId !== null;
@@ -149,7 +188,7 @@ function ProposalCard({ proposal, now, pending, onConfirm }: { proposal: Booking
           </Text>
         </View>
         {booked ? (
-          <Button label="Xem chuyến đi" variant="secondary" onPress={() => router.push('/trips')} />
+          <ChatPayment bookingId={proposal.bookingId!} />
         ) : expired ? (
           <Text variant="caption" color={colors.onSurfaceVariant}>
             Đề xuất chỉ giữ giá 30 phút. Nhắn trợ lý “báo giá lại” để có đề xuất mới.
@@ -158,9 +197,71 @@ function ProposalCard({ proposal, now, pending, onConfirm }: { proposal: Booking
           <>
             <Button label={pending ? 'Đang đặt…' : 'Xác nhận đặt phòng'} disabled={pending} onPress={onConfirm} />
             <Text variant="caption" color={colors.onSurfaceVariant} center>
-              Bạn sẽ chuyển sang bước thanh toán, phòng được giữ 15 phút.
+              Mã QR chuyển khoản hiện ngay tại đây, phòng được giữ 15 phút.
             </Text>
           </>
+        )}
+      </View>
+    </View>
+  );
+}
+
+/** Đề xuất huỷ đơn: trợ lý chỉ tính phí và tiền hoàn; khách tự bấm "Xác nhận huỷ" trong 30 phút. */
+function CancellationCard({ proposal, now, pending, onConfirm }: { proposal: CancellationProposal; now: number; pending: boolean; onConfirm: () => void }) {
+  const done = proposal.outcome !== null;
+  const expired = !done && Date.parse(proposal.expiresAt) <= now;
+  const row = (label: string, value: string, strong?: boolean) => (
+    <View className="flex-row items-baseline justify-between gap-2">
+      <Text variant="caption" weight={strong ? 'bold' : 'regular'} color={strong ? colors.onSurface : colors.onSurfaceVariant}>
+        {label}
+      </Text>
+      <Text variant={strong ? 'h3' : 'caption'} weight={strong ? 'bold' : 'regular'} color={strong ? colors.primary : colors.onSurfaceVariant}>
+        {value}
+      </Text>
+    </View>
+  );
+  return (
+    <View className="overflow-hidden rounded-lg border border-error-container bg-surface-container-lowest">
+      <View className="flex-row items-center justify-between gap-2 bg-error-container px-3.5 py-2.5">
+        <Text variant="caption" weight="bold" color={colors.error}>
+          ĐỀ XUẤT HUỶ PHÒNG
+        </Text>
+        {(done || expired) && (
+          <Text variant="caption" weight="semibold" color={colors.onSurfaceVariant} className="flex-1 text-right">
+            {done ? (proposal.outcome === 'REFUND_PENDING' ? 'Chờ khách sạn duyệt hoàn tiền' : 'Đã huỷ') : 'Đã hết hạn'}
+          </Text>
+        )}
+      </View>
+      <View className="gap-2 p-3.5">
+        <View>
+          <Text variant="label" weight="semibold">
+            {proposal.hotelName}
+          </Text>
+          <Text variant="caption" color={colors.onSurfaceVariant}>
+            {formatDate(proposal.checkIn)} → {formatDate(proposal.checkOut)} · {proposal.bookingCode}
+          </Text>
+        </View>
+        <View className="gap-1 border-t border-surface-container-high pt-2">
+          {row('Đã thanh toán', formatVnd(proposal.paid))}
+          {row('Phí huỷ', proposal.fee > 0 ? `−${formatVnd(proposal.fee)}` : 'Miễn phí')}
+          {row('Được hoàn về ví', formatVnd(proposal.refund), true)}
+        </View>
+        <Text variant="caption" color={colors.onSurfaceVariant} className="rounded-md bg-surface-container-low p-2.5">
+          {proposal.refund > 0
+            ? proposal.needsApproval
+              ? 'Tiền hoàn về ví StayReco sau khi khách sạn duyệt yêu cầu. Phòng vẫn giữ cho bạn tới lúc đó.'
+              : 'Tiền hoàn về ví StayReco ngay khi huỷ.'
+            : 'Theo chính sách huỷ, đơn này không được hoàn tiền.'}
+          {proposal.freeUntil ? ` Huỷ miễn phí đến ${new Date(proposal.freeUntil).toLocaleString('vi-VN')}.` : ''}
+        </Text>
+        {done ? (
+          <Button label="Xem đơn đặt phòng" variant="secondary" onPress={() => router.push({ pathname: '/booking/detail', params: { id: proposal.bookingId } })} />
+        ) : expired ? (
+          <Text variant="caption" color={colors.onSurfaceVariant}>
+            Đề xuất chỉ có hiệu lực 30 phút. Nhắn trợ lý “huỷ lại đơn {proposal.bookingCode}” để tính lại.
+          </Text>
+        ) : (
+          <Button label={pending ? 'Đang huỷ…' : 'Xác nhận huỷ'} leadingIcon="cancel" disabled={pending} onPress={onConfirm} style={{ backgroundColor: colors.error }} />
         )}
       </View>
     </View>
@@ -198,12 +299,16 @@ export function MessageRow({
   now,
   confirmingId,
   onConfirm,
+  cancellingId,
+  onConfirmCancel,
 }: {
   message: AssistantMessage;
   dates: StayDates;
   now: number;
   confirmingId: string | null;
   onConfirm: (proposalId: string) => void;
+  cancellingId: string | null;
+  onConfirmCancel: (proposalId: string) => void;
 }) {
   if (message.role === 'SYSTEM') {
     return (
@@ -229,6 +334,14 @@ export function MessageRow({
             now={now}
             pending={confirmingId === message.proposal.id}
             onConfirm={() => onConfirm(message.proposal!.id)}
+          />
+        )}
+        {message.cancellation && (
+          <CancellationCard
+            proposal={message.cancellation}
+            now={now}
+            pending={cancellingId === message.cancellation.id}
+            onConfirm={() => onConfirmCancel(message.cancellation!.id)}
           />
         )}
         <Text variant="caption" color={colors.onSurfaceVariant}>

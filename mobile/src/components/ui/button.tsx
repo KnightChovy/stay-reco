@@ -33,8 +33,9 @@ export function Button({ label, onPress, variant = 'primary', icon, leadingIcon,
       onPress={onPress}
       disabled={disabled}
       accessibilityState={{ disabled }}
-      className={`flex-row items-center justify-center gap-2 rounded-md border ${v.box} ${sizes[size]} ${disabled ? 'opacity-50' : ''} ${className}`}
-      style={style}
+      className={`flex-row items-center justify-center gap-2 rounded-md border ${v.box} ${sizes[size]} ${className}`}
+      // Độ mờ đặt qua style: trên web, className đổi sau lần render đầu của AnimatedPressable không được áp lại.
+      style={[style, { opacity: disabled ? 0.5 : 1 }]}
     >
       {leadingIcon && <Icon name={leadingIcon} size={18} color={v.fg} />}
       <Text variant="label" weight="semibold" color={v.fg} center className="shrink">

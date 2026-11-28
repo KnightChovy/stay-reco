@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { ScrollView, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, TextInput, View } from 'react-native';
 import { alert } from '@/lib/alert';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { AxiosError } from 'axios';
-import { createBookingSchema, type ErrorDetail } from '@stayreco/shared';
+import { ADD_ON_LIMITS, createBookingSchema, type ErrorDetail } from '@stayreco/shared';
 import { ScreenHeader } from '@/components/layout/AppHeader';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -32,6 +32,21 @@ function CardTitle({ icon, title }: { icon: IconName; title: string }) {
         {title}
       </Text>
     </View>
+  );
+}
+
+function QtyButton({ icon, label, disabled, onPress }: { icon: IconName; label: string; disabled: boolean; onPress: () => void }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      className={`h-10 w-10 items-center justify-center rounded-md border border-primary ${disabled ? 'opacity-40' : ''}`}
+    >
+      <Icon name={icon} size={18} color={colors.primary} />
+    </Pressable>
   );
 }
 
@@ -71,10 +86,16 @@ export default function BookingInfoScreen() {
   const [codeError, setCodeError] = useState('');
   const [applying, setApplying] = useState(false);
   const [usePoints, setUsePoints] = useState(false);
+  // Dịch vụ đặt kèm (docs/api/add-ons.md): trả cùng tiền phòng, không giảm giá, hoàn đủ khi huỷ.
+  const [addOnQty, setAddOnQty] = useState<Record<string, number>>({});
+  const bookableAddOns = data?.hotel.addOns.filter((a) => a.prebookable) ?? [];
+  const addOnLines = bookableAddOns.filter((a) => (addOnQty[a.id] ?? 0) > 0).map((a) => ({ addOnId: a.id, quantity: addOnQty[a.id] }));
+  const addOns = addOnLines.length > 0 ? addOnLines : undefined;
+  const setQty = (id: string, q: number) => setAddOnQty((prev) => ({ ...prev, [id]: Math.max(0, Math.min(ADD_ON_LIMITS.maxQuantity, q)) }));
 
   // Backend tính giảm giá và điểm (BR-06, BR-11); app chỉ hiển thị và gửi lại đúng expectedTotal.
   const quoteQuery = (pointsToUse: number, withCode = code) => ({
-    queryKey: ['discount-quote', params.roomTypeId, stay.checkIn, stay.checkOut, stay.rooms, withCode ?? null, pointsToUse],
+    queryKey: ['discount-quote', params.roomTypeId, stay.checkIn, stay.checkOut, stay.rooms, withCode ?? null, pointsToUse, addOns ?? null],
     queryFn: () =>
       getDiscountQuote({
         roomTypeId: params.roomTypeId,
@@ -83,6 +104,7 @@ export default function BookingInfoScreen() {
         rooms: stay.rooms,
         ...(withCode ? { code: withCode } : {}),
         ...(pointsToUse ? { pointsToUse } : {}),
+        ...(addOns ? { addOns } : {}),
       }),
   });
   const baseQuote = useQuery({ ...quoteQuery(0), enabled: !!account && !!offer });
@@ -143,6 +165,7 @@ export default function BookingInfoScreen() {
       ...(requests.trim() ? { specialRequests: requests } : {}),
       ...(code ? { code } : {}),
       ...(usePoints && quote?.points?.pointsUsed ? { pointsToUse: quote.points.pointsUsed } : {}),
+      ...(addOns ? { addOns } : {}),
       expectedTotal,
     });
     if (!input.success) {
@@ -327,6 +350,46 @@ export default function BookingInfoScreen() {
           />
         </View>
 
+        {bookableAddOns.length > 0 && (
+          <View className="gap-3 rounded-lg bg-surface-container-lowest p-4 shadow-card">
+            <CardTitle icon="add" title="Dịch vụ đặt kèm" />
+            {bookableAddOns.map((a) => {
+              const q = addOnQty[a.id] ?? 0;
+              const atLineLimit = addOnLines.length >= ADD_ON_LIMITS.maxLines;
+              return (
+                <View key={a.id} className={`flex-row items-center gap-3 rounded-md border p-3 ${q > 0 ? 'border-primary' : 'border-surface-container-high'}`}>
+                  <View className="flex-1">
+                    <Text variant="small" weight="bold">
+                      {a.name}
+                    </Text>
+                    {!!a.description && (
+                      <Text variant="caption" color={colors.onSurfaceVariant}>
+                        {a.description}
+                      </Text>
+                    )}
+                    <Text variant="caption" color={colors.primary} weight="semibold">
+                      {formatVnd(a.price)} / lần
+                    </Text>
+                  </View>
+                  <QtyButton icon="remove" label={`Bớt ${a.name}`} disabled={q === 0} onPress={() => setQty(a.id, q - 1)} />
+                  <Text variant="label" weight="bold" style={{ minWidth: 20, textAlign: 'center' }}>
+                    {q}
+                  </Text>
+                  <QtyButton
+                    icon="add"
+                    label={`Thêm ${a.name}`}
+                    disabled={q >= ADD_ON_LIMITS.maxQuantity || (q === 0 && atLineLimit)}
+                    onPress={() => setQty(a.id, q + 1)}
+                  />
+                </View>
+              );
+            })}
+            <Text variant="caption" color={colors.onSurfaceVariant}>
+              Dịch vụ được trả cùng tiền phòng, không áp dụng voucher hay điểm, và được hoàn đủ nếu bạn huỷ đơn. Dịch vụ khác có thể gọi tại khách sạn và trả khi trả phòng.
+            </Text>
+          </View>
+        )}
+
         <View className="gap-3 rounded-lg bg-surface-container-lowest p-4 shadow-card">
           <Text variant="h3">Chi tiết giá</Text>
           {offer.nightlyPrices.map((n) => (
@@ -337,6 +400,7 @@ export default function BookingInfoScreen() {
             />
           ))}
           <PriceLine label="Thuế VAT & Phí phục vụ" value="Đã bao gồm" />
+          {addOns && <PriceLine label="Dịch vụ thêm" value={quote ? `+${formatVnd(quote.addOnsTotal)}` : '—'} />}
           {quote?.discount && (
             <PriceLine
               icon="sell"
@@ -492,7 +556,7 @@ export default function BookingInfoScreen() {
           size="sm"
           className="flex-1" style={{ minHeight: 52 }}
           // Chờ báo giá để không gửi tổng chưa trừ khuyến mãi tự áp dụng.
-          disabled={!agreed || submitting || baseQuote.isPending || (pointsToUse > 0 && pointsQuote.isPending) || pointsInput !== undefined}
+          disabled={!agreed || submitting || baseQuote.isPending || (!!addOns && !quote) || (pointsToUse > 0 && pointsQuote.isPending) || pointsInput !== undefined}
           onPress={() => void submit(total)}
         />
       </View>
